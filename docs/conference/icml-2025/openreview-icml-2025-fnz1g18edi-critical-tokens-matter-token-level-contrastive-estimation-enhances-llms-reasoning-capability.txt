@@ -1,0 +1,496 @@
+Title: Critical Tokens Matter: Token-Level Contrastive Estimation Enhances LLM's Reasoning Capability
+
+URL Source: https://openreview.net/pdf?id=fnz1g18EdI
+
+Number of Pages: 13
+
+Markdown Content:
+# Critical Tokens Matter: Token-Level Contrastive Estimation Enhances LLM’s Reasoning Capability 
+
+Zicheng Lin 1 * Tian Liang 2 * Jiahao Xu 2 * Qiuzhi Liu 2 Xing Wang 2
+
+Ruilin Luo 1 Chufan Shi 1 Siheng Li 1 Yujiu Yang 1 Zhaopeng Tu 2
+
+# Abstract 
+
+Mathematical reasoning tasks pose significant challenges for large language models (LLMs) be-cause they require precise logical deduction and sequence analysis. In this work, we introduce the concept of critical tokens – elements within reasoning trajectories that significantly influence incorrect outcomes. We present a novel frame-work for identifying these tokens through rollout sampling and demonstrate their substantial diver-gence from traditional error tokens. Through ex-tensive experiments on datasets such as GSM8K and MATH500, we show that identifying and replacing critical tokens significantly improves model accuracy. We propose an efficient method-ology for pinpointing these tokens in large-scale datasets using contrastive estimation and extend this framework to enhance model training pro-cesses with direct preference optimization (DPO). Experimental results on GSM8K and MATH500 benchmarks with the widely used models Llama-3 (8B and 70B) and Deepseek-math (7B) demon-strate the effectiveness of the proposed approach, 
+
+cDPO. Our results underscore the potential of leveraging critical tokens to reduce errors in rea-soning tasks, advancing the development of AI systems capable of robust logical deduction. 
+
+# 1. Introduction 
+
+In the domain of artificial intelligence, mathematical rea-soning tasks are seen as a crucible for evaluating the pro-ficiency of large language models (LLMs) (Cobbe et al., 2021; Hendrycks et al., 2021; Yuan et al., 2023; Ahn et al.,              
+
+> *Equal contribution 1Tsinghua University 2Tencent. Correspon-dence to: Yujiu Yang <yang.yujiu@sz.tsinghua.edu.cn >,Zhaopeng Tu <zptu@tencent.com >,First Author
+> <linzc23@mails.tsinghua.edu.cn >.
+> Proceedings of the 42 nd International Conference on Machine Learning , Vancouver, Canada. PMLR 267, 2025. Copyright 2025 by the author(s).
+
+2024; Yu et al.; Collins et al., 2024). These tasks neces-sitate logical and sequential deduction to derive solutions, making them challenging for models trained primarily on general language processing. The chain of thought (COT) method (Wei et al., 2022) has significantly improved the reasoning capability of LLMs by employing a series of in-termediate reasoning steps, or reasoning trajectories. Prior research has categorized trajectory errors based on mod-ifications required to correct the COT, such as calculator errors, with the objective of identifying avenues for model improvement (Wei et al., 2022; Wang et al., 2023). Despite these advancements, the token-level discrepancies within mathematical reasoning contexts have not been sys-tematically explored. Our study seeks to bridge this gap by introducing a novel framework for identifying and quanti-fying the impact of critical tokens on model accuracy. We define critical tokens in mathematical reasoning as crucial components within an incorrect trajectory that significantly alter the final outcome . We utilize rollout sampling to iden-tify tokens that substantially influence the correctness of rea-soning trajectories. Our findings reveal that critical tokens often diverge from human-annotated error tokens, highlight-ing their unique role in disrupting logical coherence and computational accuracy. By analyzing the characteristics of critical tokens through word type and positional analysis, we provide novel insights into their nature and influence mech-anisms. Furthermore, manipulating a single critical token in incorrect trajectories can significantly enhance accuracy, underscoring their pivotal role in error mitigation. Building on these insights, we illustrate how critical tokens can enhance reasoning capabilities within Direct Preference Optimization (DPO), a commonly used reinforcement learn-ing algorithm. Although DPO proves effective for general tasks, it encounters difficulties in mathematical reasoning because it may reduce the generation likelihood of positive examples due to lexical similarities with negative examples. Our proposed method, cDPO, addresses this issue by tar-geting critical tokens unique to negative examples, thereby improving the model’s ability to differentiate between pos-itive and negative instances. cDPO involves the efficient identification and penalization of critical tokens predom-1Critical Tokens Matter: Token-Level Contrastive Estimation Enhances LLM’s Reasoning Capability an initial installment of $125, which represents 25% of the total amount she 
+
+> owed. So the total amount she owes is: 125 / 0.25 = 500. The answer is 500.
+> $125 initially. She still owes $125 * 0.75 = $93.75. The answer is $93.75.
+> 125 dollars. 75% is 3/4. 3/4 of 125 is 3/4 x 125 = 93.75. The answer is 93.75.
+> 125 dollars initially. If she still owes 75% of that, that is 0.75 x 125 = 93.75
+> dollars. The answer is 93.75.
+
+# ✔   
+
+> Question:
+> Mathilda is determined to pay back
+> the money she owes a friend so she
+> decides to pay an initial installment of
+> $125. If she still has 75% left to pay,
+> how much did she owe originally?
+> Response:
+> Let’s think step by step. She owed
+> $125 initially, She still has 75% left to
+> pay, So she owes $125 * 0.75 =
+> $93.75. The answer is $93.75. paid 125 dollars. She owes 75% of the original amount. 100% minus 75% is 25%.
+> 125 / 0.25 is 500. The answer is 500.
+> $125 as an initial installment with 75% left to pay. So, the total owed is 125
+> wes is: 125 / 0.25 = 500. The answer is 500.
+> owed
+
+# ✘
+
+# ✘
+
+# ✘
+
+# ✔
+
+# ✔
+
+Figure 1. An illustration of the critical token “ owed ” shows that it fails to lead to the correct answer in any case. Replacing it with an alternative can significantly increase model accuracy. 
+
+inantly found in negative examples, refining the model’s learning process and enhancing its understanding of positive outcomes. Experimental results on GSM8K and MATH500 benchmarks using widely recognized models like Llama-3 (8B and 70B) and Deepseek-math (7B) demonstrate that our approach surpasses strong DPO baselines, such as Tok-enDPO (Zeng et al., 2024) and RPO (Liu et al., 2024; Pang et al., 2024), across all evaluated scenarios. In summary, our contributions are three-fold: • We introduce the concept of critical tokens in mathemat-ical reasoning tasks and empirically validate their exis-tence through extensive rollout sampling, distinguishing them from traditional error tokens. • We propose an efficient approach using contrastive esti-mation to practically identify critical tokens in large-scale training data, requiring only as little as 0.002% of the computational cost of rollout sampling for GSM8K. • We develop cDPO, an innovative approach that leverages critical tokens within DPO, enhancing the algorithm’s ability to distinguish between positive and negative exam-ples in mathematical reasoning. 
+
+# 2. Critical Tokens in Mathematic Reasoning 
+
+In this section, we explore the concept of “critical tokens” in mathematical reasoning tasks and their impact on model accuracy. We begin by defining critical tokens as pivotal points in incorrect reasoning trajectories that significantly in-fluence outcomes using the example in Figure 1. To validate the presence of critical tokens, we perform rollout sampling, identifying tokens with zero correctness scores that meet specific conditions in sequence analysis. Our findings reveal that critical tokens differ from human-annotated error to-kens in a substantial proportion of cases, emphasizing their unique role in reasoning failure (Table 1). Further experi-mentation shows that replacing critical tokens boosts model accuracy significantly, highlighting their importance in er-ror reduction (Figure 2). We conclude with an analysis of critical tokens based on word types and positional attributes (Table 2), providing insights into their characteristics. 
+
+Intuition Mathematical reasoning tasks require logical and sequential deduction to find solutions. We have ob-served that within incorrect reasoning trajectories, certain tokens are pivotal in leading to incorrect outcomes. These to-kens disrupt the logical flow, misrepresent relationships, or introduce computational errors, thus significantly affecting the final result. Unlike other tokens that may have negligible effects on the reasoning process, these “critical tokens” are crucial points of failure. Identifying these tokens is essen-tial because avoiding or correcting them can often result in correct outcomes, even within an incorrect trajectory. As illustrated in Figure 1, the token “owed” is predominantly re-sponsible for incorrect reasoning trajectories as it misguides the logical deduction process. In contrast, prompting the model to decode alternative tokens like “paid” significantly increases the likelihood of producing a correct final result. 
+
+Empirical Validation with Rollout Sampling To empiri-cally validate the existence of critical tokens, we conducted 64 rollout samplings for each token within an incorrect tra-jectory. We calculated a score for each token based on the correctness ratio of the generated completions, to quantify its influence on the trajectory. The first token that meets the 2Critical Tokens Matter: Token-Level Contrastive Estimation Enhances LLM’s Reasoning Capability  
+
+> Table 1. The ratio of incorrect trajectories where critical tokens are different from error tokens across to the error types.
+
+Error Types GSM8K Training Data MATH500 Training Data #Count Critical != Error #Count Critical != Error 
+
+Calculation Error 60 56.7% 54 79.6% One step Missing 17 72.7% 8 87.5% Semantic Misund. 22 82.3% 17 100.0% Degeneration 1 100.0% 21 95.2% Total 100 65.0% 100 87.0%  
+
+> Table 2. Analysis of identified critical tokens.
+
+Error Types Word Types Relative Positions Function Content Number Operator Punct. Before After 100 Instances from GSM8K Training Data 
+
+Calculation Error 10 14 19 10 7 17 17 One step Missing 5 2 9 0 1 9 5Semantic Misund. 3 6 3 3 7 7 9Degeneration 0 0 1 0 0 0 1Total 18 22 32 13 15 33 32 
+
+100 Instances from MATH500 Training Data 
+
+Calculation Error 10 10 15 17 2 30 13 One step Missing 3 0 2 3 0 6 1Semantic Misund. 4 3 2 6 2 10 7Degeneration 6 3 6 5 1 10 10 Total 23 16 25 31 5 56 31 following two conditions is identified as the critical token: • The token’s correctness score is 0; • The scores of all subsequent tokens are below 5%. We analyzed 100 incorrect trajectories from Llama3-8B-base, randomly selected from the MATH training dataset, and successfully identified the critical token in all cases. In addition, by examining 100 random incorrect trajectories from the GSM8K training data, we identified the critical token in 99 cases out of 100. For the outlier case, we iden-tified a critical token that only satisfied the first condition. These results demonstrate the existence of critical tokens. 
+
+Critical Tokens Are Not Necessarily Error Tokens Re-searchers might hypothesize that critical tokens tend to co-incide with error tokens, given their definition (i.e., the correctness ratio of rollout samplings is 0). However, Ta-ble 1 demonstrates that critical tokens frequently differ from human-annotated error tokens across various error types (Wei et al., 2022; Wang et al., 2023). In the GSM8K training dataset, 65% of the critical tokens do not match the error tokens, while this disparity increases to 87% in the MATH500 training dataset. This variance is further nuanced when examining specific error categories. For example, in the GSM8K data, calculation errors show a 56.7% mismatch, which suggests that nearly half the time the critical tokens identified do not correspond to the actual error tokens. One-step missing error demonstrates a higher 72.7% discrepancy, and semantic misunderstandings show an even greater divergence of 82.3%. Notably, degeneration errors—though based on a single occurrence—exhibit a complete 100% discrepancy with error tokens. In the MATH500 dataset, a similar pattern is observed. Cal-culation errors exhibit a 79.6% discrepancy, one-step miss-ing errors an 87.5% mismatch, semantic misunderstandings a 100% divergence, and degeneration errors a significant 95.2% discrepancy. The results in MATH500, particularly the large differences in degeneration errors, underscore the complexity involved in high-precision domains. These findings underscore a critical insight: while critical to-kens are valuable for flagging potential issues in a trajectory, there isn’t always a direct correlation with human-annotated error tokens. This divergence emphasizes the intricate na-ture of error detection and correction in algorithmic analyses, 3Critical Tokens Matter: Token-Level Contrastive Estimation Enhances LLM’s Reasoning Capability 
+
+suggesting that critical tokens capture a broader context of underlying issues, possibly before an error becomes evident. 
+
+Analysis of Critical Tokens We analyze critical tokens from the following perspectives, as detailed in Table 2. Tokens are categorized into five types based on their lin-guistic roles: function words, content words, and numbers. Additionally, operators (e.g., mathematical symbols) and punctuation marks are identified. Our analysis reveals differ-ing patterns across error types and datasets, highlighting the complexity of math reasoning tasks. In the GSM8K dataset, calculation errors predominantly occur with numbers (19 instances) and are fairly distributed among other word types. On the other hand, one step missing errors primarily involve numbers and function words. This suggests an emphasis on numerical manipulation where precision in number usage and function words indicating operations are critical. The MATH500 dataset follows a somewhat similar trend, though it exhibits a higher occurrence of operator-related calcula-tion errors (17 instances), indicating a more frequent use of complex mathematical operations in this dataset. This accentuates the need for careful handling of operators in mathematical computations. The position of critical tokens is analyzed relative to the corresponding error tokens, categorizing them as occurring before or after the error tokens. If the critical token is the error token itself, it is not counted. In GSM8K, critical tokens are almost evenly distributed: 33 occur before and 32 after the error. However, in MATH500, more critical tokens occur before error tokens, suggesting that critical tokens capture a broader context of underlying issues in the complex MATH500 problems, potentially before an error becomes evident. 
+
+Impact of Critical Tokens We investigate the effect of critical tokens by replacing them with alternative tokens during model decoding. Specifically, let ti be a critical token in a given trajectory, and let T<i = {t1, . . . , t i−1} represent the preceding tokens. We perform k rollout samples based on two different prefixes and calculate the Pass@k metric: • w/ critical tokens : The prefix is {t1, . . . , t i}. Based on the definition of critical token, all Pass@k scores are zero. • w/o critical tokens : The prefix is {t1, . . . , t i−1}, exclud-ing the critical token ti. We force the model to decode an alternative token at the same position, using the model’s probability distribution while masking out the critical to-ken. This substitution allows us to explore if it leads to improved outcomes in model predictions. Figure 2 displays the results on 100 instances sampled indi-vidually from the GSM8K and MATH500 training datasets. By replacing critical tokens with alternative tokens, we Pass@k       
+
+> 0%
+> 20%
+> 40%
+> 60%
+> 80%
+> 100%
+> Number of Samples (k)
+> 124816 32 64 0.0% 0.0% 0.0% 0.0% 0.0% 0.0% 0.0% 91.0% 85.3% 76.3% 64.7% 52.3% 40.5% 29.9% 0.0% 0.0% 0.0% 0.0% 0.0% 0.0% 0.0% 95.0% 88.0% 77.8% 66.2% 54.1% 42.0% 30.5%
+> MATH500: w/o Critical Tokens
+> MATH500: w/ Critical Tokens
+> GSM8K: w/o Critical Tokens
+> GSM8k: w/ Critical Tokens
+> Generated Tokens
+
+0
+
+200 
+
+400 
+
+600 
+
+800 
+
+1000 
+
+> Qwen2.5-72B
+> LLaMa3.3-70B
+> DeepSeek-Math-7B
+> Qwen2.5-Math-7B
+> Qwen2.5-Math-72B
+> GPT-4o
+> GPT-4o-mini
+> Gemini Pro
+> Claude-3.5
+> o1-Preview
+> o1-mini
+> DeepSeek-R1
+> QwQ-32B-Preview 901 451 218 226 757745 50 16 77
+
+Figure 2. Impact of critical tokens on reasoning accuracy. Re-placing critical tokens with alternatives (“w/o Critical Tokens”) can significantly increase model accuracy on both GSM8K and MATH500, highlighting the importance of these tokens. 
+
+observed a significant improvement in the model’s perfor-mance on these datasets, with Pass@1 accuracy reaching approximately 30% and Pass@64 increasing to over 90%. These results underscore the crucial role that critical tokens play as potential stumbling blocks in the reasoning process. By preventing the model from proceeding with these criti-cal tokens and suggesting alternatives, we enable a higher likelihood of reaching accurate conclusions. The findings emphasize the importance of understanding and manipulating critical tokens to enhance model perfor-mance, especially in complex reasoning tasks. By identi-fying these critical tokens in reasoning trajectories, we can mitigate the risk of errors, thereby significantly improving the model’s effectiveness. Such insights could be instru-mental in refining training processes and increasing the reliability of AI systems in real-world applications. 
+
+# 3. Enhancing Reasoning Capability with Critical Tokens 
+
+In this section, we demonstrate how reasoning capabili-ties, trained with commonly-used DPO, can be enhanced by using critical tokens. Despite the success of DPO in general instruction tuning tasks, challenges persist when it is applied to reasoning and mathematical tasks. Studies have delved into this issue from an optimization perspective, identifying that these algorithms often diminish the genera-tion likelihood of positive examples in reasoning tasks due to the lexical similarity between positive and negative exam-ples. This overlap can lead to a situation where the model struggles to effectively prioritize and generate the correct tra-jectory during reasoning or mathematical problem-solving tasks. As a result, the adopted approach is to optimize pref-erences while ensuring that high generation likelihoods are maintained exclusively for positive examples (Liu et al., 2024; Pang et al., 2024; Pal et al., 2024; Feng et al., 2024). 4Critical Tokens Matter: Token-Level Contrastive Estimation Enhances LLM’s Reasoning Capability 
+
+However, these approaches still attribute high likelihood to tokens that appear in both negative and positive examples, thereby failing to adequately distinguish between truly ben-eficial features and those that are merely ubiquitous across positive and negative examples. In this work, we mitigate this problem by leveraging critical tokens that occur only in negative examples. By focusing on these tokens, we aim to enhance the model’s ability to effec-tively differentiate between positive and negative examples. Our approach involves the identification and penalization 
+
+of critical tokens that are prevalent exclusively in negative examples. This allows us to adjust the model’s learning process by reducing the likelihood of these negative-specific tokens, thereby refining the model’s understanding of what constitutes a positive outcome. By explicitly incorporating a mechanism that penalizes frequent negative-example tokens, we ensure that the model learns to prioritize features that truly contribute to successful task completion. 
+
+3.1. Efficient Identification of Critical Tokens 
+
+While it is straightforward to identify critical tokens using rollout sampling as described in Section 2, such methods incur prohibitively high sampling costs and face significant scalability challenges. Moreover, existing methods (Guo et al., 2023; Yoon et al., 2024) depend on external models for token-level annotations, which, although providing effective supervision signals, are costly and limited by the capabili-ties of the external models. To efficiently identify critical tokens, we propose a method called contrastive estimation, which leverages models trained to learn patterns from both correct and incorrect reasoning trajectories. Figure 3 depicts the framework. By comparing the token-level likelihoods produced by two separately trained models, contrastive esti-mation can effectively pinpoint critical tokens contributing to incorrect outcomes. The contrastive estimation probabil-ity naturally highlights tokens (e.g., “owed”) that lead to incorrect reasoning outcomes. We provide additional details throughout the remainder of this section. 
+
+Training Positive and Negative Models To implement the contrastive estimation, we need to develop models that can effectively estimate a wide range of both correct and incorrect reasoning distributions. To this end, we collect reasoning trajectories based on the sampling strategy: given a dataset of M instances D = {(xi, y i)}Mi=1 , we utilize a pre-trained LLM to sample N reasoning trajectories. Then, we verify the outcome results based on the golden labels yi,which yields ki positive reasoning trajectories and N − ki
+
+negative reasoning trajectories, which is denoted as: 
+
+Dp = {(xi, {ypi,j }kj=1 )}Mi=1 
+
+Dn = {(xi, {yni,j }Nj=k+1 )}Mi=1 
+
+For training the positive model, we randomly selected a single correct trajectory because we expect the model to develop decisiveness using its own accurate reasoning paths. For training the negative model, we chose the incorrect tra-jectories that most frequently occur and account for 50% of all incorrect cases. This approach ensures both variety and representativeness, allowing us to accurately identify critical tokens. For instance, if there are 10 incorrect tra-jectories comprising 3 cases with the incorrect answer a,2 cases with the incorrect answer b, and other cases with answers {c, d, e, f, g } occurring only once each, we would randomly select one incorrect trajectory from those with an-swers a and b, as they appear in 5 cases in total. Finally, we train the negative model on this example using two incorrect trajectories: one with answer a and the other with b.
+
+Contrastive Estimation With both the positive model and the negative model available, we can automatically annotate the likelihood of each token in an incorrect trajectory being a critical token using contrastive estimation. Let x be a query, and yn = {y1, . . . , y t, . . . , y T } be a negative example of length T used in DPO training. We compute the likelihood of token yt being a critical token, denoted as st, with the following equation: 
+
+log st =(1 + β) log P p(yt|x, y<t )
+
+− β log P n(yt|x, y<t ) − log Z (1) Here, β is a scaling hyperparameter, while P p(·) and P n(·)
+
+represent the probabilities from the positive and negative models, respectively. The term log Z is the partition func-tion used in the softmax computation. A low st indicates a low likelihood under the correct pattern and a high likeli-hood under the incorrect pattern, signaling the presence of critical tokens. We further provide theoretical and empirical analysis in Appendix A. 
+
+Efficiency Analysis of Contrastive Estimation To eval-uate the computational efficiency of contrastive estimation compared to rollout sampling, we estimate the number of forward passes required. Rollout sampling, used to identify critical tokens, incurs substantial inference costs as it relies on sampling from the base model. For GSM8K, obtaining critical tokens through rollout sampling for 100 incorrect examples (64 samples per token) results in an average of 581,425 additional tokens per response (7,613,942 tokens for MATH). Therefore, for n examples, rollout sampling requires approximately 581 , 425 × n forward passes. In contrast, contrastive estimation involves both training and inference costs. On GSM8K, the dataset for training the positive and negative models contains 26,131 examples (68,391 examples for MATH), and SFT on this dataset re-quires approximately 3 × 26 , 131 = 78 , 393 forward passes, assuming a batch size of 1. For inference on n examples, 5Critical Tokens Matter: Token-Level Contrastive Estimation Enhances LLM’s Reasoning Capability 𝑫 = {(𝒙 𝒊 , 𝒚 𝒊               
+
+> p,𝒚 𝒊
+> 𝒏 ,𝒔 𝒊
+> 𝒏 )}𝒊 =𝟏
+> 𝑴
+> 𝑫 𝒑 ={(𝒙 𝒊 ,{𝒚 𝒊 ,𝒋
+> 𝒑 }𝒋 =𝟏
+> 𝒌 )}𝒊 =𝟏
+> 𝑴 𝑫 𝒏 ={(𝒙 𝒊 ,{𝒚 𝒊 ,𝒋
+> 𝒏 }𝒋 =𝒌 +𝟏
+> 𝑵 )}𝒊 =𝟏
+> 𝑴
+> Sampling with Correctness Validation
+> Base Model
+> SFT SFT
+> Trained Model
+> Negative Model Positive Model
+
+Contrastive Estimation 
+
+cDPO      
+
+> Base Model
+> She owed $125 initially…… The answer is $93.75.
+> Negative Model Positive Model
+> Prediction
+> 𝑫 ={(𝒙 𝒊 ,𝒚 𝒊 )}𝒊 =𝟏
+> 𝑴
+
+Figure 3. Pipeline of the proposed cDPO that involves the efficient identification and penalization of critical tokens that are prevalent exclusively in negative examples. 
+
+contrastive estimation only requires each of the positive and negative models to perform one forward pass per example, totaling 2n. Consequently, the total cost for contrastive estimation is 78 , 393 + 2 n forward passes for GSM8K, which is significantly lower than the cost of rollout sam-pling. For example, for GSM8K that consists of 7,500 examples, contrastive estimation requires only as little as (78393+2*7500)/(581425*7500)=0.002% of the computa-tional cost of rollout sampling. Despite its efficiency, con-trastive estimation demonstrates reasonable alignment with rollout-based supervision. Specifically, we measured the Area Under the Curve (AUC) of CE with respect to rollout on LLaMA-3-8B, obtaining values of 0.77 on GSM8K and 0.84 on MATH. 
+
+3.2. cDPO: Explicitly Penalizing Critical Tokens in DPO Intuition Critical tokens in incorrect trajectories signif-icantly contribute to errors, even when other tokens may be correctly placed. By assigning token-level scores to incorrect trajectories, we can specifically penalize critical tokens without adversely affecting correct ones. Conversely, scoring correct trajectories to encourage certain tokens can inadvertently penalize other valid tokens, resulting in unde-sired distribution shifts in DPO (Rafailov et al., 2024; Xu et al., 2024). Therefore, we focus exclusively on scoring tokens within incorrect trajectories and extend DPO from the example level to the token level by utilizing token-level rewards for preference optimization. 
+
+Formulation Given the pairwise preference dataset D =
+
+{(xi, y pi , y ni )}Mi=1 , the original DPO loss is formulated as: 
+
+ℓDPO = −
+
+> M
+
+X
+
+> i=1
+
+log σ(ϕ(xi, y pi ) − ϕ(xi, y ni )) 
+
+Here, ϕ(x, y ) is an implicit reward function, given by: 
+
+ϕ(x, y ) = γ log πθ (y | x)
+
+πref (y | x)
+
+where πθ (·| x) and πref (y|x) represent the policy model and the reference model, respectively, and γ is the coefficient for the KL divergence penalty. We extend the sample-level DPO to token-level DPO with critical rewards (i.e., cDPO). First, we modify the reward function ϕ(x, y ) to include token-level scores sni (Equa-tion 1) as follows: 
+
+ϕs(x, y, s ) = γ
+
+> T
+
+X
+
+> t=1
+
+(1 − st) log πθ (yt|x, y <t )
+
+πref (yt|x, y <t )
+
+where T is the total length of the response y, and st rep-resents the token-level reward score in cDPO for the t-th token. Accordingly, the objective of cDPO is formulated as: 
+
+ℓcDPO = −
+
+> M
+
+X
+
+> i=1
+
+log σ(ϕ(xi, y pi ) − ϕs(xi, y ni , s ni )) 
+
+Note that only the reward function for the negative example 
+
+yn is modified. Intuitively, lower values of st suggest a 6Critical Tokens Matter: Token-Level Contrastive Estimation Enhances LLM’s Reasoning Capability 
+
+higher likelihood of being critical tokens, which are more prone to result in incorrect outcomes. By weighting each token’s contribution with 1 − st, the model effectively pe-nalizes generating these critical tokens. This token-level approach helps ensure that the model reduces the likelihood of generating critical tokens, thus improving the overall accuracy of the responses. 
+
+3.3. Experimental Results Experimental Setup We used two widely recognized math reasoning datasets: GSM8K (Cobbe et al., 2021) and MATH (Hendrycks et al., 2021). For training, we sampled from all questions in the training set to generate the data. For evaluation, we utilized the MATH500 subset, which is uniformly sampled and has a distribution of difficulty levels and subjects that matches the full MATH test set, as demonstrated in Lightman et al. (2023). Additionally, for both training sampling and evaluation, we adopted few-shot prompting: 8-shot prompting for GSM8K, following Wei et al. (2022), and 4-shot prompting for MATH500, as de-scribed in Lewkowycz et al. (2022). For all main evaluations, the temperature was fixed at 0. We conducted experiments on a range of models, including the general-purpose models Llama-3-8B-base and Llama-3-70B-base (Dubey et al., 2024), as well as the domain-specific model DeepSeek-math-7B-base (Shao et al., 2024). For comparison, we evaluated multiple baseline methods us-ing the data generated from the process described in Section 3.1. For Supervised Fine-Tuning (SFT), we fine-tuned the model using the positive response set Dp. For preference optimization (PO) methods, we utilized the token-level an-notated pair-wise preference dataset D. The baselines we compared include: • DPO (Rafailov et al., 2024): We tested two different starting points for training: based on the base model and on the SFT model. • TokenDPO (Zeng et al., 2024), which is a token-level ap-proach that enhances Kullback-Leibler (KL) divergence regulation by incorporating forward KL divergence con-straints at the token level. The SFT model is used as the starting point for training. We implemented TDPO using the publicly available implementation. • RPO (Liu et al., 2024; Pang et al., 2024) introduces an ex-tra negative log-likelihood term to improve performance on reasoning tasks. We implemented it using Hugging-Face’s implementation and starting with the base model. We used LoRA adapters (Hu et al., 2022) to train all the models. We trained both positive and negative models for 1 epoch with a learning rate of 3e-4. For preference opti-mization training, we set γ = 1 .0 and trained for 3 epochs 0 500 1000 1500 2000 2500 
+
+> Training Steps
+> 250
+> 200
+> 150
+> 100
+> 50
+> Log probability
+> Chosen in cDPO
+> Rejected in cDPO
+> Chosen in RPO
+> Rejected in RPO
+> Chosen in DPO
+> Rejected in DPO
+
+Figure 4. Log probabilities of chosen and rejected sequences dur-ing training on the GSM8K dataset. Solid lines represent chosen sequences, while dashed lines denote rejected sequences. The figure illustrates how cDPO achieves a better separation between chosen and rejected sequences compared to DPO and RPO. 
+
+with a learning rate of 2e-5 for all baseline methods. For our 
+
+cDPO approach, since the token-level scores range between 0 and 1 (whereas in DPO, the scores were all 1), we simply increased the learning rate to 4e-5. For our proposed cDPO , each problem was sampled N =64 times, selecting the top-p = 50 % of incorrect trajectories to train the negative model q(·). During estimation, the hyperparameter β was set to 1.0. 
+
+Learning Curves We begin by examining the impact of 
+
+cDPO on training dynamics. Figure 4 shows the log proba-bility trends for selected and non-selected sequences over training steps on the GSM8K dataset using the Llama-3-8B model with DPO, RPO, and cDPO. The proposed cDPO method successfully differentiates be-tween chosen and rejected sequences by significantly in-creasing the log probability of correct sequences while sharply decreasing that of incorrect ones. In comparison, RPO (DPO with an additional NLL term) increases the probability of correct sequences, but its impact on reducing incorrect response probabilities is less significant. On the other hand, DPO notably decreases the probability of gener-ating incorrect sequences, but also reduces the probability of correct sequences. This suggests that cDPO strikes a balanced approach, effectively enhancing the probability of correct outputs while minimizing critical errors, exceeding the performance of both DPO and RPO. 
+
+Main Results Table 3 presents the experimental results for various methods across the GSM8K and MATH500. Our proposed method consistently outperforms all baselines and other methods, achieving the highest scores across both datasets. For the GSM8K dataset, our method achieves a 7Critical Tokens Matter: Token-Level Contrastive Estimation Enhances LLM’s Reasoning Capability 
+
+Method GSM8K MATH500 
+
+Llama-3 DeepSeek Avg. Llama-3 DeepSeek Avg. 
+
+8B 70B math-7B 8B 70B math-7B 
+
+Baseline 56.4 80.4 64.1 67.0 18.6 43.6 34.0 32.1 + SFT 61.2 82.1 67.1 70.1 16.8 43.4 34.2 31.5 + DPO 59.7 87.8 66.5 71.3 17.6 40.8 34.6 31.0 + TokenDPO 62.3 83.3 69.6 71.7 19.2 43.6 34.6 32.5 + DPO 59.6 88.9 63.1 70.5 14.6 42.6 35.0 30.7 + RPO 67.5 89.7 68.9 75.4 19.4 44.0 33.6 32.3 + cDPO (Ours) 67.9* 90.8* 72.9* 77.2* 19.6* 45.0* 35.2* 33.3*    
+
+> Table 3. Experimental results on GSM8K and MATH500 datasets. Our proposed method surpasses all the strong baselines at a large margin on individual settings and average performance. * denotes the significance test where p < 0.005 .
+
+remarkable average score of 77.2, surpassing the Baseline and notable improvements such as those incorporating SFT and DPO. Specifically, our approach reaches the highest scores with Llama-3 (90.8 for 70B) and DeepSeek (72.9). These results highlight the effectiveness of our method in leveraging the strengths of both large-scale models (Llama-3) and task-specific models (DeepSeek). Similarly, on the MATH500 dataset, our method attains an average score of 33.3, marking an improvement over the baseline (32.1) and other enhanced methods such as SFT and RPO. Notably, our approach yields the highest individual score with Llama-3 (45.0 for 70B) and performs robustly across all model configurations. Since models exhibit sensitivity to prompt formatting when evaluated with temperature 0 on MATH500, we further perform additional analyses by sampling each question 10 times under varying temperatures and report Pass@1 in the Table 5. As shown, cDPO consistently outperforms the corresponding base models across all temperature settings and exhibits stable, robust performance. To further verify the effectiveness of our method on stronger models, we conduct experiments using Qwen-2.5-7B and Qwen-2.5-32B on both GSM8K and MATH500. The results are presented in Table 6. As shown, cDPO consistently im-proves performance across both datasets and model scales. The consistent performance improvements observed across various settings underscore the superiority of our method compared to existing techniques. The significance tests, which were conducted to verify the statistical reliability of these results, confirm the competitive advantage of our proposed approach. 
+
+# 4. Related Work 
+
+Contrastive Estimation Notable works have refined con-trastive estimation techniques (Gutmann & Hyv ¨arinen, 2010; Bose et al., 2018; He et al., 2020; Denize et al., 2023). Specifically, our work is closely related to contrastive de-coding (CD), an application of contrastive estimation in downstream tasks. CD (Li et al., 2023) involves contrast-ing token distribution likelihoods between expert and am-ateur models during decoding. As described by O’Brien & Lewis (2023), this technique avoids high-probability but low-quality tokens, ensuring text fluency and coherence. Subsequent research has emphasized CD’s potential to im-prove factuality (Zhang et al., 2023; Yang et al., 2024), knowledge editing (Bi et al., 2024), safety (Zhao et al., 2024), and reasoning (O’Brien & Lewis, 2023; Shi et al., 2024; Yuan et al., 2024; Yang et al., 2025). Notably, O’Brien & Lewis (2023) showed that CD enhances reasoning tasks and mitigates typical errors. Shi et al. (2024) demonstrated that unchosen experts in Mixture-of-Experts models could be applied for CD, thereby improving model reasoning ca-pacities. Different from those works that focus on the infer-ence of contrastive decoding, our research primarily uses contrastive estimation to identify “critical tokens” that sig-nificantly affect the correctness of the reasoning process. 
+
+Reinforcement Learning Among various alignment al-gorithms (Christiano et al., 2017; Schulman et al., 2017; Ziegler et al., 2019; Ouyang et al., 2022; Bai et al., 2022), DPO (Rafailov et al., 2024) is one of the most representa-tive algorithms. DPO uses the LLM itself as a secret reward model and conducts preference optimization on a preference pair of positive and negative examples. Since then, various contributions have been made to further advance the DPO development of LLM alignment (Pal et al., 2024; Amini et al., 2024; Azar et al., 2024). A line of research aims to improve the performance of DPO in reasoning tasks (Liu et al., 2024; Pang et al., 2024; Pal et al., 2024; Feng et al., 2024). Furthermore, Lai et al. (2024) leverage human or GPT-4 validation to pinpoint incorrect reasoning steps; Guo et al. (2023); Yoon et al. (2024) utilize 8Critical Tokens Matter: Token-Level Contrastive Estimation Enhances LLM’s Reasoning Capability 
+
+external LLMs to refine responses, deriving token-level preferences from pre- and post-revision comparisons. In contrast, our study seeks to establish an automatic process supervision strategy devoid of human annotation and easy to scale. Specifically, we harness contrastive estimation to identify critical tokens, providing token-level signals for preference optimization that significantly enhance LLM reasoning capabilities. 
+
+# 5. Conclusion 
+
+Our work contributes a significant framework for under-standing and enhancing mathematical reasoning in LLMs through critical token analysis. By defining and identifying critical tokens, we provide valuable insights into token-level discrepancies that disrupt logical reasoning. Our approach, 
+
+cDPO, successfully integrates this analysis into DPO, im-proving model performance on mathematical tasks by im-proving the model’s differentiation between positive and negative examples. Experimental results from GSM8K and MATH500 benchmarks have shown that our method outper-forms existing DPO baselines, underscoring the potential of critical token interventions in enhancing model accuracy. Our research opens new doors for further exploration of token-level influences in complex reasoning tasks, which could lead to more refined and effective LLMs. Future work should explore the integration of cDPO with other reasoning frameworks and extend its application to diverse logical reasoning domains, contributing towards the broader aim of developing more robust and reliable LLMs. 
+
+# Impact Statement 
+
+In our research, we focus exclusively on developing models for solving mathematical problems, which inherently mini-mizes common ethical concerns typically associated with AI applications in broader domains. The primary function of our models is to enhance computational accuracy and efficiency in mathematical tasks, ensuring that any potential bias, privacy issues, or harmful outputs are effectively non-existent. Since our dataset consists solely of mathematical questions, it does not involve personal, sensitive, or contro-versial information that could lead to ethical dilemmas. 
+
+# Acknowledgments 
+
+This work was partly supported by the National Key Research and Development Program of China (No. 2024YFB2808903) , the Shenzhen Science and Technol-ogy Program (JCYJ20220818101014030) and the research fund of Tsinghua University - Tencent Joint Laboratory for Internet Innovation Technology. 
+
+# References 
+
+Ahn, J., Verma, R., Lou, R., Liu, D., Zhang, R., and Yin, W. Large language models for mathematical reasoning: Progresses and challenges. In Proceedings of the 18th Conference of the European Chapter of the Association for Computational Linguistics: Student Research Work-shop , pp. 225–237, 2024. Amini, A., Vieira, T., and Cotterell, R. Direct pref-erence optimization with an offset. arXiv preprint arXiv:2402.10571 , 2024. Azar, M. G., Guo, Z. D., Piot, B., Munos, R., Rowland, M., Valko, M., and Calandriello, D. A general theoretical paradigm to understand learning from human preferences. In International Conference on Artificial Intelligence and Statistics , pp. 4447–4455, 2024. Bai, Y., Jones, A., Ndousse, K., Askell, A., Chen, A., Das-Sarma, N., Drain, D., Fort, S., Ganguli, D., Henighan, T., et al. Training a helpful and harmless assistant with rein-forcement learning from human feedback. arXiv preprint arXiv:2204.05862 , 2022. Bi, B., Liu, S., Mei, L., Wang, Y., Ji, P., and Cheng, X. De-coding by contrasting knowledge: Enhancing llms’ confi-dence on edited facts. arXiv preprint arXiv:2405.11613 ,2024. Bose, A. J., Ling, H., and Cao, Y. Adversarial contrastive estimation. arXiv preprint arXiv:1805.03642 , 2018. Christiano, P. F., Leike, J., Brown, T., Martic, M., Legg, S., and Amodei, D. Deep reinforcement learning from human preferences. Advances in neural information pro-cessing systems , 30, 2017. Cobbe, K., Kosaraju, V., Bavarian, M., Chen, M., Jun, H., Kaiser, L., Plappert, M., Tworek, J., Hilton, J., Nakano, R., et al. Training verifiers to solve math word problems. 
+
+arXiv preprint arXiv:2110.14168 , 2021. Collins, K. M., Jiang, A. Q., Frieder, S., Wong, L., Zilka, M., Bhatt, U., Lukasiewicz, T., Wu, Y., Tenenbaum, J. B., Hart, W., et al. Evaluating language models for mathe-matics through interactions. Proceedings of the National Academy of Sciences , 121(24):e2318124121, 2024. Denize, J., Rabarisoa, J., Orcesi, A., H ´erault, R., and Canu, S. Similarity contrastive estimation for self-supervised soft contrastive learning. In Proceedings of the IEEE/CVF Winter Conference on Applications of Computer Vision ,pp. 2706–2716, 2023. Dubey, A., Jauhri, A., Pandey, A., Kadian, A., Al-Dahle, A., Letman, A., Mathur, A., Schelten, A., Yang, A., Fan, A., et al. The llama 3 herd of models. arXiv preprint arXiv:2407.21783 , 2024. 9Critical Tokens Matter: Token-Level Contrastive Estimation Enhances LLM’s Reasoning Capability 
+
+Feng, D., Qin, B., Huang, C., Zhang, Z., and Lei, W. Towards analyzing and understanding the limitations of dpo: A theoretical perspective. arXiv preprint arXiv:2404.04626 , 2024. Guo, G., Zhao, R., Tang, T., Zhao, W. X., and Wen, J.-R. Beyond imitation: Leveraging fine-grained quality signals for alignment. arXiv preprint arXiv:2311.04072 ,2023. Gutmann, M. and Hyv ¨arinen, A. Noise-contrastive estima-tion: A new estimation principle for unnormalized statisti-cal models. In Proceedings of the thirteenth international conference on artificial intelligence and statistics , pp. 297–304. JMLR Workshop and Conference Proceedings, 2010. He, K., Fan, H., Wu, Y., Xie, S., and Girshick, R. Mo-mentum contrast for unsupervised visual representation learning. In Proceedings of the IEEE/CVF conference on computer vision and pattern recognition , pp. 9729–9738, 2020. Hendrycks, D., Burns, C., Kadavath, S., Arora, A., Basart, S., Tang, E., Song, D., and Steinhardt, J. Measuring mathematical problem solving with the math dataset. In 
+
+Thirty-fifth Conference on Neural Information Process-ing Systems Datasets and Benchmarks Track (Round 2) ,2021. Hu, E. J., Wallis, P., Allen-Zhu, Z., Li, Y., Wang, S., Wang, L., Chen, W., et al. Lora: Low-rank adaptation of large language models. In International Conference on Learn-ing Representations , 2022. Lai, X., Tian, Z., Chen, Y., Yang, S., Peng, X., and Jia, J. Step-dpo: Step-wise preference optimiza-tion for long-chain reasoning of llms. arXiv preprint arXiv:2406.18629 , 2024. Lambert, N., Pyatkin, V., Morrison, J., Miranda, L., Lin, B. Y., Chandu, K., Dziri, N., Kumar, S., Zick, T., Choi, Y., et al. Rewardbench: Evaluating reward models for language modeling. arXiv preprint arXiv:2403.13787 ,2024. Lewkowycz, A., Andreassen, A., Dohan, D., Dyer, E., Michalewski, H., Ramasesh, V., Slone, A., Anil, C., Schlag, I., Gutman-Solo, T., et al. Solving quantitative reasoning problems with language models. Advances in Neural Information Processing Systems , 35:3843–3857, 2022. Li, X. L., Holtzman, A., Fried, D., Liang, P., Eisner, J., Hashimoto, T. B., Zettlemoyer, L., and Lewis, M. Con-trastive decoding: Open-ended text generation as opti-mization. In Proceedings of the 61st Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) , pp. 12286–12312, 2023. Lightman, H., Kosaraju, V., Burda, Y., Edwards, H., Baker, B., Lee, T., Leike, J., Schulman, J., Sutskever, I., and Cobbe, K. Let’s verify step by step. arXiv preprint arXiv:2305.20050 , 2023. Liu, Z., Lu, M., Zhang, S., Liu, B., Guo, H., Yang, Y., Blanchet, J., and Wang, Z. Provably mitigating overopti-mization in rlhf: Your sft loss is implicitly an adversarial regularizer. arXiv preprint arXiv:2405.16436 , 2024. O’Brien, S. and Lewis, M. Contrastive decoding improves reasoning in large language models. arXiv preprint arXiv:2309.09117 , 2023. Ouyang, L., Wu, J., Jiang, X., Almeida, D., Wainwright, C., Mishkin, P., Zhang, C., Agarwal, S., Slama, K., Ray, A., et al. Training language models to follow instructions with human feedback. Advances in neural information processing systems , 35:27730–27744, 2022. Pal, A., Karkhanis, D., Dooley, S., Roberts, M., Naidu, S., and White, C. Smaug: Fixing failure modes of pref-erence optimisation with dpo-positive. arXiv preprint arXiv:2402.13228 , 2024. Pang, R. Y., Yuan, W., Cho, K., He, H., Sukhbaatar, S., and Weston, J. Iterative reasoning preference optimization. 
+
+arXiv preprint arXiv:2404.19733 , 2024. Rafailov, R., Sharma, A., Mitchell, E., Manning, C. D., Er-mon, S., and Finn, C. Direct preference optimization: Your language model is secretly a reward model. Ad-vances in Neural Information Processing Systems , 36, 2024. Schulman, J., Wolski, F., Dhariwal, P., Radford, A., and Klimov, O. Proximal policy optimization algorithms. 
+
+arXiv preprint arXiv:1707.06347 , 2017. Shao, Z., Wang, P., Zhu, Q., Xu, R., Song, J., Zhang, M., Li, Y., Wu, Y., and Guo, D. Deepseekmath: Pushing the limits of mathematical reasoning in open language models. arXiv preprint arXiv:2402.03300 , 2024. Shi, C., Yang, C., Zhu, X., Wang, J., Wu, T., Li, S., Cai, D., Yang, Y., and Meng, Y. Unchosen experts can contribute too: Unleashing moe models’ power by self-contrast. 
+
+arXiv preprint arXiv:2405.14507 , 2024. Wang, B., Min, S., Deng, X., Shen, J., Wu, Y., Zettlemoyer, L., and Sun, H. Towards understanding chain-of-thought prompting: An empirical study of what matters. In Pro-ceedings of the 61st Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) ,pp. 2717–2739, 2023. 10 Critical Tokens Matter: Token-Level Contrastive Estimation Enhances LLM’s Reasoning Capability 
+
+Wei, J., Wang, X., Schuurmans, D., Bosma, M., Xia, F., Chi, E., Le, Q. V., Zhou, D., et al. Chain-of-thought prompting elicits reasoning in large language models. Advances in neural information processing systems , 35:24824–24837, 2022. Xu, S., Fu, W., Gao, J., Ye, W., Liu, W., Mei, Z., Wang, G., Yu, C., and Wu, Y. Is dpo superior to ppo for llm align-ment? a comprehensive study. In Forty-first International Conference on Machine Learning , 2024. Yang, C., Shi, C., Li, S., Shui, B., Yang, Y., and Lam, W. LLM2: Let large language models harness sys-tem 2 reasoning. In Chiruzzo, L., Ritter, A., and Wang, L. (eds.), Proceedings of the 2025 Conference of the Nations of the Americas Chapter of the Asso-ciation for Computational Linguistics: Human Lan-guage Technologies (Volume 2: Short Papers) , pp. 168– 177, Albuquerque, New Mexico, April 2025. Associa-tion for Computational Linguistics. ISBN 979-8-89176-190-2. URL https://aclanthology.org/2025. naacl-short.15/ .Yang, D., Xiao, D., Wei, J., Li, M., Chen, Z., Li, K., and Zhang, L. Improving factuality in large language models via decoding-time hallucinatory and truthful comparators. 
+
+arXiv preprint arXiv:2408.12325 , 2024. Yoon, E., Yoon, H. S., Eom, S., Han, G., Nam, D., Jo, D., On, K.-W., Hasegawa-Johnson, M., Kim, S., and Yoo, C. Tlcr: Token-level continuous reward for fine-grained reinforcement learning from human feedback. In 
+
+Findings of the Association for Computational Linguistics ACL 2024 , pp. 14969–14981, 2024. Yu, L., Jiang, W., Shi, H., Jincheng, Y., Liu, Z., Zhang, Y., Kwok, J., Li, Z., Weller, A., and Liu, W. Metamath: Bootstrap your own mathematical questions for large lan-guage models. In The Twelfth International Conference on Learning Representations .Yuan, H., Lu, K., Huang, F., Yuan, Z., and Zhou, C. Specu-lative contrastive decoding. In Proceedings of the 62nd Annual Meeting of the Association for Computational Linguistics (Volume 2: Short Papers) , pp. 56–64, 2024. Yuan, Z., Yuan, H., Li, C., Dong, G., Lu, K., Tan, C., Zhou, C., and Zhou, J. Scaling relationship on learning math-ematical reasoning with large language models. arXiv preprint arXiv:2308.01825 , 2023. Zeng, Y., Liu, G., Ma, W., Yang, N., Zhang, H., and Wang, J. Token-level direct preference optimization. arXiv preprint arXiv:2404.11999 , 2024. Zhang, Y., Cui, L., Bi, W., and Shi, S. Alleviating hal-lucinations of large language models through induced hallucinations. arXiv preprint arXiv:2312.15710 , 2023. Zhao, Z., Zhang, X., Xu, K., Hu, X., Zhang, R., Du, Z., Guo, Q., and Chen, Y. Adversarial contrastive decod-ing: Boosting safety alignment of large language mod-els via opposite prompt optimization. arXiv preprint arXiv:2406.16743 , 2024. Ziegler, D. M., Stiennon, N., Wu, J., Brown, T. B., Radford, A., Amodei, D., Christiano, P., and Irving, G. Fine-tuning language models from human preferences. arXiv preprint arXiv:1909.08593 , 2019. 11 Critical Tokens Matter: Token-Level Contrastive Estimation Enhances LLM’s Reasoning Capability 
+
+# A. Contrastive Estimation: Theoretical and Empirical Analysis 
+
+A.1. Distribution Analysis of Contrastive Estimation 
+
+We demonstrate that contrastive estimation does not fundamentally alter the nature of the trajectory distribution. According to (Guo et al., 2023; Lambert et al., 2024), the trajectory distribution can be modeled as Gaussian distributions based on correctness. Consequently, we define the probability density functions for the correct and incorrect distributions, denoted as 
+
+P p and P n respectively, as follows: 
+
+P p(x) = 1
+
+√2πσ exp 
+
+
+
+− (x − μp)2
+
+2σ2
+
+
+
+, (2) 
+
+P n(x) = 1
+
+√2πσ exp 
+
+
+
+− (x − μn)2
+
+2σ2
+
+
+
+, (3) where the means satisfy μp > μ n, and both distributions share the same standard deviation σ, facilitating a straightforward comparison between them. Therefore, according to Eq. 1, the probability density function P ce of the CE distribution can be calculated as follows: 
+
+log( P ce (x)) = (1 + β) log( P p(x)) − β log( P n(x)) − log( Z1), (4) where Z1 is the partition function. Substituting the definitions of P p(x) and P n(x), we obtain: 
+
+log( P ce (x)) = log 
+
+ 1
+
+√2πσ 
+
+
+
+− (1 + β)( x − μp)2 − β(x − μn)2
+
+2σ2 − log( Z1). (5) Thus, the CE distribution P ce is: 
+
+P ce (x) = 1
+
+Z1
+
+ 1
+
+√2πσ exp 
+
+
+
+− (1 + β)( x − μp)2 − β(x − μn)2
+
+2σ2
+
+ 
+
+. (6) The term (1 + β)( x − μp)2 − β(x − μn)2 can be expressed as: 
+
+(1 + β)( x − μp)2 − β(x − μn)2 = ( x − μce )2 + Z3, (7) where μce = μp + β(μp − μn), and Z3 is a constant independent of x.Substituting this result into (6) gives: 
+
+P ce (x) = 1
+
+Z1
+
+ 1
+
+√2πσ exp 
+
+
+
+− (x − μce )2
+
+2σ2
+
+
+
+exp 
+
+
+
+− Z3
+
+2σ2
+
+ 
+
+, (8) where Z1 = exp  − Z3
+
+> 2σ2
+
+. Finally, the CE distribution can be written as: 
+
+P ce (x) = 1
+
+√2πσ exp 
+
+
+
+− (x − μce )2
+
+2σ2
+
+
+
+. (9) Hence, P ce (x) is also a Gaussian distribution with mean μce = μp + β(μp − μn) and variance σ2. Here, contrast factor β
+
+controls the extent to which the distribution shifts away from the negative mean μn towards the positive mean μp
+
+12 Critical Tokens Matter: Token-Level Contrastive Estimation Enhances LLM’s Reasoning Capability 
+
+A.2. Effect of the Contrast Factor β
+
+To better understand the influence of the scaling factor β in contrastive estimation, we conduct an ablation study using the LLaMA-3-8B model on the GSM8K. The results are shown in Table 4.    
+
+> Table 4. Ablation study on the contrast factor βon GSM8K using LLaMA-3-8B.
+
+β 0.5 0.75 1.0 1.25 1.5 1.75 2.0 2.25 2.5 
+
+cDPO (%) 66.5 69.2 67.9 67.2 69.5 70.7 68.4 66.8 68.9 As discussed in Appendix A.1, the scaling factor β shifts the mean of the modified distribution P ce away from the negative mean μn toward the positive mean μp, following μce = μp + β(μp − μn). The ablation results show that setting β in the range of 1.5 to 1.75 leads to better performance, indicating that P ce aligns more closely with the optimal distribution when the contrast is moderately emphasized. 
+
+# B. Futhrer Experiments 
+
+B.1. Pass@1 accuracy on MATH500  
+
+> Table 5. Pass@1 accuracy on MATH500. Each result is averaged over 10 samplings per question.
+
+Temperature 0 0.25 0.5 0.75 1.0 1.25 1.5 LLaMA-3-8B 18.6 16.4 15.3 13.0 9.5 3.3 1.2 + cDPO 19.6 20.3 20.1 19.6 18.7 19.7 18.3 
+
+DeepSeek-Math-7B 34.0 31.8 30.5 26.2 21.1 11.3 3.0 + cDPO 35.2 34.5 34.5 34.5 33.9 32.9 32.8 
+
+Qwen-2.5-7B 49.2 46.9 45.1 41.4 34.0 20.1 2.8 + cDPO 54.0 54.2 53.6 52.8 52.9 53.4 51.9 B.2. Accuracy of Qwen-2.5 models  
+
+> Table 6. Accuracy of Qwen-2.5 models on GSM8K and MATH500.
+
+Model GSM8K MATH500 
+
+Qwen-2.5-7B 85.5 49.2 + cDPO 87.5 54.0 
+
+Qwen-2.5-32B 93.0 58.8 + cDPO 93.5 64.8 
+
+13

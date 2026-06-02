@@ -1,0 +1,1949 @@
+Title: Curse of High Dimensionality Issue in Transformer for Long-context Modeling
+
+URL Source: https://openreview.net/pdf?id=CYmaCpGDDG
+
+Number of Pages: 25
+
+Markdown Content:
+# Curse of High Dimensionality Issue in Transformer for Long-context Modeling 
+
+Shuhai Zhang * 1 2 Zeng You * 1 3 Yaofo Chen 1 Zhiquan Wen 1 Qianyue Wang 1 Zhijie Qiu 1
+
+Yuanqing Li 1 2 Mingkui Tan 1 4 
+
+## Abstract 
+
+Transformer-based large language models (LLMs) excel in natural language processing tasks by capturing long-range dependencies through self-attention mechanisms. However, long-context modeling faces significant computational ineffi-ciencies due to redundant attention computations: while attention weights are often sparse , all to-kens consume equal computational resources. In this paper, we reformulate traditional probabilis-tic sequence modeling as a supervised learning task , enabling the separation of relevant and irrele-vant tokens and providing a clearer understanding of redundancy. Based on this reformulation, we theoretically analyze attention sparsity, revealing that only a few tokens significantly contribute to predictions. Building on this, we formulate attention optimization as a linear coding prob-lem and propose a group coding strategy , theo-retically showing its ability to improve robust-ness against random noise and enhance learn-ing efficiency. Motivated by this, we propose 
+
+Dynamic Group Attention (DGA), which lever-ages the group coding to explicitly reduce redun-dancy by aggregating less important tokens dur-ing attention computation. Empirical results show that our DGA significantly reduces computational costs while maintaining competitive performance. Code is available at https://github.com/ bolixinyu/DynamicGroupAttention .
+
+## 1. Introduction 
+
+Transformer-based large language models (LLMs) (Touvron et al., 2023a;b) have advanced in various natural language processing tasks (Brown et al., 2020; Wei et al., 2022), ex-       
+
+> *Equal contribution 1South China University of Technology
+> 2Pazhou Laboratory 3Peng Cheng Laboratory 4Key Laboratory of Big Data and Intelligent Robot, Ministry of Education. Correspon-dence to: Mingkui Tan <mingkuitan@scut.edu.cn >.
+> Proceedings of the 42 st International Conference on Machine Learning , Vancouver, Canada. PMLR 267, 2025. Copyright 2025 by the author(s).
+
+hibiting emergent abilities like few-shot learning and com-plex reasoning (Schaeffer et al., 2023). These capabilities stem primarily from their ability to model long-range depen-dencies through self-attention (Vaswani, 2017; Schaeffer et al., 2023). However, a key challenge in long-context modeling is the redundancy in attention computation: while attention weights are often sparse , meaning many tokens contribute minimally to predictions, all tokens still consume 
+
+equal computational resources. This substantial inefficiency raises the question: how can we reduce redundant computa-tions without sacrificing model performance? Existing approaches (Xiao et al., 2024; Han et al., 2023; Chen et al., 2024) often tackle this issue by discarding some tokens to simplify attention computations and reduce costs. However, while effective in specific scenarios, such methods risk disrupting token interactions, especially in tasks requir-ing comprehensive context understanding, e.g. , question answering (Lu et al., 2022; Singhal et al., 2025) and docu-ment summarization (Cao et al., 2017; Pasunuru et al., 2021). Token removal may lead to incomplete or inaccurate con-text comprehension, impairing model performance. Thus, the key challenge is how to minimize redundant attention computations while maintaining critical token interactions. Traditional probabilistic sequence modeling, such as au-toregressive models (Vaswani, 2017; Huang et al., 2018; OpenAI, 2023), treats long-context redundancy implicitly by processing the entire context as a block during next-token prediction, making it difficult to analyze the above issue. To better understand and analyze redundancy, we reformu-late the probabilistic sequence modeling as a supervised learning task in Section 3. This reformulation enables us to separate relevant and irrelevant tokens and provides a clearer view of redundancy, inspiring us to develop more efficient methods for long-context modeling. To gain a deeper understanding of the redundancy in a long context, we provide a theoretical analysis of the sparsity of attention weights in transformers in Section 4. Our analy-sis shows that only a small subset of tokens significantly contributes to the target representation, while many tokens offer little value to overall model performance, leading to inefficient use of computational resources. To better un-derstand this issue and inspire new attention, we formulate 1Curse of High Dimensionality Issue in Transformer for Long-context Modeling 
+
+attention optimization as a linear coding problem (Ryan & Lin, 2009). In long-context modeling, the sparsity of attention weights often causes learning unstable and inef-ficient (Lounici et al., 2011; Huang & Zhang, 2010). To address this, we propose a group coding strategy , which aggregates tokens into meaningful groups. Our theoretical analysis demonstrates that the group coding is more robust to random noise and offers a more stable and efficient learn-ing process. This suggests that grouping mechanisms can effectively reduce redundancy in long-context modeling, offering a new perspective on transformer optimization. To further exploit the group mechanism to reduce com-putational redundancy in LLMs, we propose a Dynamic Group Attention (DGA) mechanism, which explicitly re-duces redundancy in attention computation without sacrific-ing critical token interactions, as detailed in Section 5. The core idea of DGA lies in dynamically grouping and aggre-gating less important tokens during attention computation, as illustrated in Figure 1 and Algorithm 1. Specifically, 1) DGA identifies tokens that contribute minimally to the atten-tion process, grouping them together and aggregating their representations before performing the attention operation. This reduces the number of individual tokens involved in attention calculations, thereby significantly reducing com-putational complexity. 2) Crucially, the more important tokens, which are vital for maintaining the model’s perfor-mance, are handled individually, ensuring their interactions remain preserved and accurately represented. 3) Further-more, DGA introduces complementary keys and values for tokens restricted from accessing group information due to the autoregressive nature of LLMs. By focusing the atten-tion mechanism on the most relevant tokens and reducing the redundancy of less informative ones, DGA not only reduces redundancy computation but also maintains essen-tial token interactions. Empirical results demonstrate the superiority of our DGA for long-context modeling. We summarize our main contributions as follows: • A supervised reformulation of sequence modeling for redundancy analysis: We reformulate the sequence model-ing as a supervised learning task, enabling the separation of relevant and irrelevant tokens in long-context modeling. It provides a clearer understanding of redundancy and in-spires more efficient methods for long-context modeling. • Theoretical analyses of attention sparsity and group cod-ing strategy: We theoretically analyze the sparsity of at-tention weights in transformers, showing that only a small subset of tokens significantly contributes to the target representation. To inspire new attention, we formulate at-tention optimization as a linear coding problem. Based on this, we propose a group coding strategy and theoretically show that the group coding is more robust to random noise and offers a more stable and efficient learning process. • Dynamic group attention for long-context modeling: We propose Dynamic Group Attention (DGA) to address re-dundancy in attention computation for long-context mod-eling. DGA dynamically aggregates less important tokens into meaningful groups, significantly reducing computa-tional costs while preserving critical token interactions. Empirical results on diverse long-context tasks demon-strate that our DGA significantly reduces computation while maintaining competitive performance. 
+
+## 2. Related Work 
+
+Efficient transformer. Early efforts focus on introducing sparsity into attention mechanisms. For instance, Reformer (Kitaev et al., 2020) uses Locality Sensitive Hashing (LSH) to group similar tokens into buckets, reducing computational demands. Similarly, Longformer (Beltagy et al., 2020) com-bines global attention for key tokens with local sliding win-dow attention to handle longer texts. Big Bird (Zaheer et al., 2020) further integrates global, local, and random attention strategies to capture both long-range and local contexts. Another line of research approximates attention mechanisms to achieve linear complexity. Performer (Choromanski et al., 2021) introduces a kernel-based approximation of softmax attention, reducing memory and computational costs. Simi-larly, Linear Transformer (Katharopoulos et al., 2020) and RetNet (Sun et al., 2023) reformulate self-attention as a linear dot-product of kernel feature maps. Additionally, Sun et al. (2021) learn parameterized hash functions for queries and keys to enhance efficiency. HyperAttention (Han et al., 2024) refines attention approximation by measuring prob-lem hardness with fine-grained parameters. Recent works further advance long-context modeling. Lon-gLoRA (Chen et al., 2024) partitions tokens into groups and shifts group partitions to facilitate inter-group com-munication for modeling efficiency. StreamingLLM (Xiao et al., 2024) and LM-Infinite (Han et al., 2023) prioritize attention on the initial and final tokens, ignoring intermedi-ate tokens to optimize attention. KVMerger (Wang et al., 2024b) focuses on KV cache compression via Gaussian-kernel-based Key clustering but ignores attention compu-tation redundancy. Some methods focus on dynamically adapting sparsity patterns. For instance, MInference (Jiang et al., 2024) identifies three unique sparse attention patterns and dynamically applies them during inference. Despite these advancements, such methods often rely on fixed sparsity patterns, which may sacrifice important token interactions. This can degrade performance in tasks re-quiring fine-grained interactions. Recently, CCA-Attention (Chen et al., 2025) leverages grouped aggregation of intra-token interactions combined with local sliding windows for 2Curse of High Dimensionality Issue in Transformer for Long-context Modeling 
+
+efficient attention. In contrast, our method dynamically iden-tifies critical tokens and selectively aggregates only unim-portant tokens while preserving essential interactions via complementary tokens. This ensures adaptive redundancy reduction without sacrificing key contextual dependencies. 
+
+Long-context modeling. Extending the context window of LLMs to handle long sequences is critical for tasks re-quiring deep understanding. Recently, A plethora of work has attempted to extend the context length of LLMs (Chen et al., 2023; Yen et al., 2024; Mohtashami & Jaggi, 2023; An et al., 2024; Tworkowski et al., 2023). For instance, Position Interpolation (Chen et al., 2023) linearly down-scales input position indices to fit within the original context window size, enabling RoPE-based LLMs to handle longer sequences. Yen et al. (2024) introduce a small encoder to process long inputs in chunks, allowing a frozen decoder to cross-attend to additional contexts, thus extending the context length without modifying the core architecture. In contrast, An et al. (2024) propose Dual Chunk Attention, en-abling models like Llama2-70B to support context windows exceeding 100,000 tokens without extra training, by decom-posing long-sequence attention into chunk-based modules that capture both intra-chunk and inter-chunk dependencies. Other approaches focus on modifying position embeddings to extend context length, such as positional skipping (Zhu et al., 2024), Yarn (Peng et al., 2024), and RoPE extrapo-lation (Liu et al., 2024b). While these methods primarily address position embedding limitations, our approach is or-thogonal, focusing on reducing computational redundancy through dynamic token grouping and aggregation. 
+
+## 3. Sequence Modeling to Supervised Learning 
+
+3.1. Traditional Probabilistic Sequence Modeling 
+
+Traditional probabilistic sequence modeling (Vaswani, 2017; Wang et al., 2024a) in language models typically involves generating a token sequence by predicting each next token based on previously generated ones. Given a token sequence 
+
+{x1, x2, . . . , xL}, the training objective for a model θ is to maximize the likelihood of the entire sequence: 
+
+max 
+
+> θL
+
+Y
+
+> i=1
+
+Pθ (xi|x1, x2, . . . , xi−1). (1) During the generation, the model selects the most likely token at each step via xi= arg max x P (x|x<i ). This au-toregressive process iteratively applies the same mechanism until the desired sequence length is reached. 
+
+Limitations of probabilistic sequence modeling for anal-ysis. While this approach ensures coherent and contextually relevant token generation, it struggles with long sequences. As the sequence length increases, the model often encoun-ters more irrelevant information, leading to inefficiencies in both computation and optimization. Traditional sequence modeling treats the entire context as a monolithic block due to its conditional modeling paradigm, making it diffi-cult to identify or eliminate redundant tokens. Moreover, the implicit handling of redundancy in traditional sequence modeling ( e.g. , self-attention (Vaswani, 2017)) limits the ability to optimize computational resources effectively. 
+
+3.2. Supervised Reformulation for Sequence Modeling 
+
+Recall that next-token prediction (Zhang et al., 2024) in traditional sequence modeling is xi= arg max x P (x|x<i ).We can reformulate it as y= arg max y P (y|C(y)) with 
+
+C(y) = {x1, x2, . . . , xi−1} representing the context pre-ceding the target token y. This can be interpreted as pre-dicting label y based on the input C(y), resembling the supervised learning mechanism (Hastie et al., 2009). Building on this insight, we formalize probabilistic sequence modeling as a supervised learning task . Given a training corpus {(C(yi), yi)}ni=1 , where yi∈V is a token from the vocabulary V and C(yi) is its context, the task is to maxi-mize the likelihood of predicting conditioned on all C(yi):
+
+max 
+
+> θ
+
+Y
+
+> y∈V ,C (y)
+
+Pθ (y|C(y)) . (2) Denoting f as the feature extractor in the last layer of the LLM, the probability Pθ (y|C(y)) can be reformulated as 
+
+Pθ (y|C(y)) = exp( zk)
+
+PKj=1 exp( zj ) , (3) where k is the index of the token in the vocabulary, and 
+
+z = w⊤f (C(y)) ∈ RK represents the logits of y. Here, 
+
+w ∈ Rd×K is the weight matrix of the final fully connected layer, and K = |V| is the vocabulary size. This is a standard supervised learning paradigm (Hastie et al., 2009; Nasteski, 2017). Further discussion on the relations between sequence modeling and supervised learning is in Appendix B. 
+
+Remark 1. 1) Ideally, for each target token y, it is crucial to collect all relevant contexts C(y) for accurate prediction. 2) To train a promising model, it is essential to gather the comprehensive context associated with each y. This can be achieved by collecting longer corpora (Fu et al., 2024). However, longer contexts inevitably introduce redundant tokens, leading to unnecessary computational overhead and optimization challenges (Altman & Krzywinski, 2018). 
+
+Advantages of supervised sequence modeling. The su-pervised sequence modeling provides a more structured ap-proach to understanding long-context redundancy, although they are theoretically equivalent. It allows us to separate the context C(y) into relevant and irrelevant parts, allowing a more focused examination of the redundancy issue. By 3Curse of High Dimensionality Issue in Transformer for Long-context Modeling 
+
+casting the problem as supervised learning, we can precisely determine which tokens in C(y) are vital for predicting y,and which tokens may be discarded or aggregated. 
+
+Redundancy in long contexts. From the above view, the context C(y) with redundancy can be formalized as 
+
+C(y) = {xR1 , xIR 2 , xR3 , xIR 4 , xIR 5 , . . . , xR
+
+> L−1
+
+, xIR  
+
+> L
+
+}, (4) where xR denotes relevant tokens that contribute to predict-ing the target token x, and xIR denotes irrelevant tokens that introduce unnecessary noise or computation. 
+
+Challenges. The redundancy becomes particularly pro-nounced in transformers, which process all tokens with equal computational cost. However, not all tokens con-tribute equally to predicting y: many tokens in C(y) offer negligible or redundant information, inflating computational requirements and impairing optimization efficiency. This motivates us to analyze the redundancy within C(y) and find more effective methods for long-context modeling. 
+
+## 4. Redundancy in Self-attention: From Mechanism to Coding Perspective 
+
+Section 3 reformulates long-context modeling as a super-vised learning task (Eqn. (2)), which explicitly separates 
+
+relevant (critical for predictions) and irrelevant (redundant for context) tokens. This formulation provides a structured foundation to investigate how redundancy manifests in atten-tion computations and motivates our theoretical exploration from both the mechanism and coding perspectives. 
+
+4.1. Redundancy in Self-attention Mechanism Self-attention in LLMs. Self-attention (Vaswani, 2017) is a key mechanism in LLMs that allows the model to assign the importance of different tokens for long-context modeling. Formally, given input X∈RL×d, self-attention is defined as: 
+
+Att = softmax 
+
+ QK ⊤
+
+√d
+
+
+
+V, (5) where Q=XW Q, K=XW K , and V=XW V repre-sent the query, key, and value matrices, respectively. Here, WQ, WK , WV ∈ Rd×d are learnable projection weights and d is the dimensionality of the token embed-dings. For simplicity, we denote the attention weight as 
+
+A=softmax (QK ⊤/√d), which captures the pairwise rel-evance between tokens, determining how much influence of each token on the representation of the other tokens. To facilitate the understanding of the attention mechanism, we rewrite the attention of i-th token separately: 
+
+Att i =
+
+> L
+
+X
+
+> j=1
+
+Ai,j Vj ∈ R1×d, i = 1 , . . . , L, (6) where Ai=softmax (QiK⊤/√d). This implies that the at-tention of a token is computed as a linear combination of the values of other tokens, weighted by the importance obtained from the dot product of its query and the keys of other tokens. This mechanism enables the model to consider long-range dependencies for long-context modeling. 
+
+Redundancy in attention weights. To analyze the inher-ent redundancy in long-context modeling within LLMs, we focus on the representation of the context C(y) in a sim-plified model: a single-layer transformer with single-head attention. Given a sequence C(y) ∈ RL×d, denoted as 
+
+X=[ x1; . . . ; xL] for simplicity, the representation of the last token f (X) can be formulated as: 
+
+f (X) = α1V1 + α2V2 + · · · + αj Vj + · · · + αLVL, (7) where αj = exp( QL·Kj )  
+
+> PLl=1 exp( QL·Kl)
+
+represent the j-th weight. The attention weights αj determine the contribution of each token’s value vector Vj to the target representation f (X).However, in long sequences, a significant portion of the to-kens in the context are irrelevant to the target representation as in Eqn. (4), resulting in sparse and concentrated attention distributions, i.e. , a few weights αj are significantly greater than most weights. To facilitate understanding, we analyze the sparsity of attention weights in the following: 
+
+Theorem 1. (Sparsity on attention weights ) Consider ρ ∈
+
+(1 /L, 1] as a sparse rate, we say that the weight α is ρ-sparse when there exists at least one probability greater than 1/(Lρ ). Let ξ = KQ i ∈ RL, then the probability of α
+
+being ρ-sparse Psparse (L, ρ ) is given by 
+
+Psparse (L, ρ ) ≥ max  
+
+> x> 0
+
+1 − [Phead Ptail ]L, (8) 
+
+where Phead = P {exp( ξj ) ≤ x} with j being some index of α and Ptail = P {(Lρ − 1) x ≤ PLk̸ =j exp( ξk)}.
+
+Remark 2. Given L and ρ, the probability Psparse (L, ρ )
+
+is influenced by the interplay between Phead and Ptail that are functions of x. A larger x increases Phead but decreases 
+
+Ptail , leading to a balance where Phead Ptail <1. For suf-ficiently large L, the exponential amplification of L sup-presses Phead Ptail further, ensuring a large Psparse (L, ρ ).
+
+Remark 3. Psparse (L, ρ ) rigorously quantifies how spar-sity intensifies with increasing context length L. It reflects a model’s inherent ability to prioritize critical tokens across diverse contexts, e.g. , Psparse (L, ρ ) evaluated on xxx model rises sharply for ρ=0 .01 as L grows (see Figure 2(b)). Cru-cially, ρ-sparsity can be aggregated over multiple sequences to compute the average sparsity level (see Section 6.2), pro-viding a model-level characterization of sparsity that gener-alizes beyond individual instances. This metric serves as a unified approach to evaluate and compare the efficiency of attention mechanisms in long-context modeling. 
+
+4Curse of High Dimensionality Issue in Transformer for Long-context Modeling 
+
+The sparsity of α implies that only a few tokens in the con-text contribute meaningfully to the target representation. While this sparsity aligns with the nature of self-attention, the redundancy in the input context still increases the compu-tational burden during training, as all tokens are processed equally regardless of their relevance. This not only increases training time but also impairs optimization efficiency. 
+
+4.2. Redundancy Analysis from Coding Perspective 
+
+In this work, we aim to seek an effective mechanism to alleviate the issue of attention redundancy for long-context modeling. Inspired by the form in Eqn. (7), we simplify the optimization process of a transformer into a linear coding problem (Ryan & Lin, 2009). This enables us to investigate the sparsity and redundancy of attention weights and in-spires us to develop more efficient optimization approaches. Specifically, we will show how grouping mechanisms can reduce redundancy while improving optimization efficiency. 
+
+Problem 1. (Linear coding problem for self-attention) 
+
+min 
+
+> α
+> L
+
+X
+
+> j=1
+
+αj Vj − y
+
+> 22
+
+, s.t. ,
+
+> L
+
+X
+
+> j=1
+
+αj = 1 , α j > 0. (9) 
+
+where y is the embedding of the target token. 
+
+In this formulation, αj represents the contribution of the 
+
+j-th token’s value vector Vj to the target representation, and its constraints are attributed to the softmax in the attention. Here, we consider each embedding y of the target token in the vocabulary and the parameters of Vj as fixed, simpli-fying the analysis of transformer optimization using linear coding techniques (MacKay, 2003; Ryan & Lin, 2009). Due to the sparsity property established in Theorem 1, the attention weights α focus on a few key tokens, rendering most of the context redundant. However, this redundancy challenges optimization: while sparse weights are beneficial, achieving stable and efficient learning is often hindered by noise sensitivity and overfitting to irrelevant tokens (Lounici et al., 2011; Huang & Zhang, 2010). One naive approach is to add some penalties during opti-mization. Unfortunately, each context C(x) has its optimal weight within the whole tokens of the context. To address this, benefiting from the group sparsity (Huang & Zhang, 2010; Lounici et al., 2011), we propose a group coding 
+
+strategy, reducing the inherent redundancy by partitioning the attention weights α into k groups, i.e. , ¯α ∈ Rk. Each group shares a common weight, effectively pooling the con-tributions of grouped tokens. Let G1, . . . , G k denote the index sets from the token indices I = {1, . . . , L }, where 
+
+I = Skg=1 Gg and Gi
+
+T Gj = ∅ for ∀i̸ = j. Formally, we define the group weight as ¯αg = 1 
+
+> |Gg|
+
+P 
+
+> i∈Gg
+
+αi. The optimization problem is then reformulated as: 
+
+Problem 2. (Group coding problem for self-attention) 
+
+min 
+
+> ¯α
+> k
+
+X
+
+> g=1
+
+¯αg
+
+|Gg |
+
+X
+
+> j∈Gg
+
+Vj −y
+
+> 22
+
+, s.t. ,
+
+> k
+
+X
+
+> g=1
+
+¯αg |Gg |=1 , α g >0.
+
+(10) This group mechanism not only reduces the dimensionality of optimization but also reduces the redundancy observed in the attention. Aggregating tokens into meaningful groups can effectively compress redundant information and exploit the shared structure within the context. We summarize the advantages of this approach as follows: 1) Improved Robustness to Noise : The grouping mecha-nism smooths out the impact of random noise by averaging over multiple tokens in the same group. Mathematically, as shown in Theorem 2, the variance of weight changes is reduced by a factor of 1/m 2, where m is the group size. 
+
+Theorem 2. Assume the weights before normalization are 
+
+˜α obtained by the product of the query and key matrix, and 
+
+αj = exp( ˜ αj )  
+
+> PLl=1 exp( ˜ αl)
+
+. Consider a Gaussian noise ∆˜ α ∼N (0, σ 2IL) being added into ˜α and each group size being 
+
+|Gg | = m, the variance of the weight changes obtained via group coding in Eqn. (2) can be reduced by 1/m 2.
+
+2) Accelerated Optimization : Most weights in long-context modeling are relatively small (see Theorem 1), mak-ing most gradient contributions also small; The group opti-mization reduces both the optimization dimension and gradi-ent sparsity while enhancing stability. Theorem 3 shows that the group coding reduces the condition number (Edelman, 1988) of the objective function, enhancing convergence of the optimization, as verified in Section 6.3. 
+
+Theorem 3. Denote H and ¯H as the Hessian matrix of the optimizations in (1) and (2), respectively. Let κ(H) = 
+
+λmax (H)/λ min (H) be the condition number (Edelman, 1988) of H, where λmax and λmin are the maximum and minimum eigenvalues of H, respectively. Consider each group size |Gg |=m, λmin (H)>0 and λmin ( ¯H)>0, we have 
+
+κ( ¯H) ≤ κ(H). (11) Through the lens of the group linear coding, we highlight the redundancy in the long context can be mitigated by structured grouping. This approach not only reduces the computational overhead but also enhances model robustness and optimization efficiency, offering a feasible way to man-age sparsity and redundancy in transformer optimization. 
+
+## 5. Dynamic Group Attention Mechanism for Long-context Modeling 
+
+Theorems 2 and 3 show the robustness and optimization ef-ficiency of group coding in reducing redundancy, inspiring 5Curse of High Dimensionality Issue in Transformer for Long-context Modeling 𝐊 𝟒  𝐊 𝟕  𝐊 𝟗  𝐊 𝟏  𝐊 𝟐  𝐊 𝟑  𝐊 𝟓  𝐊 𝟔  𝐊 𝟖                                                       
+
+> Rearrange
+> 𝑚
+> 𝐊 𝟏 𝐊 𝟐 𝐊 𝟑 𝐊 𝟒 𝐊 𝟓 𝐊 𝟔 𝐊 𝟕 𝐊 𝟖 𝐊 𝟗
+> 𝐐 𝟏
+> 𝐐 𝟐
+> 𝐐 𝟑
+> 𝐐 𝟒
+> 𝐐 𝟓
+> 𝐐 𝟔
+> 𝐐 𝟕
+> 𝐐 𝟖
+> 𝐐 𝟗
+> Focal tokens Non -focal tokens
+> 𝐐 𝟏
+> 𝐐 𝟐
+> 𝐐 𝟑
+> 𝐐 𝟒
+> 𝐐 𝟓
+> 𝐐 𝟔
+> 𝐐 𝟕
+> 𝐐 𝟖
+> 𝐐 𝟗
+> 𝐕 𝟏 𝐕 𝟐 𝐕 𝟑 𝐕 𝟒 𝐕 𝟓 𝐕 𝟔 𝐕 𝟕 𝐕 𝟖 𝐕 𝟗 𝐕 𝟒 𝐕 𝟕 𝐕 𝟗 𝐕 𝟏 𝐕 𝟐 𝐕 𝟑 𝐕 𝟓 𝐕 𝟔 𝐕 𝟖
+> 𝐊 𝟒 𝐊 𝟕 𝐊 𝟗 𝐊 𝟏
+> 𝒏 𝐊 𝟐
+> 𝒏
+> 𝐐 𝟏
+> 𝐐 𝟐
+> 𝐐 𝟑
+> 𝐐 𝟒
+> 𝐐 𝟓
+> 𝐐 𝟔
+> 𝐐 𝟕
+> 𝐐 𝟖
+> 𝐐 𝟗
+> 𝐕 𝟒 𝐕 𝟕 𝐕 𝟗 𝐕 𝟏
+> 𝒏 𝐕 𝟐
+> 𝒏
+> Groupe &
+> Aggregate
+> 𝐊 𝒇 𝐊 𝒏
+> Complement
+> Aggregated keys
+> Aggregated values
+> 𝐊 𝟒 𝐊 𝟕 𝐊 𝟗 𝐊 𝟏
+> 𝒏 𝐊 𝟐
+> 𝒏 𝐊 𝟏
+> 𝒄 𝐊 𝟐
+> 𝒄 𝐊 𝟑
+> 𝒄
+> 𝐐 𝟏
+> 𝐐 𝟐
+> 𝐐 𝟑
+> 𝐐 𝟒
+> 𝐐 𝟓
+> 𝐐 𝟔
+> 𝐐 𝟕
+> 𝐐 𝟖
+> 𝐐 𝟗
+> 𝐊 𝟏
+> 𝐊 𝟏 𝐊 𝟐
+> 𝐊 𝟓
+> 𝐊 𝟓 𝐊 𝟔
+> 𝐊 𝟓 𝐊 𝟔
+> 𝐕 𝟒 𝐕 𝟕 𝐕 𝟗 𝐕 𝟏
+> 𝒏 𝐕 𝟐
+> 𝒏 𝐕 𝟏
+> 𝒄 𝐕 𝟐
+> 𝒄 𝐕 𝟑
+> 𝒄
+> 𝐊 𝒇 𝐊 𝒏 𝐊 𝒄
+> Complemented keys
+> Complemented values
+
+Figure 1. Overview of the proposed DGA attention. The DGA attention dynamically adjusts the computation based on token importance. First, DGA moves the key-value (KV) pairs of important tokens to the front (denoted as Kf and Vf ). For less important tokens, DGA groups and aggregates their KV pairs with a group size m (denoted as Kn and Vn). Finally, DGA introduces complementary KV pairs (denoted as Kc and Vc) to enable access to group information for tokens restricted by the autoregressive nature. 
+
+Algorithm 1 The pipeline of dynamic group attention. 
+
+input Matrices Q, K, V ∈ RL×d, group size m, impor-tance rate γ.
+
+output Att ∈ RL×d.
+
+1: Compute the importance score s via Eqn. (16) and (17). 
+
+2: Divide the tokens into focal tokens T foc and non-focal tokens T non based on s and γ.
+
+3: Construct K′ and V′ ∈ RL×d by moving the items of 
+
+K and V corresponding to T foc to the front positions. 
+
+4: Construct Kgroup and Vgroup via Eqn. (12), (14), (15). 
+
+5: Construct the causing mask M via Algorithm 2. 
+
+6: for i = 1 , . . . , L do 
+
+7: // Compute the attention for the query Qi.
+
+8: Att i = Attention flash (Qi, Kgroup , Vgroup , Mi).
+
+9: end for 
+
+us to explore a novel approach to address the computational inefficiencies in long-context modeling. Typical methods often use sparse mechanisms (Xiao et al., 2024; Han et al., 2023; Chen et al., 2024), discarding some tokens to simplify attention computation and reduce costs. However, such ap-proaches risk disrupting the flow of information, particularly in tasks requiring comprehensive context understanding, such as question answering or document summarization. 
+
+Overview of dynamic group attention. To address the above issues, we leverage the advantages of the group mech-anism and propose Dynamic Group Attention (DGA) ,which explicitly reduces redundancy in attention computa-tion without sacrificing essential token interactions. Specifi-cally, we divide tokens into two parts based on the impor-tance score : a small subset of significant tokens as focal tokens , while the less critical tokens are treated as non-focal tokens . Non-focal tokens are then grouped and aggregated, allowing the model to focus on aggregated representations rather than individual tokens. The overview of our DGA is shown in Figure 1 and the algorithm is in Algorithm 1. Formally, we give the grouped Kgroup and Vgroup as: 
+
+Kgroup = Kf ; Kn; Kc , Vgroup = Vf ; Vn; Vc , (12) where Kf and Vf are the key and value of the focal tokens, 
+
+Kn and Vn are the key and value of the non-focal tokens that are grouped and aggregated, Kc and Vc are the key and value complementing tokens that cannot access the group information due to the autoregressive nature. The detailed formulations are given in Eqn. (14) and Eqn. (15). Recall the definition of attention in Eqn. (6), we compute the attention with causing mask as: 
+
+Att i = X
+
+> j
+
+(Agroup  
+
+> i,j
+
+⊙ Mi,j )Vgroup  
+
+> j
+
+∈ R1×d, (13) where Agroup  
+
+> i
+
+=softmax 
+
+
+
+QiKgroup ⊤/√d
+
+
+
+, M is the caus-ing mask and ⊙ is the element-product. We can implement this by the flash attention (Dao et al., 2022), simply formu-lated as Attention flash (Qi, Kgroup , Vgroup , Mi).
+
+5.1. Grouping for Self-attention 
+
+Given a sequence with L tokens, we first employ an impor-tance statistic to derive the importance score s ∈ RL (see Eqn. (16) in Section 5.2) and divide all tokens into focal tokens (top-γ important ones) and non-focal tokens , denoted as T foc and T non , respectively. For convenience in compu-tation, we move the items of K and V associated with the focal tokens in T foc to the front positions. We denote these rearranged items as K′ and V′, respectively. Subsequently, we group and aggregate the K′ and V′ matrices related to the non-focal tokens in T non with a group size m based on 6Curse of High Dimensionality Issue in Transformer for Long-context Modeling 
+
+their importance in each group, which are formulated as: 
+
+Kf = [ K′
+
+> 1
+
+; . . . ; K′ 
+
+> r
+
+] , Vf = [ V′
+
+> 1
+
+; . . . ; V′ 
+
+> r
+
+] ∈ Rr×d,
+
+Kn=
+
+ X
+
+> j∈G1
+
+P1,j K′ 
+
+> j
+
+; . . . ; X
+
+> j∈Gk
+
+Pk,j K′
+
+> j
+
+ ,
+
+Vn=
+
+ X
+
+> j∈G1
+
+P1,j V′ 
+
+> j
+
+; . . . ; X
+
+> j∈Gk
+
+Pk,j V′
+
+> j
+
+ ,
+
+(14) where Pi, ·=softmax( Qmax Gi K⊤
+
+> [min Gi:max Gi]
+
+)∈Rm is the weight vector of i-th group, Gi is the index set of i-th group, 
+
+min Gi and max Gi are the first and last token index in the 
+
+i-th group, r=|T foc | and k=( L − r)/m are the number of focal tokens and groups. Here, we compute the weights 
+
+P using only the query of the last token in each group. If non-focal tokens are not divisible by m, we will include more tokens in T foc , ensuring all tokens are processed. Note that some tokens may not access preceding tokens after grouping aggregation. For instance, in the rightmost of Figure 1, the query Q2 cannot attend to the keys K1 and 
+
+K2 (i.e. , their masks are zeros at the 4-th and 5-th columns) even if the 2-th token should access the 1-th and 2-th tokens. To address this, we introduce complementary keys Kc and values Vc to restore the missing information for the query 
+
+Qi (e.g. , adding the keys “ K1 and K2” and the values “ V1
+
+and V2” to the query Q2 at the 6-th and 7-th columns): 
+
+Kc= [ Kj ] , Vc= [ Vj ] , j ∈Gz if i∈[min Gz , max Gz ], (15) where z denotes the index of the i-th token’s nearest neigh-bor group. We then mask inaccessible keys and values due to the autoregressive nature (more details in Appendix D). 
+
+Group inference. In the prefilling phase, we can calculate attention in the same way as in the training phase. In the decoding phase, the model generates new tokens, which re-quires us to dynamically group and aggregate tokens. When the model generates less than m′ = 1 .1m tokens (with 
+
+∼ 10% slots for focal tokens), we use standard attention for calculation; Once m′ tokens are generated, we can use the attention of the last query to re-calculate the weight P and update the group keys Kgroup and values Vgroup for the subsequent generation. However, we only add a new group key and value to the original ones for reduced memory usage once generating m′ tokens. 
+
+5.2. Fast Focal Token Identification for Grouping 
+
+Evaluating the importance of the token is crucial for our group-oriented attention. To this end, we employ an impor-tance score s by computing accumulated attention weights: 
+
+si =
+
+PLj=1 Aj,i 
+
+∥A·,i ∥0
+
+, (16) where ∥A·,i ∥0 is the number of non-zero elements in the i-th column of A, which will be L−i+1 for the decoder-only based transformer. Similar techniques have been used for the inference of LLMs (Zhang et al., 2023; He et al., 2024). For fast to obtain an importance score s, we sample a small portion of recent tokens and some other random tokens to obtain eQ to approximate the attention weight A:
+
+eA = softmax 
+
+ eQK ⊤/√d
+
+
+
+. (17) For fast implementation, we perform the matrix partitioning technique (Dao et al., 2022) when computing the softmax. 
+
+## 6. Experiments 
+
+6.1. Experimental setup Benchmark and evaluation metrics . We compare our methods on LongBench-E (Bai et al., 2024) to evaluate the long-context understanding capabilities of LLMs, and use EM score (Liu et al., 2024a) to measure the ability to find the key information within a long multi-document context. Ad-ditionally, we use inter-token latency (ITL (Chitty-Venkata et al., 2024)) to measure the time delay between generating consecutive tokens. More details are in Appendix C.1. 
+
+Models . We integrate our DGA attention into LLaMA2-7B (Touvron et al., 2023b) and GPT2-S (Radford et al., 2019) and OPT-125M (Zhang et al., 2022). We train the models on SlimPajama (Cerebras, 2024). All training uses 8 A800 GPUs with a micro-batch size of 1, gradient accumulation of 8, and 1000 steps, consistent across all context lengths. 
+
+Baselines . We compare our DGA attention with follow-ing baselines: StreamingLLM (Xiao et al., 2024), LM-Infinite (Han et al., 2023), and MInference (Jiang et al., 2024). We defer more implementation details for these baseline methods in Appendix C.3. 
+
+6.2. Empirical Studies of Redundancy in Self-attention 
+
+We investigate the redundancy in transformer-based LLMs for long-context modeling by analyzing the sparsity of vanilla attention weights. Figure 2(a) shows the distribu-tion of the vanilla attention weights for a sequence randomly sampled from SlimPajama on LLaMA-7B, which shows that only a few tokens contribute significantly to the predictions. To further quantify the sparsity across more examples on long contexts, we examine Psparse (L, ρ ) of the attention weights across 100 contexts of length 1k over SlimPa-jama on LLaMA-7B at layers 24 and 30 under different sparse rates ρ. Note that lower ρ means sparser atten-tion weights. Figure 2(b) shows that, as ρ decreases, i.e. ,
+
+ρ : 0 .05 →0.02 →0.01 , the probability Psparse (L, ρ ) in-creases with context length L, indicating that attention 7Curse of High Dimensionality Issue in Transformer for Long-context Modeling 
+
+Table 1. Comparisons of different methods on LongBench-E (Bai et al., 2024), where the 95% text length quantile is 31K. “ITL” denotes inter-token latency (Chitty-Venkata et al., 2024), which measures the time delay between generating consecutive tokens.                                                   
+
+> Methods Single-Doc. QA Multi-Doc. QA Summary FS. Learning Synthetic Code Avg. ↑ITL / ms ↓
+> LLaMA2-7B (Vanilla Self-Attention) 6.43 2.37 13.65 56.65 3.04 48.0 21.69 69.70 MInference (Jiang et al., 2024) 5.86 2.65 14.33 55.99 2.63 48.41 21.64 94.34 StreamingLLM (Xiao et al., 2024) 4.99 4.13 11.51 45.43 2.16 30.38 16.43 78.28 LM-Infinite (Han et al., 2023) 3.54 2.61 3.31 48.97 1.33 35.26 15.84 102.22 DGA-LLM (Ours) 3.61 3.58 6.81 57.90 1.47 53.45 21.14 28.80
+
+Table 2. Comparisons of different methods on EM score (Liu et al., 2024a) evaluated at lengths from 4K to 32K.                               
+
+> Methods 4K 8K 16K 32K Avg.
+> LLaMA2-7B (Vanilla Self-Attention) 37.2 36.4 33.8 26.8 33.6
+> StreamingLLM 30.2 25.8 22.2 20.8 24.8 LM-Infinite 29.4 28.6 23.8 22.4 26.1 MInference 29.2 24.8 23.6 17.0 23.7 DGA-LLM (Ours) 35.0 27.4 25.6 22.6 27.7
+
+Table 3. Comparisons of different methods on computational effi-ciency in terms of inter-token latency (ITL (Chitty-Venkata et al., 2024)) evaluated at lengths from 4K to 16K.                   
+
+> Methods 4K 8K 16K
+> LLaMA2-7B (Vanilla Self-Attention) 36.87 42.32 69.70 MInference 93.13 93.93 94.34 StreamingLLM 40.00 46.67 78.28 LM-Infinite 49.70 64.34 102.22 DGA-LLM (Ours) 26.26 26.87 28.79
+
+weights become increasingly sparse with longer contexts, and only a few tokens contribute significantly to predictions. Note that Psparse (L, ρ ) is dataset-independent and adapts to L. Figure 2(c) shows Psparse has nearly identical trends across SlimPajama and WikiText2 over llama2-7B or Qwen2.5-7B model, confirming ρ generalizes across datasets. As ρ = 0 .02 , Psparse increases sharply with 
+
+L, where Psparse → 1 at L = 400 over llama2-7B and 
+
+L = 300 over Qwen2.5-7B, respectively, proving sparsity strengthens with context length universally and model-level characterized. These results align with our analysis in Theo-rem 1, highlighting the inherent redundancy in long-context attention computations. More results are in Appendix H.1. 
+
+6.3. Comparisons on Long-Context Modeling Results on Longbench-E. We conduct experiments on LongBench-E (Bai et al., 2024), which includes tasks with text lengths up to 31K. Table 1 shows that our DGA-LLM achieves competitive performance across tasks, with an av-erage score of 21 .14 for LLaMA2-7B trained on 8K context-length texts. While our method does not significantly out-perform others in average scores, it demonstrates notable advantages in Inter-token Latency (ITL) at 16K context length. Specifically, DGA-LLM achieves an ITL of 28 .80 
+
+ms, 2.42 × faster than vanilla LLaMA2-7B ( 69 .70 ms) and 
+
+3.55 × faster than LM-Infinite ( 102 .22 ms). This highlights the efficiency of our group coding strategy in reducing com-putational redundancy while maintaining performance, mak-ing it particularly suitable for time-sensitive applications. More results on ITL are in Section 6.4. 
+
+Results on EM score. We further validate the effective-ness of our DGA-LLM on long-document EM scores at context lengths of 4K, 8K, 16K and 32K for LLaMA2-7B trained with a context length of 8K. As shown in Table 2, our DGA-LLM achieves the highest performance at 4K, 16K, and 32K context lengths, and the second highest at 8K compared to other baselines, with average scores of 27 .7. In contrast, methods like StreamingLLM and LM-Infinite ex-hibit significant performance degradation as context length increases, particularly at 16K, where their scores drop to 
+
+22 .2 and 23 .8, respectively. These results highlight that our DGA-LLM not only reduces computational redundancy but also maintains competitive performance, making it highly suitable for diverse long-context scenarios. 
+
+Results on optimization efficiency. To validate the opti-mization efficiency of the group coding strategy in DGA, we pre-train GPT2-S and OPT-125M with a 1K and 2K context length on SlimPajama, respectively, as fine-tuning LLMs from scratch is infeasible. As shown in Figures 3(a) and 4, the validation loss for our DGA converges faster than vanilla self-attention, indicating that our group coding strat-egy accelerates convergence. These results align with the conclusion in Theorem 3, demonstrating the efficiency of our approach in optimizing long-context modeling tasks. 
+
+Results on robustness to random noise. To evaluate the robustness of the group coding strategy in DGA to ran-dom noise, we conduct experiments on question answering task for LLaMA2-7B trained with context-length 8K and compare the average KL-divergence of the output probabil-ity before and after adding the noises on random sampled 
+
+100 sequences on SlimPajama. From Figure 3(b), vanilla self-attention exhibits a significant deviation under noisy conditions, while our DGA maintains a more robust KL-divergence. This coincides with Theorem 2, demonstrating that group coding enhances robustness to random noise. 
+
+6.4. Comparisons on Computational Efficiency 
+
+To evaluate the inference efficiency of our DGA, we measure the Inter-token Latency (ITL) of the LLaMA2-7B model 8Curse of High Dimensionality Issue in Transformer for Long-context Modeling 0 200 400 600 800 1000 
+
+> Token Index
+> 0.00
+> 0.05
+> 0.10
+> 0.15
+> Attn Value
+> Layer 30
+
+(a) Distribution of attention weights for a random context. 200 600 1000                 
+
+> 0.00
+> 0.25
+> 0.50
+> 0.75
+> 1.00
+> psparse
+> Layer 24, =0.05
+> 200 600 1000
+> 0.00
+> 0.25
+> 0.50
+> 0.75
+> 1.00
+> Layer 24, =0.02
+> 200 600 1000
+> 0.00
+> 0.25
+> 0.50
+> 0.75
+> 1.00
+> Layer 24, =0.01
+> 200 600 1000
+> L
+> 0.00
+> 0.25
+> 0.50
+> 0.75
+> 1.00
+> psparse
+> Layer 30, =0.05
+> 200 600 1000
+> L
+> 0.00
+> 0.25
+> 0.50
+> 0.75
+> 1.00
+> Layer 30, =0.02
+> 200 600 1000
+> L
+> 0.00
+> 0.25
+> 0.50
+> 0.75
+> 1.00
+> Layer 30, =0.01
+
+(b) Distribution of ρ-sparse across different context lengths. 0 200 400 600 800 1000      
+
+> L
+> 0.00
+> 0.25
+> 0.50
+> 0.75
+> 1.00
+> psparse
+> Llama2-7B
+> SlimPajama
+> WikiText2
+> 0200 400 600 800 1000
+> L
+> 0.00
+> 0.25
+> 0.50
+> 0.75
+> 1.00
+> Qwen2.5-7B
+> SlimPajama
+> WikiText2
+
+(c) Distribution of ρ-sparse across different datasets and models. 
+
+Figure 2. Sparsity on the attention weights on for long-context modeling. (a) shows the attention weight distribution for a random example on SlimPajama. (b) demonstrates the distribution of ρ-sparse across context lengths, i.e. , Psparse (L, ρ ), over 100 random examples on SlimPajama. (c) exhibits the distribution of ρ-sparse over 100 random examples on WikiText2 and SlimPajama, across llama2-7B (left) and Qwen2.5-7B models (right) as ρ = 0 .02 .
+
+during the decoding phase across 4K, 8K, and 16K contexts on LongBench-E using a single A800 GPU. Table 3 shows that DGA significantly reduces inference latency compared to other methods. For instance, at 16K context length, DGA-LLM achieves an ITL of 28 .79 ms, 3.28 × faster than MIn-ference ( 94 .34 ms) and 2.72 × faster than StreamingLLM (78 .28 ms). Notably, other methods are slower than vanilla self-attention, as they lack optimizations for the generation process. As the context length increases from 4K to 16K, other baseline methods show a sharp ITL rise, indicating a slower generation. In contrast, our DGA-LLM maintains stable and low ITL, demonstrating its efficiency for longer texts (see more detailed complexity analysis in Appendix E). Notably, LongLoRA (Chen et al., 2024) uses S2-Attention only during training, reverting to vanilla self-attention in in-ference, resulting in the same speed. These results highlight the efficiency of DGA-LLM in handling long-context tasks. 0 250 500 750 1000 
+
+> Iterations
+> 9.4
+> 9.6
+> 9.8
+> 10.0
+> 10.2
+> 10.4
+> Val loss
+> OPT-125M (Vanilla)
+> OPT-125M (DGA)
+
+(a) Optimization Efficiency 5e-5 6e-5 7e-5 8e-5 9e-5 1e-4  
+
+> Noise variance
+> 0.04
+> 0.08
+> 0.12
+> 0.16
+> KL divergence  Vanilla Self-Attention
+> DGA-LLM (Ours)
+
+(b) Robustness 
+
+Figure 3. Comparisons on optimization efficiency and robustness to random noise between Vanilla Self-Attention and DGA-LLM (ours). Subfigure (a) shows validation losses of our DGA-LLM and vanilla ones on OPT-125M, where the models are trained with a 2K context length on SlimPajama. Subfigure (b) demonstrates average KL-divergence between the output probability distributions before and after adding Gaussian noise for Vanilla Self-Attention and our DGA-LLM under different levels of noise variance ( σ2). 
+
+## 7. Conclusion 
+
+In this paper, we address computational redundancy in long-context modeling by first reformulating the sequence mod-eling as a supervised learning task, enabling a clear under-standing of token relevance. Based on this reformulation, we theoretically analyze attention sparsity, showing that only a few tokens significantly contribute to predictions, and propose a group coding strategy. Last, we propose Dy-namic Group Attention (DGA), which uses this strategy to adaptively reduce redundancy while retaining critical to-ken interactions. We validate the effectiveness of DGA on long-context tasks, showing significant reductions in compu-tational costs while maintaining competitive performance. 
+
+## Acknowledgments 
+
+This work was partially supported by the Joint Funds of the National Natural Science Foundation of China (Grant No.U24A20327), Key-Area Research and Development Pro-gram Guangdong Province 2018B010107001, Postdoctoral Fellowship Program of CPSF (GZC20251043), and TCL Science and Technology Innovation Fund, China. 
+
+## Impact Statement 
+
+Our work addresses the computational inefficiency of long-context modeling in LLMs by introducing a dynamic token grouping strategy. By reducing redundant attention com-putations while preserving critical interactions, our method lowers training and inference costs, making long-context applications ( e.g. , legal document analysis, multi-hop QA) more accessible for resource-constrained settings. Our ap-proach contributes to sustainable AI development by balanc-ing performance and efficiency, paving the way for scalable and practical deployment of LLMs in real-world scenarios. 9Curse of High Dimensionality Issue in Transformer for Long-context Modeling 
+
+## References 
+
+Alayrac, J.-B., Donahue, J., Luc, P., Miech, A., Barr, I., Hasson, Y., Lenc, K., Mensch, A., Millican, K., Reynolds, M., et al. Flamingo: a visual language model for few-shot learning. Advances in neural information processing systems , 35:23716–23736, 2022. Altman, N. and Krzywinski, M. The curse (s) of dimension-ality. Nat Methods , 15(6):399–400, 2018. An, C., Huang, F., Zhang, J., Gong, S., Qiu, X., Zhou, C., and Kong, L. Training-free long-context scaling of large language models. In International Conference on Machine Learning , 2024. Artetxe, M., Bhosale, S., Goyal, N., Mihaylov, T., Ott, M., Shleifer, S., Lin, X. V., Du, J., Iyer, S., Pasunuru, R., et al. Efficient large scale language modeling with mixtures of experts. In Proceedings of the 2022 Conference on Empirical Methods in Natural Language Processing , pp. 11699–11732, 2022. Azerbayev, Z., Ayers, E., and Piotrowski, B. Proof-pile. In Available online: https://github.com/zhangir-azerbayev/proof-pile. , 2022. Bai, Y., Lv, X., Zhang, J., Lyu, H., Tang, J., Huang, Z., Du, Z., Liu, X., Zeng, A., Hou, L., Dong, Y., Tang, J., and Li, J. Longbench: A bilingual, multitask benchmark for long context understanding. In Proceedings of the 62nd Annual Meeting of the Association for Computational Linguistics , pp. 3119–3137, 2024. Beltagy, I., Peters, M. E., and Cohan, A. Long-former: The long-document transformer. arXiv preprint arXiv:2004.05150 , 2020. Browder, A. Mathematical analysis: an introduction .Springer Science & Business Media, 2012. Brown, T., Mann, B., Ryder, N., Subbiah, M., Kaplan, J. D., Dhariwal, P., Neelakantan, A., Shyam, P., Sastry, G., Askell, A., et al. Language models are few-shot learners. 
+
+Advances in Neural Information Processing Systems , 33: 1877–1901, 2020. Cao, Z., Li, W., Li, S., and Wei, F. Improving multi-document summarization via text classification. In Pro-ceedings of the AAAI conference on artificial intelligence ,2017. Cerebras. Slimpajama: A 627b token cleaned and deduplicated version of redpajama. https://www.cerebras.net/blog/slimpajama-a-627b-token-cleaned-and-deduplicated-version-of-redpajama, 2024. Accessed: 2024-04-23. Chen, S., Wong, S., Chen, L., and Tian, Y. Extending context window of large language models via positional interpolation. arXiv:2306.15595 , 2023. Chen, Y., Qian, S., Tang, H., Lai, X., Liu, Z., Han, S., and Jia, J. Longlora: Efficient fine-tuning of long-context large language models. In International Conference on Learning Representations , 2024. Chen, Y., You, Z., Zhang, S., Li, H., Li, Y., Wang, Y., and Tan, M. Core context aware transformers for long context language modeling. In International Conference on Machine Learning . PMLR, 2025. Chitty-Venkata, K. T., Raskar, S., Kale, B., Ferdaus, F., Tanikanti, A., Raffenetti, K., Taylor, V., Emani, M., and Vishwanath, V. Llm-inference-bench: Inference bench-marking of large language models on ai accelerators. In 
+
+SC24-W: Workshops of the International Conference for High Performance Computing, Networking, Storage and Analysis , pp. 1362–1379. IEEE, 2024. Choromanski, K. M., Likhosherstov, V., Dohan, D., Song, X., Gane, A., Sarlos, T., Hawkins, P., Davis, J. Q., Mo-hiuddin, A., Kaiser, L., et al. Rethinking attention with performers. In International Conference on Learning Representations , 2021. Dao, T., Fu, D., Ermon, S., Rudra, A., and R ´e, C. Flashat-tention: Fast and memory-efficient exact attention with io-awareness. Advances in Neural Information Process-ing Systems , 35:16344–16359, 2022. Edelman, A. Eigenvalues and condition numbers of random matrices. SIAM journal on matrix analysis and applica-tions , 9(4):543–560, 1988. Frantar, E., Ashkboos, S., Hoefler, T., and Alistarh, D. Gptq: Accurate post-training quantization for generative pre-trained transformers. arXiv preprint arXiv:2210.17323 ,2022. Fu, Y., Panda, R., Niu, X., Yue, X., Hajishirzi, H., Kim, Y., and Peng, H. Data engineering for scaling language models to 128k context. arXiv preprint arXiv:2402.10171 ,2024. Gu, Y., Dong, L., Wei, F., and Huang, M. Minillm: Knowl-edge distillation of large language models. In The Twelfth International Conference on Learning Representations ,2024. Han, C., Wang, Q., Xiong, W., Chen, Y., Ji, H., and Wang, S. LM-infinite: Simple on-the-fly length generalization for large language models. arXiv preprint arXiv:2308.16137 ,2023. 10 Curse of High Dimensionality Issue in Transformer for Long-context Modeling 
+
+Han, I., Jayaram, R., Karbasi, A., Mirrokni, V., Woodruff, D., and Zandieh, A. Hyperattention: Long-context at-tention in near-linear time. In The Twelfth International Conference on Learning Representations , 2024. Hastie, T., Tibshirani, R., Friedman, J., Hastie, T., Tibshi-rani, R., and Friedman, J. Overview of supervised learn-ing. The elements of statistical learning: Data mining, inference, and prediction , pp. 9–41, 2009. He, Y., Zhang, L., Wu, W., Liu, J., Zhou, H., and Zhuang, B. Zipcache: Accurate and efficient kv cache quanti-zation with salient token identification. arXiv preprint arXiv:2405.14256 , 2024. Horn, R. A. and Johnson, C. R. Matrix analysis . Cambridge university press, 2012. Huang, C.-W., Krueger, D., Lacoste, A., and Courville, A. Neural autoregressive flows. In International Conference on Machine Learning , pp. 2078–2087. PMLR, 2018. Huang, J. and Zhang, T. The benefit of group sparsity. 2010. Jiang, H., LI, Y., Zhang, C., Wu, Q., Luo, X., Ahn, S., Han, Z., Abdi, A. H., Li, D., Lin, C.-Y., Yang, Y., and Qiu, L. MInference 1.0: Accelerating pre-filling for long-context LLMs via dynamic sparse attention. In The Thirty-eighth Annual Conference on Neural Information Processing Systems , 2024. Katharopoulos, A., Vyas, A., Pappas, N., and Fleuret, F. Transformers are rnns: Fast autoregressive transformers with linear attention. In International Conference on Machine Learning , pp. 5156–5165. PMLR, 2020. Ke, Z., Shao, Y., Lin, H., Konishi, T., Kim, G., and Liu, B. Continual pre-training of language models. In The Twelfth International Conference on Learning Representations ,2023. Kenton, J. D. M.-W. C. and Toutanova, L. K. Bert: Pre-training of deep bidirectional transformers for language understanding. In Proceedings of naacL-HLT , volume 1. Minneapolis, Minnesota, 2019. Kitaev, N., Kaiser, Ł., and Levskaya, A. Reformer: The efficient transformer. In International Conference on Learning Representations , 2020. Liu, N. F., Lin, K., Hewitt, J., Paranjape, A., Bevilacqua, M., Petroni, F., and Liang, P. Lost in the middle: How language models use long contexts. Transactions of the Association for Computational Linguistics , 12:157–173, 2024a. Liu, X., Yan, H., Zhang, S., An, C., Qiu, X., and Lin, D. Scaling laws of rope-based extrapolation. In The Twelfth International Conference on Learning Representations ,2024b. Lounici, K., Pontil, M., Van De Geer, S., and Tsybakov, A. B. Oracle inequalities and optimal inference under group sparsity. 2011. Lu, P., Mishra, S., Xia, T., Qiu, L., Chang, K.-W., Zhu, S.-C., Tafjord, O., Clark, P., and Kalyan, A. Learn to explain: Multimodal reasoning via thought chains for science question answering. Advances in Neural Infor-mation Processing Systems , 35:2507–2521, 2022. MacKay, D. J. Information theory, inference and learning algorithms . Cambridge university press, 2003. Mathias, R. The spectral norm of a nonnegative matrix. 
+
+Linear algebra and its applications , 139:269–284, 1990. Mohtashami, A. and Jaggi, M. Landmark attention: Random-access infinite context length for transformers. 
+
+arXiv preprint arXiv:2305.16300 , 2023. Nasteski, V. An overview of the supervised machine learn-ing methods. Horizons. b , 4(51-62):56, 2017. OpenAI. GPT-4 technical report. arXiv:2303.08774 , 2023. Pasunuru, R., Celikyilmaz, A., Galley, M., Xiong, C., Zhang, Y., Bansal, M., and Gao, J. Data augmentation for ab-stractive query-focused multi-document summarization. In Proceedings of the AAAI Conference on Artificial In-telligence , volume 35, pp. 13666–13674, 2021. Peng, B., Quesnelle, J., Fan, H., and Shippole, E. Yarn: Effi-cient context window extension of large language models. In The Twelfth International Conference on Learning Representations , 2024. Radford, A., Wu, J., Child, R., Luan, D., Amodei, D., Sutskever, I., et al. Language models are unsupervised multitask learners. OpenAI blog , 1(8):9, 2019. Radford, A., Kim, J. W., Hallacy, C., Ramesh, A., Goh, G., Agarwal, S., Sastry, G., Askell, A., Mishkin, P., Clark, J., et al. Learning transferable visual models from natural language supervision. In International Conference on Machine Learning , pp. 8748–8763. PMLR, 2021. Ryan, W. and Lin, S. Channel codes: classical and modern .Cambridge university press, 2009. Schaeffer, R., Miranda, B., and Koyejo, S. Are emergent abilities of large language models a mirage? Advances in Neural Information Processing Systems , 36, 2023. Singhal, K., Tu, T., Gottweis, J., Sayres, R., Wulczyn, E., Amin, M., Hou, L., Clark, K., Pfohl, S. R., Cole-Lewis, H., et al. Toward expert-level medical question answering 11 Curse of High Dimensionality Issue in Transformer for Long-context Modeling 
+
+with large language models. Nature Medicine , pp. 1–8, 2025. Sun, Y., Dong, L., Huang, S., Ma, S., Xia, Y., Xue, J., Wang, J., and Wei, F. Retentive network: A successor to transformer for large language models. arXiv preprint arXiv:2307.08621 , 2023. Sun, Z., Yang, Y., and Yoo, S. Sparse attention with learn-ing to hash. In International Conference on Learning Representations , 2021. Touvron, H., Lavril, T., Izacard, G., Martinet, X., Lachaux, M.-A., Lacroix, T., Rozi `ere, B., Goyal, N., Hambro, E., Azhar, F., et al. Llama: Open and efficient foundation lan-guage models. arXiv preprint arXiv:2302.13971 , 2023a. Touvron, H., Martin, L., Stone, K., Albert, P., Almahairi, A., Babaei, Y., Bashlykov, N., Batra, S., Bhargava, P., Bhosale, S., et al. Llama 2: Open foundation and fine-tuned chat models. arXiv preprint arXiv:2307.09288 ,2023b. Tworkowski, S., Staniszewski, K., Pacek, M., Wu, Y., Michalewski, H., and Miło ´s, P. Focused transformer: Contrastive training for context scaling. Advances in Neural Information Processing Systems , 36, 2023. Vaswani, A. Attention is all you need. Advances in Neural Information Processing Systems , 2017. Wang, X., Zhang, X., Luo, Z., Sun, Q., Cui, Y., Wang, J., Zhang, F., Wang, Y., Li, Z., Yu, Q., et al. Emu3: Next-token prediction is all you need. arXiv preprint arXiv:2409.18869 , 2024a. Wang, Z., Jin, B., Yu, Z., and Zhang, M. Model tells you where to merge: Adaptive kv cache merging for llms on long-context tasks. arXiv preprint arXiv:2407.08454 ,2024b. Wei, J., Wang, X., Schuurmans, D., Bosma, M., Xia, F., Chi, E., Le, Q. V., Zhou, D., et al. Chain-of-thought prompting elicits reasoning in large language models. 
+
+Advances in Neural Information Processing Systems , 35: 24824–24837, 2022. Xiao, G., Tian, Y., Chen, B., Han, S., and Lewis, M. Effi-cient streaming language models with attention sinks. In 
+
+International Conference on Learning Representations ,2024. Xiong, W., Liu, J., Molybog, I., Zhang, H., Bhargava, P., Hou, R., Martin, L., Rungta, R., Sankararaman, K. A., Oguz, B., Khabsa, M., Fang, H., Mehdad, Y., Narang, S., Malik, K., Fan, A., Bhosale, S., Edunov, S., Lewis, M., Wang, S., and Ma, H. Effective long-context scal-ing of foundation models. In Proceedings of the 2024 Conference of the North American Chapter of the Associ-ation for Computational Linguistics: Human Language Technologies , pp. 4643–4663, 2024. Yen, H., Gao, T., and Chen, D. Long-context language modeling with parallel context encoding. In Proceed-ings of the 62nd Annual Meeting of the Association for Computational Linguistics , pp. 2588–2610, 2024. Zaheer, M., Guruganesh, G., Dubey, K. A., Ainslie, J., Al-berti, C., Ontanon, S., Pham, P., Ravula, A., Wang, Q., Yang, L., et al. Big bird: Transformers for longer se-quences. Advances in Neural Information Processing Systems , 33:17283–17297, 2020. Zhang, L., Hosseini, A., Bansal, H., Kazemi, M., Ku-mar, A., and Agarwal, R. Generative verifiers: Re-ward modeling as next-token prediction. arXiv preprint arXiv:2408.15240 , 2024. Zhang, S., Roller, S., Goyal, N., Artetxe, M., Chen, M., Chen, S., Dewan, C., Diab, M., Li, X., Lin, X. V., et al. Opt: Open pre-trained transformer language models. 
+
+arXiv preprint arXiv:2205.01068 , 2022. Zhang, Z., Sheng, Y., Zhou, T., Chen, T., Zheng, L., Cai, R., Song, Z., Tian, Y., R ´e, C., Barrett, C., et al. H2o: Heavy-hitter oracle for efficient generative inference of large language models. Advances in Neural Information Processing Systems , 36:34661–34710, 2023. Zhu, D., Yang, N., Wang, L., Song, Y., Wu, W., Wei, F., and Li, S. Pose: Efficient context window extension of llms via positional skip-wise training. In The Twelfth International Conference on Learning Representations ,2024. 12 Curse of High Dimensionality Issue in Transformer for Long-context Modeling 
+
+# APPENDIX 
+
+## Contents 
+
+A Theoretical analysis 14 
+
+A.1 Proof of Theorem 1 . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 14 A.2 Proof of Theorem 2 . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 14 A.3 Proof of Theorem 3 . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 16 
+
+B More Discussions on Sequence Modeling and Supervised Learning 18 C More Details for Experiment Settings 19 
+
+C.1 More Details on Benchmark and Evaluation Metrics . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 19 C.2 Implementation Details on Our Method . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 19 C.3 Implementation Details on Baselines . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 19 C.4 Implementation Details on Sparsity in Figure 2 . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 20 C.5 Implementation Details on Optimization Efficiency in Figure 3(a) . . . . . . . . . . . . . . . . . . . . . . . . . . . . 20 
+
+D Details on Causing Mask in Group-Oriented Attention 20 E Analysis on Reduced Complexity and Key-value Cache 21 F Ablation Studies 22 G Discussions on DGA-LLM 23 H More Experimental Results 23 
+
+H.1 More Results on Redundancy in Self-attention . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 23 
+
+I Future Directions 23 
+
+13 Curse of High Dimensionality Issue in Transformer for Long-context Modeling 
+
+## A. Theoretical analysis 
+
+A.1. Proof of Theorem 1 Theorem 1 (Sparsity on attention weights ) Consider ρ ∈ (1 /L, 1] as a sparse rate, we say that the weight α is ρ-sparse when there exists at least one probability greater than 1/(Lρ ). Let ξ = KQ i ∈ RL, then the probability of α being ρ-sparse 
+
+Psparse (L, ρ ) is given by 
+
+Psparse (L, ρ ) ≥ max  
+
+> x> 0
+
+1 − [Phead Ptail ]L, (18) 
+
+where Phead = P {exp( ξj ) ≤ x} with j being some index of α and Ptail = P {(Lρ − 1) x ≤ PLk̸ =j exp( ξk)}.Proof. According to the definition of ρ-sparse, the probability of having at least one probability greater than 1/(Lρ ) is given 
+
+Psparse (L, ρ ) = 1 − P {αj ≤ 1/(Lρ ), ∀j ∈ [L]}≥ 1 − P L{αj ≤ 1/(Lρ )} (19) Here, the inequation is due to the dependence of each αj . We next focus on the upper bound of P {αj ≤ 1/(Lρ )}.
+
+P {αj ≤ 1/(Lρ )} = P {⟨ exp( ξ), 1n⟩−1 exp( ξj ) ≤ 1/(Lρ )}
+
+= P {exp( ξj ) ≤ 1/(Lρ )⟨exp( ξ), 1n⟩} 
+
+= P {exp( ξj ) ≤ x ≤ 1/(Lρ )⟨exp( ξ), 1n⟩} 
+
+= P {exp( ξj ) ≤ x, x ≤ 1/(Lρ )⟨exp( ξ), 1n⟩} 
+
+= P {exp( ξj ) ≤ x}P {x ≤ 1/(Lρ )⟨exp( ξ), 1n⟩| exp( ξj ) ≤ x}
+
+= P {exp( ξj ) ≤ x}P {Lρx ≤ ⟨ exp( ξ), 1n⟩| exp( ξj ) ≤ x}≤ P {exp( ξj ) ≤ x}P {(Lρ − 1) x ≤
+
+> n
+
+X 
+
+> k̸=j
+
+exp( ξk)} (20) Combining the inequations (19) and (20), and denoting Phead = P {exp( ξj ) ≤ x} and Ptail = P {(Lρ − 1) x ≤
+
+PLk̸ =j exp( ξk)}, we finish the proof. Note that the distribution of the attention weights α is often complex, and more importantly, these weights are not independent and may be highly correlated, which makes the analysis of sparsity extremely challenging. In this theorem, we provide a general bound for sparsity without imposing specific assumptions on the weights. In the inequation (18), a larger x increases 
+
+Phead but decreases Ptail , ensuring that their product remains bounded by a value less than 1. When the sequence length 
+
+L is large, this value raised to the power of L will be much less than 1, resulting in a large Psparse (L, ρ ). We hope this theorem offers researchers deeper insights and serves as a source of inspiration for further exploration into sparsity. 
+
+A.2. Proof of Theorem 2 Theorem 2 Assume the weights before normalization are ˜α obtained by the product of the query and key matrix, and 
+
+αj = exp( ˜ αj )  
+
+> PLl=1 exp( ˜ αl)
+
+. Consider a Gaussian noise ∆˜ α ∼ N (0, σ 2IL) being added into ˜α and each group size being |Gg | = m,the variance of the weight changes obtained via group optimization in Eqn. (2) can be reduced by 1/m 2.Proof. Recall that the optimization in Problem (2) when |Gg | = m is: 
+
+min 
+
+> ¯α
+> k
+
+X
+
+> g=1
+
+X
+
+> j∈Gg
+
+¯αg
+
+m Vj −y
+
+> 22
+
+, s.t. ,
+
+> k
+
+X
+
+> g=1
+
+mα g =1 , α g >0. (21) Note that adding the noise ∆˜ αg ∼ N (0 , σ 2) on ¯αg is equivalent to adding the noise ˜αg 
+
+> m
+
+on each weight in g-th group. Consequently, we focus only on the effect of the input noise ˜αg 
+
+> m
+
+on the normalized output. Since the factor 1 
+
+> m
+
+can be shifted on the variance σ of the noise, we next direct analyze the effect of the input noise ˜αj on the normalized αj for simplicity. 14 Curse of High Dimensionality Issue in Transformer for Long-context Modeling 
+
+Denote the normalized noised weight as 
+
+αδj = exp(˜ αδj )
+
+PLi=1 exp(˜ αδi ) , (22) where αδj = ˜ αj + ∆˜ αj and ∆˜ αj ∼ N (0 , σ 2). Then, according to Lemma 1 and Lemma 2, we have 
+
+Var(∆ αj ) = Var( αδj − αj ) (23) 
+
+= Var 
+
+αj (∆ˆ αj −
+
+> L
+
+X
+
+> j=1
+
+αj ∆˜ αj + o(∆˜ αj )) 
+
+
+
+= α2 
+
+> j
+
+Var 
+
+∆ˆ αj −
+
+> L
+
+X
+
+> j=1
+
+αj ∆˜ αj + o(∆˜ αj )
+
+
+
+= O(σ2) (24) where o(∆˜ αj ) represents the higher-order infinitesimal of ∆˜ αj and O(σ2) denotes the same-order infinitesimal of σ2
+
+(Browder, 2012). Thus, when adding the noise ˜αg 
+
+> m
+
+to each weight in the g-th group, the variance of the weight changes is 
+
+O(σ2/m 2). Therefore, by group optimization in Eqn. (2), the variance of the weight changes can be reduced by 1/m 2.
+
+Lemma 1. Given αj = exp( ˜ αj )  
+
+> PLl=1 exp( ˜ αl)
+
+and αδj = exp( ˜ αj +∆ ˜ αj )  
+
+> PLi=1 exp( ˜ αi+∆ ˜ αi)
+
+, where ∆˜ αj ∼ N (0 , σ 2), let ∆αj = αδj − αj , we have 
+
+∆αj = αj
+
+"
+
+∆˜ αj −
+
+> L
+
+X
+
+> i=1
+
+αi∆˜ αi + o(∆˜ αj )
+
+#
+
+, (25) 
+
+where o(∆˜ αj ) represents the higher-order infinitesimal of ∆˜ αj (Browder, 2012). Proof. According to the definition of ∆˜ αj , we have 
+
+αδj = exp(˜ αj + ∆˜ αj )
+
+PLi=1 exp(˜ αi + ∆˜ αi)= exp(˜ αj )[(1 + ∆˜ αj + o(∆˜ αj )] 
+
+PLi=1 exp(˜ αi)[1 + ∆˜ αi + o(∆˜ αi)] = exp(˜ αj )[(1 + ∆˜ αj + o(∆˜ αj )] 
+
+PLn=1 exp(˜ αn) + PLi=1 exp(˜ αi)[∆˜ αi + o(∆˜ αi)] = exp(˜ αj )[(1 + ∆˜ αj + o(∆˜ αj )] 
+
+PLn=1 exp(˜ αn)
+
+n
+
+1 + PLi=1 exp( ˜ αi)  
+
+> PLm=1 exp( ˜ αm)
+
+[∆˜ αi + o(∆˜ αi)] 
+
+o
+
+= exp(˜ αj )[(1 + ∆˜ αj + o(∆˜ αj )] 
+
+PLn=1 exp(˜ αn)
+
+n
+
+1 + PLi=1 αi[∆˜ αi + o(∆˜ αi)] 
+
+o
+
+= αj [(1 + ∆˜ αj + o(∆˜ αj )] 1 + PLi=1 αi[∆˜ αi + o(∆˜ αi)] = αj [(1 + ∆˜ αj + o(∆˜ αj )] 
+
+"
+
+1 −
+
+> L
+
+X
+
+> i=1
+
+αi[∆˜ αi + o(∆˜ αi)] + o
+
+> L
+
+X
+
+> i=1
+
+αi[∆˜ αi + o(∆˜ αi)] 
+
+!# 
+
+= αj
+
+"
+
+1 + ∆˜ αi −
+
+> L
+
+X
+
+> i=1
+
+αi∆˜ αi + o(∆˜ αi)
+
+#
+
+(26) where the second line follows Taylor’s expansion of exp(∆˜ αj ) = 1 + ∆˜ αj + o(∆˜ αj ); the penultimate line follows Taylor’s expansion of 11+ PLi=1 αi[∆ ˜ αi+o(∆ ˜ αi)] = 1 − PLi=1 αi[∆˜ αi + o(∆˜ αi)] + o(PLi=1 αi[∆˜ αi + o(∆˜ αi)]) .15 Curse of High Dimensionality Issue in Transformer for Long-context Modeling 
+
+Therefore, we have 
+
+∆αj = αδj − αj = αj
+
+"
+
+∆˜ αj −
+
+> L
+
+X
+
+> i=1
+
+αi∆˜ αi + o(∆˜ αj )
+
+#
+
+. (27) 
+
+Lemma 2. Given ∆˜ α ∼ N (0, σ 2IL), we have 
+
+Var(∆˜ αj −
+
+> L
+
+X
+
+> i=1
+
+αi∆˜ αi) = O(σ2), (28) 
+
+where O(σ2) denotes the same-order infinitesimal of σ2 (Browder, 2012). Proof. Expanding the variance of ∆αj − PLi=1 αi∆˜ αi as 
+
+Var(∆ αj −
+
+> L
+
+X
+
+> i=1
+
+αi∆˜ αi) = Var(∆˜ αj ) + Var 
+
+> L
+
+X
+
+> i=1
+
+αi∆˜ αi
+
+!
+
+− 2 · Cov ∆˜ αj ,
+
+> L
+
+X
+
+> i=1
+
+αi∆˜ αi
+
+!
+
+= σ2 + σ2
+
+> L
+
+X
+
+> i=1
+
+α2 
+
+> i
+
+− 2
+
+> L
+
+X
+
+> i=1
+
+αi · Cov(∆˜ αj , ∆˜ αi)= σ2 + σ2
+
+> L
+
+X
+
+> i=1
+
+α2 
+
+> i
+
+− 2αj σ2
+
+= (1 + 
+
+> L
+
+X
+
+> i=1
+
+α2 
+
+> i
+
+− 2αj )σ2
+
+= O(σ2) (29) where the third line holds since Cov(∆˜ αi, ∆˜ αj ) = 0 when i̸ = j and Cov(∆˜ αi, ∆˜ αj ) = σ2 when i̸ = j.
+
+A.3. Proof of Theorem 3 Theorem 3 Denote H and ¯H as the Hessian matrix of the optimizations in (1) and (2), respectively. Let κ(H) = 
+
+λmax (H)/λ min (H) be the condition number (Edelman, 1988) of H, where λmax and λmin are the maximum and minimum eigenvalues of H, respectively. Consider each group size |Gg | = m and λmin (H) > 0, we have 
+
+κ( ¯H) ≤ κ(H). (30) 
+
+Proof. Recall that the objective in Problem (2) when |Gg | = m is: 
+
+min 
+
+> ¯α
+> k
+
+X
+
+> g=1
+
+X
+
+> j∈Gg
+
+¯αg
+
+m Vj −y
+
+> 22
+
+, s.t. ,
+
+> k
+
+X
+
+> g=1
+
+mα g =1 , α g >0. (31) Let ¯Vg = 1
+
+> m
+
+P 
+
+> j∈Gg
+
+Vj and ¯V = [ ¯V1; ¯V2; . . . ; ¯Vk] ∈ Rk×d, then the Hessian matrix of the grouped objective is 
+
+¯H = 2 ¯V⊤ ¯V. (32) We introduce a grouping matrix M ∈ Rk×L, where Mg,i is defined as 
+
+Mg,i =
+
+( 1 
+
+> m
+
+, i ∈ g, 
+
+0, i / ∈ g. (33) 16 Curse of High Dimensionality Issue in Transformer for Long-context Modeling 
+
+Then, we have ¯V = M V. (34) The Hessian matrix in (32) can be reformulated as 
+
+¯H = 2 ¯V⊤ ¯V = 2 V⊤M ⊤M V. (35) According to Lemma 3 and 4, we have 
+
+λmax ( ¯H)
+
+λmin ( ¯H) ≤ λmax (H)
+
+λmin (H) . (36) Thus, based on the definition of the condition number (Edelman, 1988), we have 
+
+κ( ¯H) ≤ κ(H). (37) 
+
+Lemma 3. Given ¯H = 2 V⊤M ⊤M V and H = 2 V⊤V, where M is defined in Eqn. (33), we have 
+
+λmax ( ¯H) ≤ λmax (H)
+
+m . (38) 
+
+Proof. Note that the matrix M ⊤M is a block-diagonal matrix: 
+
+M ⊤M =
+
+ 
+
+> 1
+> m2
+
+Jm 0 · · · 00 1 
+
+> m2
+
+Jm · · · 0
+
+... ... . . . ...
+
+0 0 · · · 1 
+
+> m2
+
+Jm
+
+ (39) where Jm ∈ Rm×m is an all-one matrix. Note that the rank of Jm is rank( Jm) = 1 since each row of the matrix is 1. Due to Jmv = mv, where 
+
+v = 1√m [1 , 1, · · · , 1] ⊤, one of the (non-zero) eigenvalues of 1 
+
+> m2
+
+Jm is 
+
+λmax ( 1
+
+m2 Jm) = mm2 = 1
+
+m . (40) Thus, we have 
+
+λmax (M ⊤M ) = 1
+
+m . (41) Based on the property of the spectral norm of the matrix (Mathias, 1990), we have 
+
+S(V⊤M ⊤M V) ≤ S(V⊤V) · S(M ⊤M ), (42) where S(A) is the spectral norm of the matrix A. Since the spectral norm of the symmetric matrix A is its maximum eigenvalue, we have 
+
+λmax (V⊤M ⊤M V) ≤ λmax (V⊤V) · λmax (M ⊤M ). (43) Combing Eqn. (41) and the definitions of ¯H and H, we get 
+
+λmax ( ¯H) ≤ λmax (H)
+
+m . (44) 
+
+Lemma 4. Given ¯H = 2 V⊤M ⊤M V and H = 2 V⊤V, where M is defined in Eqn. (33), we have 
+
+λmin ( ¯H) ≥ λmin (H)
+
+m . (45) 17 Curse of High Dimensionality Issue in Transformer for Long-context Modeling 
+
+Proof. According to the Rayleigh theorem (Horn & Johnson, 2012), for M ⊤M , for any nonzero vector z ∈ RL, we have 
+
+z⊤M ⊤M zz⊤z ≥ λmin (M ⊤M ). (46) Let z = Vx , where x ∈ Rd and ∥x∥22 = 1 , we have 
+
+x⊤V⊤M ⊤M Vx ≥ λmin (M ⊤M ) · x⊤V⊤Vx . (47) Taking the minimum of all the vectors x, we get 
+
+min 
+
+> ∥x∥22=1
+
+x⊤V⊤M ⊤M Vx ≥ λmin (M ⊤M ) · min 
+
+> ∥x∥22=1
+
+x⊤V⊤Vx . (48) According to the definition of the minimum eigenvalues, we have 
+
+λmin (V⊤M ⊤M V) ≥ λmin (M ⊤M ) · λmin (V⊤V). (49) Here, we focus on the non-zero eigenvalues of V⊤M ⊤M V since the zero eigenvalues may not actually mean much. Based on the analyses in the eigenvalues of M ⊤M in Lemma 3, we have λmin (M ⊤M ) = 1 
+
+> m
+
+. Thus, we obtain 
+
+λmin ( ¯H) ≥ λmin (H)
+
+m . (50) 
+
+## B. More Discussions on Sequence Modeling and Supervised Learning 
+
+We demonstrate that traditional pre-training is fundamentally a form of supervised learning. For a token sequence 
+
+x1, x2, . . . , xt−1, xt, traditional pre-training, based on the principle of maximum likelihood, optimizes the model θ as 
+
+max  
+
+> θ
+
+Pθ (x1, x2, . . . , xt−1, xt) = 
+
+> t
+
+Y
+
+> k=1
+
+p(xk|x1, x2, . . . , xk−1), xk ∈ X . (51) Given a large collection of sequences, this objective aligns with Eqn. 2, with the conditions represented as C(y). In practical applications, this can be reformulated as minimizing the cross-entropy loss: 
+
+min  
+
+> θ
+
+− X
+
+> k
+
+log p(xk|x1, x2, . . . , xk−1). (52) Thus, the traditional pre-training paradigm for LLMs is essentially equivalent to supervised learning. 18 Curse of High Dimensionality Issue in Transformer for Long-context Modeling 
+
+## C. More Details for Experiment Settings 
+
+C.1. More Details on Benchmark and Evaluation Metrics SlimPajama (Cerebras, 2024) dataset is an open-source reproduction of the data mixture used to pretrain the LLaMA models. It includes 82% web data, 4.5% code from GitHub, 4.5% Wikipedia, 4.5% books, 2.5% Arxiv, and 2.0% StackExchange. The dataset is designed to extend the context lengths of large language models (LLMs) to 128K tokens through data engineering techniques such as per-source length upsampling. 
+
+LongBench (Bai et al., 2024) is a pioneering benchmark designed to evaluate the long-context understanding capabilities of large language models (LLMs) in a bilingual (Chinese and English) and multitask setting. It includes 21 tasks across 6 major categories, such as single-document QA, multi-document QA, summarization, few-shot learning, synthetic tasks, and code completion, covering key long-text application areas. The benchmark comprises 14 English tasks, 5 Chinese tasks, and 2 code tasks, with most tasks averaging between 5k to 15k in length and totaling 4,750 test data points. LongBench contains a test set with more evenly distributed lengths, named LongBench-E, which includes comparable data quantities across 0-4K, 4K-8K, and 8K+ length intervals, enabling thorough analysis of model performance across different input lengths. 
+
+EM score (Liu et al., 2024a) measures the ability to find the key information within a long multi-document context. It measures whether the model’s predicted output exactly matches one or more ground-truth answers, ensuring precision in information retrieval. Therefore, the EM score is calculated by checking if any correct answers appear in the model’s predictions, providing a strict assessment of the model’s ability to extract precise information from complex contexts. This metric is particularly stringent, as it requires the model to identify the correct answer without partial or approximate matches. 
+
+Inter-token latency (ITL (Chitty-Venkata et al., 2024)) is a metric for evaluating the average time between generating consecutive tokens in a response. It refers to the time delay between the generation of consecutive tokens (e.g., words or subwords) in a sequence produced by a language model. This metric is influenced by factors like model architecture, computational resources, and optimization techniques. Reducing inter-token latency is essential for enhancing the usability and performance of language models in time-sensitive scenarios. 
+
+Perplexity (PPL) serves as a metric to evaluate a model’s predictive accuracy within a given context. It is derived by exponentiating the average negative log-likelihood of a sequence, providing a statistical assessment of language modeling efficacy. Proof-pile (Azerbayev et al., 2022) is a high-quality dataset encompassing mathematical text and code, totaling 13GB and consisting of 8.3 billion tokens (tokenized using the gpt-neox tokenizer). This dataset aggregates a variety of sources, including both informal and formal mathematical content, with raw data collected from the web. The PPL is reported based on the test dataset. We use the test dataset of Proof-pile to verify the modeling ability of models. 
+
+C.2. Implementation Details on Our Method 
+
+For continuous pretraining, we utilize the SlimPajama dataset, an open-source replication of the LLaMA pretraining data mixture. In our approach, we replace the standard self-attention mechanism in LLaMA-2 with our focal attention. Notably, the group size m = 16 and importance rate γ = 0 .1, the number of the focal tokens is max {γL, 1k}, remain consistent across different experiments, ensuring architectural uniformity. All models are trained on 8 × A800 GPUs, employing a micro-batch size of 1 with gradient accumulation over 8 steps, totaling 1000 training steps. To facilitate effective scaling to longer contexts, we modified the RoPE (Rotary Position Embedding) base frequency from 10,000 to 500,000, following Cerebras (2024) and Xiong et al. (2024). 
+
+C.3. Implementation Details on Baselines 
+
+We implement StreamingLLM (Xiao et al., 2024) following the codebase 1, LM-Infinite (Han et al., 2023) following the codebase 2, MInference (Jiang et al., 2024) following the codebase 3.For StreamingLLM, we configure the attention sink parameter to 4 and the attention context window size to 2000 tokens. For LM-Infinite, the local branch size is set to 4096 tokens, while the global branch size is configured to 10. For MInference, we utilize their official implementations with default parameter settings. 
+
+> 1https://github.com/mit-han-lab/streaming-llm
+> 2https://github.com/Glaciohound/LM-Infinite
+> 3https://github.com/microsoft/MInference
+
+19 Curse of High Dimensionality Issue in Transformer for Long-context Modeling 
+
+C.4. Implementation Details on Sparsity in Figure 2 
+
+In Section 6.2, we conduct experiments on the sparsity of the vanilla attention weights on the samples from the train split of the SlimPajama (Cerebras, 2024) dataset, truncating each sample to retain only the first 1,000 tokens. Each sample undergoes a single forward pass through the LLaMA2-7B model (Touvron et al., 2023b), during which we capture the attention maps from the 9-th attention head of the 24-th and 30-th layers. In Figure 2(a), we randomly select a example and display the distribution of attention weights corresponding to the last token in the 30-th layer. Additional results are provided in Figure 6. In Figure 2(b), we randomly select 100 examples and present the statistical analysis of attention distributions across rows L ∈ [100 , 1000] in different attention maps, quantified using the ρ-sparse metric Psparse (L, ρ ) with different 
+
+ρ ∈ { 0.05 , 0.02 , 0.01 }, as defined in Theorem 1. We estimate Psparse (L, ρ ) using the observed sparsity frequency in the 100 examples. Additional results are provided in Figure 7. 
+
+C.5. Implementation Details on Optimization Efficiency in Figure 3(a) 0 250 500 750 1000 
+
+> Iterations
+> 8.9
+> 9.0
+> 9.1
+> 9.2
+> 9.3
+> 9.4
+> Val loss
+> GPT2-S (Vanilla)
+> GPT2-S (DGA)
+
+Figure 4. Validation losses of our DGA-LLM and vanilla ones on GPT2-S, where the models are trained with a 1K context length on SlimPajama. 
+
+We train the GPT2-S and OPT-125M models on the SlimPajama dataset using a distributed setup consisting of 8 A800 GPUs. The training configuration includes a micro-batch size of 1, gradient accumulation over 8 steps, and a total of 1000 training steps. Integrating our proposed DGA into the model, we set the group size m to 16 and the importance rate to 0.1. For GPT2-S, the learning rate is set to 2 × 10 −4, with a warmup period of 20 steps. For OPT-125M, the learning rate is set to 8 × 10 −5, with a warmup period of 50 steps and a weight decay coefficient of 0.1. Additionally, the AdamW optimizer is employed with the hyperparameters β1 = 0 .9 and β2 = 0 .95 .
+
+## D. Details on Causing Mask in Group-Oriented Attention 
+
+Algorithm 2 Constructing causing mask M for attention. 
+
+input Matrices Q, K, V ∈ RL×d, group size m, focal tokens T foc and non-focal tokens T non .
+
+output Causing mask M ∈ RL×(r+k+m).
+
+1: Initialize a lower triangular matrix M0 ∈ RL×L with ones. 
+
+2: Partition T non into k groups {Gi}ki=1 , each of size m. // Note that non-divisible tokens are classified as focal tokens. 
+
+3: Construct 0-1 mask Mn∈RL×k for aggregated tokens by setting Mni,j =1 if ∥Mi,G j ∥0>0.
+
+4: Construct 0-1 mask Mc∈RL×m for complemented tokens: 
+
+Mci = Φ i, [m(z−1)+1: mz ] ∈ Rm if i∈[min Gz , max Gz ],where Φ = M0  
+
+> Tnon
+
+− ϕm(Mn), ϕm(Mn) repeats each column of the matrix Mn m times. 
+
+5: Final mask is M = [ M0  
+
+> Tfoc
+
+, Mn, Mc] ∈ RL×(r+k+m).20 Curse of High Dimensionality Issue in Transformer for Long-context Modeling 
+
+## E. Analysis on Reduced Complexity and Key-value Cache 𝑚 
+
+…       
+
+> （a）Self -Attention 𝑶 (𝑳 )
+> （b）Ours 𝑶 𝒓 +𝑳 −𝒓
+> 𝒎 +𝒎
+> 𝐿
+
+…  
+
+> 𝐿
+> Focal tokens Non -Focal tokens
+> 𝑟
+> Figure 5. Comparison of the computational complexity during inference between our DGA-LLM and vanilla self-attention.
+
+Our DGA-LLM enhances efficiency by adaptively grouping and aggregating redundant non-focal tokens, thereby reducing computational complexity and key-value cache memory storage compared to vanilla self-attention. Based on these benefits, our DGA-LLM achieves substantial improvements in terms of running speed and memory usage efficiency. 
+
+Computational Complexity Optimization. Our DGA-LLM exhibits varying computational complexities across training and inference phases. For the training phases, DGA-LLM achieves a computational complexity of O(Lr + L L−rm + Lm ),representing a substantial improvement over the vanilla full self-attention mechanism, which has a complexity of O(L2).Specifically, the computation primarily involves three types of tokens: (1) focal tokens, contributing a complexity of ( Lr ); (2) aggregated non-focal tokens, contributing ( L L−rm ); (3) complement tokens, contributing ( Lm ). Considering the group size m and the number of focal tokens r as constant, the final computational complexity can degenerate as O(L2/m ).As shown in Figure 5, during the inference phase, where the generation process involves next-token prediction, the computational complexity of generating a token is reduced to O(r + L−rm + m). This is significantly lower with large m
+
+compared to the full self-attention mechanism, which has a complexity of O(L).
+
+Key-Value (KV) Cache Reduction. The KV cache is a widely used mechanism in self-attention-based Transformers to enhance the efficiency of attention computations by leveraging the model’s auto-regressive nature to store and reuse key-value pairs ( i.e. , K and V). However, its memory consumption scales linearly with sequence length, making it a primary contributor to the overall memory footprint during inference. The increasing memory demand not only imposes substantial resource requirements but also potentially degrades inference speed due to the heightened frequency of I/O operations. The full self-attention mechanism has a storage complexity of O(L), whereas our proposed DGA-LLM significantly reduces it to O(r + L−rm + m). Specifically, instead of storing all original tokens at O(L) complexity, we retain key and value matrices for three distinct token types: focal tokens with a complexity of O(r), aggregated non-focal tokens at O( L−rm ), and complement tokens at O(m).21 Curse of High Dimensionality Issue in Transformer for Long-context Modeling 
+
+## F. Ablation Studies 
+
+Effect of group Size m. In this experiment, we investigate the impact of group size m on model performance and latency. As shown in Table 4, when varying m from 4 to 64, we observe only a slight degradation in model performance, with perplexity (PPL) increasing from 3.20 to 3.87 and accuracy decreasing from 70 .17 % to 65 .00 %. However, computational efficiency shows a notable improvement, with latency significantly decreasing from 189 .80 ms to 162 .02 ms. Thus, we set 
+
+m = 16 to strike a balance between computational efficiency and model performance as the default training setting.   
+
+> Table 4. Effect of group size m.
+
+m 4 8 16 32 64 PPL ↓ 3.20 3.42 3.59 3.77 3.87 Accuracy ↑ (%) 70.17 68.33 67.00 65.61 65.00 Latency ↓ (ms) 189.80 189.10 172.12 169.40 162.02 
+
+Effect of focal token identification. In this experiment, we investigate the effect of different focal token identification strategies on model performance. From Table 5, compared to the randomly selected strategy, our Top-K approach achieves an improvement in accuracy from 66 .91 % to 67 .00 %. At the same time, perplexity (PPL) shows a decrease from 3.60 to 
+
+3.59 . These results suggest the effectiveness of focal token identification in DGA over the randomly selected strategy.  
+
+> Table 5. Effect of focal token identification strategy.
+
+Strategy Randomly Selected Top-K (Ours) PPL ↓ 3.60 3.59 Accuracy ↑ (%) 66.91 67.00 
+
+Effect of importance rate γ. In this experiment, we investigate the effect of the importance rate γ in our DGA. Table 6 demonstrates a significant positive correlation between γ values and model performance. Specifically, as γ increases from 0.1 to 0.9, the model accuracy improves substantially from 67 .00 % to 70 .58 %, while perplexity (PPL) consistently decreases from 3.59 to 3.20 . However, the latency shows an increase as γ increases, growing from 172 .12 ms to 555 .25 ms. A larger γ indicates that more tokens are identified as focal tokens, thereby preserving a greater portion of the original input information in the self-attention computations. This preservation of information, while beneficial for accuracy, inevitably increases the computational overhead. Conversely, a smaller γ leads to more tokens being grouped and aggregated, which enhances computational efficiency but at the expense of model performance. Striking a balance between computational efficiency and model effectiveness, we select γ = 0 .1 as the default training setting.   
+
+> Table 6. Effect of importance rate γ.
+
+γ 0.1 0.3 0.5 0.7 0.9 PPL ↓ 3.59 3.43 3.27 3.22 3.20 Accuracy ↑ (%) 67.00 68.25 69.67 70.29 70.58 Latency ↓ (ms) 172.12 224.85 386.36 465.35 555.25 
+
+Effect of complementary tokens. Table 7 shows that removing complementary tokens significantly degrades performance on tasks like Multi-Doc QA from 3.58 to 2.37 and Code from 53 .45 to 48 .00 , indicating complementary tokens are critical for context modeling. They slightly increase latency from 24 .9 ms to 28 .8 ms, but still 2.4 ∼ 3.5× faster than vanilla self-attention (Table 2: 69 .70 ∼ 102 .22 ms). 22 Curse of High Dimensionality Issue in Transformer for Long-context Modeling                            
+
+> Table 7. Effect of complementary tokens on LongBench-E (Bai et al., 2024), where the 95% text length quantile is 31K. “ITL” denotes inter-token latency (Chitty-Venkata et al., 2024), which measures the time delay between generating consecutive tokens.
+> Methods Single Doc. QA Multi Doc. QA Summar. FS Learning Synthetic Code Avg. ↑ITL (ms) ↓
+> w/o comple. tokens 6.43 2.37 8.47 53.69 3.04 48.00 20.33 24.9 DGA-LLM (Ours) 3.61 3.58 6.81 57.90 1.47 53.45 21.14 28.8
+
+## G. Discussions on DGA-LLM 
+
+Hyperparameters selection . Experimental analysis in Tables 4 and 7 reveals that smaller group sizes ( m) and higher importance rates ( γ) improve performance at the cost of increased latency. Based on these, we recommend the following practical guidelines for parameter selection: For resource-constrained scenarios, larger m and lower γ balance acceptable performance with reduced complexity. Performance-critical applications ( e.g. , medical diagnosis) benefit from minimal 
+
+m and maximal γ to preserve accuracy, whereas latency-sensitive tasks ( e.g. , real-time systems) require moderate m
+
+and lower γ for responsiveness. An adaptive framework to automatically optimize ( m, γ) based on application-specific accuracy-latency trade-offs remains a promising direction for future work. 
+
+Potential application. While our current work focuses on long-text modeling, the proposed DGA mechanism is inherently task-agnostic and could generalize to other long-sequence domains ( e.g. , video/audio) where redundancy exists in sequential tokens and adaptive token importance assessment is critical. For instance, 1) Video processing: Temporal sequences in videos often exhibit localized redundancy ( e.g. , static backgrounds or repetitive motions). DGA could dynamically group less informative frames while preserving critical temporal segments. 2) Audio processing: Long audio signals contain silent or redundant segments. DGA’s importance scoring could prioritize phonetically rich regions, enabling efficient compression. 
+
+## H. More Experimental Results 
+
+H.1. More Results on Redundancy in Self-attention 
+
+In this section, we present additional visualizations of the sparsity in vanilla attention weights. Figure 6 illustrates the distributions of attention weights across four randomly sampled long contexts from SlimPajama. Figure 7 depicts the distributions of Psparse (L, ρ ) for ρ ∈ { 0.05 , 0.02 , 0.01 }. The results reveal that attention weights grow increasingly sparse with longer contexts, with only a small subset of tokens playing a significant role in predictions, aligning with the findings in Theorem 1 and the results in Section 6.2. 
+
+## I. Future Directions 
+
+While our proposed Dynamic Group Attention (DGA) demonstrates significant improvements in computational efficiency and robustness for long-context modeling, several avenues remain for further exploration. First, extending DGA to multi-modal settings, such as vision-language models or audio-text models, could unlock new possibilities for efficient cross-modal reasoning. For instance, integrating DGA with architectures like CLIP (Radford et al., 2021) or Flamingo (Alayrac et al., 2022) could enable more efficient processing of long video or audio sequences while maintaining high performance. Additionally, exploring the application of DGA in low-resource environments, such as edge devices or mobile platforms, could further enhance its practicality. Techniques like quantization (Frantar et al., 2022), distillation (Gu et al., 2024), or hardware-aware optimization (Artetxe et al., 2022) could be combined with DGA to reduce memory and computational requirements, making it suitable for real-time applications in resource-constrained settings. Second, the theoretical foundations of DGA could be further refined to better understand its limitations and potential improvements. For example, a deeper analysis of the trade-offs between group size m and model performance could provide insights into optimal hyperparameter settings for different tasks and datasets. Moreover, investigating the impact of DGA on downstream tasks, such as few-shot learning (Brown et al., 2020), transfer learning (Kenton & Toutanova, 2019), or continual learning (Ke et al., 2023), could reveal its broader applicability. Finally, exploring adaptive mechanisms for dynamically adjusting the group size m or the importance threshold γ during training and inference could further enhance the flexibility and efficiency of DGA. These directions not only address the limitations of the current approach but also open up new opportunities for advancing long-context modeling in both research and practical applications. 23 Curse of High Dimensionality Issue in Transformer for Long-context Modeling 0 200 400 600 800 1000 
+
+0.00 
+
+0.20 
+
+0.40 
+
+0.60 
+
+0.80 
+
+> Attn Value
+
+Layer 6 
+
+0 200 400 600 800 1000 
+
+0.00 
+
+0.10 
+
+0.20 
+
+0.30 
+
+0.40 
+
+0.50 
+
+Layer 18 
+
+0 200 400 600 800 1000 
+
+Token Index 
+
+0.00 
+
+0.20 
+
+0.40 
+
+0.60 
+
+0.80 
+
+1.00 
+
+> Attn Value
+
+Layer 24 
+
+0 200 400 600 800 1000 
+
+Token Index 
+
+0.00 
+
+0.05 
+
+0.10 
+
+0.15 
+
+Layer 30 
+
+(a) 0 200 400 600 800 1000 
+
+0.00 
+
+0.20 
+
+0.40 
+
+0.60 
+
+> Attn Value
+
+Layer 6 
+
+0 200 400 600 800 1000 
+
+0.00 
+
+0.10 
+
+0.20 
+
+0.30 
+
+Layer 18 
+
+0 200 400 600 800 1000 
+
+Token Index 
+
+0.00 
+
+0.20 
+
+0.40 
+
+0.60 
+
+0.80 
+
+1.00 
+
+> Attn Value
+
+Layer 24 
+
+0 200 400 600 800 1000 
+
+Token Index 
+
+0.00 
+
+0.10 
+
+0.20 
+
+0.30 
+
+0.40 
+
+Layer 30 
+
+(b) 0 200 400 600 800 1000 
+
+0.00 
+
+0.10 
+
+0.20 
+
+0.30 
+
+0.40 
+
+> Attn Value
+
+Layer 6 
+
+0 200 400 600 800 1000 
+
+0.00 
+
+0.10 
+
+0.20 
+
+0.30 
+
+0.40 
+
+Layer 18 
+
+0 200 400 600 800 1000 
+
+Token Index 
+
+0.00 
+
+0.10 
+
+0.20 
+
+0.30 
+
+0.40 
+
+0.50 
+
+0.60 
+
+> Attn Value
+
+Layer 24 
+
+0 200 400 600 800 1000 
+
+Token Index 
+
+0.00 
+
+0.05 
+
+0.10 
+
+0.15 
+
+Layer 30 
+
+(c) 0 200 400 600 800 1000 
+
+0.00 
+
+0.10 
+
+0.20 
+
+0.30 
+
+0.40 
+
+0.50 
+
+> Attn Value
+
+Layer 6 
+
+0 200 400 600 800 1000 
+
+0.00 
+
+0.10 
+
+0.20 
+
+0.30 
+
+0.40 
+
+0.50 
+
+0.60 Layer 18 
+
+0 200 400 600 800 1000 
+
+Token Index 
+
+0.00 
+
+0.10 
+
+0.20 
+
+0.30 
+
+0.40 
+
+0.50 
+
+> Attn Value
+
+Layer 24 
+
+0 200 400 600 800 1000 
+
+Token Index 
+
+0.00 
+
+0.10 
+
+0.20 
+
+0.30 
+
+0.40 
+
+Layer 30 
+
+(d) 
+
+Figure 6. More visualizations on distribution of attention weights over Llama2-7B on 4 random examples from SlimPajama. 
+
+24 Curse of High Dimensionality Issue in Transformer for Long-context Modeling 200 600 1000 
+
+0.00 
+
+0.25 
+
+0.50 
+
+0.75 
+
+1.00 
+
+> psparse
+
+Layer 6, =0.04 
+
+200 600 1000 
+
+0.00 
+
+0.25 
+
+0.50 
+
+0.75 
+
+1.00 
+
+Layer 6, =0.03 
+
+200 600 1000 
+
+0.00 
+
+0.25 
+
+0.50 
+
+0.75 
+
+1.00 
+
+Layer 6, =0.02 
+
+200 600 1000 
+
+0.00 
+
+0.25 
+
+0.50 
+
+0.75 
+
+1.00 
+
+Layer 6, =0.01 
+
+200 600 1000 
+
+0.00 
+
+0.25 
+
+0.50 
+
+0.75 
+
+1.00 
+
+> psparse
+
+Layer 18, =0.04 
+
+200 600 1000 
+
+0.00 
+
+0.25 
+
+0.50 
+
+0.75 
+
+1.00 
+
+Layer 18, =0.03 
+
+200 600 1000 
+
+0.00 
+
+0.25 
+
+0.50 
+
+0.75 
+
+1.00 
+
+Layer 18, =0.02 
+
+200 600 1000 
+
+0.00 
+
+0.25 
+
+0.50 
+
+0.75 
+
+1.00 
+
+Layer 18, =0.01 
+
+200 600 1000 
+
+0.00 
+
+0.25 
+
+0.50 
+
+0.75 
+
+1.00 
+
+> psparse
+
+Layer 24, =0.04 
+
+200 600 1000 
+
+0.00 
+
+0.25 
+
+0.50 
+
+0.75 
+
+1.00 
+
+Layer 24, =0.03 
+
+200 600 1000 
+
+0.00 
+
+0.25 
+
+0.50 
+
+0.75 
+
+1.00 
+
+Layer 24, =0.02 
+
+200 600 1000 
+
+0.00 
+
+0.25 
+
+0.50 
+
+0.75 
+
+1.00 
+
+Layer 24, =0.01 
+
+200 600 1000 
+
+L
+
+0.00 
+
+0.25 
+
+0.50 
+
+0.75 
+
+1.00 
+
+> psparse
+
+Layer 30, =0.04 
+
+200 600 1000 
+
+L
+
+0.00 
+
+0.25 
+
+0.50 
+
+0.75 
+
+1.00 
+
+Layer 30, =0.03 
+
+200 600 1000 
+
+L
+
+0.00 
+
+0.25 
+
+0.50 
+
+0.75 
+
+1.00 
+
+Layer 30, =0.02 
+
+200 600 1000 
+
+L
+
+0.00 
+
+0.25 
+
+0.50 
+
+0.75 
+
+1.00 
+
+Layer 30, =0.01 
+
+Figure 7. More visualizations on the sparsity of the attention weights. 
+
+25

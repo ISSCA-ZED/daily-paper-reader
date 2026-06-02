@@ -1,0 +1,2260 @@
+Title: Gumiho: A Hybrid Architecture  to Prioritize Early Tokens in Speculative Decoding
+
+URL Source: https://openreview.net/pdf?id=0ObGn4e1IS
+
+Number of Pages: 25
+
+Markdown Content:
+# Gumiho: A Hybrid Architecture to Prioritize Early Tokens in Speculative Decoding 
+
+Jinze Li 1 2 Yixing Xu 1 Haiduo Huang 1 3 Xuanwu Yin 1 Dong Li 1 Edith C.H. Ngai ∗ 2 Emad Barsoum 1     
+
+> lijinze-hku@connect.hku.hk, huanghd@stu.xjtu.edu.cn, chngai@eee.hku.hk
+> {yixing.xu, Xuanwu.Yin, d.li, emad.barsoum }@amd.com
+
+## Abstract 
+
+Speculative decoding (SPD) aims to accelerate the auto-regressive token generation process of a target Large Language Model (LLM). Some approaches employ a draft model with multi-ple heads to predict a sequence of future tokens, where each head handles a token in the sequence. The target LLM verifies the predicted sequence and accepts aligned tokens, enabling efficient multi-token generation. However, existing meth-ods assume that all tokens within a sequence are equally important, employing identical head struc-tures and relying on a single-generation paradigm, either serial or parallel. To this end, we theoreti-cally demonstrate that initial tokens in the draft se-quence are more important than later ones. Build-ing on this insight, we propose Gumiho, a hy-brid model combining serial and parallel heads. Specifically, given the critical importance of early tokens, we employ a sophisticated Transformer architecture for the early draft heads in a serial configuration to improve accuracy. For later to-kens, we utilize multiple lightweight MLP heads operating in parallel to enhance efficiency. By allocating more advanced model structures and longer running times to the early heads, Gumiho achieves improved overall performance. The ex-perimental results demonstrate that our method outperforms existing approaches, fully validat-ing its effectiveness. Our code is available at https://github.com/AMD-AIG-AIMA/Gumiho.       
+
+> 1Advanced Micro Devices, Inc., Beijing, China 2Department of Electrical and Electronic Engineering, The University of Hong Kong 3Institute of Artificial Intelligence and Robotics, Xi’an Jiaotong University. Correspondence to: Edith C.H. Ngai <chn-gai@eee.hku.hk >.
+> Proceedings of the 42 nd International Conference on Machine Learning , Vancouver, Canada. PMLR 267, 2025. Copyright 2025 by the author(s).
+
+## 1. Introduction 
+
+While Large Language Models (LLMs) (Achiam et al., 2023; Touvron et al., 2023) have demonstrated impres-sive capabilities, their auto-regressive inference introduces significant latency challenges, especially as the number of parameters continues to increase. Speculative decod-ing (SPD) (Leviathan et al., 2023; Chen et al., 2023) has emerged as a promising solution to this problem. It lever-ages smaller models to efficiently propose draft tokens for future steps, which are then verified in parallel by the LLM. Specifically, in each draft round, the draft model generates a sequence of multiple draft tokens, and the target LLM verifies these tokens in parallel. This generation-verification process constitutes a draft round. These draft tokens are accepted only if they match the LLM’s original output. If a mismatch occurs, starting from the first divergent token, all subsequent draft tokens are discarded. Recent advances (Cai et al., 2024; Li et al., 2024a;b; Ankner et al., 2024) have shown that smaller models, which leverage the hidden states of the LLM itself, can achieve substan-tial speedups in inference while maintaining output quality. Medusa (Cai et al., 2024) predicts multiple future tokens in parallel using MLPs with the last verified token’s hidden state, while Hydra (Ankner et al., 2024) and Eagle (Li et al., 2024a) generate tokens serially. Although Medusa’s parallel prediction paradigm runs faster through simultaneous draft token predictions, it relies solely on hidden states from previously verified tokens, making it blind to earlier unverified predictions within the current draft round. Serial methods like Eagle, Eagle-2 and Hydra can fully utilize previously generated draft tokens, but their sequential paradigm tends to slow down the drafting pro-cess, making it less efficient. More critically, all approaches treat all tokens within a draft round as equally important, which is unsuitable for SPD. In our view, the tokens gen-erated earlier in each draft round hold more importance than those generated later. This is because when the first incorrect token is encountered, it causes both that token and all subsequent draft tokens to be discarded, even if the following tokens are correct. We will formally present a 1Gumiho: A Hybrid Architecture to Prioritize Early Tokens in Speculative Decoding 
+
+theorem and mathematically prove that prioritizing the ini-tial tokens of a sequence consistently improves the mean accepted tokens ( τ ) in each draft round. Motivated by this, we propose Gumiho, a hybrid model that prioritizes the initial positions in the draft sequence, combin-ing both sequential and parallel architectures. We employ a serial structure comprising a two-layer Transformer, en-abling comprehensive modeling of token dependencies and context for early tokens. The subsequent tokens, which are relatively less critical, are predicted in parallel through sim-ple MLPs, thereby enhancing computational efficiency. By combining the serial and parallel architectures, our hybrid design achieves higher acceptance lengths and less process-ing time in each draft-verification cycle at the same time. The key idea of our hybrid model lies in two folds: (1) it allocates more parameters and leverages serial processing for crucial early token predictions, maximizing accuracy where it matters most, and (2) it employs efficient paral-lel computation with simple architecture for later tokens, reducing the overall computational cost. In addition, we enhance Eagle-2’s dynamic tree mechanism by introducing Full Tree Attention (FTA). While Eagle-2’s dynamic tree selectively expands promising nodes and re-ranks draft tokens for optimal verification, this re-ranking process can result in shorter candidate sequences when later tokens are discarded due to low scores, potentially reducing the mean accepted tokens ( τ ). We observed that tokens gen-erated by parallel heads exhibit correlations, as they share both input and purpose. Specifically, each n-th head is de-signed to predict the token that should appear n positions away from the input token. Inspired by this, our full tree attention mechanism supplements shorter paths with tokens from longer paths at corresponding positions, thereby in-creasing the mean accepted tokens ( τ ) of shorter candidate paths. Since these supplementary tokens come from exist-ing longer candidates, their q, k, and v have already been computed, incurring no additional computational overhead. Our contributions are summarized as follows: • We propose Gumiho, a hybrid structure model for SPD, inspired by the observation that earlier tokens have more impact on the overall sequence length accepted, while later tokens are relatively less critical. We pri-oritize the generation of earlier tokens by allocating more computational resources and using a serial ap-proach to enhance accuracy, while simpler models are employed in parallel for the later tokens to improve computational efficiency. • We demonstrate through theoretical analysis that to-kens appearing earlier in the draft sequence have a more significant impact on the overall accepted length. • We propose a full tree attention mechanism for tree candidates, allowing tokens from longer candidates to augment shorter ones. This approach further increases the acceptance length without incurring additional com-putational overhead. • We conduct comprehensive experiments to demon-strate Gumiho’s superior performance compared to existing methods. 
+
+## 2. Related Works 
+
+With the widespread adoption of large language models (LLMs), significant research has been devoted to acceler-ating their inference through techniques such as distilla-tion (Hinton, 2015; Bercovich et al., 2024; Zhao et al., 2024; Fu et al., 2024), low-bit quantization (Hubara et al., 2018; Shen et al., 2020; Kim et al., 2021; Zadeh et al., 2020; Zafrir et al., 2019), pruning (Gale et al., 2019; Sanh et al., 2020; Kurtic et al., 2022; Voita et al., 2019), and innovative network architecture designs (Gu & Dao, 2023; Wu et al., 2020). These approaches aim to reduce the computational cost of each forward pass to improve efficiency. However, they often involve a trade-off (Donisch et al., 2024), as these optimizations can partially compromise model performance, requiring a balance between generation quality and compu-tational overhead. Speculative decoding, a draft-then-verify paradigm (Xia et al., 2023), achieves lossless acceleration by leveraging the original LLM for verification. Drafting approaches can be broadly categorized into two paradigms (Xia et al., 2024): independent drafting which employs draft models that can be deployed without addi-tional training, and self-drafting which requires dedicated training processes to develop effective draft models. Independent drafting typically uses a separate, smaller model to generate multiple future tokens concurrently, thereby enhancing the efficiency of speculative decod-ing. For example, using T5-small to accelerate T5-XXL (Leviathan et al., 2023). These off-the-shelf drafters do not need extra training or architectural modifications and benefit from the inherent alignment in prediction behaviors due to shared tokenizers and pretraining processes. How-ever, independent drafting requires additional work to find or train a compatible model that matches the target LLM. This becomes more challenging when smaller versions of the LLM don’t exist. Orthogonal to independent drafting, self-drafting typically uses the target LLM itself (Liu et al., 2024a; Du et al., 2024; Elhoushi et al., 2024; Gloeckle et al., 2024; Cai et al., 2024; Li et al., 2024a; Zimmer et al., 2024; Xiao et al., 2024; Zhang et al., 2024; Brown et al., 2024; Liu et al., 2024b), utilizing features like its hidden states for more efficient drafting. Medusa (Cai et al., 2024) is one of the studies to leverage the hidden state of the original LLM as input for 2Gumiho: A Hybrid Architecture to Prioritize Early Tokens in Speculative Decoding 
+
+draft models. It employs K distinct MLPs as draft models, each predicting one of K future tokens. Since these K draft models operate independently, they can execute in parallel, enabling Medusa to generate K tokens in a single forward pass. Hydra (Ankner et al., 2024) is a sequential variant of Medusa, transforming the parallel MLPs into a serial architecture. It feeds the unverified tokens from draft mod-els as input to subsequent ones. This sequential approach enables each draft model to leverage more contextual infor-mation when predicting later tokens, enhancing the quality of successive predictions. Eagle (Li et al., 2024a) advances the architecture by converting the serial MLPs into serial Transformers and introducing concatenated token-hidden state pairs as input. Eagle-2 (Li et al., 2024b) further inno-vates by implementing a dynamic tree candidate selection mechanism to enhance token prediction efficiency. Our method falls within the self-drafting category. Different from previous self-drafting methods, we utilize the fact that the importance of a token decreases as its position moves back and propose different architectures for front-positioned tokens and later ones. 
+
+## 3. Method 
+
+In this section, we begin by introducing the preliminaries of speculative decoding (SPD). We then present a theorem and provide a rigorous mathematical proof to validate that tokens at the beginning of the sequence are more crucial than those at the end. Finally, we propose Gumiho, a novel method derived from our theorem. 
+
+3.1. Preliminaries LLM Decoding The process of generating text from LLMs is termed decoding: the sequential production of tokens in response to an input prompt. This generation pro-cess follows an auto-regressive pattern, where each token 
+
+yt is generated by sampling from a probability distribu-tion conditioned on both the initial prompt z and all pre-viously generated tokens y<t . In practice, the key-value cache ( kv <t ) of previously generated tokens is maintained, with the model taking both kv <t and the current token yt as inputs for efficient generation. Let ML denote the Large Language Model, which com-prises two components: the decoder layer fL(·) and 
+
+LM head that maps the embeddings back to the vocab-ulary with size |V| . The vanilla decoding process can be formulated as:      
+
+> kv <t +1 , h t+1 =fL(kv <t , e (yt)) ,
+> yt+1 ∼Softmax (LM head (ht+1 )) ,(1)
+
+where ht+1 denotes the hidden states of the final decoder layer, and e(·) is an embedding function that maps tokens to their corresponding vector representations. In the following, we define yt+1 = ML(yt) ≜ ML(yt, kv <t ) and ignore 
+
+kv <t for simplicity. 
+
+Speculative Decoding Auto-regressive text generation in LLMs is time-consuming. Speculative decoding addresses this limitation by employing a smaller, faster draft model 
+
+MS to generate candidate tokens ahead of time. These candidate tokens, commonly referred to as drafts, are then verified in parallel by the target LLM ML using rejection sampling (Leviathan et al., 2023), i.e. , if any token in the draft sequence is rejected, all subsequent tokens are dis-carded, and the draft-verification process resumes from the last accepted token. During each draft-verification iteration, MS generates a sequence of D draft tokens {ˆyt+i}Di=1 . Subsequently, ML
+
+verifies these drafts in parallel according to Eq.(1):     
+
+> yt+1 ∼ M L(yt),
+> yt+2 ∼ M L(ˆ yt+1 ),(2) ...
+> yt+D∼ M L(ˆ yt+D−1).
+
+The number of accepted draft tokens for each iteration is de-termined by comparing the draft sequence {ˆyt+1 , ..., ˆyt+D }
+
+with the verified sequence {yt+1 , ..., y t+D } using rejection sampling. 
+
+Metrics We assess the method’s performance by measur-ing its acceleration effect. Specifically, we use the speedup ratio as a metric, which is calculated by dividing the speed of our proposed method by the speed of standard (vanilla) decoding: 
+
+> Speedup ratio = speed Gumiho
+> speed vanilla
+> (3)
+
+The speed of each method is calculated by dividing the total number of generated tokens by the total processing time:         
+
+> speed = total tokens total time
+> =mean accepted tokens ×draft rounds average time ×draft rounds
+> =mean accepted tokens average time (4)
+
+Following existing works (Li et al., 2024b; Ankner et al., 2024), we primarily use mean accepted tokens (τ ) as the main metric. We also present the differences in draft time across different methods to demonstrate the effectiveness of our approach in improving efficiency. 
+
+3.2. Theoretical Analysis 
+
+In this section, we prove that tokens at the beginning of the draft sequence are more crucial than those at the end. 3Gumiho: A Hybrid Architecture to Prioritize Early Tokens in Speculative Decoding 
+
+Figure 1. Left : Differences between our proposed Gumiho and existing methods: Unlike existing approaches that use similar models to predict every token in a sequence, we propose that initial tokens are more critical than later ones. So we employ a larger model with a serial structure to generate the early tokens, while leveraging smaller parallel models for the later ones. Right : Overview of Gumiho. Given an LLM input Describe a beautiful scene. , Gumiho predicts the next 7 draft tokens ( sun rose above the mountains through the ). The first two tokens ( sun and rose ) are deemed critical and are produced sequentially using the Transformer MT for higher accuracy. The remaining tokens are generated simultaneously through the MLP heads, optimizing for computational efficiency. 
+
+Consider a draft model that predicts 3 tokens at a time with a uniform acceptance probability of 0.8 at each position. The expected length E[L]original of accepted tokens per draft round is: 
+
+E[L]original = 1 × P (L = 1) + 2 × P (L = 2) + 3 × P (L = 3) =
+
+> 3
+
+X
+
+> i=1
+
+P (L ≥ i)= 0 .8 + 0 .82 + 0 .83 = 1 .95 ,
+
+where L represents the accepted length determined by the target LLM’s verification after each draft round. E[·] de-notes the expectation operator, and P (L = i) represents the probability that the accepted length L is equal to i.Now, suppose we redistribute the model’s parameters to prioritize earlier positions, i.e. , allocating more parame-ters to predict the first position and fewer for subsequent positions. Assume this improved structure creates position-dependent acceptance probabilities of 0.85 , 0.8, and 0.75 
+
+for the first, second, and third positions respectively. The expected length E[L]improved becomes: 
+
+E[L]improved =
+
+> 3
+
+X
+
+> i=1
+
+P (L ≥ i)= 0 .85 + 0 .85 × 0.8 + 0 .85 × 0.8 × 0.75 = 2 .04 .
+
+This example empirically demonstrates that when the overall token accuracy remains constant, improving the accuracy of the initial token can increase the mean accepted tokens ( τ ). In the following, we provide a theorem to generalize the above example to a broader scenario. Given a draft se-quence with length D, we first have an original setting with acceptance probabilities {pi}Di=1 and denote E[L]original as its mean accepted tokens ( τ ). Since errors accumulate when predicting a sequence, the acceptance probability of later to-kens tends to be lower than that of earlier tokens in practical scenarios. Based on this observation, we have: 
+
+1 ≥ p1 ≥ p2 ≥ · · · ≥ pD ≥ 0. (5) 
+
+Then, we define an improved setting whose sequence is separated by index d with 1 < d < D . In this setting, acceptance probabilities ˜pi are modified as follows: 
+
+˜pi =
+
+(
+
+pi + ζi, 1 ≤ i ≤ dpi − ζi, d < i ≤ D ,s.t. 0 ≤ { ζi}Di=1 ≤ 1, 0 ≤ { ˜pi}Di=1 ≤ 1,
+
+> d
+
+X
+
+> i=1
+
+ζi =
+
+> D
+
+X
+
+> j=d+1
+
+ζj , ζi < p i. (6) 
+
+In this improved setting, we increase the acceptance prob-abilities for the first d tokens by a small amount ζi and decrease those for the remaining tokens by the same total amount. In this way, the sum of the acceptance probabil-ities remains unchanged. We denote the mean accepted tokens ( τ ) in this improved setting as E[L]improved . With these definitions above, we can derive the following theo-rem: 4Gumiho: A Hybrid Architecture to Prioritize Early Tokens in Speculative Decoding 
+
+Theorem 3.1. The mean accepted tokens ( τ ) under the im-proved probability distribution exceeds that of the original distribution:   
+
+> E[L]improved ≥E[L]original .
+
+This theorem shows that redistributing the acceptance proba-bilities across sequence tokens by increasing the accuracies of the initial tokens and decreasing those of the later tokens can improve the overall expected performance. A detailed proof of this theorem is provided in Appendix A. 
+
+3.3. Gumiho 
+
+Inspired by Theorem 3.1, we propose Gumiho, a model that prioritizes the front part of the draft sequence. Gumiho consists of two main components: heads for generating draft tokens and a full tree attention mechanism for verification. 
+
+Gumiho Heads. As shown in Fig. 1, Gumiho introduces a hybrid architecture that distinguishes itself from existing methods. Unlike approaches that rely solely on a single serial or parallel structure and employ uniform head size across all positions, Gumiho combines large serial heads with small parallel heads to enhance accuracy and efficiency. The serial component aims to increase the accuracy of the initial tokens and comprises a two-layer Transformer MT
+
+that predicts initial draft tokens sequentially. Specifically, 
+
+MT generates the first two tokens of the draft sequence auto-regressively. Similar to Eagle-2, our method concatenates the hidden state ht ∈ Rd with the corresponding output token embedding e(yt) ∈ Rd generated by LLM ML at time step t, and employs a fully connected layer FC to reduce the dimension from 2d to d:  
+
+> ot= FC(cat( e(yt), h t)) ,(7)
+
+where cat denotes the concatenation operation, and ot ∈
+
+Rd. Then, the concatenated result ot is fed into the serial component MT, which sequentially generates the first two drafts:             
+
+> ˆht+1 =MT(ot),ˆot+1 = FC(cat( e(ˆ yt+1 ),ˆht+1 )) ,(8)
+> ˆht+2 =MT(ˆ ot+1 ),ˆot+2 = FC(cat( e(ˆ yt+2 ),ˆht+2 )) .(9)
+
+For simplicity, we omit the input and output of KV cache in MT, and also the step of using Softmax to obtain ˆyt+1 ,
+
+ˆyt+2 , which is similar to Eq. (1). The parallel component aims to speed up the generation of the remaining tokens while maintaining accuracy and consists of five different MLPs {M i
+
+> M
+
+}5 
+
+> i=1
+
+running concur-rently. These MLPs share the same architecture, consisting of two fully connected (FC) layers with a ReLU activation function in between. They also share the same input, i.e. ,
+
+cat(ˆ ot+1 , ˆot+2 ) which concatenate the two outputs gener-ated by the serial model MT. The outputs of MLPs repre-sent the draft tokens at the following five positions:           
+
+> Figure 2. Our proposed Full Tree Attention enhances shorter can-didate paths by borrowing tokens from other tree nodes, thereby increasing the likelihood that candidates achieve longer acceptance lengths. Note that for each depth in the tree, we only have s= 3
+> different tokens.
+> ˆht+2+ i=Mi
+> M(cat (ˆ ot+1 ,ˆot+2 )) ,i= 1 , ..., 5.(10)
+
+Given the hidden states {ˆht+i}7
+
+> i=1
+
+, we obtain the draft to-kens {ˆyt+i}7 
+
+> i=1
+
+using Eq. (1). 
+
+Full Tree Attention (FTA). A key distinction between our Gumiho and Eagle-2 lies in the use of parallel heads for generating subsequent tokens. To fully leverage this parallel paradigm, we introduce the full tree attention mechanism, which enhances the existing Tree Attention mechanism em-ployed by Eagle-2. In Eagle-2, tokens at each position are generated in an auto-regressive manner, meaning that each subsequent token is entirely dependent on the tokens generated in the previous. Conversely, our parallel heads Mi 
+
+> M
+
+generate tokens for all positions simultaneously. This parallel generation paradigm removes dependencies between these tokens, as they are determined solely by the outputs of the preceding serial out-puts generated by MT. The independence between tokens enables us to perform a full traversal connection operation on the tokens generated in parallel. Specifically, any two tokens generated by two different Mi 
+
+> M
+
+can be connected to form a candidate path. As illustrated in Fig. 2, after the serial heads output the tokens the and sun , the three parallel heads generate s subsequent tokens for each position ( s = 3 
+
+in Fig. 2). These s tokens at each position can be arbitrarily combined with tokens from other positions, resulting in a total of s3 candidate paths with only 3s different tokens by the time we complete the third MLP head. In Fig. 2, the score for each token is displayed, calculated by multiplying the score of the preceding token with the confidence of the 5Gumiho: A Hybrid Architecture to Prioritize Early Tokens in Speculative Decoding 
+
+current MLP in generating specific tokens. To select candidate paths for verification, we choose the top eight tokens with the highest scores. As shown in Fig. 2, traditional tree attention often results in some candidate paths being very short because tokens on early positions usually have higher scores. To address this issue, our pro-posed FTA mechanism supplements shorter paths with to-kens from corresponding positions in longer paths. This is reasonable since any two tokens from different positions among the parallel-generated tokens can be combined, and the borrowed tokens from longer candidate paths do not conflict with the original tokens in shorter paths. This en-sures the coherence of the final candidate paths, maintaining the integrity of the generated sequence. Consequently, this approach increases the average length of candidate paths, enhancing the overall performance of the model. It is worth noting that FTA incurs no additional compu-tational overhead, as the borrowed tokens already exist in other candidate paths within the tree, with their query, key, and value computations already completed. In the original attention tree, these tokens were simply discarded, while our approach unblocks them and allows shorter can-didates to access and utilize them. The rejection sampling method (Leviathan et al., 2023) for token selection ensures that the appending of borrowed tokens does not impact pre-viously selected tokens. Consequently, after applying FTA, each candidate’s acceptance length equals or exceeds that of the original implementation. 
+
+## 4. Experiments 
+
+In this section, we compare our proposed Gumiho with other SOTA methods to show the priority of our approach. Then, we conduct several ablation studies to validate the effectiveness of each part of our method. 
+
+4.1. Experimental Setup 
+
+We conduct experiments using seven target LLMs: Vicuna-7B/13B (Chiang et al., 2023), Llama2-chat-7B/13B/70B (Touvron et al., 2023), and Llama3-instruct-8B/70B (Meta, 2024). Target LLMs are fixed during train-ing, with only the draft heads being trained. Following Eagle and Eagle-2 (Li et al., 2024a;b), we train our draft model on the ShareGPT dataset. Our Gumiho model comprises a Transformer model and five MLPs to predict the next seven draft tokens: the Transformer autoregressively generates the first two tokens, and the remaining five are predicted in parallel by the MLPs. Training details and hyperparameters can be found in Appendix C. We evaluate the performance across multiple benchmarks: MT-Bench (Zheng et al., 2023) for multi-turn dialogue, HumanEval (Chen et al., 2021) for code generation,  
+
+> Figure 3. Comparison of average draft time (lower is better) with different temperatures. Both results are based on Vicuna 7B.
+
+GSM8K (Cobbe et al., 2021) for mathematical reasoning, Alpaca (Taori et al., 2023) for general instruction-following, CNN/Daily Mail (Nallapati et al., 2016) for summarization, and Natural Questions (Kwiatkowski et al., 2019) for ques-tion answering. We conduct model training using 8 ×AMD Instinct MI250 GPUs. For evaluation, we use a single MI250 GPU for all models except the 70B variant, which requires 4 ×MI250 GPUs due to its larger size. Additionally, we include evaluation results using a single NVIDIA A100 GPU in Appendix B. We compare our method against several existing approaches: Medusa (Cai et al., 2024) with multiple parallel MLP heads, Hydra (Ankner et al., 2024) with sequential MLP heads, Eagle (Li et al., 2024a) and Eagle-2 (Li et al., 2024b) with sequential single-layer Transformer head. Eagle-2 shares the same model parameters as Eagle but distinguishes itself by incorporating a dynamic tree to generate candidates. In line with Eagle-2 (Li et al., 2024b), we also conduct experiments with temperature settings of 0 and 1. A tem-perature of 0 means that the target LLM uses a greedy sampling method, where the token with the highest proba-bility is selected at each position. In contrast, a temperature of 1 increases the diversity of the output by applying post-processing to the logits at the current position, rather than directly selecting the token with the highest probability. When the temperature is set to 1, Eagle-2 excludes methods like Medusa since their relaxed acceptance criteria under non-greedy sampling do not ensure lossless acceleration. We follow their experimental settings in this work. 
+
+4.2. Performance Comparison 
+
+Experimental results are shown in Tab. 1. The Speedup 
+
+metric quantifies the actual end-to-end acceleration ratio of token generation speed compared to vanilla auto-regressive generation, while τ is the average number of tokens accepted 6Gumiho: A Hybrid Architecture to Prioritize Early Tokens in Speculative Decoding 
+
+Table 1. Speedup ratios and mean accepted tokens ( τ ) of different methods. V represents Vicuna, L2 represents LLaMA2-Chat, and L3 represents LLaMA3-Instruct. We present the results of different methods across six datasets. Mean represents the average performance across these six datasets. 
+
+Model Method MT-Bench HumanEval GSM8K Alpaca CNN/DM Natural Ques. Mean Speedup τ Speedup τ Speedup τ Speedup τ Speedup τ Speedup τ Speedup τ
+
+Temperature=0 V 7B Medusa 1.96 × 2.50 2.15 × 2.69 2.01 × 2.59 1.94 × 2.48 1.60 × 2.02 1.68 × 2.05 1.89 × 2.39 Hydra 2.47 × 3.59 2.65 × 3.78 2.49 × 3.67 2.44 × 3.58 1.92 × 2.70 2.01 × 2.86 2.33 × 3.36 Eagle 2.61 × 3.82 2.96 × 4.20 2.67 × 4.00 2.41 × 3.66 2.35 × 3.34 2.10 × 3.13 2.52 × 3.69 Eagle-2 2.88 × 5.00 3.27 × 5.35 2.93 × 4.94 2.71 × 4.85 2.45 × 4.11 2.24 × 3.84 2.74 × 4.68 Gumiho(ours) 3.15 × 5.29 3.65 × 5.77 3.10 × 5.06 2.83 × 4.87 2.73 × 4.48 2.34 × 3.88 2.97 × 4.89 
+
+V 13B Medusa 2.03 × 2.58 2.24 × 2.77 2.08 × 2.64 2.04 × 2.44 1.67 × 2.10 1.70 × 2.10 1.96 × 2.44 Hydra 2.65 × 3.65 2.88 × 3.86 2.69 × 3.67 2.65 × 3.49 2.08 × 2.82 2.16 × 2.86 2.52 × 3.39 Eagle 2.87 × 3.90 3.25 × 4.29 2.88 × 3.90 2.64 × 3.50 2.58 × 3.49 2.21 × 2.92 2.74 × 3.66 Eagle-2 3.16 × 4.93 3.68 × 5.42 3.19 × 4.82 3.01 × 4.89 2.79 × 4.27 2.41 × 3.69 3.04 × 4.67 Gumiho(ours) 3.36 × 5.16 4.11 × 5.97 3.39 × 5.04 3.07 × 4.88 2.91 × 4.41 2.52 × 3.76 3.23 × 4.87 
+
+L2 7B Eagle 2.22 × 3.00 2.53 × 3.58 2.21 × 3.09 2.04 × 2.88 2.08 × 2.78 1.88 × 2.64 2.16 × 3.00 Eagle-2 2.91 × 4.76 3.30 × 5.38 2.87 × 4.76 2.81 × 4.65 2.53 × 4.10 2.52 × 4.16 2.82 × 4.64 Gumiho(ours) 3.07 × 4.90 3.55 × 5.60 3.00 × 4.81 2.85 × 4.55 2.66 × 4.18 2.59 × 4.16 2.95 × 4.70 
+
+L2 13B Eagle 2.59 × 3.30 2.96 × 3.90 2.61 × 3.45 2.41 × 3.16 2.39 × 3.09 2.15 × 2.82 2.52 × 3.29 Eagle-2 3.17 × 4.76 3.78 × 5.53 3.23 × 4.88 3.03 × 4.62 2.84 × 4.27 2.76 × 4.12 3.13 × 4.70 Gumiho(ours) 3.34 × 4.98 4.05 × 5.87 3.35 × 5.02 3.12 × 4.66 2.93 × 4.40 2.84 × 4.20 3.27 × 4.85 
+
+L2 70B Eagle-2 2.51 × 4.52 2.98 × 5.24 2.63 × 4.63 2.48 × 4.42 2.04 × 3.72 2.14 × 3.88 2.47 × 4.40 Gumiho(ours) 2.83 × 4.71 3.35 × 5.43 2.90 × 4.69 2.70 × 4.46 2.37 × 4.08 2.35 × 3.90 2.76 × 4.54 
+
+L3 8B Eagle-2 2.16 × 4.36 2.51 × 5.06 2.22 × 4.45 2.25 × 4.88 1.82 × 3.81 1.75 × 3.54 2.12 × 4.35 Gumiho(ours) 2.38 × 4.48 2.77 × 5.18 2.49 × 4.63 2.44 × 4.88 2.00 × 3.94 1.93 × 3.64 2.34 × 4.46 
+
+L3 70B Eagle-2 2.94 × 4.17 3.65 × 5.09 3.17 × 4.34 3.12 × 4.74 2.54 × 3.66 2.48 × 3.50 2.98 × 4.25 Gumiho(ours) 3.38 × 4.28 4.28 × 5.25 3.79 × 4.58 3.48 × 4.58 2.91 × 3.80 2.87 × 3.59 3.45 × 4.35 
+
+Temperature=1 V 7B Eagle-2 2.51 × 4.30 2.67 × 4.52 2.46 × 4.47 2.38 × 4.37 2.15 × 3.70 2.02 × 3.50 2.37 × 4.16 Gumiho(ours) 2.61 × 4.42 2.84 × 4.62 2.73 × 4.52 2.46 × 4.40 2.38 × 3.94 2.10 × 3.51 2.52 × 4.23 
+
+V 13B Eagle-2 2.81 × 4.37 3.32 × 4.96 2.80 × 4.43 2.66 × 4.46 2.51 × 3.92 2.25 × 3.50 2.73 × 4.27 Gumiho(ours) 2.93 × 4.54 3.55 × 5.30 2.84 × 4.59 2.77 × 4.54 2.58 × 4.04 2.36 × 3.72 2.84 × 4.46 
+
+L2 7B Eagle-2 2.66 × 4.63 2.95 × 5.15 2.70 × 4.76 2.52 × 4.40 2.34 × 3.98 2.29 × 4.02 2.58 × 4.49 Gumiho(ours) 2.79 × 4.64 3.19 × 5.27 2.78 × 4.67 2.64 × 4.40 2.47 × 4.05 2.44 × 4.08 2.72 × 4.52 
+
+L2 13B Eagle-2 3.01 × 4.60 3.58 × 5.34 3.09 × 4.76 2.91 × 4.49 2.71 × 4.15 2.66 × 4.08 2.99 × 4.57 Gumiho(ours) 3.18 × 4.82 3.86 × 5.71 3.24 × 4.94 2.98 × 4.62 2.80 × 4.28 2.76 × 4.16 3.14 × 4.75 
+
+L2 70B Eagle-2 2.28 × 4.41 2.73 × 5.15 2.42 × 4.59 2.31 × 4.30 1.87 × 3.67 2.00 × 3.72 2.27 × 4.30 Gumiho(ours) 2.60 × 4.65 3.15 × 5.46 2.66 × 4.61 2.50 × 4.43 2.15 × 3.98 2.22 × 3.95 2.55 × 4.51 
+
+L3 8B Eagle-2 1.93 × 4.04 2.32 × 4.80 2.06 × 4.27 2.03 × 4.57 1.67 × 3.55 1.59 × 3.27 1.93 × 4.08 Gumiho(ours) 2.13 × 4.14 2.55 × 4.95 2.29 × 4.42 2.19 × 4.55 1.86 × 3.64 1.72 × 3.32 2.12 × 4.17 
+
+L3 70B Eagle-2 2.85 × 4.07 3.57 × 4.97 3.13 × 4.31 3.00 × 4.65 2.47 × 3.58 2.42 × 3.45 2.91 × 4.17 Gumiho(ours) 3.29 × 4.20 4.20 × 5.17 3.69 × 4.49 3.34 × 4.43 2.84 × 3.71 2.85 × 3.57 3.37 × 4.26 
+
+by the target LLM per draft round after verification. Across diverse target LLMs, model sizes, and temperature settings, Gumiho demonstrates superior performance. Over-all, Gumiho surpasses the existing SOTA method EAGLE-2 by 4.5% ∼15.8%. The performance gains are particularly pronounced with 70B model variants. At temperature 0, Gumiho outperforms EAGLE-2 by 11.7% on LLaMA2 70B and 15.8% on LLaMA3 70B. This substantial improvement is primarily attributed to enhancements in τ and a reduction in draft time. Specifically, the output hidden state for 70B models has a dimension of 8192, compared to 4096 in the 7B and 13B models. While the larger hidden state increases computational complexity, it also amplifies the benefits of our model parallelization, significantly reducing drafting time and further boosting the speedup ratio. In Fig. 3, we present the time required by different models for a draft round. From Eq. (4) , it is evident that a shorter draft time leads to a higher speedup ratio, resulting in im-proved performance. Fig. 3 demonstrates that the draft time of Gumiho is consistently shorter than that of Eagle-2 across all datasets regarding different temperatures, highlighting the superiority of our approach. This is primarily attributed to the efficiency of the parallel MLP heads in Gumiho. 
+
+4.3. Ablation Studies 
+
+In this section, we evaluate the contribution of each compo-nent in our method to the overall performance. Specifically, we conduct ablation studies focusing on three key aspects: (1) The depth of the serial head (Transformer head), where we vary the number of Transformer layers to assess its im-pact; (2) The width of parallel heads (MLP heads), where we experiment with different numbers of MLP heads; and (3) the effectiveness of full tree attention (FTA). These ab-lation studies aim to provide a deeper understanding of the architectural design choices in our proposed method and their respective contributions to the final performance. We also present a detailed comparison of draft head accuracy in Appendix D. Unless otherwise specified, the ablation exper-iments are conducted using Vicuna 7B as the target LLM, with MT-Bench as the test dataset and the temperature set to 0. 7Gumiho: A Hybrid Architecture to Prioritize Early Tokens in Speculative Decoding  
+
+> Figure 4. Ablation study on serial head depth. The serial head is a Transformer model, whose depth represents the number of layers within the Transformer architecture.
+
+Serial head depth. The serial head depth refers to the number of layers in the Transformer model. This Trans-former serves as the initial head responsible for generating the first two tokens in a draft sequence. In this study, we vary the number of layers in the Transformer model to examine how the depth of the initial head affects the model’s overall performance. The experimental results shown in Fig. 4 re-veal that reducing the number of Transformer layers results in a decline in τ , which underscores the significant impact of the initial heads. However, when the depth increases from 2 to 3 layers, although τ improves further, the speedup ratio decreases. This is because the overall speedup depends not only on τ but also on the time required to complete a single draft process. Using a three-layer Transformer substantially increases the drafting time, which ultimately reduces the speedup effect. It is worth noting that using varied depths to generate the first two tokens, such as a two-layer Transformer for the first token and a one-layer Transformer for the second, may seem intuitive but proves inefficient during inference. Since Transformers with different architectures cannot share their key-value (KV) caches, each head must compute its cache independently. This prevents cache reuse between heads, increasing the computational overhead. Our approach em-ploys identical serial heads throughout the model, only trains one single Transformer model, and reuses it for auto-regressive token generation during inference. This architec-tural uniformity enables efficient KV cache sharing across the entire generation process. 
+
+Parallel Head Width. Parallel head width refers to the number of MLP heads in Gumiho, which run in parallel to generate subsequent tokens in the draft sequence. The exper-imental results are shown in Fig. 5. Note that increasing the number of MLP heads initially improves performance but eventually leads to a decline. This is because increasing the number of parallel heads enhances the model’s capacity to predict longer draft sequences, thereby improving its ability        
+
+> Figure 5. Ablation study on parallel head width. Parallel heads refer to the MLPs in Gumiho, and the width indicates the number of MLP models.
+> Table 2. Ablation study on the FTA mechanism.
+> Speedup τ
+> w/o Full Tree Attention 3.10 ×5.18 w/ Full Tree Attention 3.15 ×5.29
+
+to generate more accepted tokens. Additionally, since MLP heads operate in parallel, increasing their number does not significantly increase runtime. A higher number of mean accepted tokens with a similar runtime leads to an improved performance. However, this improvement does not scale in-definitely. All MLP heads share the same input embedding, which is derived from the concatenation of outputs from the preceding Transformer head. During training, this shared embedding serves as the input to every MLP head and is simultaneously shaped by the back-propagated losses from all of them. As the number of MLP heads increases, the em-bedding must encode a growing amount of information to meet the requirements of each additional head. This leads to excessive information being compressed into the limited em-bedding space, which reduces the clarity and specificity of the information available to each MLP head and ultimately causes performance degradation. 
+
+Effectiveness of Full Tree Attention (FTA). We verify the effectiveness of this component by conducting exper-iments with or without using FTA in our model. The ex-perimental results are presented in Tab. 2. They indicate that removing FTA impacts the mean accepted tokens and diminishes the speedup effect. 
+
+Wall Clock Time of Different Components. To provide a granular understanding of the model’s performance, we report the wall clock time of key components in the pipeline, as shown in Tab. 3. 8Gumiho: A Hybrid Architecture to Prioritize Early Tokens in Speculative Decoding  
+
+> Table 3. Ablation study on the wall time.
+
+Components Wall Time (ms) 1st Serial Head 2.80 2nd Serial Head 3.46 Parallel Head 2.02 Full Tree Attention 3.41 Other Computation 6.11 Verification 45.50 
+
+## 5. Conclusion 
+
+The core idea of this paper is to rigorously prove that the accuracy of early tokens in a draft sequence is more critical than that of later ones in speculative decoding. In other words, given a fixed budget for model parameter size and overall execution time, prioritizing the heads responsible for generating the initial tokens can improve overall per-formance. Building on this insight, we propose Gumiho, a novel approach that employs a hybrid head design. Specifi-cally, Gumiho allocates a larger proportion of the parameter and execution time budget to the head responsible for gener-ating the initial tokens. This head is a Transformer model with a serial structure designed for these initial tokens, en-suring higher accuracy. For those heads that generate later tokens, Gumiho employs lightweight MLPs and parallelizes their execution to produce multiple tokens simultaneously. This hybrid design achieves improved performance by bal-ancing accuracy and efficiency: the serial Transformer en-hances the accuracy of the initial tokens, while the parallel MLPs reduce overall generation time. Experimental results validate the effectiveness of our approach, demonstrating that Gumiho surpasses existing state-of-the-art methods. 
+
+## 6. Limitation 
+
+Our proposed method, while achieving significant speedup, utilizes a more parameter-heavy draft model compared to architectures like Eagle and Medusa. Specifically, the incor-poration of a two-layer Transformer head alongside five par-allel MLP heads, trained concurrently, results in increased GPU memory consumption during the training phase. 
+
+## Impact Statement 
+
+This paper presents work whose goal is to advance the field of Machine Learning. There are many potential societal consequences of our work, none which we feel must be specifically highlighted here. 
+
+## References 
+
+Achiam, J., Adler, S., Agarwal, S., Ahmad, L., Akkaya, I., Aleman, F. L., Almeida, D., Altenschmidt, J., Altman, S., Anadkat, S., et al. Gpt-4 technical report. arXiv preprint arXiv:2303.08774 , 2023. Ankner, Z., Parthasarathy, R., Nrusimha, A., Rinard, C., Ragan-Kelley, J., and Brandon, W. Hydra: Sequentially-dependent draft heads for medusa decoding. arXiv preprint arXiv:2402.05109 , 2024. Bercovich, A., Ronen, T., Abramovich, T., Ailon, N., Assaf, N., Dabbah, M., Galil, I., Geifman, A., Geif-man, Y., Golan, I., et al. Puzzle: Distillation-based nas for inference-optimized llms. arXiv preprint arXiv:2411.19146 , 2024. Brown, O., Wang, Z., Do, A., Mathew, N., and Yu, C. Dy-namic depth decoding: Faster speculative decoding for llms. arXiv preprint arXiv:2409.00142 , 2024. Cai, T., Li, Y., Geng, Z., Peng, H., Lee, J. D., Chen, D., and Dao, T. Medusa: Simple llm inference acceleration framework with multiple decoding heads. arXiv preprint arXiv:2401.10774 , 2024. Chen, C., Borgeaud, S., Irving, G., Lespiau, J.-B., Sifre, L., and Jumper, J. Accelerating large language model decoding with speculative sampling. arXiv preprint arXiv:2302.01318 , 2023. Chen, M., Tworek, J., Jun, H., Yuan, Q., Pinto, H. P. D. O., Kaplan, J., Edwards, H., Burda, Y., Joseph, N., Brockman, G., et al. Evaluating large language models trained on code. arXiv preprint arXiv:2107.03374 , 2021. Chiang, W.-L., Li, Z., Lin, Z., Sheng, Y., Wu, Z., Zhang, H., Zheng, L., Zhuang, S., Zhuang, Y., Gonzalez, J. E., et al. Vicuna: An open-source chatbot impressing gpt-4 with 90%* chatgpt quality. See https://vicuna. lmsys. org (accessed 14 April 2023) , 2(3):6, 2023. Cobbe, K., Kosaraju, V., Bavarian, M., Chen, M., Jun, H., Kaiser, L., Plappert, M., Tworek, J., Hilton, J., Nakano, R., et al. Training verifiers to solve math word problems. 
+
+arXiv preprint arXiv:2110.14168 , 2021. Donisch, L., Schacht, S., and Lanquillon, C. Inference optimizations for large language models: Effects, chal-lenges, and practical considerations. arXiv preprint arXiv:2408.03130 , 2024. Du, C., Jiang, J., Yuanchen, X., Wu, J., Yu, S., Li, Y., Li, S., Xu, K., Nie, L., Tu, Z., et al. Glide with a cape: A low-hassle method to accelerate speculative decoding. The International Conference on Machine Learning , 2024. Elhoushi, M., Shrivastava, A., Liskovich, D., Hosmer, B., Wasti, B., Lai, L., Mahmoud, A., Acun, B., Agarwal, S., Roman, A., et al. Layer skip: Enabling early exit inference and self-speculative decoding. The Association for Computational Linguistics , 2024. 9Gumiho: A Hybrid Architecture to Prioritize Early Tokens in Speculative Decoding 
+
+Fu, Y., Bailis, P., Stoica, I., and Zhang, H. Break the se-quential dependency of llm inference using lookahead decoding. The International Conference on Machine Learning , 2024. Gale, T., Elsen, E., and Hooker, S. The state of sparsity in deep neural networks. arXiv preprint arXiv:1902.09574 ,2019. Gloeckle, F., Idrissi, B. Y., Rozi `ere, B., Lopez-Paz, D., and Synnaeve, G. Better & faster large language models via multi-token prediction. The International Conference on Machine Learning , 2024. Gu, A. and Dao, T. Mamba: Linear-time sequence modeling with selective state spaces. arXiv preprint arXiv:2312.00752 , 2023. Hinton, G. Distilling the knowledge in a neural network. 
+
+arXiv preprint arXiv:1503.02531 , 2015. Hubara, I., Courbariaux, M., Soudry, D., El-Yaniv, R., and Bengio, Y. Quantized neural networks: Training neu-ral networks with low precision weights and activations. 
+
+Journal of Machine Learning Research , 18(187):1–30, 2018. Kim, S., Gholami, A., Yao, Z., Mahoney, M. W., and Keutzer, K. I-bert: Integer-only bert quantization. In 
+
+International conference on machine learning , pp. 5506– 5518. PMLR, 2021. Kurtic, E., Campos, D., Nguyen, T., Frantar, E., Kurtz, M., Fineran, B., Goin, M., and Alistarh, D. The optimal bert surgeon: Scalable and accurate second-order pruning for large language models. arXiv preprint arXiv:2203.07259 ,2022. Kwiatkowski, T., Palomaki, J., Redfield, O., Collins, M., Parikh, A., Alberti, C., Epstein, D., Polosukhin, I., Devlin, J., Lee, K., et al. Natural questions: a benchmark for ques-tion answering research. Transactions of the Association for Computational Linguistics , 7:453–466, 2019. Leviathan, Y., Kalman, M., and Matias, Y. Fast inference from transformers via speculative decoding. In Inter-national Conference on Machine Learning , pp. 19274– 19286. PMLR, 2023. Li, Y., Wei, F., Zhang, C., and Zhang, H. Eagle: Speculative sampling requires rethinking feature uncertainty. arXiv preprint arXiv:2401.15077 , 2024a. Li, Y., Wei, F., Zhang, C., and Zhang, H. Eagle-2: Faster inference of language models with dynamic draft trees. 
+
+arXiv preprint arXiv:2406.16858 , 2024b. Liu, F., Tang, Y., Liu, Z., Ni, Y., Han, K., and Wang, Y. Kangaroo: Lossless self-speculative decoding via double early exiting. Conference on Neural Information Process-ing Systems , 2024a. Liu, Y., Li, W., Cui, L., and Yang, H. Cerberus: Ef-ficient inference with adaptive parallel decoding and sequential knowledge enhancement. arXiv preprint arXiv:2410.13344 , 2024b. Meta. Llama3. https://github.com/pytorch-labs/gpt-fast/ ,2024. Nallapati, R., Zhou, B., Gulcehre, C., Xiang, B., et al. Ab-stractive text summarization using sequence-to-sequence rnns and beyond. arXiv preprint arXiv:1602.06023 , 2016. Sanh, V., Wolf, T., and Rush, A. Movement pruning: Adap-tive sparsity by fine-tuning. Advances in neural informa-tion processing systems , 33:20378–20389, 2020. Shen, S., Dong, Z., Ye, J., Ma, L., Yao, Z., Gholami, A., Mahoney, M. W., and Keutzer, K. Q-bert: Hessian based ultra low precision quantization of bert. In Proceedings of the AAAI Conference on Artificial Intelligence , vol-ume 34, pp. 8815–8821, 2020. Taori, R., Gulrajani, I., Zhang, T., Dubois, Y., Li, X., Guestrin, C., Liang, P., and Hashimoto, T. B. Stanford alpaca: An instruction-following llama model, 2023. Touvron, H., Lavril, T., Izacard, G., Martinet, X., Lachaux, M.-A., Lacroix, T., Rozi `ere, B., Goyal, N., Hambro, E., Azhar, F., et al. Llama: Open and efficient foundation lan-guage models. arXiv preprint arXiv:2302.13971 , 2023. Voita, E., Talbot, D., Moiseev, F., Sennrich, R., and Titov, I. Analyzing multi-head self-attention: Specialized heads do the heavy lifting, the rest can be pruned. arXiv preprint arXiv:1905.09418 , 2019. Wu, Z., Liu, Z., Lin, J., Lin, Y., and Han, S. Lite trans-former with long-short range attention. arXiv preprint arXiv:2004.11886 , 2020. Xia, H., Ge, T., Wang, P., Chen, S.-Q., Wei, F., and Sui, Z. Speculative decoding: Exploiting speculative execu-tion for accelerating seq2seq generation. In Findings of the Association for Computational Linguistics: EMNLP 2023 , pp. 3909–3925, 2023. Xia, H., Yang, Z., Dong, Q., Wang, P., Li, Y., Ge, T., Liu, T., Li, W., and Sui, Z. Unlocking efficiency in large language model inference: A comprehensive survey of speculative decoding. arXiv preprint arXiv:2401.07851 , 2024. Xiao, Z., Zhang, H., Ge, T., Ouyang, S., Ordonez, V., and Yu, D. Parallelspec: Parallel drafter for efficient specula-tive decoding. arXiv preprint arXiv:2410.05589 , 2024. 10 Gumiho: A Hybrid Architecture to Prioritize Early Tokens in Speculative Decoding 
+
+Zadeh, A. H., Edo, I., Awad, O. M., and Moshovos, A. Gobo: Quantizing attention-based nlp models for low la-tency and energy efficient inference. In 2020 53rd Annual IEEE/ACM International Symposium on Microarchitec-ture (MICRO) , pp. 811–824. IEEE, 2020. Zafrir, O., Boudoukh, G., Izsak, P., and Wasserblat, M. Q8bert: Quantized 8bit bert. In 2019 Fifth Workshop on Energy Efficient Machine Learning and Cognitive Computing-NeurIPS Edition (EMC2-NIPS) , pp. 36–39. IEEE, 2019. Zhang, L., Wang, X., Huang, Y., and Xu, R. Learning har-monized representations for speculative sampling. arXiv preprint arXiv:2408.15766 , 2024. Zhao, Y., Xie, Z., Liang, C., Zhuang, C., and Gu, J. Looka-head: An inference acceleration framework for large language model with lossless generation accuracy. In 
+
+Proceedings of the 30th ACM SIGKDD Conference on Knowledge Discovery and Data Mining , pp. 6344–6355, 2024. Zheng, L., Chiang, W.-L., Sheng, Y., Zhuang, S., Wu, Z., Zhuang, Y., Lin, Z., Li, Z., Li, D., Xing, E., et al. Judging llm-as-a-judge with mt-bench and chatbot arena. Ad-vances in Neural Information Processing Systems , 36: 46595–46623, 2023. Zimmer, M., Gritta, M., Lampouras, G., Ammar, H. B., and Wang, J. Mixture of attentions for speculative decoding. 
+
+arXiv preprint arXiv:2410.03804 , 2024. 11 Gumiho: A Hybrid Architecture to Prioritize Early Tokens in Speculative Decoding 
+
+## A. Detailed Proof of Theorem 3.1 
+
+Given {pi}Di=1 and {˜pi}Di=1 defined in Eq. (5) and Eq. (6) in the main paper, the mean accepted tokens ( τ ) for the original and improved settings are expressed as: 
+
+E[L]original =
+
+> D
+
+X
+
+> k=1
+
+Pori (L ≥ k) = 
+
+> D
+
+X
+
+> k=1
+
+(
+
+> k
+
+Y
+
+> i=1
+
+pi), (11) and 
+
+E[L]improved =
+
+> D
+
+X
+
+> k=1
+
+Pimp (L ≥ k) = 
+
+> D
+
+X
+
+> k=1
+
+(
+
+> k
+
+Y
+
+> i=1
+
+˜pi). (12) We aim to prove that: 
+
+E[L]improved ≥ E[L]original . (13) We introduce an auxiliary probability sequence P ′ 
+
+> i
+
+that concentrates the scattered changes ζi at two adjacent positions d and 
+
+d + 1 . Specifically, we define: 
+
+P ′ 
+
+> i
+
+=
+
+
+
+pi + ζ, i = dpi − ζ, i = d + 1 
+
+pi, otherwise ,
+
+s.t. ζ =
+
+> d
+
+X
+
+> i=1
+
+ζi =
+
+> D
+
+X
+
+> j=d+1
+
+ζj . (14) Here, we assume 
+
+pd + ζ ≤ 1. (15) We will discuss the cases of pd + ζ > 1 at the end. With these assumptions hold, the corresponding mean accepted tokens ( τ ) for this concentrated setting is: 
+
+E[L]concentrate =
+
+> D
+
+X
+
+> k=1
+
+Pcon (L ≥ k) = 
+
+> D
+
+X
+
+> k=1
+
+(
+
+> k
+
+Y
+
+> i=1
+
+P ′ 
+
+> i
+
+). (16) In the following, we will prove that: 
+
+E[L]concentrate ≥ E[L]original , (17) 
+
+E[L]improved ≥ E[L]concentrate . (18) Before proceeding with the main proof, let us examine the special case where pd+1 = 1 . In this case, the ordering constraint 
+
+1 ≥ p1 ≥ p2 ≥ · · · ≥ pd ≥ pd+1 implies that all probabilities are equal: p1 = p2 = · · · = pd = pd+1 = 1 . Given that 
+
+pi + ζi ≤ 1 for all i = {1, 2, · · · , d }, we must have ζ1 = ζ2 = · · · = ζd = 0 . This leads to ζ = Pdi=1 ζi = PDi=d+1 ζi = 0 ,meaning that {pi}Di=1 and { epi}Di=1 are exactly the same. As a result,, E[L]improved = E[L]original .For the remainder of the proof, we assume pd+1 < 1.
+
+A.1. The proof of E[L]concentrate ≥ E[L]original 
+
+Define 
+
+∆E = E[L]concentrate − E[L]original =
+
+> D
+
+X
+
+> k=1
+
+∆Ek, (19) 12 Gumiho: A Hybrid Architecture to Prioritize Early Tokens in Speculative Decoding 
+
+where ∆Ek = Qki=1 P ′ 
+
+> i
+
+− Qki=1 pi represents the contributions to the difference of the expected value for each position k.
+
+Step 1: Analyze of ∆E.
+
+We separate ∆E into three parts, where ∆E1 = Pdk=1 ∆Ek, ∆E2 = ∆ Ed+1 and ∆E3 = PDk=d+2 ∆Ek.For 1 ≤ k < d , P ′ 
+
+> k
+
+= pk and ∆Ek = 0 . Therefore: 
+
+∆E1 = ∆ Ed
+
+=
+
+> d
+
+Y
+
+> i=1
+
+P ′ 
+
+> i
+
+−
+
+> d
+
+Y
+
+> i=1
+
+pi
+
+=
+
+> d−1
+
+Y
+
+> i=1
+
+pi · (pd + ζ) −
+
+> d
+
+Y
+
+> i=1
+
+pi
+
+= ζ
+
+> d−1
+
+Y
+
+> i=1
+
+pi. (20) For k = d + 1 , we have: 
+
+∆E2 = ∆ Ed+1 
+
+=
+
+> d+1
+
+Y
+
+> i=1
+
+P ′ 
+
+> i
+
+−
+
+> d+1
+
+Y
+
+> i=1
+
+pi
+
+=
+
+> d−1
+
+Y
+
+> i=1
+
+pi · (pd + ζ)( pd+1 − ζ) −
+
+> d+1
+
+Y
+
+> i=1
+
+pi
+
+=
+
+> d−1
+
+Y
+
+> i=1
+
+pi · (ζp d+1 − ζp d − ζ2)= ζ(pd+1 − pd − ζ)
+
+> d−1
+
+Y
+
+> i=1
+
+pi. (21) For k > d + 1 , the difference arises from the terms (pd + ζ) and (pd+1 − ζ) in the product. Thus: 
+
+∆E3 =
+
+> D
+
+X
+
+> k=d+2
+
+∆Ek
+
+=
+
+> D
+
+X
+
+> k=d+2
+> k
+
+Y
+
+> i=1
+
+P ′ 
+
+> i
+
+−
+
+> k
+
+Y
+
+> i=1
+
+pi
+
+!
+
+=
+
+> D
+
+X
+
+> k=d+2
+
+(
+
+> d−1
+
+Y
+
+> i=1
+
+pi)( pd + ζ)( pd+1 − ζ)( 
+
+> k
+
+Y
+
+> i=d+2
+
+pi) −
+
+> k
+
+Y
+
+> i=1
+
+pi
+
+
+
+=
+
+> D
+
+X
+
+> k=d+2
+
+(
+
+> d−1
+
+Y
+
+> i=1
+
+pi)ζ(pd+1 − pd − ζ)( 
+
+> k
+
+Y
+
+> i=d+2
+
+pi)
+
+ . (22) By combining Eq. (20) ∼ Eq. (22), we have: 
+
+∆E = ∆ E1 + ∆ E2 + ∆ E3
+
+= ζ(pd+1 − pd + 1 − ζ)
+
+> d−1
+
+Y
+
+> i=1
+
+pi +
+
+> D
+
+X
+
+> k=d+2
+
+(
+
+> d−1
+
+Y
+
+> i=1
+
+pi)ζ(pd+1 − pd − ζ)( 
+
+> k
+
+Y
+
+> i=d+2
+
+pi)
+
+ . (23) 13 Gumiho: A Hybrid Architecture to Prioritize Early Tokens in Speculative Decoding 
+
+Step 2: Scaling. 
+
+Define A = Qd−1 
+
+> i=1
+
+piζ and recall that in Eq. (5) we have 1 ≥ p1 ≥ p2 ≥ · · · ≥ pD ≥ 0, then the total difference ∆E
+
+becomes: 
+
+∆E = A(pd+1 − pd + 1 − ζ) + 
+
+> D
+
+X
+
+> k=d+2
+
+A(pd+1 − pd − ζ)( 
+
+> k
+
+Y
+
+> i=d+2
+
+pi)
+
+
+
+= A
+
+1 + ( pd+1 − pd − ζ) + ( pd+1 − pd − ζ)
+
+> D
+
+X
+
+> k=d+2
+> k
+
+Y
+
+> i=d+2
+
+pi
+
+
+
+= A
+
+1 − (pd − pd+1 + ζ) − (pd − pd+1 + ζ)
+
+> D
+
+X
+
+> k=d+2
+> k
+
+Y
+
+> i=d+2
+
+pi
+
+
+
+≥ A
+
+1 − (pd − pd+1 + ζ) − (pd − pd+1 + ζ)
+
+> D
+
+X
+
+> k=d+2
+
+pk−d−1
+
+> d+1
+
+
+
+= A
+
+1 − (pd − pd+1 + ζ)(1 + 
+
+> D
+
+X
+
+> k=d+2
+
+pk−d−1 
+
+> d+1
+
+)
+
+ . (24) 
+
+Step 3: Simplifying the sum. 
+
+Note that the last term 1 + PDk=d+2 pk−d−1 
+
+> d+1
+
+in Eq. (24) is a geometric series. Therefore, we have: 
+
+1 + 
+
+> D
+
+X
+
+> k=d+2
+
+pk−d−1 
+
+> d+1
+
+= 1 + pd+1 + p2 
+
+> d+1
+
++ p3 
+
+> d+1
+
++ · · · + pD−d−1
+
+> d+1
+
+= 1 − pD−dd+1 
+
+1 − pd+1 
+
+. (25) Substitute this back into ∆E, and we have: 
+
+∆E ≥ A
+
+1 − (pd − pd+1 + ζ)( 1 − pD−dd+1 
+
+1 − pd+1 
+
+)
+
+ . (26) 
+
+Step 4: Proving ∆E ≥ 0
+
+To ensure ∆E ≥ 0, we need: 
+
+(pd − pd+1 + ζ)( 1 − pD−dd+1 
+
+1 − pd+1 
+
+) ≤ 1,
+
+⇐⇒ (pd − pd+1 + ζ)(1 − pD−dd+1 ) ≤ 1 − pd+1 ,
+
+⇐⇒ (pd + ζ) − pD−dd+1 (pd − pd+1 + ζ) ≤ 1. (27) Since 1 ≥ pd ≥ pd+1 ≥ 0 and ζ ≥ 0, it follows that pD−dd+1 (pd − pd+1 + ζ) ≥ 0. Besides, since we have pd + ζ ≤ 1 in Eq. (15), the inequality holds. Thus, ∆E ≥ 0. Implying: 
+
+E[L]concentrate ≥ E[L]original . (28) 
+
+A.2. Proving that E[L]improved ≥ E[L]concentrate 
+
+We introduce a series of auxiliary sequences with the goal of proving the following inequality chain. Note that the first line and the last line in the following inequality chain represent the improved setting and the concentrate setting, respectively. 14 Gumiho: A Hybrid Architecture to Prioritize Early Tokens in Speculative Decoding 
+
+Note that only two elements are different in every two consecutive lines (except for the last two lines). Specifically, we merge ζi into ζd one at a time for 1 ≤ i ≤ d − 1.
+
+E(p1 + ζ1, p2 + ζ2, p3 + ζ3, · · · , pd + ζd, pd+1 − ζd+1 , pd+2 − ζd+2 , · · · , pD − ζD )
+
+≥
+
+E(p1, p2 + ζ2, p3 + ζ3, · · · , pd + ζd + ζ1, pd+1 − ζd+1 , pd+2 − ζd+2 , · · · , pD − ζD )
+
+≥
+
+E(p1, p2, p3 + ζ3, · · · , pd + ζd + ζ1 + ζ2, pd+1 − ζd+1 , pd+2 − ζd+2 , · · · , pD − ζD )
+
+≥· · · ≥
+
+E(p1, p2, p3, · · · , pd + Pdi=1 ζi, pd+1 − ζd+1 , pd+2 − ζd+2 , · · · , pD − ζD )
+
+≥
+
+E(p1, p2, p3, · · · , pd + Pdi=1 ζi, pd+1 − PDi=d+1 ζi, pd+2 , · · · , pD )
+
+(29) 
+
+First Part of the Inequality Chain 
+
+We begin by proving the first inequality in the chain, which involves transferring ζ1 from p1 to pd:
+
+E(p1 + ζ1, p2 + ζ2, p3 + ζ3, · · · , pd + ζd, pd+1 − ζd+1 , pd+2 − ζd+2 , · · · , pD − ζD )
+
+≥
+
+E(p1, p2 + ζ2, p3 + ζ3, · · · , pd + ζd + ζ1, pd+1 − ζd+1 , pd+2 − ζd+2 , · · · , pD − ζD )
+
+(30) 15 Gumiho: A Hybrid Architecture to Prioritize Early Tokens in Speculative Decoding 
+
+Let ∆E14 denote the difference between the left-hand side (LHS) and the right-hand side (RHS) of the above inequality: 
+
+∆E14 =E(p1 + ζ1, p 2 + ζ2, p 3 + ζ3, · · · , p d + ζd, p d+1 − ζd+1 , p d+2 − ζd+2 , · · · , p D − ζD )
+
+− E(p1, p 2 + ζ2, p 3 + ζ3, · · · , p d + ζd + ζ1, p d+1 − ζd+1 , p d+2 − ζd+2 , · · · , p D − ζD )=( p1 + ζ1 − p1) + 
+
+> d−1
+
+X
+
+> k=2
+
+" kY
+
+> i=1
+
+(pi + ζi) − p1
+
+> k
+
+Y
+
+> i=2
+
+(pi + ζi)
+
+#
+
++
+
+" dY
+
+> i=1
+
+(pi + ζi) − p1
+
+> d−1
+
+Y
+
+> i=2
+
+(pi + ζi)
+
+!
+
+(pd + ζ1 + ζd)
+
+# " 
+
+1 + 
+
+> D
+
+X
+
+> k=d+1
+
+(
+
+> k
+
+Y
+
+> i=d+1
+
+(pi − ζi)
+
+#
+
+≥ζ1 +
+
+" dY
+
+> i=1
+
+(pi + ζi) − p1
+
+> d−1
+
+Y
+
+> i=2
+
+(pi + ζi)
+
+!
+
+(pd + ζ1 + ζd)
+
+# " 
+
+1 + 
+
+> D
+
+X
+
+> k=d+1
+
+(
+
+> k
+
+Y
+
+> i=d+1
+
+(pi − ζi)
+
+#
+
+≥ζ1 +
+
+> d−1
+
+Y
+
+> i=2
+
+(pi + ζi) [( p1 + ζ1)( pd + ζd) − p1(pd + ζ1 + ζd)] 
+
+"
+
+1 + 
+
+> D
+
+X
+
+> k=d+1
+
+(
+
+> k
+
+Y
+
+> i=d+1
+
+(pi − ζi)
+
+#
+
+=ζ1 +
+
+> d−1
+
+Y
+
+> i=2
+
+(pi + ζi)ζ1 (pd + ζd − p1)
+
+"
+
+1 + 
+
+> D
+
+X
+
+> k=d+1
+
+(
+
+> k
+
+Y
+
+> i=d+1
+
+(pi − ζi)
+
+#
+
+(31) If pd + ζd − p1 ≥ 0, then ∆E14 ≥ 0. This directly implies that the first inequality holds. If pd + ζd − p1 < 0, then 
+
+∆E14 ≥ζ1 −
+
+> d−1
+
+Y
+
+> i=2
+
+(pi + ζi)ζ1 (p1 − pd − ζd)
+
+"
+
+1 + 
+
+> D
+
+X
+
+> k=d+1
+
+(pk−dd+1 )
+
+#
+
+=ζ1 −
+
+> d−1
+
+Y
+
+> i=2
+
+(pi + ζi)ζ1 (p1 − pd − ζd) 1 − pD−d+1 
+
+> d+1
+
+1 − pd+1 
+
+≥ζ1 − ζ1 (p1 − pd − ζd) 11 − pd+1 
+
+=ζ1
+
+
+
+1 − (p1 − pd − ζd) 11 − pd+1 
+
+
+
+=ζ1
+
+ (1 − pd+1 ) − (p1 − pd − ζd)1 − pd+1 
+
+
+
+=ζ1
+
+ (1 − p1) + ( pd + ζd − pd+1 )1 − pd+1 
+
+
+
+(32) Given that p1 ≤ 1 and pd+1 ≤ pd < 1, the numerator (1 − p1) + ( pd + ζd − pd+1 ) and the denominator 1 − pd+1 are both positive. Hence, ∆E14 ≥ 0.In both cases, ∆E14 ≥ 0, thereby proving Inequality 30. Similarly, consider further transferring ζ2 from p2 to pd:
+
+E(p1, p2 + ζ2, p3 + ζ3, · · · , pd + ζd + ζ1, pd+1 − ζd+1 , pd+2 − ζd+2 , · · · , pD − ζD )
+
+≥
+
+E(p1, p2, p3 + ζ3, · · · , pd + ζd + ζ1 + ζ2, pd+1 − ζd+1 , pd+2 − ζd+2 , · · · , pD − ζD )
+
+(33) 16 Gumiho: A Hybrid Architecture to Prioritize Early Tokens in Speculative Decoding 
+
+Apparently, this equals to prove: 
+
+p1 + p1E(p2 + ζ2, p3 + ζ3, · · · , pd + ζd + ζ1, pd+1 − ζd+1 , pd+2 − ζd+2 , · · · , pD − ζD )
+
+≥
+
+p1 + p1E(p2, p3 + ζ3, · · · , pd + ζd + ζ1 + ζ2, pd+1 − ζd+1 , pd+2 − ζd+2 , · · · , pD − ζD )
+
+(34) which can be degenerated to Inequality 30 by removing p1 from both auxiliary sequences. Using the same method, we can iteratively transfer each ζi from pi to pd for i = 1 , 2, · · · , d , ensuring that each step maintains the inequality. Consequently, all inequalities in the chain (29) hold, except the last. To conclude, after transferring all ζi from i = 1 to d, we arrive at the following: 
+
+E(p1 + ζ1, p2 + ζ2, p3 + ζ3, · · · , pd + ζd, pd+1 − ζd+1 , pd+2 − ζd+2 , · · · , pD − ζD )
+
+≥
+
+E(p1, p2, p3, · · · , pd + Pdi=1 ζi, pd+1 − ζd+1 , pd+2 − ζd+2 , · · · , pD − ζD )
+
+(35) This completes the proof for the first part of the inequality chain. 
+
+Second Part of the Inequality Chain 
+
+We now address the final inequality in the chain (29), specifically: 
+
+E(p1, p2, p3, · · · , pd + Pdi=1 ζi, pd+1 − ζd+1 , pd+2 − ζd+2 , · · · , pD − ζD )
+
+≥
+
+E(p1, p2, p3, · · · , pd + Pdi=1 ζi, pd+1 − PDi=d+1 ζi, pd+2 , · · · , pD )
+
+(36) Let ∆E5 denote the difference between the left-hand side and the right-hand side of the above inequality: 
+
+∆E5 =E(p1, p 2, p 3, · · · , p d +
+
+> d
+
+X
+
+> i=1
+
+ζi, p d+1 − ζd+1 , p d+2 − ζd+2 , · · · , p D − ζD )
+
+− E(p1, p 2, p 3, · · · , p d +
+
+> d
+
+X
+
+> i=1
+
+ζi, p d+1 −
+
+> D
+
+X
+
+> i=d+1
+
+ζi, p d+2 , · · · , p D )=( 
+
+> d−1
+
+Y
+
+> i=1
+
+pi)( pd +
+
+> d
+
+X
+
+> i=1
+
+ζi)
+
+" DX
+
+> k=d+1
+
+(
+
+> k
+
+Y
+
+> i=d+1
+
+(pi − ζi)) −
+
+> D
+
+X
+
+> k=d+1
+
+(
+
+> k
+
+Y
+
+> i=d+1
+
+P ′ 
+
+> i
+
+)
+
+#
+
+(37) Note that the multiplicative coefficient (Qd−1 
+
+> i=1
+
+pi)( pd + Pdi=1 ζi) is always positive, as probabilities are non-negative. Therefore, the sign of ∆E5 depends solely on the later bracketed difference. We denote this difference as ∆E′
+
+> 5
+
+:17 Gumiho: A Hybrid Architecture to Prioritize Early Tokens in Speculative Decoding 
+
+∆E′ 
+
+> 5
+
+=
+
+> D
+
+X
+
+> k=d+1
+
+(
+
+> k
+
+Y
+
+> i=d+1
+
+(pi − ζi)) −
+
+> D
+
+X
+
+> k=d+1
+
+(
+
+> k
+
+Y
+
+> i=d+1
+
+P ′ 
+
+> i
+
+)=
+
+> D
+
+X
+
+> k=d+1
+
+(
+
+> k
+
+Y
+
+> i=d+1
+
+(pi − ζi)) −
+
+(pd+1 − ζ) + 
+
+> D
+
+X
+
+> k=d+2
+
+(
+
+> k
+
+Y
+
+> i=d+2
+
+pi)( pd+1 − ζ)
+
+
+
+=
+
+(pd+1 − ζd+1 ) + 
+
+> D
+
+X
+
+> k=d+2
+
+(
+
+> k
+
+Y
+
+> i=d+1
+
+(pi − ζi)) 
+
+ −
+
+(pd+1 − ζ) + 
+
+> D
+
+X
+
+> k=d+2
+
+(
+
+> k
+
+Y
+
+> i=d+2
+
+pi)( pd+1 − ζ)
+
+
+
+= ( ζ − ζd+1 ) + 
+
+> D
+
+X
+
+> k=d+2
+
+
+
+> k
+
+Y
+
+> i=d+1
+
+(pi − ζi) − (
+
+> k
+
+Y
+
+> i=d+2
+
+pi)( pd+1 − ζ)
+
+
+
+= ( ζ − ζd+1 ) + 
+
+> D
+
+X
+
+> k=d+2
+
+ζ(
+
+> k
+
+Y
+
+> i=d+2
+
+pi) + 
+
+> k
+
+Y
+
+> i=d+1
+
+(pi − ζi) −
+
+> k
+
+Y
+
+> i=d+1
+
+pi
+
+
+
+= ( ζ − ζd+1 ) + 
+
+> D
+
+X
+
+> k=d+2
+
+
+
+ζ(
+
+> k
+
+Y
+
+> i=d+2
+
+pi) + 
+
+> k
+
+X
+
+> i=d+1
+
+(−ζi)( 
+
+> k
+
+Y 
+
+> j=d+1
+> j̸=i
+
+pj ) + R2(ζd+1 , ζ d+2 , · · · , ζ k)
+
+
+
+, (38) where in the last two terms of Eq. (38) , we split the result of Qki=d+1 (pi − ζi) − Qki=d+1 pi into two terms. The first term represents the summation of all elements with only one ζi, and R2(ζd+1 , ζ d+2 , · · · , ζ k) denotes the sum of all possible products involving two or more distinct ζi terms from {ζd+1 , ζ d+2 , · · · , ζ k}. Now we want to prove that 
+
+R2(ζd+1 , ζ d+2 , · · · , ζ k) ≥ 0. Since R2(ζd+1 , ζ d+2 , · · · , ζ k) only exists when k ≥ d + 2 , we define it as follow: 
+
+R2(ζd+1 , ζ d+2 , · · · , ζ k) = 
+
+> k
+
+Y
+
+> i=d+1
+
+(pi − ζi) −
+
+
+
+> k
+
+Y
+
+> i=d+1
+
+pi −
+
+> k
+
+X
+
+> i=d+1
+
+ζikY 
+
+> j=d+1
+> j̸=i
+
+pj
+
+ , k ≥ d + 2 . (39) Then, we can calculate the partial derivative of the function R2(ζd+1 , ζ d+2 , · · · , ζ k) with respect to ζm:
+
+d(R2(ζd+1 , ζ d+2 , · · · , ζ k)) 
+
+d(ζm) = −
+
+> k
+
+Y
+
+> i=d+1
+> i̸=m
+
+(pi − ζi) + 
+
+> k
+
+Y 
+
+> j=d+1
+> j̸=m
+
+pj . (40) Given 0 ≤ pi − ζi ≤ pi ≤ 1, we observe that d(R2(ζd+1 ,ζ d+2 ,...,ζ k ))  
+
+> d(ζm)
+
+≥ 0 is always true, which implies that 
+
+R2(ζd+1 , ζ d+2 , . . . , ζ k) is monotonically non-decreasing with respect to ζm for all m ∈ { d + 1 , d + 2 , . . . , k }. Note that R2(ζd+1 , ζ d+2 , . . . , ζ k) is differentiable on (0 , 1) and continuous on [0 , 1] with respect to all ζm. Therefore, 
+
+R2(ζd+1 , ζ d+2 , . . . , ζ k) attains its minimum value when ζm = 0 for all m ∈ { d + 1 , . . . , k }. Since R2(0 , 0, . . . , 0) = 0 ,we conclude that R2(ζd+1 , ζ d+2 , . . . , ζ k) ≥ 0.Then 
+
+∆E′ 
+
+> 5
+
+≥ (ζ − ζd+1 ) + 
+
+> D
+
+X
+
+> k=d+2
+
+
+
+ζ(
+
+> k
+
+Y
+
+> i=d+2
+
+pi) −
+
+> k
+
+X
+
+> i=d+1
+
+ζi(
+
+> k
+
+Y 
+
+> j=d+1
+> j̸=i
+
+pj )
+
+
+
+= ( ζ − ζd+1 ) + 
+
+> D
+
+X
+
+> k=d+2
+
+
+
+(
+
+> D
+
+X
+
+> i=d+1
+
+ζi)( 
+
+> k
+
+Y
+
+> i=d+2
+
+pi) −
+
+> k
+
+X
+
+> i=d+1
+
+ζi(
+
+> k
+
+Y 
+
+> j=d+1
+> j̸=i
+
+pj )
+
+
+
+. (41) 18 Gumiho: A Hybrid Architecture to Prioritize Early Tokens in Speculative Decoding 
+
+When D − d = 2 :
+
+∆E′[2] 5 = ( ζ − ζd+1 ) + 
+
+> d+2
+
+X
+
+> k=d+2
+
+
+
+(
+
+> k
+
+Y
+
+> i=d+2
+
+pi)ζ −
+
+> k
+
+X
+
+> i=d+1
+
+ζi(
+
+> k
+
+Y 
+
+> j=d+1
+> j̸=i
+
+pj )
+
+
+
+= ζd+2 + pd+2 ζ − ζd+1 pd+2 − ζd+2 pd+1 
+
+= ζd+2 (1 − pd+1 ) + ( ζ − ζd+1 )pd+2 
+
+≥ (ζ − ζd+1 )pd+2 . (42) Since 0 ≤ pi ≤ 1 and 0 ≤ ζi ≤ 1, it is clear that ∆E′[2] 5 ≥ 0.Similarly, When D − d = 3 :
+
+∆E′[3] 5 = ∆ E′[2] 5 +
+
+
+
+(
+
+> d+3
+
+Y
+
+> i=d+2
+
+pi)ζ −
+
+> d+3
+
+X
+
+> i=d+1
+
+ζi(
+
+> d+3
+
+Y 
+
+> j=d+1
+> j̸=i
+
+pj )
+
+
+
+≥ (ζ − ζd+1 )pd+2 + ( pd+2 pd+3 ζ − ζd+1 pd+2 pd+3 − ζd+2 pd+1 pd+3 − ζd+3 pd+1 pd+2 )= ( ζd+2 + ζd+3 )pd+2 + ( pd+2 pd+3 ζ − ζd+1 pd+2 pd+3 − ζd+2 pd+1 pd+3 − ζd+3 pd+1 pd+2 )= ζd+2 (pd+2 − pd+1 pd+3 ) + ζd+3 (pd+2 − pd+1 pd+2 ) + ( ζ − ζd+1 )pd+2 pd+3 
+
+≥ ζd+2 (pd+2 − pd+1 pd+2 ) + ζd+3 (pd+2 − pd+1 pd+2 ) + ( ζ − ζd+1 )pd+2 pd+3 
+
+≥ (ζ − ζd+1 )pd+2 pd+3 
+
+≥ 0. (43) Using induction, assume that for any D − d = k ∈ [2 , ∞), ∆E′[k]5 = ( ζ − ζd+1 ) Qd+ki=d+2 pi ≥ 0.Then for D − d = k + 1 :
+
+∆E′[k+1] 5 ≥ (ζ − ζd+1 )
+
+> d+k
+
+Y
+
+> i=d+2
+
+pi + ( 
+
+> d+k+1
+
+Y
+
+> i=d+2
+
+piζ −
+
+> d+k+1
+
+X
+
+> i=d+1
+
+ζi(
+
+> d+k+1
+
+Y 
+
+> j=d+1
+> j̸=i
+
+pj )) = ( ζ − ζd+1 )
+
+> d+k
+
+Y
+
+> i=d+2
+
+pi +
+
+ζ(
+
+> d+k+1
+
+Y
+
+> i=d+2
+
+pi) − ζd+1 (
+
+> d+k+1
+
+Y
+
+> j=d+2
+
+pj ) − ζd+2 (
+
+> d+k+1
+
+Y 
+
+> j=d+1
+> j̸=d+2
+
+pj ) − · · · − ζd+k+1 (
+
+> d+k+1
+
+Y 
+
+> j=d+1
+> j̸=d+k+1
+
+pj )
+
+
+
+= ( ζd+2 + ζd+3 + · · · + ζd+k+1 )
+
+> d+k
+
+Y
+
+> i=d+2
+
+pi+
+
+ζ(
+
+> d+k+1
+
+Y
+
+> i=d+2
+
+pi) − ζd+1 (
+
+> d+k+1
+
+Y
+
+> j=d+2
+
+pj ) − ζd+2 (
+
+> d+k+1
+
+Y 
+
+> j=d+1
+> j̸=d+2
+
+pj ) − · · · − ζd+k+1 (
+
+> d+k+1
+
+Y 
+
+> j=d+1
+> j̸=d+k+1
+
+pj )
+
+
+
+= ζd+2 
+
+
+
+> d+k
+
+Y
+
+> i=d+2
+
+pi −
+
+> d+k+1
+
+Y 
+
+> j=d+1
+> j̸=d+2
+
+pj
+
+ + ζd+3 
+
+
+
+> d+k
+
+Y
+
+> i=d+2
+
+pi −
+
+> d+k+1
+
+Y 
+
+> j=d+1
+> j̸=d+3
+
+pj
+
+ + · · · + ζd+k+1 
+
+
+
+> d+k
+
+Y
+
+> i=d+2
+
+pi −
+
+> d+k+1
+
+Y 
+
+> j=d+1
+> j̸=d+k+1
+
+pj
+
+
+
++ ( ζ − ζd+1 )
+
+> d+k+1
+
+Y
+
+> i=d+2
+
+pi. (44) 19 Gumiho: A Hybrid Architecture to Prioritize Early Tokens in Speculative Decoding 
+
+For the first term in Eq. (44), we observe: 
+
+
+
+> d+k
+
+Y
+
+> i=d+2
+
+pi −
+
+> d+k+1
+
+Y 
+
+> j=d+1
+> j̸=d+2
+
+pj
+
+ =
+
+
+
+> d+k
+
+Y
+
+> i=d+2
+
+pi −
+
+> d+k
+
+Y 
+
+> j=d+1
+> j̸=d+2
+
+pj · pd+k+1 
+
+
+
+≥
+
+
+
+> d+k
+
+Y
+
+> i=d+2
+
+pi −
+
+> d+k
+
+Y 
+
+> j=d+1
+> j̸=d+2
+
+pj · pd+2 
+
+
+
+=
+
+
+
+> d+k
+
+Y
+
+> i=d+2
+
+pi −
+
+> d+k
+
+Y
+
+> j=d+1
+
+pj
+
+
+
+= (1 − pd+1 )
+
+> d+k
+
+Y
+
+> i=d+2
+
+pi
+
+!
+
+≥ 0. (45) By the same reasoning, we can show that all coefficients in Eq. (44) are non-negative, and we have: 
+
+∆E′[k+1] 5 ≥ (ζ − ζd+1 )
+
+> d+k+1
+
+Y
+
+> i=d+2
+
+pi
+
+≥ 0. (46) Therefore, we can conclude that ∆E′ 
+
+> 5
+
+≥ 0, and thus: 
+
+∆E5 ≥ 0. (47) 
+
+Conclusion: 
+
+Since: 
+
+∆E4 ≥ 0, ∆E5 ≥ 0, (48) we conclude that the inequality chain (29) holds, which means: 
+
+E[L]improved ≥ E[L]concentrate . (49) 
+
+A.3. Proving that E[L]improved ≥ E[L]original 
+
+Given that: 
+
+E[L]improved ≥ E[L]concentrate , E[L]concentrate ≥ E[L]original , (50) we establish that: 
+
+E[L]improved ≥ E[L]original . (51) 
+
+A.4. Cases of pd + ζ > 1
+
+At the beginning of the proof, we assume pd + ζ ≤ 1. In cases where pd + ζ > 1, the parameter ζ can be distributed across multiple positions to satisfy the constraints. Specifically, we divide ζ into n parts: 20 Gumiho: A Hybrid Architecture to Prioritize Early Tokens in Speculative Decoding 
+
+ζ = ˆζd + ˆζd−1 + ˆζd−2 + · · · + ˆζd−n+1 , (52) where 
+
+pd + ˆζd = 1 , (53) 
+
+pd−1 + ˆζd−1 = 1 , (54) 
+
+· · · , (55) 
+
+pd−n+2 + ˆζd−n+2 = 1 , (56) 
+
+pd−n+1 + ˆζd−n+1 < 1. (57) These adjustments are applied to n positions as follows: 
+
+P ′ 
+
+> i
+
+=
+
+
+
+pi + ˆζi, i = d − n + 1 , · · · , d pi − ζ, i = d + 1 
+
+pi, otherwise ,
+
+s.t. ζ =
+
+> d
+
+X
+
+> i=1
+
+ζi =
+
+> D
+
+X
+
+> i=d+1
+
+ζi =
+
+> d
+
+X
+
+> i=d−n+1
+
+ˆζi. (58) Next, we construct the following inequality chain: 
+
+E(p1, p2, p3, · · · , pd, pd+1 , pd+2 , · · · , pD )
+
+≤
+
+E(p1, p2, p3, · · · , pd + ˆζd, pd+1 − ˆζd, pd+2 , · · · , pD )
+
+≤
+
+E(p1, p2, · · · , pd−1 + ˆζd−1, pd + ˆζd, pd+1 − ˆζd − ˆζd−1, pd+2 , · · · , pD )
+
+≤· · · ≤
+
+E(p1, · · · , pd−n+1 + ˆζd−n+1 , · · · , pd−1 + ˆζd−1, pd + ˆζd, pd+1 − Pdi=d−n+1 ˆζi, pd+2 , · · · , p D )
+
+(59) Each step in the inequality chain (59) can be proven using the same method as proving E[L]concentrate ≥ E[L]original .Next, we construct another inequality: 
+
+E(p1, · · · , pd−n+1 + ˆζd−n+1 , · · · , pd−1 + ˆζd−1, pd + ˆζd, pd+1 − Pdi=d−n+1 ˆζi, pd+2 , · · · , p D )
+
+≤
+
+E(p1, · · · , pd−n+1 + ˆζd−n+1 , · · · , pd−1 + ˆζd−1, pd + ˆζd, pd+1 − ζd+1 , pd+2 − ζd+2 , · · · , p D − ζD )
+
+(60) The inequality (60) can be proven using the same method as proving inequality (36). 21 Gumiho: A Hybrid Architecture to Prioritize Early Tokens in Speculative Decoding 
+
+Finally, we construct a third inequality: 
+
+E(p1, · · · , pd−n+1 + ˆζd−n+1 , · · · , pd−1 + ˆζd−1, pd + ˆζd, pd+1 − ζd+1 , pd+2 − ζd+2 , · · · , p D − ζD )
+
+≤
+
+E(p1 + ζ1, p2 + ζ2, · · · , pd + ζd, pd+1 − ζd+1 , pd+2 − ζd+2 , · · · , p D − ζD )
+
+(61) To prove inequality (61) , we can follow the same method as proving the first to the second-to-last line in inequality (29) . In that proof, we observed that each step involved moving a non-negative value ζi from an earlier position to a later position, and the validity of the inequality was independent of the specific value of ζi or the positions involved. In the case of inequality (61) , we have ζ1, · · · , ζ d ≥ 0 and ζd−n+1 , · · · , ζ d ≤ ˆζd−n+1 , · · · , ˆζd. This means that we are essentially moving positive values from earlier positions to later positions, similar to the process in inequality (29). Therefore, we can use the same method to establish inequality (61). With inequalities (61) , (60) and the inequality chain (59) established, we conclude that E[L]improved ≥ E[L]original . Therefore, we finish the proof of Theorem 3.1 in the main paper. 22 Gumiho: A Hybrid Architecture to Prioritize Early Tokens in Speculative Decoding 
+
+## B. Experiment Results on A100 
+
+This section gives the inference results on a single NVIDIA A100 GPU. It is reasonable that there are different final speedups on MI250 and A100. However, note that the mean average tokens ( τ ) are also slightly different. This is because of the use of FP16 precision during inference, and different FP16 processing mechanisms in MI250 and A100 GPUs. Using FP32 precision yields identical τ values across both platforms, yet significantly increases the inference latency. 
+
+Table 4. Speedup ratios and mean accepted tokens ( τ ) of different methods on NVIDIA A100. V represents Vicuna, L2 represents LLaMA2-Chat, and L3 represents LLaMA3-Instruct. We present the results of different methods across six datasets. Mean represents the average performance across these six datasets. 
+
+Model Method MT-Bench HumanEval GSM8K Alpaca CNN/DM Natural Ques. Mean Speedup τ Speedup τ Speedup τ Speedup τ Speedup τ Speedup τ Speedup τ
+
+Temperature=0 V 7B Eagle-2 3.30 × 5.03 3.59 × 5.36 3.21 × 4.94 3.00 × 4.86 2.57 × 4.10 2.48 × 3.82 3.02 × 4.69 Gumiho(ours) 3.62 × 5.22 4.22 × 5.81 3.48 × 5.07 3.13 × 4.82 2.91 × 4.46 2.60 × 3.80 3.33 × 4.86 
+
+V 13B Eagle-2 3.05 × 4.92 3.60 × 5.42 3.24 × 4.79 2.99 × 4.90 2.47 × 4.21 2.48 × 3.71 2.98 × 4.66 Gumiho(ours) 3.33 × 5.23 4.12 × 6.01 3.35 × 5.08 3.07 × 4.97 2.68 × 4.40 2.52 × 3.81 3.19 × 4.92 
+
+L2 7B Eagle-2 3.28 × 4.76 3.71 × 5.38 3.28 × 4.77 3.17 × 4.66 2.61 × 4.09 2.78 × 4.16 3.14 × 4.64 Gumiho(ours) 3.44 × 4.92 3.92 × 5.57 3.42 × 4.83 3.19 × 4.54 2.82 × 4.20 2.91 × 4.19 3.28 × 4.71 
+
+L2 13B Eagle-2 3.02 × 4.77 3.60 × 5.53 3.40 × 4.89 3.10 × 4.60 2.54 × 4.26 2.77 × 4.12 3.07 × 4.69 Gumiho(ours) 3.24 × 4.97 3.78 × 5.85 3.61 × 5.03 3.19 × 4.63 2.72 × 4.38 2.85 × 4.20 3.23 × 4.84 
+
+L3 8B Eagle-2 2.71 × 4.35 3.20 × 5.06 2.79 × 4.47 2.78 × 4.87 2.24 × 3.81 2.26 × 3.53 2.67 × 4.35 Gumiho(ours) 2.95 × 4.48 3.62 × 5.22 3.20 × 4.62 2.86 × 4.88 2.39 × 3.90 2.41 × 3.62 2.91 × 4.45 
+
+Temperature=1 V 7B Eagle-2 2.73 × 4.32 2.99 × 4.65 2.59 × 4.41 2.55 × 4.25 2.28 × 3.87 2.21 × 3.52 2.56 × 4.17 Gumiho(ours) 3.00 × 4.35 3.30 × 4.82 2.98 × 4.54 2.61 × 4.22 2.48 × 3.94 2.29 × 3.63 2.78 × 4.25 
+
+V 13B Eagle-2 2.73 × 4.35 3.14 × 4.85 2.81 × 4.54 2.75 × 4.57 2.34 × 4.01 2.26 × 3.53 2.68 × 4.31 Gumiho(ours) 2.92 × 4.56 3.46 × 5.31 2.95 × 4.63 2.89 × 4.67 2.42 × 4.05 2.43 × 3.70 2.85 × 4.49 
+
+L2 7B Eagle-2 2.94 × 4.53 3.32 × 5.10 3.01 × 4.69 2.80 × 4.61 2.50 × 3.92 2.60 × 4.04 2.86 × 4.48 Gumiho(ours) 3.02 × 4.65 3.41 × 5.31 3.12 × 4.74 2.97 × 4.43 2.65 × 4.07 2.83 × 4.12 3.00 × 4.55 
+
+L2 13B Eagle-2 2.80 × 4.61 3.41 × 5.37 3.19 × 4.75 2.93 × 4.50 2.41 × 4.15 2.62 × 4.06 2.90 × 4.57 Gumiho(ours) 2.96 × 4.85 3.71 × 5.72 3.33 × 4.88 2.99 × 4.50 2.54 × 4.31 2.71 × 4.12 3.04 × 4.73 
+
+L3 8B Eagle-2 2.34 × 3.92 2.82 × 4.81 2.61 × 4.36 2.53 × 4.50 2.04 × 3.55 2.02 × 3.36 2.39 × 4.08 Gumiho(ours) 2.52 × 4.11 3.13 × 4.97 2.81 × 4.62 2.67 × 4.54 2.19 × 3.66 2.12 × 3.47 2.57 × 4.23 
+
+23 Gumiho: A Hybrid Architecture to Prioritize Early Tokens in Speculative Decoding 
+
+## C. Training Details and Hyper-parameters 
+
+Similar to Eagle-2 (Li et al., 2024b), we employ both the regression loss Lreg and the classification loss Lcls to train the draft model. The total loss L is defined as a weighted combination of these two components: 
+
+L = wreg · L reg + wcls · L cls ,where wreg and wcls denote the weighting coefficients for the regression loss Lreg and the classification loss Lcls ,respectively. Similar to EAGLE-2’s tree attention, we select the top 10 output tokens from each Transformer head as input for the subsequent head, i.e. , topk=10. For FTA, we extract the top 35 output tokens from each MLP head , i.e. , s=35. Hyper-parameters can be found in Tab. 5.  
+
+> Table 5. Hyper-parameter configurations of Gumiho.
+
+Hyper-parameters Vicuna 7B/13B LLaMA2 7B/13B LLaMA3 8B LLaMA2 70B LLaMA3 70B Learning rate 2e-4 1e-4 Transformer layer number 2MLP head number 5Batch size 4
+
+wcls 0.1 
+
+wreg 1Training epoch 10 Optimizer AdamW 
+
+(β1, β 2) (0.9, 0.95) Per MLP structure [2*hidden state, 1*hidden state]*1 → [1*hidden state, 1*hidden state]*5 topk 10 s 35 
+
+24 Gumiho: A Hybrid Architecture to Prioritize Early Tokens in Speculative Decoding 
+
+## D. Ablation Study on Head Accuracy  
+
+> Figure 6. Comparison of draft head accuracy on two datasets (MT-Bench and GSM8K). Both results are based on Vicuna 7B with the temperature set to 0.
+
+We conducted a comparative analysis of head-wise accuracy between our method and EAGLE-2 based on Vicuna 7B with temperature set to 0 on MT-Bench and GSM8K datasets. It should be noted that we have a total of seven draft heads, while EAGLE-2 only has six heads. Therefore, to facilitate comparison, we have only conducted an accuracy comparison between the first six heads of ours and the six heads of EAGLE-2. As illustrated in Fig. 6, our approach enhances the accuracy of front heads, which are responsible for generating the initial tokens in the draft sequence. The precision of these early tokens substantially impacts the final mean accepted tokens( τ ). Our back heads employ a parallel MLP architecture, resulting in lower accuracy compared to EAGLE-2. This accuracy distribution aligns with our theoretical findings. Our theorem demonstrates that optimizing the accuracy distribution across heads, specifically through enhancing precision in front heads while proportionally reducing accuracy in back heads, leads to better overall mean accepted tokens( τ ). 25
