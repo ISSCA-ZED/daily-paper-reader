@@ -25,5 +25,47 @@ subscriptions:
     stage: A
     diff_threshold_pct: 15
   keyword_recall_mode: or
-  intent_profiles: []
-source_backends: {}
+  intent_profiles:
+    - tag: key-tokens
+      description: 查找推理序列中关键token相关的文章
+      enabled: true
+      paper_sources:
+        - arxiv
+      keywords:
+        - keyword: reasoning sequence
+          keyword_cn: 推理序列
+          query: reasoning sequence in language models
+        - keyword: key token
+          keyword_cn: 关键token
+          query: key token importance in reasoning
+        - keyword: hidden state analysis
+          keyword_cn: 隐藏状态分析
+          query: hidden state analysis for critical tokens in reasoning
+        - keyword: token importance
+          keyword_cn: token重要性
+          query: token importance metrics in transformer reasoning
+        - keyword: causal tracing
+          keyword_cn: 因果追踪
+          query: causal tracing of reasoning tokens
+      intent_queries:
+        - query: articles about identifying key tokens in reasoning sequences of large language models
+          query_cn: 关于大型语言模型推理序列中关键token识别的文章
+          enabled: true
+          source: manual
+          note: ''
+      updated_at: '2026-06-02T07:55:51.737Z'
+source_backends:
+  arxiv:
+    papers_table: arxiv_papers
+    use_vector_rpc: true
+    vector_rpc: match_arxiv_papers
+    vector_rpc_exact: match_arxiv_papers_exact
+    use_bm25_rpc: true
+    bm25_rpc: match_arxiv_papers_bm25
+    sync_table: arxiv_sync_status
+    sync_success_value: success
+    schema: public
+    kind: supabase
+    enabled: true
+    url: https://lyucdwgefyfbmaiopjbk.supabase.co
+    anon_key: sb_publishable_lX-oi64Uxyd7SIVv3_w2Uw_MTOojeKq
