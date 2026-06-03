@@ -1,0 +1,359 @@
+Title: Bridging Reasoning Trajectories in On-Policy Distillation via Near-Future Guidance
+
+URL Source: https://arxiv.org/pdf/2606.00305v1
+
+Published Time: Tue, 02 Jun 2026 00:15:51 GMT
+
+Number of Pages: 15
+
+Markdown Content:
+# Bridging Reasoning Trajectories in On-Policy Distillation via Near-Future Guidance 
+
+## Yuxuan Jiang 1 Francis Ferraro 11University of Maryland, Baltimore County 
+
+## yuxuanj1@umbc.edu 
+
+## Abstract 
+
+On-Policy Distillation (OPD) improves large language model reasoning by training a student on trajectories sampled from its own policy un-der teacher supervision. Although OPD oper-ates on trajectories, its learning signal remains token-level: it identifies deviations through high-loss tokens and repairs them through lo-cal reverse-KL correction. We show that this “trajectory-sampled but token-learned” mech-anism cannot reliably bridge student trajecto-ries toward teacher trajectories. About 30% of high-loss tokens fall into the low-divergence regime, indicating that many are surface-form mismatches rather than real reasoning forks. Moreover, even truly divergent tokens are dif-ficult to repair with isolated token-level super-vision, since reasoning failures often unfold as short-horizon distributional drift. We propose 
+
+Trajectory-aware OPD (TOPD), which uses near-future trajectory information to identify real divergent states and distribute guidance across multiple future tokens. Experiments show that suppressing non-divergent high-loss tokens improves standard OPD from 47.8% to 48.2% average accuracy, while TOPD further improves performance to 52.2%, with gains on AIME24 from 60.0% to 63.3% and AIME25 from 46.7% to 53.3%. 
+
+## 1 Introduction 
+
+On-Policy Distillation (OPD) has established itself as a cornerstone of the modern post-training pipeline for Large Language Models (LLMs) (Agarwal et al., 2024; Tan et al., 2024). This effectiveness has been validated by industrial works such as DeepSeek-V4 (DeepSeek-AI, 2026), MiMo (Xiao et al., 2026), and Qwen-3 (Yang et al., 2025), where OPD serves as a vital com-ponent alongside Supervised Fine-tuning (SFT) or Reinforcement Learning with Verifiable Rewards (RLVR) to further squeeze out reasoning perfor-mance. OPD offers a natural way to improve reasoning models by supervising the student on trajectories sampled from its own policy. Since these trajecto-ries reflect the states that the student actually visits, high-loss tokens provide useful signals about where the student may deviate from the teacher. Standard reverse-KL correction then encourages the student to move away from these low-probability actions and toward the teacher-preferred behavior (Lu and Lab, 2025). This token-level mechanism makes OPD an effective and practical approach for refin-ing reasoning trajectories. However, we find that OPD cannot reliably bridge student reasoning trajectories toward teacher trajectories. As illustrated in Figure 1, OPD suffers from two closely related failure modes in trajectory-level reasoning correction: high-loss tokens may correspond to false alarms, and more critically, the model can become trapped in a token-by-token learning process where local corrections fail to re-store the overall reasoning path. First, we find that high-loss tokens do not al-ways correspond to real reasoning divergence. Al-though high-loss tokens reflect strong disagreement between teacher and student at local predictions, this does not necessarily mean that the two models will follow highly divergent reasoning trajectories from that point onward. For example, the token “and” in Figure 1 incurs high loss mainly because the teacher prefers connective expressions such as “then,” while the subsequent reasoning process re-mains nearly identical. Our short-window probing results show that token-level loss is only weakly aligned with near-future trajectory divergence, and a substantial fraction of high-loss tokens are actu-ally low-divergence false alarms. Moreover, ignor-ing these false alarms improves OPD performance, suggesting that they not only fail to provide useful supervision, but can actively interfere with reason-ing correction. More importantly, even after identifying real di-1
+
+> arXiv:2606.00305v1 [cs.CL] 29 May 2026 Figure 1: Overview of standard OPD and TOPD. Left: a high-loss token such as “and” may be a noisy candidate, and reverse-KL OPD can fall into the token-by-token learning trap where local token correction fails to repair the future trajectory. Right: TOPD uses short-window OT alignment to inject trajectory-level guidance and move the student continuation toward the teacher path.
+
+vergent points, single-token reverse-KL correction still struggles to repair an entire reasoning trajec-tory. Multi-step reasoning failures rarely appear as isolated token mistakes; instead, they gradually evolve into distributional drift over a short future window. Figure 1 illustrates this token-by-token learning trap: in the example of 5+2 ×3, OPD grad-ually changes local tokens from the incorrect “2” toward “(” and further adjusts nearby symbols, yet the model still continues to generate “is 7,” indicat-ing that the underlying reasoning trajectory has not truly returned to the teacher-guided path 5+(2 ×3) .In other words, local token correction does not effi-ciently reshape the student’s near-future transition distribution under the same prefix. Motivated by these observations, we propose 
+
+Trajectory-aware OPD (TOPD) . TOPD leverages near-future trajectory information to build a bridge between local token correction and reasoning tra-jectory evolution, helping OPD overcome the mis-match between token-level learning and trajectory-level reasoning correction. Concretely, TOPD first compares teacher and student short-window contin-uations generated from the same prefix to identify genuinely trajectory-divergent states and filter out high-loss false alarms. It then uses OT-based trajec-tory alignment to transfer future trajectory direction into the learning objective, allowing the student to learn not only how to correct the current token, but also how its subsequent reasoning trajectory should move toward the teacher path. In this way, OPD supervision is extended from isolated token correction to short-window trajectory correction, enabling more direct optimization of reasoning tra-jectories. Our contributions are summarized as follows: • This work identifies a fundamental mis-match between token-level supervision and trajectory-level reasoning correction in OPD. Although OPD is trained with token-level reverse-KL supervision, multi-step reasoning requires trajectory-level error detection and path repair, which token-level supervision does not reliably provide. • Our empirical analysis reveal two failure mechanisms caused by this mismatch. Our probing results show that about 30% of high-loss tokens are actually low-divergence false alarms, indicating that high loss does not al-ways correspond to real trajectory divergence. We further identify the token-by-token learn-ing trap, where single-token correction fails to sufficiently repair future reasoning trajecto-ries. • We introduce a trajectory-level guidance prin-ciple that injects future trajectory information into the losses of multiple tokens. Instead of restricting supervision to local token correc-tion, OPD should distribute the teacher’s near-future trajectory information across a short-window training objective. Based on this prin-ciple, short-window OT alignment is used to inject teacher-student path discrepancy into the loss, encouraging the student’s future rea-2(a) High-loss OT distances form a near-normal distribution, 
+
+> while random and low-loss selections show more skewed
+> distributions toward lower divergence.
+> (b) Token loss and OT distance exhibit a broadly consistent
+> trend, with high-loss tokens showing higher near-future
+> divergence than random and low-loss tokens.
+
+Figure 2: Near-future divergence analysis. High-loss tokens show larger OT distances on average, but substan-tial overlap with random and low-loss tokens indicates that token-level loss is an informative yet noisy indicator of trajectory divergence. 
+
+soning path to move toward the teacher trajec-tory. 
+
+## 2 When Token-Level OPD Fails to Redirect Reasoning Trajectories 
+
+In principle, On-Policy Distillation aims to align the student’s reasoning trajectory with the teacher’s. While formulated through token-level loss, the suc-cess of OPD implicitly hinges on two fundamental capabilities: the ability to identify where the stu-dent has diverged, and the ability to correct the reasoning path thereafter. However, we identify two critical failure modes in standard OPD that suggest token-level supervision is structurally misaligned with these requirements. 2.1 Informative but Blunt: High-Loss Tokens Are Not Always Trajectory-Critical 
+
+A common heuristic in existing On-Policy Dis-tillation is that high-loss tokens mark trajectory-critical divergence points requiring strong correc-tion. However, this assumption is often fragile. We observe that high token loss frequently captures benign surface-level mismatches—such as stylistic preferences or equivalent symbolic forms—rather than genuine logical deviations. Consequently, a high-loss token may signal a local teacher-student mismatch without implying a divergent future rea-soning path. To examine this phenomenon, we conduct a short-window probing analysis using Qwen3-30B-A3B-Instruct-2507 as the teacher and Qwen3-4B-Instruct-2507 as the student, student trajec-tories are generated from prompts sampled from 
+
+OpenThoughts3 . For each trajectory, we com-pare the near-future continuations induced by high-loss, random, and low-loss token positions, and use short-window (length K = 50 tokens) OT distance as a trajectory-level divergence measure.Figure 2 shows that high-loss tokens indeed exhibit substan-tially larger OT distances on average, suggesting that token-level loss broadly reflects future trajec-tory divergence. Specifically, the median OT dis-tance of high-loss tokens is 0.566, compared with 0.361 for random tokens and 0.315 for low-loss tokens. This indicates that the core intuition be-hind OPD—using high-loss tokens as correction targets—is statistically meaningful. However, token-level loss remains a weak and noisy predictor of actual trajectory divergence. The correlation between token loss and near-future OT distance is limited (Pearson r = 0 .126 , Spearman 
+
+ρ = 0 .143 ), and a substantial overlap exists be-tween high-loss tokens and low-divergence regions (more details in Appendix A). In particular, ap-proximately 29.23% of high-loss tokens fall within the typical low-divergence range defined by the upper quartile of low-loss OT distances. These to-kens correspond to local stylistic or surface-form mismatches that do not substantially alter the sub-sequent reasoning trajectory. 
+
+Take-away While token-level loss serves as a useful first-order indicator of policy discrepancy, it remains a remarkably blunt proxy that lacks structural precision. A substantial fraction of high-loss tokens are statistically indistinguish-able from benign, low-divergence steps, blurring the boundary between genuine reasoning forks and harmless local variation. 32.2 Local Token Correction Does Not Guarantee Trajectory Correction 
+
+More importantly, even when a genuine divergence point is identified, imposing a strong reverse-KL penalty on a single token is often insufficient to redirect the reasoning trajectory. Such localized su-pervision primarily encourages the model to match the teacher’s distribution at the current step, with-out ensuring that subsequent generations align with the teacher’s intended reasoning path. In short, while existing OPD methods can identify where astudent diverges, token-level supervision remains agnostic to how the student should navigate the reasoning trajectory afterward. To illustrate this issue, we design a local trajec-tory correction setting. For each trajectory, we first identify one divergent point using the procedure described above. We then step back by one posi-tion and fix the original prompt together with the student generation before this position as the prefix. From the same prefix, we regenerate a fixed-length (50 Tokens) continuation and compute the reverse-KL OPD loss only on this continuation for model update. After the update, the model regenerates a continuation from the same prefix, and we compare its trajectory divergence from the teacher continu-ation. To make the local effect of reverse-KL op-timization easier to observe, we perform multiple consecutive updates on the same prefix. 
+
+Case study. Figure 3 illustrates a local correction failure. Given the prompt “What is 5+(2 ×3) ?”, the current prefix is 5+ . At this position, the teacher-expected continuation is (2 × 3) = 6 , so the next token should be the left parenthesis “(”; this also serves as the beginning of the teacher’s own fu-ture trajectory. In contrast, the student’s original generation starts with the token “2” and continues along its erroneous path by computing 5 + 2 = 7 ,eventually reaching 7 × 3 = 21 .After the local OPD update, the student is indeed corrected at the divergent position and generates the teacher-expected left parenthesis “(”. However, this local correction does not change the subsequent transition distribution. At the next position, the student fails to continue with the teacher-expected 
+
+2 × 3 structure; instead, it generates “)” and then returns to its original erroneous path, producing 
+
+2 = 7 . In other words, OPD successfully changes the current token, but it does not make the model enter the teacher-consistent near-future trajectory. This case reveals what we call the token-by-token    
+
+> Figure 3: Case study of the token-by-token learning trap. The teacher expects the correction “(” to guide the student toward 5 + (2 ×3) = 11 , but the student instead enters another erroneous branch, showing that local to-ken correction does not guarantee trajectory redirection.
+
+learning trap . OPD successfully corrects the cur-rent divergent token, but the subsequent continua-tion still fails to enter the teacher-consistent trajec-tory. Instead, the model drifts into a new erroneous branch, where future tokens such as “)” and the following continuation would require additional rounds of local correction. As a result, reverse-KL supervision repairs the trajectory only by editing one position at a time, rather than directly inducing a coherent trajectory-level shift toward the teacher path. This suggests that local reverse-KL supervi-sion changes individual token preferences, but does not sufficiently reshape the model’s near-future transition dynamics under the corrected prefix. 
+
+Take-away Toke by Token Learning Trap :treating reasoning correction as a series of in-dependent token-level targets is insufficient for trajectory-level alignment. As long as supervi-sion remains point-wise, models fail to escape erroneous reasoning branches, as they lack the global perspective to rectify the subsequent near-future reasoning drift . Meaningful trajectory re-pair necessitates shifting from local token editing to global, transition-aware alignment. 
+
+## 3 Methodology 
+
+We propose Trajectory Aware OPD (TOPD) .TOPD first identifies real divergent points that in-duce near-future reasoning drift, and then injects short-window teacher-student trajectory discrep-ancy into the training objective. This enables the student to learn not only which token to correct, but also how to move toward the teacher’s near-future reasoning trajectory. 4Divergence Detection. Given a teacher model and a student model, we first compute the token-level OPD loss along the student-generated trajec-tory. For each high-loss candidate position t, we step back to t − 1 and keep the student prefix xS<t .Starting from this same prefix, both the teacher and student generate a continuation of length K. Since the prefix ends at t − 1, the future window starts from position t and includes the candidate token itself. We denote the two short-window trajectories as 
+
+Tt:t+K = {xTt+i}K−1 
+
+> i=0
+
+, St:t+K = {xSt+i}K−1 
+
+> i=0
+
+.
+
+We map both continuations into the embedding space and measure their trajectory-level discrep-ancy using optimal transport. Let 
+
+Cij = c(xTt+i, x St+j )
+
+be the ground-cost matrix between teacher and stu-dent future tokens. The short-window OT distance is defined as 
+
+DOT (Tt:t+K , S t:t+K ) = min 
+
+> γ∈Π( a,b )
+> K−1
+
+X
+
+> i=0
+> K−1
+
+X
+
+> j=0
+
+γij Cij ,
+
+where γ is the transport plan, and Π( a, b ) denotes the set of admissible transport matrices satisfying the marginal constraints a and b. We treat posi-tions with both high token-level loss and high short-window OT divergence as real divergent points. 
+
+Trajectory-level Teacher Signal Injection. Af-ter detecting a real divergent point t, TOPD extends supervision from the current token to the short-window trajectory generated from the same prefix 
+
+xS<t . Let 
+
+XT = {xTt+i}K−1 
+
+> i=0
+
+, XS = {xSt+i}K−1
+
+> i=0
+
+denote the teacher and student future trajectories. Since both are generated from the same prefix, their discrepancy reflects how the two models choose dif-ferent near-future reasoning paths under the same state. Using the OT transport plan γ, we construct a trajectory-aware soft target for each student future position. Specifically, γij represents the soft align-ment between the i-th student position and the j-th teacher position. The target for the i-th student future position is 
+
+˜yt+i =
+
+> K−1
+
+X
+
+> j=0
+
+γij · onehot( xTt+j ).
+
+We then train the student prediction distribution 
+
+pS (· | ct+i) to match this OT-aligned soft target: 
+
+Ltraj =
+
+> K−1
+
+X
+
+> i=0
+
+KL (˜ yt+i ∥ pS (· | ct+i)) ,
+
+where ct+i is the context for the i-th student future state. The final TOPD objective is 
+
+LTOPD = LOPD + λLtraj ,
+
+where λ controls the strength of trajectory-level supervision. In this way, TOPD preserves the original token-level correction signal while adding near-future trajectory guidance. Rather than only aligning the current token, the student is encouraged to follow a teacher-consistent short-window reasoning path, which helps alleviate the token-by-token learning trap. 
+
+## 4 Empirical Experiments 
+
+4.1 Training Setup 
+
+We use KDFlow (Zhang et al., 2026a) to distill 
+
+Qwen3-30B-A3B-Instruct-2507 into Qwen3-4B-Instruct-2507 , with thinking mode disabled for both models. Training consists of two stages. In Stage 1, the student is initialized via off-policy distil-lation on 20k teacher-generated solutions from 
+
+OpenThoughts3 (Guha et al., 2025) using for-ward KL distillation combined with cross-entropy (kd_ratio = 0 .5). In Stage 2, the student performs on-policy sam-pling on a separate set of 50k prompts. For each prompt, we sample 4 student rollouts and optimize the student on its own trajectories using reverse KL distillation ( kd_ratio = 1 .0). Unless otherwise specified, all remaining hyper-parameters follow the default KDFlow configura-tion. Additional implementation details are pro-vided in Appendix B. 
+
+Computation Cost In practice, TOPD intro-duces only a modest overhead: OT is computed only on selected high-loss short windows, and the overall training time is 1.41 × that of standard OPD in our experiments. 
+
+4.2 Evaluation 
+
+We employ the LM -EVALUATION -HARNESS frame-work (Gao et al., 2024) for standardized assessment 5across all benchmarks in a zero-shot setting. To ensure statistical robustness, we report the Pass@1 
+
+accuracy averaged over five independent runs, ac-counting for variance in decoding. Our evaluation suite focuses on challenging competitive mathematics, comprising AIME 24 ,
+
+AIME 25 , and HMMT 25-Feb from Math-Arena (Dekoninck et al., 2026). Each benchmark contains 30 problems; we report the aggregated average score across these 90 tasks as the primary performance metric in our study. 
+
+4.3 Main Results 
+
+Table 1 presents the main results on three competi-tive mathematics benchmarks. The offline-distilled Qwen3-4B model achieves an average accuracy of 38.9. Standard OPD substantially improves the performance to 47.8, demonstrating the effective-ness of on-policy reasoning distillation. TOPD further improves the average accuracy to 52.2 and consistently outperforms standard OPD across all benchmarks. In particular, TOPD improves AIME24 from 60.0 to 63.3 and AIME25 from 46.7 to 53.3, show-ing that trajectory-aware future supervision is more effective than point-wise token-level correction alone. These results support our hypothesis that rea-soning failures are fundamentally trajectory-level phenomena, and that injecting near-future trajec-tory guidance can more effectively redirect the stu-dent toward teacher-consistent reasoning paths. 
+
+## 5 Ablations and Analysis 
+
+5.1 Trajectory-Aware Divergence Detection 
+
+As shown in the previous section 2.1, not all high-loss tokens correspond to real trajectory-level di-vergence. Here, we further examine whether these high-loss false alarms have a measurable impact on OPD training. Specifically, we test whether sup-pressing low-OT high-loss tokens ( false alarms )improves OPD, and whether suppressing high-OT high-loss tokens ( real divergent points ) removes useful correction signals. 
+
+Downweighting strategy. Figure 4 shows that high-loss tokens span a wide range of OT distances rather than concentrating only in the highly diver-gent region. This motivates a targeted downweight-ing intervention: if low-OT high-loss tokens are noisy supervision signals, suppressing them should not harm OPD and may improve training; in con-trast, suppressing high-OT high-loss tokens should 0.0 0.2 0.4 0.6 0.8 
+
+> OT distance
+> 0
+> 50
+> 100
+> 150
+> 200
+> 250
+> High-loss token Numbers
+> Figure 4: OT distribution of high-loss tokens. Although high-loss tokens exhibit larger trajectory divergence on average, their OT distances span a broad range, indicat-ing that many high-loss positions remain near the low-divergence regime rather than corresponding to genuine reasoning forks.
+
+remove genuinely useful correction signals. For each training sample, we compute the median to-ken loss within the sample as a local reference level. For selected tokens, we cap their contribution at this sample-level median loss instead of using their original high loss. 
+
+Variants. We compare three settings: (1) Base-line OPD , which applies standard OPD without ad-ditional downweighting; (2) Low-OT High-Loss Downweighting , which downweights the bottom 30% OT tokens among high-loss tokens; and (3) 
+
+Matched High-OT High-Loss Downweighting ,which downweights the same number of tokens ran-domly sampled from the high-OT region of high-loss tokens. 
+
+Results and findings. Table 2 shows that stan-dard OPD improves the warm-start Qwen3-4B model from 38.9% to 47.8%. Downweighting low-OT high-loss tokens further improves accuracy to 48.2%, suggesting that many low-divergence high-loss positions act as noisy supervision signals. In contrast, downweighting matched high-OT tokens drops performance to 42.1%, indicating that high-OT high-loss positions indeed contain important trajectory-critical correction signals. This contrast confirms that trajectory-aware divergence detec-tion helps distinguish benign local mismatch from real reasoning divergence. Finally, TOPD achieves the best accuracy of 52.2%, showing that identi-fying real divergent points alone is not sufficient; injecting near-future trajectory guidance provides an additional and substantially larger gain. 6Method AIME24 AIME25 HMMT25-Feb Avg. Qwen3-4B (Warm Start) 46.7 40.0 30.0 38.9 + OPD 60.0 46.7 36.7 47.8 + TOPD (Ours) 63.3 53.3 40.0 52.2 
+
+Table 1: Main results on competitive mathematics benchmarks. TOPD consistently improves standard OPD by incorporating trajectory-aware future guidance beyond point-wise token-level correction.       
+
+> Method Avg.Acc
+> Qwen3-4B (Warm Start) 38.9 + Baseline OPD 47.8
+> + Low-OT High-Loss DW 48.2
+> + Matched High-OT DW 42.1 + TOPD 52.2
+
+Table 2: Mechanistic analysis of divergence-aware su-pervision. Suppressing low-OT high-loss tokens slightly improves OPD, whereas suppressing matched high-OT tokens substantially harms performance. TOPD achieves the best result by further injecting trajectory-aware future guidance. 
+
+Take-away By suppressing the bottom 30% low-OT high-loss tokens, i.e., high-loss false alarms, OPD achieves a further +0.4% improve-ment over standard OPD. This suggests that these false alarms are not merely uninformative, but can actively hinder OPD training. Moreover, our results indicate that effective OPD requires not only accurate identification of real divergent points, but also trajectory-aware future guidance for repairing reasoning paths. 
+
+5.2 Does TOPD Improve Local Trajectory Correction? 
+
+The main results show that TOPD improves OPD under the reverse-KL training setting. We further ask whether this performance gain is accompanied by the intended trajectory-level improvement: after a real divergent point, does TOPD more effectively move the student’s near-future continuation toward the teacher trajectory? To answer this question, we design a local trajectory correction experiment that directly measures short-window OT divergence before and after local updates. 
+
+Local Trajectory Correction. For each of 1,000 training samples, we select one real divergence point that exhibits both high token-level loss and high short-window OT divergence. We then con-catenate the original problem with the student re-sponse before this divergence point to form a fixed prefix. Starting from this same prefix, we use the Origin OPD TOPD 
+
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> Short-window OT distance
+
+Figure 5: Local trajectory correction analysis. We com-pare the short-window OT distance before local updates, after standard OPD updates, and after TOPD updates on the same divergent prefixes. Each point represents one local correction sample. Standard OPD reduces the trajectory divergence only partially, while TOPD shifts the OT distribution substantially further downward, in-dicating stronger near-future trajectory repair toward the teacher continuation. 
+
+teacher continuation as the local optimization tar-get and retain only the next 50 tokens after the divergence point as the correction window. Tokens outside this window are masked out and do not contribute to the gradient update. We compare two local correction strategies. The first is standard OPD, which optimizes the token-level distillation loss within the short window. The second is TOPD, which applies the same short-window correction setting but additionally injects trajectory-aware future guidance through the OT-based loss term. To make the local learning effect observable, we perform M = 5 consecutive gradi-ent updates on the same prefix-window pair. After the local updates, we regenerate a continu-ation from the same fixed prefix using the updated model. We then compute the short-window OT dis-tance between the regenerated student continuation and the teacher continuation. By comparing the OT distance before and after local updates, we measure whether each method successfully moves the stu-dent’s near-future reasoning trajectory toward the 7teacher trajectory. 
+
+Results and findings. Figure 5 shows that diver-gent prefixes have a high initial short-window OT distance, with a mean of 0.538. Standard OPD re-duces the mean OT distance to 0.350, suggesting that token-level reverse-KL supervision can par-tially repair local trajectory drift. However, TOPD further reduces the mean OT distance to 0.204 and produces a more concentrated low-OT distribution. This experiment suggests that the performance gain of TOPD comes from enabling the student to more effectively absorb and follow the teacher’s near-future trajectory information during local correc-tion. 
+
+## 6 Related Works 
+
+6.1 On-Policy Distillation for LLM Post-Training 
+
+On-policy distillation (OPD) evolves beyond SFT and RLVR by combining trajectory explo-ration with dense, token-level guidance (Lu and Lab, 2025). Recent large-scale reasoning sys-tems such as DeepSeek-V4 (DeepSeek-AI, 2026), MiMo (Xiao et al., 2026), and Qwen-3 (Yang et al., 2025) demonstrate the effectiveness of OPD as a post-training paradigm, while self-distillation stud-ies suggest that OPD can amplify latent reason-ing capabilities rather than merely imitate teacher outputs (Zhao et al., 2026; Shenfeld et al., 2026; Hübotter et al., 2026). Recent analyses further reveal that successful OPD depends on several factors, including com-plementary teacher reasoning patterns, sufficient reasoning-style overlap between teacher and stu-dent, and adaptive teacher selection strategies (Li et al., 2026b; Fu et al., 2026a; Jiang et al., 2026c). At the same time, growing attention has been paid to reasoning efficiency and compression during post-training. Existing studies explore structured pruning, reasoning compression, and efficiency-aware optimization to reduce unnecessary reason-ing steps while preserving performance (Jiang et al., 2025; Gao et al., 2026; Li et al., 2024b,a). Re-lated work additionally investigates performance-efficiency trade-offs across different model scales and task settings (Cao et al., 2026; Zhang et al., 2026b). Beyond pure optimization, recent work also high-lights broader limitations of current reasoning sys-tems, including memorization-constrained reason-ing beyond mathematical benchmarks (Jiang and Ferraro, 2026a) and the importance of intermediate reasoning structure during tool-integrated optimiza-tion (Li et al., 2025j; Xu et al., 2025). Despite these advances, most existing OPD methods still rely on reverse-KL objectives defined at the token level. Such formulations provide limited modeling capac-ity for cross-step dependencies and long-horizon trajectory consistency. Our work instead explic-itly incorporates trajectory-aware path information into distillation, enabling more effective reasoning alignment. 
+
+6.2 Optimal Transport and Structured Alignment 
+
+Existing distillation methods typically rely on forward-KL or reverse-KL for distribution align-ment. While forward-KL tends to cover the over-all teacher distribution (Zhu et al., 2026; Li et al., 2025h), OPD commonly adopts reverse-KL to cor-rect student exploration by penalizing tokens that substantially deviate from teacher preferences (Lu and Lab, 2025). However, such token-level objec-tives usually treat each prediction step indepen-dently, making it difficult to capture cross-step dependencies in reasoning trajectories (Lv et al., 2024). To address these limitations, prior studies intro-duce optimal transport (OT) and structure-aware matching objectives for modeling discrepancies be-tween teacher and student distributions (Bhardwaj et al., 2022; Cui et al., 2025; Luo et al., 2025). Similar alignment ideas have also been explored in broader representation learning and retrieval set-tings, including frequency- and spectral-aligned distillation strategies (Li et al., 2025i, 2026c), preference-aware optimization (Li et al., 2025c), and multimodal or multi-teacher alignment frame-works (Li et al., 2025f; Zhang et al., 2025; Li et al., 2025e). Recent multimodal retrieval studies further em-phasize the importance of structured semantic grounding and compositional alignment. Exist-ing work investigates explicit semantic parsing and entity-aware representation learning for composi-tional retrieval (Li et al., 2025d,l,k), while robust alignment under complex modification signals mo-tivates progressive learning and noise-unlearning frameworks (Li et al., 2026g,f). In parallel, anchor-based calibration mechanisms have been explored in both image and video retrieval settings (Li et al., 2026h,e), and arbiter-calibrated retrieval strategies provide another perspective on robust semantic 8alignment (Fu et al., 2026b). Related representation learning approaches additionally study comprehen-sive attribute exploration for zero-shot retrieval and hashing (Li et al., 2025g). Our work differs from these approaches by ex-plicitly integrating trajectory-aware transport sig-nals into reverse-KL optimization. Rather than only aligning local token probabilities, our frame-work enables token-level supervision to perceive short-horizon trajectory shifts and reasoning path dependencies, resulting in more stable and effective reasoning alignment. 
+
+6.3 Efficient Reasoning and Agentic Systems 
+
+Recent studies also explore efficient retrieval, rea-soning, and representation learning in domain-specific settings. Existing work investigates robustness-precision trade-offs and reranking strategies in financial RAG systems (Cheng et al., 2026c,d), energy-efficient RAG architectures for small language models (Cheng et al., 2026e; Xie et al., 2025), and semantic embedding analysis for short-text understanding (Lai et al., 2026; Xie et al., 2026a). Related applications further in-clude LLM-based financial disclosure analysis (Liu et al., 2026b), co-design frameworks for effi-cient multimodal inference (Chen et al., 2025; Xie et al., 2026b), and time-series studies on volatility forecasting and regime-dependent mar-ket dynamics (Cheng et al., 2026a,b; Jiang et al., 2026a,b), while revealing phenomena such as memory-induced behavioral instability in multi-agent environments (Liu et al., 2026a; Li et al., 2025a). Related efforts further explore structured supervision for tool-use reasoning (Jiang and Fer-raro, 2026b), reputation-based coordination frame-works for collaborative agents (Lou et al., 2026), and quantized multimodal systems for efficient de-ployment (Guo et al., 2025). Reliable reasoning increasingly also depends on robust retrieval and evaluation mechanisms. Prior work studies LLM-as-a-judge evaluation frame-works (Li et al., 2025b), retrieval robustness un-der knowledge conflicts (Chen et al., 2026), evi-dence calibration in cited RAG systems (Qian et al., 2026), and hybrid retrieval strategies for balancing robustness and precision (Cheng et al., 2026c). Finally, reasoning systems are becoming increas-ingly connected with structured and graph-based information processing. Recent studies investigate graph-enhanced representations for spreadsheet un-derstanding (Lei et al., 2026), structured semantic forecasting using multiple LLM signals (Zhang et al., 2026c), scalable graph retrieval and nearest-neighbor search (Wang et al., 2023, 2024), and robustness-oriented adaptation under distribution shifts (Wu et al., 2026; Zeng et al., 2025). Related domain-specific applications further demonstrate the growing use of LLM reasoning and representa-tion learning techniques in areas such as medical image analysis, financial disclosure analysis, mar-ket behavior modeling, semantic embeddings, and interactive 3D systems (Liu et al., 2026b, 2023; Dai et al., 2023; Lai et al., 2026; Li et al., 2026a,d). 
+
+## 7 Conclusion 
+
+In this work, we revisit the trajectory-level as-sumptions underlying On-Policy Distillation for reasoning models. Although OPD is commonly expected to identify and repair reasoning errors through token-level reverse-KL supervision, our analysis shows that this assumption is only partially realized in practice. We identify two key limita-tions of standard OPD: (1) not all high-loss tokens correspond to real trajectory-level divergence, and many act as noisy false alarms; and (2) even when real divergent points are detected, isolated token-level correction is often insufficient to redirect the student’s future reasoning trajectory. Motivated by these observations, we pro-pose Trajectory Aware OPD , which combines trajectory-aware divergence detection with short-window trajectory supervision based on optimal transport. TOPD first identifies real divergent points by measuring near-future trajectory drift, and then injects teacher future trajectory informa-tion into local training through OT-based trajectory guidance. Extensive experiments on competitive mathematics benchmarks show that TOPD consis-tently improves standard OPD. Further mechanistic analysis demonstrates that TOPD more effectively reduces local trajectory divergence and enables the student to better absorb teacher trajectory informa-tion during reasoning correction. Overall, our findings suggest that reasoning fail-ures in OPD are fundamentally trajectory-level phenomena rather than isolated token mismatches. We hope this work provides a step toward more trajectory-aware distillation objectives for reason-ing language models. 98 Limitations 
+
+This work has several limitations. First, TOPD introduces additional computational cost because it requires short-window continuation comparison and OT computation. Second, our analysis focuses on short-horizon trajectory divergence, while some reasoning errors may emerge only over longer con-texts. Third, our experiments are mainly conducted on mathematical reasoning benchmarks, so further validation is needed on other domains such as code generation and open-ended reasoning. Finally, OT distance measures trajectory proximity but does not always capture semantic equivalence, since dif-ferent reasoning paths can lead to the same correct answer. 
+
+## 9 Ethics 
+
+This work uses publicly available datasets and open-access benchmark tasks. We do not access, infer, or attempt to recover any proprietary training data or internal model components. All experi-ments are conducted through standard inference and optimization procedures, without collecting or processing personal or sensitive user data. 
+
+Licenses and Intended Use. All datasets and benchmarks are used in accordance with their re-leased terms and intended research purposes. We do not redistribute raw datasets or proprietary model outputs. Any derived artifacts, including probing statistics and trajectory analyses, are in-tended only for research and evaluation. 
+
+Artifact Documentation. Our experiments fo-cus on English mathematical reasoning bench-marks such as AIME24, AIME25, and HMMT25-Feb. These artifacts primarily cover symbolic and multi-step reasoning problems rather than demo-graphic or user-centered data. 
+
+Risks. Although the datasets are publicly avail-able and widely used, we cannot guarantee that they are entirely free from biased, toxic, or other-wise undesirable content. We use ChatGPT 1 by OpenAI only for grammar correction and language polishing. 
+
+## References 
+
+Rishabh Agarwal, Nino Vieillard, Yongchao Zhou, Pi-otr Stanczyk, Sabela Ramos Garea, Matthieu Geist, and Olivier Bachem. 2024. On-policy distillation of language models: Learning from self-generated 
+
+> 1https://chatgpt.com/
+
+mistakes. In The twelfth international conference on learning representations .Rishabh Bhardwaj, Tushar Vaidya, and Soujanya Poria. 2022. Knot: Knowledge distillation using optimal transport for solving nlp tasks. In Proceedings of the 29th International Conference on Computational Linguistics , pages 4801–4820. Jinghan Cao, Yu Ma, Xinjin Li, Qingyang Ren, and Xiangyun Chen. 2026. Task-specific efficiency anal-ysis: When small language models outperform large language models. Preprint , arXiv:2603.21389. Wei Chen, Liangmin Wu, Yunhai Hu, Zhiyuan Li, Zhiyuan Cheng, Yicheng Qian, Lingyue Zhu, Zhipeng Hu, Luoyi Liang, Qiang Tang, Zhen Liu, and Han Yang. 2025. Autoneural: Co-designing vision-language models for npu inference. Preprint ,arXiv:2512.02924. Yihang Chen, Pin Qian, Su Wang, Sipeng Zhang, Huan Xu, Shuhuai Lin, and Xinpeng Wei. 2026. Does rag know when retrieval is wrong? diagnosing con-text compliance under knowledge conflict. Preprint ,arXiv:2605.14473. Kai Cheng, Xiaoxi Qi, Zhiyuan Cheng, and Longying Lai. 2026a. Volatility persistence and model choice in cross-market volatility forecasting. Available at SSRN 6610278 .Kai Cheng, Xiaoxi Qi, Zhiyuan Cheng, Longying Lai, and Xuan Liu. 2026b. Regime-dependent volatility dynamics: Evidence from time-series analysis. In 
+
+Proceedings of the 2026 3rd International Confer-ence on Applied Economics, Management Science and Social Development (AEMSS 2026) , pages 179– 189. Atlantis Press. Zhiyuan Cheng, Longying Lai, and Yue Liu. 2026c. Resolving the robustness-precision trade-off in finan-cial rag through hybrid document-routed retrieval. 
+
+Preprint , arXiv:2603.26815. Zhiyuan Cheng, Longying Lai, Yue Liu, Kai Cheng, and Xiaoxi Qi. 2026d. Enhancing financial report question-answering: A retrieval-augmented gener-ation system with reranking analysis. Preprint ,arXiv:2603.16877. Zhiyuan Cheng, Longying Lai, Yue Liu, and Yu Sun. 2026e. Toward sustainable on-device intelligence: A survey on energy-efficient rag systems with small language models. Available at SSRN 6698538 .Xiao Cui, Mo Zhu, Yulei Qin, Liang Xie, Wengang Zhou, and Houqiang Li. 2025. Multi-level optimal transport for universal cross-tokenizer knowledge distillation on language models. In Proceedings of the AAAI Conference on Artificial Intelligence , vol-ume 39, pages 23724–23732. Yue Dai, Ming Chen, and Zhi Zuo. 2023. Neighbors in space: Satellite imagery and chinese b-share discount. 
+
+China Economic Review , 82:102063. 
+
+10 DeepSeek-AI. 2026. Deepseek-v4: Towards highly ef-ficient million-token context intelligence. Technical Report .Jasper Dekoninck, Nikola Jovanovi’c, Tim Gehrunger, K’ari Rognvalddson, Ivo Petrov, Chenhao Sun, and Martin T. Vechev. 2026. Beyond benchmarks: Math-arena as an evaluation platform for mathematics with llms. Yuqian Fu, Haohuan Huang, Kaiwen Jiang, Yuanheng Zhu, and Dongbin Zhao. 2026a. Revisiting on-policy distillation: Empirical failure modes and simple fixes. 
+
+ArXiv preprint .Zhiheng Fu, Yupeng Hu, Qianyun Yang, Shiqi Zhang, Zhiwei Chen, and Zixu Li. 2026b. Air-know: Arbiter-calibrated knowledge-internalizing robust network for composed image retrieval. Preprint ,arXiv:2604.19386. Leo Gao, Jonathan Tow, Baber Abbasi, Stella Bider-man, Sid Black, Anthony DiPofi, Charles Foster, Laurence Golding, Jeffrey Hsu, Alain Le Noac’h, Haonan Li, Kyle McDonell, Niklas Muennighoff, Chris Ociepa, Jason Phang, Laria Reynolds, Hailey Schoelkopf, Aviya Skowron, Lintang Sutawika, and 5 others. 2024. The language model evaluation har-ness. Yaxin Gao, Yao Lu, Zongfei Zhang, Jiaqi Nie, Shan-qing Yu, and Qi Xuan. 2026. Dspc: Dual-stage pro-gressive compression framework for efficient long-context reasoning. In ICASSP 2026 - 2026 IEEE International Conference on Acoustics, Speech and Signal Processing (ICASSP) , pages 19387–19391. E. Guha, Ryan Marten, Sedrick Scott Keh, Negin Raoof, G. Smyrnis, Hritik Bansal, Marianna Nezhu-rina, Jean-Pierre Mercat, Trung Vu, Zayne Sprague, Ashima Suvarna, Ben Feuer, Liangyu Chen, Zaid Khan, Eric Frankel, Sachin Grover, Caroline Choi, Niklas Muennighoff, Shiye Su, and 31 others. 2025. Openthoughts: Data recipes for reasoning models. 
+
+arXiv.org .Jiajun Guo, Xin Luo, Jiayin Zheng, Yiqun Wang, Kai-Wei Chang, Wei Wang, and Jie Liu. 2025. Quantized-tinyllava: A new multimodal foundation model en-ables efficient split learning. In arXiv preprint arXiv:2511.23402 .Jonas Hübotter, Frederike Lübeck, Lejs Behric, An-ton Baumann, Marco Bagatella, Daniel Marta, Ido Hakimi, Idan Shenfeld, Thomas Kleine Buening, Car-los Guestrin, and 1 others. 2026. Reinforcement learning via self-distillation. ArXiv preprint .Dongming Jiang, Yi Li, Guanpeng Li, and Bingzhe Li. 2026a. Magma: A multi-graph based agentic memory architecture for ai agents. arXiv preprint arXiv:2601.03236 .Dongming Jiang, Yi Li, Songtao Wei, Jinxin Yang, Ayushi Kishore, Alysa Zhao, Dingyi Kang, Xu Hu, Feng Chen, Qiannan Li, and 1 others. 2026b. Anatomy of agentic memory: Taxonomy and em-pirical analysis of evaluation and system limitations. 
+
+arXiv preprint arXiv:2602.19320 .Yuxuan Jiang and Francis Ferraro. 2026a. Beyond math: Stories as a testbed for memorization-constrained rea-soning in llms. In Proceedings of the 19th Confer-ence of the European Chapter of the Association for Computational Linguistics (Volume 1: Long Papers) ,pages 5590–5607. Yuxuan Jiang and Francis Ferraro. 2026b. Scribe: Struc-tured mid-level supervision for tool-using language models. arXiv preprint arXiv:2601.03555 .Yuxuan Jiang, Dawei Li, and Frank Ferraro. 2025. Drp: Distilled reasoning pruning with skill-aware step decomposition for efficient large reasoning models. 
+
+arXiv preprint arXiv:2505.13975 .Yuxuan Jiang, Runchao Li, Shubhashis Roy Dipta, Dawei Li, and Zhao Yang. 2026c. Cornerstones or stumbling blocks? deciphering the rock tokens in on-policy distillation. arXiv preprint arXiv:2605.09253 .Longying Lai, Zhiyuan Cheng, Kai Cheng, and Xiaoxi Qi. 2026. Do transformers always win? an empir-ical study of semantic embeddings for short-text e-commerce reviews. In 2026 9th International Sym-posium on Big Data and Applied Statistics (ISBDAS) ,pages 525–529. Yiming Lei, Yiqi Wang, Yujia Zhang, Bo Guan, De-pei Zhu, Chunhui Wang, Zhuonan Hao, and Tianyu Shi. 2026. Sheet as token: A graph-enhanced repre-sentation for multi-sheet spreadsheet understanding. 
+
+Preprint , arXiv:2605.05811. Bojing Li, Duo Zhong, Dharani Nadendla, Gabriel Terceros, Prajna Bhandary, Raguvir S, and Charles Nicholas. 2025a. Mascot: Analyzing malware evolu-tion through a well-curated source code dataset. In 
+
+2025 IEEE International Conference on Big Data (BigData) , pages 7814–7824. Dawei Li, Bohan Jiang, Liangjie Huang, Alimohammad Beigi, Chengshuai Zhao, Zhen Tan, Amrita Bhat-tacharjee, Yuxuan Jiang, Canyu Chen, Tianhao Wu, and 1 others. 2025b. From generation to judgment: Opportunities and challenges of llm-as-a-judge. In 
+
+Proceedings of the 2025 Conference on Empirical Methods in Natural Language Processing , pages 2757–2791. Dawei Li, Renliang Sun, Yue Huang, Ming Zhong, Bo-han Jiang, Jiawei Han, Xiangliang Zhang, Wei Wang, and Huan Liu. 2025c. Preference leakage: A con-tamination problem in llm-as-a-judge. arXiv preprint arXiv:2502.01534 .Xinjin Li, Yu Ma, Yangchen Huang, Xingqi Wang, Yuzhen Lin, and Chenxi Zhang. 2024a. Synergized data efficiency and compression (sec) optimization for large language models. In 2024 4th International Conference on Electronic Information Engineering and Computer Science (EIECS) , pages 586–591. 
+
+11 Xinjin Li, Yu Ma, Kaisen Ye, Jinghan Cao, Minghao Zhou, and Yeyang Zhou. 2026a. Hy-Facial: hybrid feature extraction by dimensionality reduction meth-ods for enhanced facial expression classification. In 
+
+Eighteenth International Conference on Machine Vi-sion (ICMV 2025) , volume 14114, page 141140R. International Society for Optics and Photonics, SPIE. Yaxuan Li, Yuxin Zuo, Bingxiang He, Jinqian Zhang, Chaojun Xiao, Cheng Qian, Tianyu Yu, Huan Gao, Wenkai Yang, Zhiyuan Liu, and Ning Ding. 2026b. Rethinking on-policy distillation of large language models: Phenomenology, mechanism, and recipe. 
+
+ArXiv preprint .Yuqi Li, Kuiye Ding, Chuanguang Yang, Szu-Yu Chen, and Yingli Tian. 2026c. Distilling time series foun-dation models for efficient forecasting. In ICASSP .Yuqi Li, Kuiye Ding, Chuanguang Yang, Hao Wang, Haoxuan Wang, Huiran Duan, Junming Liu, and Yingli Tian. 2025d. Ddtime: Dataset distilla-tion with spectral alignment and information bot-tleneck for time-series forecasting. arXiv preprint arXiv:2511.16715 .Yuqi Li, Junhao Dong, Zeyu Dong, Chuanguang Yang, Zhulin An, and Yongjun Xu. 2025e. Srkd: Towards efficient 3d point cloud segmentation via structure-and relation-aware knowledge distillation. arXiv preprint arXiv:2506.17290 .Yuqi Li, Junhao Dong, Chuanguang Yang, Shiping Wen, Piotr Koniusz, Tingwen Huang, Yingli Tian, and Yew-Soon Ong. 2025f. Mmt-ard: Multimodal multi-teacher adversarial distillation for robust vision-language models. arXiv preprint arXiv:2511.17448 .Yuqi Li, Qingqing Long, Yihang Zhou, Ran Zhang, Zhiyuan Ning, Zhihong Zhu, Yuanchun Zhou, Xuezhi Wang, and Meng Xiao. 2025g. Comae: Com-prehensive attribute exploration for zero-shot hashing. 
+
+ICMR .Yuqi Li, Yao Lu, Zeyu Dong, Chuanguang Yang, Yihao Chen, and Jianping Gou. 2024b. Sglp: A similarity guided fast layer partition pruning for compressing large deep models. arXiv preprint arXiv:2410.14720 .Yuqi Li, Siwei Meng, Chuanguang Yang, Weilun Feng, Junming Liu, Zhulin An, Yikai Wang, and Yingli Tian. 2026d. A comprehensive survey of interac-tion techniques in 3d scene generation. Authorea Preprints .Yuqi Li, Chuanguang Yang, Junhao Dong, Zheng-tao Yao, Haoyan Xu, Zeyu Dong, Hansheng Zeng, Zhulin An, and Yingli Tian. 2025h. Ammkd: Adaptive multimodal multi-teacher distillation for lightweight vision-language models. arXiv preprint arXiv:2509.00039 .Yuqi Li, Chuanguang Yang, Hansheng Zeng, Zeyu Dong, Zhulin An, Yongjun Xu, Yingli Tian, and Hao Wu. 2025i. Frequency-aligned knowledge distillation for lightweight spatiotemporal forecasting. In Pro-ceedings of the IEEE/CVF International Conference on Computer Vision , pages 7262–7272. Yuqi Li, Hansheng Zeng, Fuyan Zhang, Chuanguang Yang, Yanli Li, and Weiping Ding. 2025j. Effi-cient Medical Image Segmentation via Reinforce-ment Learning-Driven K-Space Sampling. IEEE Transactions on Emerging Topics in Computational Intelligence .Zixu Li, Zhiwei Chen, Haokun Wen, Zhiheng Fu, Yu-peng Hu, and Weili Guan. 2025k. Encoder: Entity mining and modification relation binding for com-posed image retrieval. In Proceedings of the AAAI Conference on Artificial Intelligence , volume 39, pages 5101–5109. Zixu Li, Zhiheng Fu, Yupeng Hu, Zhiwei Chen, Haokun Wen, and Liqiang Nie. 2025l. Finecir: Explicit parsing of fine-grained modifica-tion semantics for composed image retrieval. 
+
+https://arxiv.org/abs/2503.21309 .Zixu Li, Yupeng Hu, Zhiwei Chen, Qinlei Huang, Guozhi Qiu, Zhiheng Fu, and Meng Liu. 2026e. Retrack: Evidence-driven dual-stream directional anchor calibration network for composed video re-trieval. In Proceedings of the AAAI Conference on Ar-tificial Intelligence , volume 40, pages 23373–23381. Zixu Li, Yupeng Hu, Zhiwei Chen, Mingyu Zhang, Zhiheng Fu, and Liqiang Nie. 2026f. Conesep: Cone-based robust noise-unlearning compositional network for composed image retrieval. Preprint ,arXiv:2604.20358. Zixu Li, Yupeng Hu, Zhiwei Chen, Shiqi Zhang, Qinlei Huang, Zhiheng Fu, and Yinwei Wei. 2026g. Habit: Chrono-synergia robust progressive learning frame-work for composed image retrieval. In Proceedings of the AAAI Conference on Artificial Intelligence ,volume 40, pages 6762–6770. Zixu Li, Yupeng Hu, Zhiheng Fu, Zhiwei Chen, Yongqi Li, and Liqiang Nie. 2026h. Tema: Anchor the im-age, follow the text for multi-modification composed image retrieval. Preprint , arXiv:2604.21806. Jiayuan Liu, Tianqin Li, Shiyi Du, Xin Luo, Haox-uan Zeng, Emanuel Tewolde, Tai Sing Lee, Tonghan Wang, Carl Kingsford, and Vincent Conitzer. 2026a. The memory curse: How expanded recall erodes cooperative intent in llm agents. arXiv preprint arXiv:2605.08060 .Yue Liu, Zhiyuan Cheng, and Longying Lai. 2026b. Im-proving the completeness and comparability of seg-ment disclosures: A large language model approach. 
+
+Available at SSRN 6720239 .Yue Liu, Jun Zhang, and Yue Dai. 2023. Analyst follow-ing and greenwashing decision. Finance Research Letters , 58:104510. 
+
+12 Yuwei Lou, Hao Hu, Shaocong Ma, Zongfei Zhang, Liang Wang, Jidong Ge, and Xianping Tao. 2026. Drf: Llm-agent dynamic reputation filtering frame-work. In Neural Information Processing , pages 127– 141, Singapore. Springer Nature Singapore. Kevin Lu and Thinking Machines Lab. 2025. On-policy distillation. Thinking Machines Lab: Con-nectionism . Https://thinkingmachines.ai/blog/on-policy-distillation. Xin Luo, Yuanhao Huang, Haoxuan Zeng, Yicheng Tao, Xinyu Bao, Fan Feng, Alexander L Hopkirk, Thai Pham, Thomas SR Bate, Diane C Saunders, and 1 others. 2025. Cellink: integrating single-cell multi-omics data with weak feature linkage and im-balanced cell populations. Nucleic Acids Research ,53(22):gkaf1270. Jiaming Lv, Haoyuan Yang, and Peihua Li. 2024. Wasserstein distance rivals kullback-leibler diver-gence for knowledge distillation. Advances in Neural Information Processing Systems , 37:65445–65475. Pin Qian, Su Wang, Xiaoyuan Wang, Yihang Chen, Wenxuan Xu, Qiaolin Yu, Shuhuai Lin, Sipeng Zhang, Junxian You, and Xinpeng Wei. 2026. Rele-vant is not warranted: Evidence-force calibration for cited rag. Preprint , arXiv:2605.28044. Idan Shenfeld, Mehul Damani, Jonas Hübotter, and Pulkit Agrawal. 2026. Self-distillation enables con-tinual learning. ArXiv preprint .Zhen Tan, Dawei Li, Song Wang, Alimohammad Beigi, Bohan Jiang, Amrita Bhattacharjee, Man-sooreh Karami, Jundong Li, Lu Cheng, and Huan Liu. 2024. Large language models for data annota-tion and synthesis: A survey. In Proceedings of the 2024 Conference on Empirical Methods in Natural Language Processing , pages 930–957. Yiqi Wang, Long Yuan, Zi Chen, Wenjie Zhang, Xuemin Lin, and Qing Liu. 2023. Towards efficient shortest path counting on billion-scale graphs. In 
+
+2023 IEEE 39th International Conference on Data Engineering (ICDE) , pages 2579–2592. IEEE. Yiqi Wang, Long Yuan, Wenjie Zhang, Xuemin Li, Zi Chen, and Qing Liu. 2024. Simpler is more: Ef-ficient top-k nearest neighbors search on large road networks. Proc. VLDB Endow. , 17(13):4683–4695. Xiangyu Wu, Dongming Jiang, Feng Yu, Yueying Tian, Jiaqi Tang, Qing-Guo Chen, Yang Yang, and Jianfeng Lu. 2026. Adaptive debiasing tsallis entropy for test-time adaptation. arXiv preprint arXiv:2602.11743 .Xi Xiao, Bing Xia, Bo Yang, Bofei Gao, Bowen Shen, Chen Zhang, Chenhong He, Chiheng Lou, Fuli Luo, Gang Wang, Gang Xie, Hailin Zhang, Hanglong Lv, Hanyu Li, Heyu Chen, Hong-Mei Xu, Houbin Zhang, Huaqiu Liu, Jiangshan Duo, and 106 others. 2026. Mimo-v2-flash technical report. arXiv.org .Zequn Xie, Xin Liu, Boyun Zhang, Yuxiao Lin, Sihang Cai, and Tao Jin. 2026a. Hvd: Human vision-driven video representation learning for text-video retrieval. 
+
+arXiv preprint arXiv:2601.16155 .Zequn Xie, Chuxin Wang, Yeqiang Wang, Sihang Cai, Shulei Wang, and Tao Jin. 2025. Chat-driven text generation and interaction for person retrieval. In 
+
+Proceedings of the 2025 Conference on Empirical Methods in Natural Language Processing , pages 5259–5270. Zequn Xie, Boyun Zhang, Yuxiao Lin, and Tao Jin. 2026b. Delving deeper: Hierarchical visual percep-tion for robust video-text retrieval. arXiv preprint arXiv:2601.12768 .Ningning Xu, Yuxuan Jiang, Shubhashis Roy Dipta, and Zhang Hengyuan. 2025. Learning how to use tools, not just when: Pattern-aware tool-integrated reasoning. MATH-AI @ NeurIPS 2025 .An Yang, Anfeng Li, Baosong Yang, Beichen Zhang, Binyuan Hui, Bo Zheng, Bowen Yu, Chang Gao, Chengen Huang, Chenxu Lv, and 1 others. 2025. Qwen3 technical report. arXiv preprint arXiv:2505.09388 .Hansheng Zeng, Yuqi Li, Ruize Niu, Chuanguang Yang, and Shiping Wen. 2025. Enhancing spa-tiotemporal prediction through the integration of mamba state space models and diffusion transformers. 
+
+Knowledge-Based Systems .Hengyuan Zhang, Shiping Yang, Xiao Liang, Chen-ming Shang, Yuxuan Jiang, Chaofan Tao, Jing Xiong, Hayden Kwok-Hay So, Ruobing Xie, An-gel X Chang, and 1 others. 2025. Find your opti-mal teacher: Personalized data synthesis via router-guided multi-teacher distillation. arXiv preprint arXiv:2510.10925 .Songming Zhang, Xue Zhang, Tong Zhang, Bojie Hu, Yufeng Chen, and Jinan Xu. 2026a. Kdflow: A user-friendly and efficient knowledge distillation frame-work for large language models. ArXiv preprint .Yike Zhang, Zuodong Xiang, and Hailu Xu. 2026b. Performance-efficiency trade-offs in human prefer-ence prediction: A comparative study of traditional machine learning and large language models. In Pro-ceedings of the 31st IEEE Symposium on Computers and Communications (ISCC) . IEEE. Zijian Zhang, Rong Fu, Yangfan He, Xinze Shen, Yan-long Wang, Xiaojing Du, Haochen You, Keyan Jin, Jiazhao Shi, and Simon Fong. 2026c. Finsentllm: Multi-llm and structured semantic signals for en-hanced financial sentiment forecasting. In ICASSP 2026-2026 IEEE International Conference on Acous-tics, Speech and Signal Processing (ICASSP) , pages 17682–17686. IEEE. Siyan Zhao, Zhihui Xie, Mengchen Liu, Jing Huang, Guan Pang, Feiyu Chen, and Aditya Grover. 2026. Self-distilled reasoner: On-policy self-distillation for large language models. arXiv.org .
+
+13 10 15 20 25 30 
+
+> Teacher token loss
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> OT distance
+> High-loss points
+> Linear trend
+> Binned mean ± SE
+
+Figure 6: Correlation between teacher token loss and near-future OT distance for high-loss token positions. Although the overall trend is positive, the relationship re-mains weak and highly dispersed, indicating that token-level loss alone is an imprecise predictor of trajectory-level divergence. Wenhong Zhu, Ruobing Xie, Rui Wang, and Pengfei Liu. 2026. Hybrid policy distillation for llms. arXiv preprint arXiv:2604.20244 .
+
+## A Additional correlation analysis 
+
+To further examine the relationship between token-level loss and trajectory-level divergence, Figure 6 presents the scatter distribution between teacher to-ken loss and near-future OT distance for high-loss token positions. Although the overall linear trend is positive, the correlation remains weak, with sub-stantial variance across the full loss range. In partic-ular, many high-loss tokens still correspond to rel-atively small OT distances, while some moderate-loss tokens induce strong trajectory divergence. The binned mean trend further shows that the in-crease in OT distance with respect to token loss is gradual rather than sharply separable. These obser-vations support our claim that token-level loss is informative but insufficiently selective for identify-ing genuine trajectory-critical divergence points. 
+
+## B Training and Evaluation Details 
+
+B.1 off policy and on policy training Training Details. We distill from Qwen3-30B-A3B-Instruct-2507, a Mixture-of-Experts teacher with ∼30B total and ∼3B active parame-ters, into Qwen3-4B-Instruct-2507 as the stu-dent, using the KDFlow framework. Both models are run with thinking mode disabled (enable_thinking=False ). Training proceeds in two stages on a single node of 4× H100 (80 GB) GPUs with FSDP2, bf16, and gradient checkpoint-ing. 
+
+Stage 1 – Off-policy KD. We first sample 20k teacher responses on math prompts drawn from OpenThoughts3 ( temperature = 0.6, top_p =0.95 , max_new_tokens = 16384 , TP = 2 on 
+
+2× H100). The student is then trained on these (prompt, teacher-response) pairs with a per-token KL distillation loss combined with cross-entropy at kd_ratio = 0 .5 (vanilla KD, forward KL). We use AdamW with learning rate 2 × 10 −5, 5% lin-ear warmup, global batch size 128 (micro-batch 1), max sequence length 16384 , sample packing, and ring attention of size 2, for 1 epoch. 
+
+Stage 2 – On-policy KD. Initialized from the Stage-1 checkpoint, the student generates 
+
+4 rollouts per prompt (temperature = 1.0,top_p = 1.0, generate_max_len = 8000 ,prompt_max_len = 800 ) on a separate 10k-prompt slice (positions 20k–30k of the same source), and is distilled toward the teacher’s token distributions on those rollouts. We use vanilla KD with reverse KL at kd_ratio = 1 .0
+
+(pure distillation, no CE), learning rate 2 × 10 −6,
+
+5% linear warmup, gradient clipping at 1.0,global batch size 4 (micro-batch 1), and 1 epoch. The rollout engine uses 1 engine with TP = 2 
+
+and the teacher uses TP = 4; both engines share GPUs with the trainer via offload-to-CPU sleep/wakeup (teacher_enable_sleep=True ,
+
+rollout_enable_sleep=True .
+
+B.2 Computational Overhead. 
+
+TOPD adds extra computation mainly from short-window continuation generation and OT alignment. Unlike standard OPD, which applies token-level reverse-KL supervision over the full student tra-jectory, TOPD only performs trajectory-level cor-rection on selected high-loss candidate positions. Let N be the average trajectory length and let m
+
+be the number of selected high-loss positions per trajectory. The additional probing ratio is there-fore approximately m/N . In our setting, m = 218 
+
+is much smaller than N = 9688 , so only a small fraction of positions require trajectory-level pro-cessing. For each selected position, TOPD generates a short continuation of length K = 50 from the shared prefix and computes an OT alignment over the resulting K × K cost matrix. The OT subprob-lem is therefore bounded by a fixed short-window size rather than the full trajectory length. As a result, the additional cost scales with mK for con-14 tinuation generation and with the cost of solving m
+
+small OT problems per trajectory, rather than with all tokens in the response. Empirically, this overhead remains manageable. Under the same training setup, TOPD increases the total training time to 1.41 × that of standard OPD. This suggests that the proposed trajectory-level guidance can be incorporated into OPD with moderate additional cost. 15

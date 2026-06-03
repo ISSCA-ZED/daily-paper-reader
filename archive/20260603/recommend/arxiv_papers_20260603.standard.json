@@ -1,0 +1,438 @@
+{
+  "mode": "standard",
+  "generated_at": "2026-06-03T22:24:50.668653+00:00",
+  "stats": {
+    "mode": "standard",
+    "tag_count": 1,
+    "deep_divecandidates": 3,
+    "deep_cap": 6,
+    "deep_selected": 3,
+    "quick_candidates": 8,
+    "quick_skim_target": 11,
+    "quick_selected": 8
+  },
+  "deep_dive": [
+    {
+      "id": "2606.00305v1",
+      "source": "arxiv",
+      "title": "Bridging Reasoning Trajectories in On-Policy Distillation via Near-Future Guidance",
+      "abstract": "On-Policy Distillation (OPD) improves large language model reasoning by training a student model on trajectories sampled from its own policy under teacher supervision. Although OPD operates on trajectories, its learning signal remains token-level: it identifies deviations through high-loss tokens and repairs them through local reverse-KL correction. We show that this \"trajectory-sampled but token-learned\" mechanism cannot reliably bridge student trajectories toward teacher trajectories. About 30% of high-loss tokens fall into the low-divergence regime, indicating that many are surface-form mismatches rather than real reasoning forks. Moreover, even truly divergent tokens are difficult to repair with isolated token-level supervision, since reasoning failures often unfold as short-horizon distributional drift. We propose Trajectory-aware OPD (TOPD), which uses near-future trajectory information to identify real divergent states and distribute guidance across multiple future tokens. Experiments show that suppressing non-divergent high-loss tokens improves standard OPD from 47.8% to 48.2% average accuracy, while TOPD further improves performance to 52.2%, with gains on AIME24 from 60.0% to 63.3% and AIME25 from 46.7% to 53.3%.",
+      "authors": [
+        "Yuxuan Jiang",
+        "Francis Ferraro"
+      ],
+      "primary_category": "cs.CL",
+      "categories": [
+        "cs.CL",
+        "cs.AI"
+      ],
+      "published": "2026-05-29T19:32:07+00:00",
+      "link": "https://arxiv.org/pdf/2606.00305v1",
+      "tags": [
+        "keyword:key-tokens",
+        "query:key-tokens"
+      ],
+      "llm_score": 8.0,
+      "llm_evidence_en": "analyzes high-loss tokens as reasoning forks in on-policy distillation trajectories",
+      "llm_evidence_cn": "分析在线策略蒸馏轨迹中高损失token作为推理分歧点",
+      "llm_evidence": "分析在线策略蒸馏轨迹中高损失token作为推理分歧点",
+      "canonical_evidence": "分析在线策略蒸馏轨迹中高损失token作为推理分歧点",
+      "llm_tldr_en": "Bridging Reasoning Trajectories shows that about 30% of high-loss tokens are surface-form mismatches not real forks, and proposes near-future guidance to repair divergent tokens.",
+      "llm_tldr_cn": "在线策略蒸馏中，学习信号是token级的，但约30%的高损失token仅是表面形式差异而非真实推理分歧。本文提出近未来引导方法，不仅修正当前token，还考虑后续预测分布，从而更有效地弥合学生与教师轨迹在关键分歧点上的差距，提升推理轨迹的一致性。",
+      "llm_tldr": "在线策略蒸馏中，学习信号是token级的，但约30%的高损失token仅是表面形式差异而非真实推理分歧。本文提出近未来引导方法，不仅修正当前token，还考虑后续预测分布，从而更有效地弥合学生与教师轨迹在关键分歧点上的差距，提升推理轨迹的一致性。",
+      "llm_tags": [
+        "query:key-tokens"
+      ],
+      "matched_query_tag": "query:key-tokens",
+      "matched_query_text": "causal tracing of reasoning tokens",
+      "matched_requirement_id": "req-5",
+      "selection_source": "fresh_fetch"
+    },
+    {
+      "id": "2606.00628v1",
+      "source": "arxiv",
+      "title": "Robust Reasoning via Dynamic Token Selection for Distribution-Aligned Self-Distillation",
+      "abstract": "Self-distillation improves learning efficiency by rewriting reference answers as training data that better matches the model's own distribution. However, reference answers also introduce strong stylistic biases, causing the generative model to imitate surface forms rather than learn useful reasoning patterns. We observe that the rewriting data contains a large number of high-perplexity (PPL) tokens, coming from two distinct sources: beneficial knowledge-enhancing logical corrections, and harmful stylistic drift induced by reference imitation. Treating all such tokens equally can disrupt the base model's original distribution and degrade performance, especially on difficult reasoning tasks. To address this, we propose Distribution-Aligned Self-Distillation (DASD), which uses an answer-aware reference model to generate candidate tokens and dynamically filters them according to the base model's confidence. DASD preserves tokens that encode useful logical knowledge while suppressing distributionally misaligned style noise. Experiments on math, code, and commonsense reasoning benchmarks show that DASD consistently outperforms competitive baselines, reduces high-PPL tokens, and improves robustness across tasks of varying difficulty.",
+      "authors": [
+        "Ruiqi Zhang",
+        "Lingxiang Wang",
+        "Hainan Zhang Zhiming Zheng"
+      ],
+      "primary_category": "cs.CL",
+      "categories": [
+        "cs.CL"
+      ],
+      "published": "2026-05-30T09:03:03+00:00",
+      "link": "https://arxiv.org/pdf/2606.00628v1",
+      "tags": [
+        "keyword:key-tokens",
+        "query:key-tokens"
+      ],
+      "llm_score": 8.0,
+      "llm_evidence_en": "dynamic token selection identifies beneficial vs harmful high-PPL tokens for reasoning",
+      "llm_evidence_cn": "动态token选择区分有益和有害的高困惑度推理token",
+      "llm_evidence": "动态token选择区分有益和有害的高困惑度推理token",
+      "canonical_evidence": "动态token选择区分有益和有害的高困惑度推理token",
+      "llm_tldr_en": "Distribution-Align proposes dynamic token selection for self-distillation, distinguishing beneficial logical corrections from harmful stylistic drift among high-PPL tokens to improve reasoning robustness.",
+      "llm_tldr_cn": "自蒸馏中参考答案引入风格偏差，导致模型模仿表面形式而非学习推理。本文发现改写数据中存在大量高困惑度token，其来源包括有益的逻辑修正和有害的风格漂移。为此提出分布对齐自蒸馏方法，动态选择有益token参与训练，抑制有害token，从而保留基础模型原始分布并提升困难推理任务性能。",
+      "llm_tldr": "自蒸馏中参考答案引入风格偏差，导致模型模仿表面形式而非学习推理。本文发现改写数据中存在大量高困惑度token，其来源包括有益的逻辑修正和有害的风格漂移。为此提出分布对齐自蒸馏方法，动态选择有益token参与训练，抑制有害token，从而保留基础模型原始分布并提升困难推理任务性能。",
+      "llm_tags": [
+        "query:key-tokens"
+      ],
+      "matched_query_tag": "query:key-tokens",
+      "matched_query_text": "key token importance in reasoning",
+      "matched_requirement_id": "req-2",
+      "selection_source": "fresh_fetch"
+    },
+    {
+      "id": "2606.03928v1",
+      "source": "arxiv",
+      "title": "Value-Aware Stochastic KV Cache Eviction for Reasoning Models",
+      "abstract": "Reasoning models improve accuracy through extended chains of thought, but their long outputs create a memory and compute bottleneck. KV cache eviction methods reduce this cost by evicting unimportant key-value pairs from the cache, yet they often yield worse accuracy than selection-based sparse attention alternatives, which keep the full KV cache. We identify key factors crucial to KV cache eviction accuracy. First, a small fraction of value states have abnormally large magnitudes, and evicting them causes catastrophic failure where models enter repetitive reasoning loops. Second, introducing stochasticity during eviction improves accuracy by increasing cache diversity. Based on these findings, we propose Value-aware Stochastic KV Cache Eviction (VaSE), a training-free recipe that protects large-magnitude value states and promotes diverse eviction decisions. Across six reasoning tasks, Qwen3 models using VaSE with 4x KV cache compression yield higher average accuracies than SOTA selection method at the same sparsity, while outperforming the strongest eviction method by more than 4%. Overall, VaSE bridges the gap between efficiency and accuracy, supporting FlashAttention2 and enabling a static memory footprint for reasoning models.",
+      "authors": [
+        "Ting-Yun Chang",
+        "Harvey Yiyun Fu",
+        "Deqing Fu",
+        "Chenghao Yang",
+        "Jesse Thomason",
+        "Robin Jia"
+      ],
+      "primary_category": "cs.LG",
+      "categories": [
+        "cs.LG",
+        "cs.CL"
+      ],
+      "published": "2026-06-02T17:16:33+00:00",
+      "link": "https://arxiv.org/pdf/2606.03928v1",
+      "tags": [
+        "keyword:key-tokens",
+        "query:key-tokens"
+      ],
+      "llm_score": 8.0,
+      "llm_evidence_en": "identifies that a small fraction of value states with abnormally large magnitudes are critical for KV cache eviction accuracy",
+      "llm_evidence_cn": "识别出少数具有异常大幅值的值状态对KV缓存逐出准确性至关重要",
+      "llm_evidence": "识别出少数具有异常大幅值的值状态对KV缓存逐出准确性至关重要",
+      "canonical_evidence": "识别出少数具有异常大幅值的值状态对KV缓存逐出准确性至关重要",
+      "llm_tldr_en": "Proposes Value-aware Stochastic KV Cache Eviction (VaSE) that identifies critical value states with large magnitudes and avoids evicting them, improving accuracy for reasoning models.",
+      "llm_tldr_cn": "推理模型的长链思维导致KV缓存内存瓶颈，现有逐出方法因逐出高重要性值状态而导致灾难性失败（重复循环等）。本文通过分析发现一小部分值状态具有异常大幅值，逐出它们会引发失败。提出值感知随机KV缓存逐出（VaSE），在逐出时保留这些关键状态并引入随机性，提升准确性。这直接体现了令牌重要性度量在推理优化中的应用。",
+      "llm_tldr": "推理模型的长链思维导致KV缓存内存瓶颈，现有逐出方法因逐出高重要性值状态而导致灾难性失败（重复循环等）。本文通过分析发现一小部分值状态具有异常大幅值，逐出它们会引发失败。提出值感知随机KV缓存逐出（VaSE），在逐出时保留这些关键状态并引入随机性，提升准确性。这直接体现了令牌重要性度量在推理优化中的应用。",
+      "llm_tags": [
+        "query:key-tokens"
+      ],
+      "matched_query_tag": "query:key-tokens",
+      "matched_query_text": "token importance metrics in transformer reasoning",
+      "matched_requirement_id": "req-4",
+      "selection_source": "fresh_fetch"
+    }
+  ],
+  "quick_skim": [
+    {
+      "id": "2605.29192v1",
+      "source": "arxiv",
+      "title": "ReasonOps: Operator Segmentation for LLM Reasoning Traces",
+      "abstract": "Chain-of-thought traces from large reasoning models can span tens of thousands of tokens, yet we lack a vocabulary for describing their internal structure. Previous methods developed to analyze chain-of-thought traces are either too rigid or not expressive enough, failing to capture features across domains and models. To remedy this, we develop ReasonOps, an unsupervised, expressive method for annotating chain-of-thought traces, providing succinct universal operators. Using ReasonOps, we analyze 44,662 traces from 12 thinking LLMs spanning 6 families across 8 reasoning benchmarks and discover that they share a common compositional structure: 7 recurring reasoning operators -- discourse-level moves such as backtracking, inferring, and hypothesizing -- that emerge from unsupervised clustering of sentence-initial 3-token pivots. These operators appear across every model family and benchmark domain, confirmed by three independent LLM judges who classify held-out samples at 70 -76% accuracy. We analyze the structure of operators on easy vs. hard problems, revealing that reflective operators are more helpful on hard problems and harm performance on easy problems. Operator sequences are highly model-identifying: a classifier trained on operator distributions alone recovers the source model with macro-AUC, revealing that each model family has a distinctive reasoning fingerprint. Structural operator features predict within-problem answer correctness well above baselines. Classifiers built on these operators reach WP-AUC and on AIME specifically. ReasonOps further enables early quality estimation well before the trace completes: we predict at WP-AUC for only 50% of the trace. The ReasonOps pipeline is unsupervised and annotation-free, enabling deep insights into LLM reasoning traces as well as strong downstream results on model identification and correctness prediction.",
+      "authors": [
+        "Daniel Lee",
+        "Owen Queen",
+        "James Zou"
+      ],
+      "primary_category": "cs.AI",
+      "categories": [
+        "cs.AI",
+        "cs.CL"
+      ],
+      "published": "2026-05-28T00:08:35+00:00",
+      "link": "https://arxiv.org/pdf/2605.29192v1",
+      "tags": [
+        "keyword:key-tokens",
+        "query:key-tokens"
+      ],
+      "llm_score": 7.0,
+      "llm_evidence_en": "analyzes reasoning traces with universal operators",
+      "llm_evidence_cn": "使用通用算子分析推理轨迹",
+      "llm_evidence": "使用通用算子分析推理轨迹",
+      "canonical_evidence": "使用通用算子分析推理轨迹",
+      "llm_tldr_en": "ReasonOps provides an unsupervised method to annotate chain-of-thought traces with seven recurring reasoning operators, revealing compositional structure across models and domains.",
+      "llm_tldr_cn": "大型推理模型的思维链轨迹缺乏结构化描述。ReasonOps提出了一种无监督方法，能够将思维链轨迹标注为七种重复出现的推理算子（如回溯、推断、假设），从而揭示跨模型和领域的共同组成结构。通过对12个模型、44,662条轨迹的分析，验证了该方法的表达能力和通用性。",
+      "llm_tldr": "大型推理模型的思维链轨迹缺乏结构化描述。ReasonOps提出了一种无监督方法，能够将思维链轨迹标注为七种重复出现的推理算子（如回溯、推断、假设），从而揭示跨模型和领域的共同组成结构。通过对12个模型、44,662条轨迹的分析，验证了该方法的表达能力和通用性。",
+      "llm_tags": [
+        "query:key-tokens"
+      ],
+      "matched_query_tag": "query:key-tokens",
+      "matched_query_text": "reasoning sequence in language models",
+      "matched_requirement_id": "req-1",
+      "selection_source": "fresh_fetch",
+      "quick_tier": "7"
+    },
+    {
+      "id": "2605.27712v1",
+      "source": "arxiv",
+      "title": "Prefix-Safe Bayesian Belief Tracking for LLM Reasoning Reliability:Separating Calibration from Ranking",
+      "abstract": "Long reasoning traces need reliability estimates before final answers are known. We study prefix-conditioned eventual-success estimation, $P(y=1 \\mid o_{1:t})$, using prefix-safe observations. Sequential Bayesian Belief Tracking (SBBT) calibrates observation likelihoods and recursively updates a two-state belief, providing a common tracker for scalar scores, text and self-verification markers, hidden clusters, token-pooling probes, and latent-trajectory features. Across generated open-weight traces on MATH-500, GSM8K, AIME 2025, and RIMO-N, probability quality and ranking separate: score-only SBBT often improves Brier, while AUROC gains require structure-aware evidence beyond strong prefix-safe baselines. In the strongest hard math setting, structure-aware observations reach +0.110 AUROC against standard prefix-safe baselines. Under a same-prefix classifier audit, MATH-500 text markers and RIMO-N self-verification signals remain positive. Together, these findings support SBBT as a calibration-aware online inference framework and expose an evidence regime: scalar scores mainly support probability quality, while structure-aware prefix signals support ranking only when strong prefix-safe baselines have not already absorbed the rank evidence.",
+      "authors": [
+        "Zhenghan Song",
+        "Yunyi Li",
+        "Yulong Liu"
+      ],
+      "primary_category": "cs.AI",
+      "categories": [
+        "cs.AI"
+      ],
+      "published": "2026-05-26T21:37:20+00:00",
+      "link": "https://arxiv.org/pdf/2605.27712v1",
+      "tags": [
+        "keyword:key-tokens",
+        "query:key-tokens"
+      ],
+      "llm_score": 6.0,
+      "llm_evidence_en": "uses token-pooling probes and hidden state features for reliability estimation",
+      "llm_evidence_cn": "使用token池化探针和隐状态特征进行可靠性估计",
+      "llm_evidence": "使用token池化探针和隐状态特征进行可靠性估计",
+      "canonical_evidence": "使用token池化探针和隐状态特征进行可靠性估计",
+      "llm_tldr_en": "Prefix-Safe Bayesian Belief Tracking provides a unified tracker for scalar scores, text, self-verification markers, hidden clusters, token-pooling probes, and latent-trajectory features to estimate eventual success with separated calibration and ranking.",
+      "llm_tldr_cn": "长推理轨迹需要预先知道可靠性。本文提出序贯贝叶斯信念追踪框架，能够统一处理标量分数、文本自验证标记、隐聚类、token池化探针和潜在轨迹特征等多种证据源，用于估计前缀条件下的最终成功概率。在多个推理数据集上证明概率质量与排名分离，且结构感知证据能改善AUROC。",
+      "llm_tldr": "长推理轨迹需要预先知道可靠性。本文提出序贯贝叶斯信念追踪框架，能够统一处理标量分数、文本自验证标记、隐聚类、token池化探针和潜在轨迹特征等多种证据源，用于估计前缀条件下的最终成功概率。在多个推理数据集上证明概率质量与排名分离，且结构感知证据能改善AUROC。",
+      "llm_tags": [
+        "query:key-tokens"
+      ],
+      "matched_query_tag": "query:key-tokens",
+      "matched_query_text": "hidden state analysis for critical tokens in reasoning",
+      "matched_requirement_id": "req-3",
+      "selection_source": "fresh_fetch",
+      "quick_tier": "6"
+    },
+    {
+      "id": "2605.30832v1",
+      "source": "arxiv",
+      "title": "SLAT: Segment-Level Adaptive Trimming for Efficient CoT Reasoning",
+      "abstract": "Recent advances in Large Reasoning Models have significantly improved chain-of-thought (CoT) capabilities via reinforcement learning (RL). However, generated reasoning chains frequently suffer from structural redundancy (i.e., \\emph{overthinking}), incurring high computational overhead without improving answer correctness. Existing mitigation strategies typically rely on token-uniform length penalties, which provide coarse, segment-agnostic pressure toward shorter outputs and can inadvertently suppress useful reasoning alongside redundancy. To address this, we demonstrate that inefficiency concentrates in high-probability segments with low marginal utility. We derive a theoretical characterization of segment suboptimality under the correctness-length trade-off objective and propose \\textsc{SLAT} (Segment-Level Adaptive Trimming), an RL framework that selectively suppresses redundant segments based on this criterion. Empirical results on standard benchmarks indicate that \\textsc{SLAT} establishes a superior accuracy-efficiency Pareto frontier, reducing reasoning length by $50\\%$ relative to uncompressed baselines while maintaining competitive accuracy. Overall, our results suggest that theoretically grounded, segment-aware trimming is a promising direction for efficient CoT reasoning in large language models.",
+      "authors": [
+        "Jian Yao",
+        "Xiongcai Luo",
+        "Ran Cheng",
+        "Kay Chen Tan"
+      ],
+      "primary_category": "cs.AI",
+      "categories": [
+        "cs.AI"
+      ],
+      "published": "2026-05-29T04:37:49+00:00",
+      "link": "https://arxiv.org/pdf/2605.30832v1",
+      "tags": [
+        "keyword:key-tokens",
+        "query:key-tokens"
+      ],
+      "llm_score": 7.0,
+      "llm_evidence_en": "identifies low-marginal-utility segments for token importance metrics",
+      "llm_evidence_cn": "识别低边际效用段以度量token重要性",
+      "llm_evidence": "识别低边际效用段以度量token重要性",
+      "canonical_evidence": "识别低边际效用段以度量token重要性",
+      "llm_tldr_en": "Proposes SLAT that adaptively trims redundant reasoning segments by detecting high-probability low-utility segments, enabling efficient CoT without suppressing useful reasoning.",
+      "llm_tldr_cn": "本文针对大推理模型生成推理链中的结构冗余（过度思考）问题，提出段级自适应修剪（SLAT）方法。SLAT识别高概率但低边际效用的段并将其修剪，在保持正确性的同时降低计算开销。实验表明，SLAT相比统一长度惩罚方法更高效，且不损害推理质量。该工作为推理token重要性的度量提供了新视角。",
+      "llm_tldr": "本文针对大推理模型生成推理链中的结构冗余（过度思考）问题，提出段级自适应修剪（SLAT）方法。SLAT识别高概率但低边际效用的段并将其修剪，在保持正确性的同时降低计算开销。实验表明，SLAT相比统一长度惩罚方法更高效，且不损害推理质量。该工作为推理token重要性的度量提供了新视角。",
+      "llm_tags": [
+        "query:key-tokens"
+      ],
+      "matched_query_tag": "query:key-tokens",
+      "matched_query_text": "token importance metrics in transformer reasoning",
+      "matched_requirement_id": "req-4",
+      "selection_source": "fresh_fetch",
+      "quick_tier": "7"
+    },
+    {
+      "id": "2605.29656v1",
+      "source": "arxiv",
+      "title": "TRACE: Toulmin-based Reasoning Assessment through Constructive Elements for LLM CoT Evaluation",
+      "abstract": "Evaluating open-ended outputs from large language models (LLMs) remains challenging due to the absence of ground truth. Existing metrics rely on final-answer accuracy or surface-level statistics, leaving the reasoning process itself unexamined. We introduce TRACE (Toulmin-based Reasoning Assessment through Constructive Elements), a metric that analyzes Chain-of-Thought (CoT) reasoning processes. Rather than judging outcomes, TRACE inspects how arguments are constructed by integrating Toulmin's argumentation theory with Flavell's metacognitive framework to assess reasoning structure. Experiments on 26.3K QA samples across 7 reasoning models show strong correlation with benchmark accuracy (r=0.74). Furthermore, TRACE is effective as a reinforcement learning reward signal, outperforming accuracy-only baselines. Together, these results indicate that logically sound reasoning leads to higher-quality answers. TRACE thus serves as a complementary metric for evaluating open-ended outputs. Code is available at https://github.com/hyyangkisti/trace.",
+      "authors": [
+        "Yundong Kim",
+        "Heyoung Yang"
+      ],
+      "primary_category": "cs.AI",
+      "categories": [
+        "cs.AI"
+      ],
+      "published": "2026-05-28T09:19:50+00:00",
+      "link": "https://arxiv.org/pdf/2605.29656v1",
+      "tags": [
+        "keyword:key-tokens",
+        "query:key-tokens"
+      ],
+      "llm_score": 6.0,
+      "llm_evidence_en": "metric for reasoning process evaluation",
+      "llm_evidence_cn": "推理过程评估指标",
+      "llm_evidence": "推理过程评估指标",
+      "canonical_evidence": "推理过程评估指标",
+      "llm_tldr_en": "TRACE integrates Toulmin's argumentation theory with Flavell's metacognitive framework to assess Chain-of-Thought reasoning structure, correlating with benchmark accuracy.",
+      "llm_tldr_cn": "现有评估指标多关注最终答案或表面统计，忽略了推理过程本身。TRACE通过整合图尔敏论证理论和弗拉维尔元认知框架，对思维链推理结构进行深入分析。在26.3K样本、7个模型上的实验表明，TRACE得分与基准准确率强相关（r=0.74），且能有效区分不同推理质量。",
+      "llm_tldr": "现有评估指标多关注最终答案或表面统计，忽略了推理过程本身。TRACE通过整合图尔敏论证理论和弗拉维尔元认知框架，对思维链推理结构进行深入分析。在26.3K样本、7个模型上的实验表明，TRACE得分与基准准确率强相关（r=0.74），且能有效区分不同推理质量。",
+      "llm_tags": [
+        "query:key-tokens"
+      ],
+      "matched_query_tag": "query:key-tokens",
+      "matched_query_text": "token importance metrics in transformer reasoning",
+      "matched_requirement_id": "req-4",
+      "selection_source": "fresh_fetch",
+      "quick_tier": "6"
+    },
+    {
+      "id": "2606.03883v1",
+      "source": "arxiv",
+      "title": "Reasoning Structure of Large Language Models",
+      "abstract": "Large reasoning models (LRMs) are often evaluated using metrics such as final-answer accuracy or token count. However, identical scores on these metrics can hide fundamentally different reasoning structures. To address this limitation, we introduce a scalable LRM benchmark of logic puzzles and a pipeline that converts unstructured traces into verifiable reasoning graphs of claims and dependencies. This turns reasoning into a structured, measurable object whose topology can be quantitatively analyzed. Building on this, we define a reasoning efficiency metric that quantifies how concentrated the model's logical flow is. Our analysis on open-source reasoning models shows that structural measurements separate behaviors that token count and accuracy conflate, providing a practical tool for diagnosing failure modes and comparing how reasoning scales with puzzle difficulty.",
+      "authors": [
+        "Frédéric Berdoz",
+        "Luca A. Lanzendörfer",
+        "Fabian Farestam",
+        "Roger Wattenhofer"
+      ],
+      "primary_category": "cs.AI",
+      "categories": [
+        "cs.AI",
+        "cs.LG"
+      ],
+      "published": "2026-06-02T16:49:19+00:00",
+      "link": "https://arxiv.org/pdf/2606.03883v1",
+      "tags": [
+        "keyword:key-tokens",
+        "query:key-tokens"
+      ],
+      "llm_score": 7.0,
+      "llm_evidence_en": "converts unstructured reasoning traces into verifiable graphs for structural analysis",
+      "llm_evidence_cn": "将非结构化推理轨迹转化为可验证图用于结构分析",
+      "llm_evidence": "将非结构化推理轨迹转化为可验证图用于结构分析",
+      "canonical_evidence": "将非结构化推理轨迹转化为可验证图用于结构分析",
+      "llm_tldr_en": "Reasoning Structure of LLMs introduces a benchmark and pipeline to convert traces into reasoning graphs, defining a topology-based efficiency metric that separates behaviors conflated by token count and accuracy.",
+      "llm_tldr_cn": "大模型推理评估常依赖最终准确率和token数，但相同指标下隐藏不同推理结构。本文提出可拓展的逻辑谜题基准和流水线，将非结构化推理轨迹转化为由声明和依赖关系组成的可验证推理图，并定义基于拓扑的推理效率指标。实验表明该结构度量能区分被准确率和token数混淆的推理行为，为深入理解模型推理机制提供新工具。",
+      "llm_tldr": "大模型推理评估常依赖最终准确率和token数，但相同指标下隐藏不同推理结构。本文提出可拓展的逻辑谜题基准和流水线，将非结构化推理轨迹转化为由声明和依赖关系组成的可验证推理图，并定义基于拓扑的推理效率指标。实验表明该结构度量能区分被准确率和token数混淆的推理行为，为深入理解模型推理机制提供新工具。",
+      "llm_tags": [
+        "query:key-tokens"
+      ],
+      "matched_query_tag": "query:key-tokens",
+      "matched_query_text": "reasoning sequence in language models",
+      "matched_requirement_id": "req-1",
+      "selection_source": "fresh_fetch",
+      "quick_tier": "7"
+    },
+    {
+      "id": "2605.31584v1",
+      "source": "arxiv",
+      "title": "LongTraceRL: Learning Long-Context Reasoning from Search Agent Trajectories with Rubric Rewards",
+      "abstract": "Long-context reasoning remains a central challenge for large language models, which often fail to locate and integrate key information in extensive distracting content. Reinforcement learning with verifiable rewards (RLVR) has shown promise for this task, yet existing methods are limited by low-confusability distractors and sparse, outcome-only reward signals that cannot supervise intermediate reasoning steps. To address these issues, we introduce \\textsc{LongTraceRL}. For data construction, we generate multi-hop questions via knowledge graph random walks and leverage search agent trajectories to build \\emph{tiered distractors}: documents the agent read but did not cite (high confusability) and documents that appeared in search results but were never opened (low confusability), producing training contexts that are far more challenging than those built by random sampling or one-shot search. For reward design, we propose a \\emph{rubric reward} that uses the gold entities along each reasoning chain as fine-grained, entity-level process supervision. This rubric reward is applied only to responses with correct final answers (positive-only strategy), distinguishing the reasoning quality among correct responses and preventing reward hacking. Experiments on three reasoning LLMs (4B--30B) across five long-context benchmarks demonstrate that \\textsc{LongTraceRL} consistently outperforms strong baselines and encourages comprehensive, evidence-grounded reasoning. Codes, datasets and models are available at \\href{https://github.com/THU-KEG/LongTraceRL}{https://github.com/THU-KEG/LongTraceRL}.",
+      "authors": [
+        "Nianyi Lin",
+        "Jiajie Zhang",
+        "Lei Hou",
+        "Juanzi Li"
+      ],
+      "primary_category": "cs.CL",
+      "categories": [
+        "cs.CL",
+        "cs.AI",
+        "cs.LG"
+      ],
+      "published": "2026-05-29T17:51:40+00:00",
+      "link": "https://arxiv.org/pdf/2605.31584v1",
+      "tags": [
+        "keyword:key-tokens",
+        "query:key-tokens"
+      ],
+      "llm_score": 6.0,
+      "llm_evidence_en": "long-context reasoning with key information integration",
+      "llm_evidence_cn": "长上下文推理中的关键信息整合",
+      "llm_evidence": "长上下文推理中的关键信息整合",
+      "canonical_evidence": "长上下文推理中的关键信息整合",
+      "llm_tldr_en": "LongTraceRL uses search agent trajectories and tiered distractors to improve long-context reasoning via reinforcement learning with rubric rewards, addressing key information location.",
+      "llm_tldr_cn": "长上下文推理中，大模型常难以定位并整合关键信息。本文提出LongTraceRL，通过知识图谱随机游走生成多跳问题，并利用搜索代理轨迹构建层级干扰物，结合基于评分规则的强化学习奖励来监督中间推理步骤。实验表明该方法能有效提升长上下文推理中关键信息的整合能力。",
+      "llm_tldr": "长上下文推理中，大模型常难以定位并整合关键信息。本文提出LongTraceRL，通过知识图谱随机游走生成多跳问题，并利用搜索代理轨迹构建层级干扰物，结合基于评分规则的强化学习奖励来监督中间推理步骤。实验表明该方法能有效提升长上下文推理中关键信息的整合能力。",
+      "llm_tags": [
+        "query:key-tokens"
+      ],
+      "matched_query_tag": "query:key-tokens",
+      "matched_query_text": "reasoning sequence in language models",
+      "matched_requirement_id": "req-1",
+      "selection_source": "fresh_fetch",
+      "quick_tier": "6"
+    },
+    {
+      "id": "2606.00590v1",
+      "source": "arxiv",
+      "title": "Critic-R: Improving Agentic Search using Instruction-tuned Retrievers with Natural Language Introspective Feedback",
+      "abstract": "Agentic search systems iteratively interact with retrieval models to answer complex queries. Despite substantial progress, optimizing retrievers for agentic search remains challenging, often requiring heavy co-training or gold-standard annotations that limit real-world applicability. We propose Critic-R, a framework that explicitly closes the feedback loop between the reasoning agent and the retrieval model during both inference and training. Critic-R introduces a critic model that evaluates the agent's introspective reasoning trace after consuming retrieved evidence to determine whether the retrieved context sufficiently supports the next reasoning step. Critic-R has two complementary mechanisms: Critic-R-Zero, an inference-time query refinement loop that iteratively rewrites queries and retrieval instructions, and Critic-Embed, an optimization approach for retrieval models that leverages successful and failed refinement trajectories as automatic supervision without requiring manual relevance annotation. We evaluate Critic-R on HotpotQA, 2WikiMultihopQA, MuSiQue, and Bamboogle. Results show that Critic-R significantly improves both retrieval quality and downstream answer accuracy.",
+      "authors": [
+        "Md Zarif Ul Alam",
+        "Alireza Salemi",
+        "Hamed Zamani"
+      ],
+      "primary_category": "cs.IR",
+      "categories": [
+        "cs.IR",
+        "cs.AI"
+      ],
+      "published": "2026-05-30T07:42:22+00:00",
+      "link": "https://arxiv.org/pdf/2606.00590v1",
+      "tags": [
+        "keyword:key-tokens",
+        "query:key-tokens"
+      ],
+      "llm_score": 6.0,
+      "llm_evidence_en": "critic evaluates reasoning trace for key evidence sufficiency",
+      "llm_evidence_cn": "评论家评估推理轨迹中关键证据的充分性",
+      "llm_evidence": "评论家评估推理轨迹中关键证据的充分性",
+      "canonical_evidence": "评论家评估推理轨迹中关键证据的充分性",
+      "llm_tldr_en": "Critic-R closes the feedback loop between reasoning agent and retriever by having a critic model evaluate the introspective trace to determine if retrieved context supports next reasoning step.",
+      "llm_tldr_cn": "代理搜索系统中，推理步骤常依赖检索证据，但证据是否充分缺乏自动判断。Critic-R引入评论家模型，通过分析推理代理的内省轨迹来评估已检索证据是否足够支持下一步推理，从而动态调整检索策略。该框架在训练和推理阶段均实现检索器与推理器的闭环反馈，提升复杂查询回答的准确性。",
+      "llm_tldr": "代理搜索系统中，推理步骤常依赖检索证据，但证据是否充分缺乏自动判断。Critic-R引入评论家模型，通过分析推理代理的内省轨迹来评估已检索证据是否足够支持下一步推理，从而动态调整检索策略。该框架在训练和推理阶段均实现检索器与推理器的闭环反馈，提升复杂查询回答的准确性。",
+      "llm_tags": [
+        "query:key-tokens"
+      ],
+      "matched_query_tag": "query:key-tokens",
+      "matched_query_text": "articles about identifying key tokens in reasoning sequences of large language models",
+      "matched_requirement_id": "req-6",
+      "selection_source": "fresh_fetch",
+      "quick_tier": "6"
+    },
+    {
+      "id": "2606.03965v1",
+      "source": "arxiv",
+      "title": "Agentic Chain-of-Thought Steering for Efficient and Controllable LLM Reasoning",
+      "abstract": "Large language models improve final-answer accuracy through extended chain-of-thought reasoning, but often spend tokens inefficiently and offer little inference-time control. Existing efficient reasoning methods control thinking length by shortening, early-stopping, or compressing traces, leaving how the model thinks implicit. In this paper, we propose Agentic Chain-of-Thought Steering (ACTS), which formulates reasoning steering as a Markov decision process where a controller agent adaptively steers a frozen reasoner during inference. At each step, the controller observes the reasoning trace and remaining thinking budget, then issues a steering action consisting of a reasoning strategy and a steering phrase that initiates the next reasoner step. This enables budget-aware strategy control for efficient reasoning while preserving the reasoner's generation continuity. We initialize the controller agent from our constructed synthetic steering trajectories with multi-budget augmentation, and further optimize it via reinforcement learning with budget-conditioned reward shaping. Experiments across multiple benchmarks show that ACTS matches full-thinking performance with substantial token savings, and enables controllable accuracy-efficiency trade-offs across different reasoners and tasks. The code is available at https://github.com/Andree-9/ACTS.",
+      "authors": [
+        "Yu Xia",
+        "Zhouhang Xie",
+        "Xin Xu",
+        "Byungkyu Kang",
+        "Prarit Lamba",
+        "Xiang Gao",
+        "Julian McAuley"
+      ],
+      "primary_category": "cs.CL",
+      "categories": [
+        "cs.CL",
+        "cs.AI"
+      ],
+      "published": "2026-06-02T17:51:30+00:00",
+      "link": "https://arxiv.org/pdf/2606.03965v1",
+      "tags": [
+        "keyword:key-tokens",
+        "query:key-tokens"
+      ],
+      "llm_score": 6.0,
+      "llm_evidence_en": "adaptive reasoning trace steering via controller agent",
+      "llm_evidence_cn": "通过控制器代理自适应引导推理轨迹",
+      "llm_evidence": "通过控制器代理自适应引导推理轨迹",
+      "canonical_evidence": "通过控制器代理自适应引导推理轨迹",
+      "llm_tldr_en": "ACTS formulates reasoning steering as a Markov decision process where a controller agent adaptively guides a frozen reasoner by observing the trace and issuing steering actions.",
+      "llm_tldr_cn": "大模型通过延长推理链提升准确性，但token使用效率低且缺乏控制。ACTS将推理引导建模为马尔可夫决策过程，通过控制器代理观测当前推理轨迹和剩余计算预算，动态发出包含推理策略和引导短语的动作，实现高效且可控的推理过程。实验表明该方法在保持准确率的同时显著减少token消耗。",
+      "llm_tldr": "大模型通过延长推理链提升准确性，但token使用效率低且缺乏控制。ACTS将推理引导建模为马尔可夫决策过程，通过控制器代理观测当前推理轨迹和剩余计算预算，动态发出包含推理策略和引导短语的动作，实现高效且可控的推理过程。实验表明该方法在保持准确率的同时显著减少token消耗。",
+      "llm_tags": [
+        "query:key-tokens"
+      ],
+      "matched_query_tag": "query:key-tokens",
+      "matched_query_text": "reasoning sequence in language models",
+      "matched_requirement_id": "req-1",
+      "selection_source": "fresh_fetch",
+      "quick_tier": "6"
+    }
+  ]
+}

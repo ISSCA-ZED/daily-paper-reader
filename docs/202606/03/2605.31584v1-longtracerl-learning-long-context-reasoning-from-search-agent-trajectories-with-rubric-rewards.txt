@@ -1,0 +1,1070 @@
+Title: LongTraceRL: Learning Long-Context Reasoning from Search Agent Trajectories with Rubric Rewards
+
+URL Source: https://arxiv.org/pdf/2605.31584v1
+
+Published Time: Mon, 01 Jun 2026 01:46:41 GMT
+
+Number of Pages: 21
+
+Markdown Content:
+# LongTraceRL: Learning Long-Context Reasoning from Search Agent Trajectories with Rubric Rewards 
+
+Nianyi Lin *, Jiajie Zhang *, Lei Hou, Juanzi Li 
+
+Tsinghua University 
+
+Abstract 
+
+Long-context reasoning remains a central chal-lenge for large language models, which often fail to locate and integrate key information in extensive distracting content. Reinforcement learning with verifiable rewards (RLVR) has shown promise for this task, yet existing meth-ods are limited by low-confusability distractors and sparse, outcome-only reward signals that cannot supervise intermediate reasoning steps. To address these issues, we introduce L ONG -TRACE RL. For data construction, we gener-ate multi-hop questions via knowledge graph random walks and leverage search agent tra-jectories to build tiered distractors : documents the agent read but did not cite (high confus-ability) and documents that appeared in search results but were never opened (low confusabil-ity), producing training contexts that are far more challenging than those built by random sampling or one-shot search. For reward de-sign, we propose a rubric reward that uses the gold entities along each reasoning chain as fine-grained, entity-level process supervision. This rubric reward is applied only to responses with correct final answers (positive-only strategy), distinguishing the reasoning quality among cor-rect responses and preventing reward hack-ing. Experiments on three reasoning LLMs (4B–30B) across five long-context benchmarks demonstrate that L ONG TRACE RL consistently outperforms strong baselines and encourages comprehensive, evidence-grounded reasoning. Codes, datasets and models are available at https://github.com/THU-KEG/LongTraceRL. 
+
+1 Introduction 
+
+Long-context reasoning is a critical capability for large language models (LLMs), driving advances in both single-pass reasoning (Bai et al., 2025; Team, 2025a) and multi-turn autonomous agent systems (Yao et al., 2023; Shinn et al., 2023; Yang et al., 2024) by enabling models to extract key 
+
+> *
+
+Equal contribution. Work done when interned at Zhipu. Question:          
+
+> Starting with an American pop female singer who debuted in the
+> late 2000s and is known for her theatrical visual styling and
+> electronic dance music style. Her debut album contains a single
+> whose title is taken from a card game, and another single that uses
+> "dance" as a command and topped the Billboard Hot 100. What is
+> the nationality of the common producer behind these two singles?
+
+Response:          
+
+> Reasoning:
+> 1. Late 2000s American pop singer, theatrical style →Lady Gaga
+> 2. Debut album →"The Fame " (2008); card game single →
+> "Poker Face "; "dance" command single →"Love Game "
+> 3. Common producer of both →RedOne
+> Answer:
+> Moroccan-Swedish
+> Hit 4/5 gold entities
+> → rubric reward: 4/5= 0.8
+
+Hard Distractor Docs by our traj-tiered strategy        
+
+> 1. A Wikipedia article on Lady Gaga's single "Just Dance" (gold)
+> 2. A Wikipedia article on Swedish Grammy-winning music
+> producer and songwriter Rami Yacoub (highly confusing)
+> 3. A Wikipedia article on Lady Gaga's song "Paparazzi" from her
+> debut album The Fame (highly confusing)
+> ……
+> outcome reward= 1.0
+> final reward= 0.8 ×0.3+ 1.0 ×0.7= 0.94
+> outcome reward= 1.0
+> final reward= 1.0
+> Our Composite Reward Outcome-Only Reward
+> Fails to penalize reasoning errors.
+> Extremely long context
+
+Easy Distractor Docs by previous random sampling        
+
+> 1. A guest blog post on Arabs serving as high-ranking officials in
+> the Byzantine Empire (irrelevant)
+> 2. A Wikipedia article on the life and career of Lady Gaga (gold)
+> 3. A personal blog written by a meteorologist (irrelevant)
+> …… too easy sample
+> hard sample
+
+Figure 1: Comparison between prior long-context RL approaches based on easy distractors and outcome-only rewards, and our proposed L ONG TRACE RL. 
+
+information across a global context, perform multi-hop inference, and stay coherent over extended text. Despite its importance, current LLMs still struggle with long-context understanding (Guan et al., 2026), especially in realistic scenarios full of distracting information. As the context length grows, they often exhibit typical failure patterns: giving hallucinated answers, relying on fragmented retrieval, or citing irrelevant passages. These limita-tions make long-text reasoning a major bottleneck for deploying reasoning-oriented models in real-world applications. Recently, reinforcement learn-1
+
+> arXiv:2605.31584v1 [cs.CL] 29 May 2026
+
+ing with verifiable rewards (RLVR) has proven effective for multiple tasks such as mathematical reasoning (DeepSeek-AI, 2025; Shao et al., 2024) and long-context question answering (Chen et al., 2026; Wang et al., 2025). However, current long-context RL methods have two key limitations. First, the quality of training data remains limited. Ex-isting methods construct questions with few rea-soning hops and shallow chains, with their dis-tractors mostly sampled randomly from unrelated documents (Wang et al., 2025; Guan et al., 2026), lacking semantic relevance to the query and pro-viding limited confusability as shown in Figure 1. Second, the reward signal is too sparse. Existing methods primarily rely on outcome-based rewards, providing optimization guidance solely based on the correctness of the final answer. When the in-put spans tens or even hundreds of thousands of tokens, such rewards become very sparse and can be noisy: the model may reach the correct answer through a wrong reasoning path by chance. For example, as shown in Figure 1, the model correctly answers “Moroccan-Swedish” while actually cit-ing the wrong entity “Love Game” instead of “Just Dance” at an intermediate hop. Such coincidental successes satisfy the binary outcome reward but mask retrieval failures in intermediate steps. To address these limitations, we propose LONG -TRACE RL , which tackles both data construction and reward design. On the data side, inspired by Lu et al. (2025), we generate complex multi-hop questions with extremely long reasoning chains via knowledge graph random walks over the KILT Wikipedia snapshot (Petroni et al., 2021), and in-troduce a novel approach that constructs distrac-tors based on real search trajectories from a search agent. Specifically, documents that the agent read but did not cite in the final response serve as high-confusability distractors (Tier-1), while doc-uments that appeared in search results but were never opened serve as low-confusability distrac-tors (Tier-2). Compared to random sampling or single direct search, these distractors are more rele-vant to the query, forcing the model to distinguish more carefully and reason more deeply. On the reward side, we design a rubric reward that uses the gold entities at each hop of the reasoning chain as fine-grained, entity-level process supervision. This reward is applied only to responses with cor-rect final answers (positive-only strategy), help-ing distinguish the reasoning quality among cor-rect responses and effectively preventing the model from gaming the reward by skipping intermediate reasoning steps and guessing the answer directly. Experiments on three reasoning LLMs (4B–30B) across five long-context benchmarks demonstrate that L ONG TRACE RL consistently outperforms all baselines and encourages comprehensive, evidence-grounded reasoning, with Qwen3-4B achieving an average gain of 5.7 points over the base model and surpassing the strongest baseline by 2.5 points. Our main contributions are as follows: (1) We propose a long-context training data construction method based on search agent trajectories, using tiered distractors to significantly improve the chal-lenge and realism of the training data. (2) We design an entity-level rubric reward that provides finer-grained supervision on intermediate reason-ing than the existing approaches for long-context reinforcement learning. (3) Through comprehen-sive experiments, we demonstrate the consistent improvements of L ONG TRACE RL across multiple model families and scales. 
+
+2 Related Work 
+
+Long-Context Synthetic Data. Synthesizing long-context training data typically involves two design choices: how to construct questions and how to assemble the context. For question con-struction, some work (Wang et al., 2025; Li et al., 2024; Zhu et al., 2025a; Guan et al., 2026) reuses short-context multi-hop QA datasets such as MuSiQue (Trivedi et al., 2022) and Hot-potQA (Yang et al., 2018), while others generate questions from scratch (Bai et al., 2024; Chen et al., 2025). More recent work uses structured knowledge to produce deeper reasoning chains, e.g., QwenLong-L1.5 (Shen et al., 2025) samples multi-hop paths from document-derived knowledge graphs, and DeepDive (Lu et al., 2025) performs random walks over the Wikipedia knowledge graph. For context assembly, some methods use a sin-gle long document (Bai et al., 2024; Chen et al., 2025, 2026), while others extend short-context QA datasets by adding distractor documents (Wang et al., 2025; Li et al., 2024; Zhu et al., 2025a; Guan et al., 2026). These distractors are usually sam-pled at random and are easy to filter out. NExt-Long (Gao et al., 2025) improves this by using hard negative mining from dense retrieval, but its distractors are still based on embedding similarity rather than realistic search behavior, leaving a gap with practical retrieval scenarios. 2(a) Multi-Hop Question Generatoin (b) Agent Search Trajectory Collection  
+
+> Path with g old entities & docs
+> Question : Start with a pop performer
+> who debuted in the late 2000s and is
+> known for her theatrical visual styling …
+> Find the legendary hit-factory studio
+> where that mentor became … What city
+> and country is that studio located in?
+> Answer : Stockholm, Sweden
+> Doc M: “Stefani Joanne
+> Angelina Germanotta,
+> known as Lady Gaga, is
+> an American singer …”
+
+v4
+
+v5 v1
+
+v0
+
+v2
+
+v3
+
+v6 
+
+> Doc B: GRAMMY-winning producer
+> RedOne recently visited The
+> Recording Academy's headquarters …
+
+open(url A) Doc A
+
+search(q1) url A/B/C
+
+open(url B) Doc B
+
+open(url D) Doc D
+
+search(q2) url D/E
+
+cite Doc A, Doc D
+
+(c) Tiered Distractor Extraction 
+
+Gold: wiki text from Step (a) 
+
+Tier-1: opened but not cited 
+
+Tier-2: searched but not opened    
+
+> Doc B: related topic
+> Doc G: similar entity
+> ...
+> Doc C: surface match
+> Doc E: keyword overlap
+> Doc H: tangential
+> ...
+> Doc M :Stefani Joanne Angelina
+> Germanotta, known as Lady Gaga,
+> is an American singer …
+> Doc B :GRAMMY-
+> winning producer RedOne
+> recently visited The
+> Recording Academy's
+> headquarters …
+
+(d) Long-Context Assembly   
+
+> Doc E :In this episode,
+> Hannah Lichtenstein
+> and Mikayla Kendall
+> describe their mentoring
+> relationship …
+> Fill with Tier-1 docs first, then Tier-2
+> docs. After reaching target length L,
+> shuffle all docs.
+
+L     
+
+> Doc N :"Just Dance" is the debut
+> single by American singer Lady
+> Gaga. She co-wrote the song with
+> Akon and its producer RedOne …
+> Doc M :Stefani Joanne Angelina
+> Germanotta, known as Lady Gaga,
+> is an American singer …
+> Doc E :In this episode, Hannah
+> Lichtenstein and Mikayla Kendall
+> describe their mentoring
+> relationship …
+> Doc B :GRAMMY-winning
+> producer RedOne recently visited
+> The Recording Academy's
+> headquarters …
+> Q: Start with a pop performer who
+> debuted in the late 2000s … What
+> city and country was that studio
+> located in?
+
+answer Stockholm, Sweden Figure 2: Overview of the L ONG TRACE RL training data construction pipeline. 
+
+Long-context Reinforcement Learning. While RLVR has proven effective on self-contained rea-soning tasks such as mathematics (DeepSeek-AI, 2025; Shao et al., 2024), its adaptation to long-context scenarios remains limited, since outcome-based rewards supervise only the final answer and give no signal for intermediate reasoning over a large input. To address this, Chen et al. (2026) uses a chunk-level context reward based on Fβ scores be-tween predicted and gold document chunks, Guan et al. (2026) provides dense process-level super-vision on evidence extraction quality via a co-evolving reward model, and LongR (Ping et al., 2026) measures relative information gain from re-trieved documents under a frozen verifier. In par-allel, fine-grained process rewards have also been explored in agentic RL: Zhang et al. (2026) de-compose deep-search answers into citation-aware rubric items for verifiable reward, and Singh et al. (2025) shape the reward by classifying the cogni-tive behavior and utility of each tool call to reduce reward hacking. However, these methods either operate at the chunk, document, or tool-call level, or require an auxiliary LLM for evidence scoring at additional cost, leaving finer-grained, entity-level reasoning supervision unexplored. 
+
+3 Method 
+
+LONG TRACE RL framework consists of two main components: (1) a data construction pipeline that synthesizes long-context training data with agent-derived distractors (§3.1), and (2) a reinforcement learning framework that combines outcome-based and process-based rewards (§3.2). 
+
+3.1 Data Construction Pipeline 
+
+We construct long-context training data through a four-step pipeline. The key idea is to leverage knowledge graph structure to generate multi-hop questions with verifiable reasoning chains, and then use agent search behavior to produce realistic dis-tractors with high confusability. Figure 2 provides an overview of the entire pipeline. 
+
+3.1.1 Multi-Hop Question Generation 
+
+Inspired by Lu et al. (2025), we automatically gen-erate multi-hop questions from the KILT Wikipedia snapshot (Petroni et al., 2021) through a two-stage process: knowledge graph random walk and ques-tion synthesis. 
+
+Knowledge Graph Random Walk. We perform controlled random walks over the Wikipedia hy-perlink graph to collect multi-hop entity paths. Starting from a seed entity v0, we walk k(= 8) 
+
+steps following hyperlinks to form a path P =[v0, v 1, . . . , v k]. At each step, an LLM selects the next most relevant entity from up to five unvisited candidates. Between path collections, we insert pe-riodic mad walks (a few random jumps) to diversify the explored graph regions. 
+
+Question Synthesis. Given a path P and the Wikipedia text of each entity, we prompt a pow-erful LLM (such as GPT-5.2) to generate a multi-hop question whose answer is a specific attribute of the last entity vk. As shown in Figure 12, the prompt enforces several constraints: (i) the ques-tion must require step-by-step reasoning through all entities in the path, with no shortcuts; (ii) all identifying information (names, dates, locations) 3must be paraphrased so that the answer cannot be found by simple keyword matching; and (iii) the answer must be unique and exactly match the se-lected attribute. The LLM also outputs the list of intermediate gold entities along the reasoning chain. For each question, we thus obtain the question text, the ground-truth answer, and the set of gold enti-ties E = {e1, e 2, . . . , e k} with their corresponding Wikipedia passages. 
+
+3.1.2 Agent Search Trajectory Collection 
+
+To construct realistic distractors, we leverage the behavioral trajectories of a search agent attempt-ing to answer each generated question. We de-ploy an agent equipped with deep search capabil-ities, including issuing search queries ( SEARCH ), opening and reading retrieved documents ( OPEN ), and citing information in its response ( CITE ). We record the agent’s complete search trajectory τ =[( a1, d 1), (a2, d 2), . . . ], where at denotes the action type and dt the associated document. 
+
+Trajectory Filtering. To obtain correct reliable trajectories, we sample K(= 5) independent tra-jectories per question and retain only those where the agent reaches the final correct answer. For each question, one of the correct trajectories is selected for subsequent distractor extraction, and the ques-tions where all K attempts fail are discarded. This filtering ensures that the retained trajectories reflect real, meaningful, and goal-directed search behavior rather than random exploration or hallucination. 
+
+3.1.3 Tiered Distractor Extraction 
+
+From the recorded search trajectories, we divide the retrieved documents (excluding gold evidence passages) into two tiers: (1) Tier-1 distractors 
+
+(high confusability): documents that the agent opened and read but did not cite in its final re-sponse, which are topically relevant and were ini-tially deemed worth reading, making them strong distractors. (2) Tier-2 distractors (low confusabil-ity): documents that appeared in search results but were never opened, which are only superficially related to the query and are less likely to mislead a careful reader. 
+
+3.1.4 Long-Context Assembly 
+
+The final long-context input is assembled fol-lowing a strategy named traj-tiered (short for trajectory-tiered). Starting from the gold passages, we first add Tier-1 distractors D1, which are more confusing and thus more valuable for training. If the context has not yet reached the target length L
+
+after exhausting all Tier-1 distractors, we continue to fill with Tier-2 distractors D2. This prioritiza-tion ensures that the model is exposed to as many challenging distractors as possible. All documents are then shuffled to prevent positional shortcuts. 
+
+3.2 RL with Rubric Reward 
+
+Since the data construction pipeline provides gold entities along each reasoning chain, we can lever-age them as process supervision during reinforce-ment learning. We adopt Group Relative Policy Optimization (GRPO; Shao et al., 2024) as our RL algorithm and design a composite reward that com-bines an outcome reward for answer correctness with a rubric reward for reasoning quality. 
+
+Outcome Reward. The binary outcome reward 
+
+roc ∈ { 0, 1} evaluates whether the model’s final short answer is correct, as determined by an LLM judge. 
+
+Rubric Reward. The raw rubric score ˆrrb mea-sures the recall of gold entities E in the model’s response: 
+
+ˆrrb = |{ e ∈ E | e appears in the response }| |E| (1) A higher ˆrrb indicates that the model referenced more of the gold entities in reasoning. 
+
+Group-Level Rubric Normalization. In GRPO, each training question is answered by a group of 
+
+G sampled responses. Since different questions involve different numbers of gold entities and vary-ing difficulty levels, the raw rubric scores may span different ranges across questions. To ensure com-parability, we normalize ˆrrb within each group by dividing by the group maximum when it is positive: 
+
+rrb =
+
+
+
+ˆrrb 
+
+max j∈[G] ˆr(j)
+
+> rb
+
+, if max j∈[G] ˆr(j) 
+
+> rb
+
+> 00, otherwise .
+
+(2) This rescales the rubric reward to [0 , 1] within each group, providing consistent process signals regard-less of question difficulty. 
+
+Positive-Only Reward Combination. Since the rubric reward is based on entity recall, applying it to all responses risks reward hacking : the model could learn to enumerate entities mentioned in the retrieved passages rather than genuinely reasoning 4over them, inflating the rubric score without actu-ally solving the problem. To prevent this, we adopt a positive-only strategy in which the rubric re-ward is only granted to responses whose final an-swer is correct: 
+
+r =
+
+(
+
+(1 − α) · roc + α · rrb , if roc > 00, otherwise (3) In this formulation, the rubric reward serves to differentiate among correct responses, assigning higher scores to those that provide sound intermedi-ate reasoning and lower scores to those that arrive at the right answer through shortcuts. Incorrect responses simply receive zero reward. The hyper-parameter α ∈ [0 , 1] controls the weight of process supervision: when α = 0 , the reward reduces to standard outcome-based GRPO; as α increases, the model receives stronger incentives to ground its reasoning in the relevant evidence passages. 
+
+4 Experiments 
+
+4.1 Setup Models. We experiment with several reasoning-capable LLMs of different families and sizes to test generalizability: (1) Qwen3-4B-Thinking-2507 (Team, 2025b), a 4B dense reasoning model; (2) DeepSeek-R1-0528-Qwen3-8B (DeepSeek-AI, 2025), a distilled dense model from the up-dated DeepSeek-R1-0528; (3) Qwen3-30B-A3B-Thinking-2507 (Team, 2025b), a mixture-of-experts model with 30B total parameters and 3B active parameters. All ablation studies are con-ducted using Qwen3-4B-Thinking-2507. 
+
+Datasets. Our training set consists of 2,815 long-context QA examples constructed via the pipeline described in §3.1. Each example contains a eight-hop question, gold evidence passages from Wiki, and tiered distractors assembled to a target context length of 128K tokens. We compare our method against three existing long-context RL datasets, us-ing the same RL algorithm and hyperparameters for a fair comparison: (1) DocQA (Wan et al., 2025): 1,591 QA examples on real documents covering math, logic and multi-hop reasoning, with con-text lengths ranging from 2K to 20K tokens. (2) 
+
+LoongRL (Wang et al., 2025): 15,000 QA exam-ples of 16K tokens, built by the KeyChain pipeline that pads short-context multi-hop QA (HotpotQA, MuSiQue, 2WikiMQA) with distractors and hides the true question behind a UUID chain. (3) Lon-gRLVR (Chen et al., 2026): 18,870 QA examples from book, arXiv and code documents with 8K to 64K tokens, trained with an extra Fβ -based context grounding reward over document chunks. A further comparison is shown in Table 6. 
+
+Benchmarks. We evaluate on five long-context benchmarks: (1) AA-LCR (Team, 2025a): 100 expert-crafted questions over real-world documents averaging 100K tokens. (2) MRCR (OpenAI, 2025): a multi-round coreference benchmark that asks the model to reproduce a specific response from a long dialog with repeated requests on over-lapping topics. We evaluate with 2, 4, and 8 needles and report the average score. (3) Frames (Krishna et al., 2025): a multi-hop factual reasoning bench-mark over multiple Wikipedia articles with numeri-cal, temporal, or tabular reasoning. (4) LongBench v2 (Bai et al., 2025): 503 multiple-choice ques-tions over real documents from 8K to 2M words, covering QA, in-context learning, code and so on. (5) LongReason (Ling et al., 2025): a synthetic benchmark that turns short reasoning problems into long-context versions by spreading key information across 8K to 128K tokens. We evaluate at 8K, 16K, 32K, 64K, and 128K and report the average score. We run AA-LCR 4 times and LongBench v2 2 times, and report the average; the other three benchmarks are run once. 
+
+Training Details. We use the Slime frame-work (Zhu et al., 2025b) for RL training. The maximum context length is set to 160K tokens (128K prompt + 32K response). We use GRPO with group size G = 8 , global batch size 128, and train for 200 iterations with a constant learn-ing rate 2 × 10 −6. The rubric reward weight is 
+
+α = 0 .3 by default, with group-level normalization and positive-only reward strategy. Rollout uses temperature 1.0, while all evaluations use tempera-ture 0.6 and maximum generation length 32K. We save a checkpoint every 20 training steps and report results from the best-performing checkpoint. All experiments are conducted on 32 × H800 GPUs. 
+
+4.2 Main Results 
+
+Table 1 reports the per-benchmark scores of L ONG -TRACE RL against other baselines across three scales. L ONG TRACE RL consistently achieves the best average score on every backbone: on Qwen3-4B-Thinking-2507 it reaches an average of 59.0 ,improving the base model by +5.7 points and surpassing the strongest baseline LongRLVR by 
+
++2.5 points. The gain is most pronounced on the 5Method AA-LCR MRCR FRAMES LongBench V2 LongReason Avg 
+
+DeepSeek-R1-0528-Qwen3-8B 
+
+Base 13.8 27.0 73.2 25.4 74.1 42.7 DocQA 9.5 20.2 73.4 25.9 73.7 40.6 LoongRL 10.2 19.0 72.6 25.5 73.3 40.1 LongRLVR 12.2 21.9 70.3 26.8 73.2 40.9 LONG TRACE RL-GRPO 15.0 25.2 73.1 25.6 75.4 42.9 LONG TRACE RL 15.0 27.0 74.3 27.5 75.2 43.8 
+
+Qwen3-4B-Thinking-2507 
+
+Base 33.2 36.2 76.7 41.7 78.5 53.3 DocQA 28.8 41.9 78.3 44.6 79.9 54.7 LoongRL 32.0 38.2 75.8 41.8 78.7 53.3 LongRLVR 37.5 41.8 78.5 43.8 80.7 56.5 LONG TRACE RL-GRPO 34.0 38.9 76.1 40.7 78.7 53.7 LONG TRACE RL 41.8 45.8 79.5 44.1 83.8 59.0 
+
+Qwen3-30B-A3B-Thinking-2507 
+
+Base 47.0 40.8 80.7 49.9 84.2 60.5 DocQA 50.2 44.8 83.5 51.6 86.4 63.3 LoongRL 53.5 43.8 81.9 52.3 84.9 63.3 LongRLVR 48.5 43.3 81.7 50.3 84.2 61.6 LONG TRACE RL-GRPO 48.2 44.7 79.6 51.8 86.9 62.3 LONG TRACE RL 53.5 46.5 81.9 51.3 85.4 63.7 
+
+Table 1: Main results on long-context reasoning benchmarks. 0 50 100 150 200 
+
+> Steps
+> 0.2
+> 0.3
+> 0.4
+> 0.5
+> 0.6
+> 0.7
+> 0.8
+> 0.9
+> 1.0
+> Rubric Reward
+> LongTraceRL-4B
+> LongTraceRL-8B
+> LongTraceRL-30B
+
+(a) 0 50 100 150 200  
+
+> Steps
+> 0.4
+> 0.5
+> 0.6
+> 0.7
+> 0.8
+> 0.9
+> Outcome Reward
+> LongTraceRL-4B
+> LongTraceRL-8B
+> LongTraceRL-30B
+> LongTraceRL-GRPO-4B
+> LongTraceRL-GRPO-8B
+> LongTraceRL-GRPO-30B
+
+(b) 0 100 200  
+
+> Steps
+> 5000
+> 10000
+> 15000
+> 20000
+> Response Length / Token  LongTraceRL
+> LongTraceRL-GRPO
+> LongRLVR
+> LoongRL
+> DocQA
+
+(c) 0 50 100 150 200  
+
+> Steps
+> 0.00
+> 0.02
+> 0.04
+> 0.06
+> 0.08
+> 0.10
+> 0.12
+> Truncated Ratio
+> LongTraceRL
+> LongTraceRL-GRPO
+> LongRLVR
+> LoongRL
+> DocQA
+
+(d) 
+
+Figure 3: From left to right: rubric and outcome reward dynamics at different scales, rollout response length and truncation rate dynamics across methods. 
+
+challenging AA-LCR (33.2 → 41.8, +8.6). The same trend holds for DeepSeek-R1-0528-Qwen3-8B (42.7 → 43.8) and Qwen3-30B-A3B-Thinking-2507 (60.5 → 63.7, +3.2), showing that the gains are robust to the model family and scale. In con-trast, DocQA, LoongRL and LongRLVR even de-grade performance on the 8B backbone (42.7 →
+
+40.6 / 40.1 / 40.9). Besides, ablating the rubric reward (L ONG TRACE RL-GRPO) on the 4B back-bone drops the average score from 59.0 to 53.7, nearly erasing the gain despite training on the same dataset, identifying the rubric reward as the domi-nant driver of the improvement. Figure 3a shows that the rubric reward grows steadily during L ONG TRACE RL training on all three scales, indicating that the model progressively learns to ground its reasoning in the gold entities. Figure 3b further shows that the outcome reward curve of L ONG TRACE RL also rises and dominates that of L ONG TRACE RL-GRPO, confirming that in-troducing the rubric reward helps the model reach the correct final answer. Figure 3c compares rollout lengths across baselines, showing that the rubric reward clearly encourages longer and more delib-erate reasoning. As shown in Figure 3d, around step 120, many rollouts of L ONG TRACE RL reach the 32K budget and thus fail to emit the final an-swer, which suppresses the outcome reward. The positive-only strategy then guides the policy back to shorter responses before the length climbs again. 6Method AA-LCR MRCR FRAMES LongBench V2 LongReason Avg                            
+
+> Qwen3-4B-Thinking-2507 33.2 36.2 76.7 41.7 78.5 53.3 + L ONG TRACE RL( α= 0 .1)39.2 46.1 79.0 44.2 82.8 58.3 + L ONG TRACE RL( α= 0 .3)41.8 45.8 79.5 44.1 83.8 59.0
+> + L ONG TRACE RL( α= 0 .5)39.0 43.7 77.5 43.5 81.7 57.1
+
+Table 2: Performance of L ONG TRACE RL with different rubric reward weight α.                                    
+
+> Method AA-LCR MRCR FRAMES LongBench V2 LongReason Avg
+> Qwen3-4B-Thinking-2507 33.2 36.2 76.7 41.7 78.5 53.3 + L ONG TRACE RL( random )34.2 40.1 78.0 43.8 82.4 55.7 + L ONG TRACE RL( search )34.2 43.2 79.0 43.9 83.3 56.7 + L ONG TRACE RL( traj-random )35.5 44.2 79.9 44.6 82.8 57.4 + L ONG TRACE RL( traj-tiered )41.8 45.8 79.5 44.1 83.8 59.0
+
+Table 3: Performance of L ONG TRACE RL across distractor strategies. Confusability increases from top to bottom. 
+
+This self-regulating behavior shows that combin-ing the positive-only strategy with a finite response budget effectively prevents rubric reward hacking. 
+
+4.3 Ablation Studies 4.3.1 Rubric Ratio α
+
+The hyperparameter α in Eq. 3 controls the rela-tive weight of the rubric reward against the out-come reward, and thus determines how strongly the model is pushed to ground its reasoning in the gold entities. To study its effect, we sweep 
+
+α ∈ { 0.1, 0.3, 0.5} while keeping all other settings identical to our main experiment. As shown in Table 2, α = 0 .3 yields the best average score (59.0) and consistently achieves the best or second-best performance across all five benchmarks. De-creasing α to 0.1 weakens the process-level signal and degrades performance, especially on the more reasoning-intensive AA-LCR benchmark (41.8 →
+
+39.2), while increasing α to 0.5 hurts performance across the board (average drops to 57.1), suggest-ing that an overly strong rubric weight begins to dilute the outcome objective and bias the model toward entity-mention shortcuts. 
+
+4.3.2 Source of Distractors 
+
+To verify the effectiveness of traj-tiered dis-tractor strategy, we compare it against three alter-native strategies while keeping the gold passages and questions identical: (1) random : distractors are randomly sampled from a global pool of doc-uments retrieved across the dataset and are there-fore mostly off-topic for the current question. (2) 
+
+search : we issue the question as a single query to a search engine and leverage the top-100 results as distractors, approximating naive one-shot retrieval without multi-round querying, document opening or filtering. (3) traj-random : we pool Tier-1 and Tier-2 distractors of each question together and ran-domly sample documents from this pool, with no preference for their confusability. This yields three new training sets that differ only in their distractor documents. We train Qwen3-4B-Thinking-2507 on each set under the same set-ting as the main experiment. As shown in Table 3, the traj-tiered strategy achieves the best aver-age score (59.0), with the advantage particularly pronounced on AA-LCR (41.8 vs. at most 35.5 for the alternatives). To better explain these gains, we quantify distractor difficulty as the fraction of distractor documents that share at least one rubric entity with the reasoning chain and are thus harder to filter out. As Table 4 shows, the rank of distractor difficulty closely matches the rank of downstream scores in Table 3: random distractors almost never share rubric entities with the question (Macro Avg 1.35%), so they are easy to filter out and provide a weak training signal, leading to the lowest score (55.7). search strategy is slightly harder (Macro Avg 15.00%) and improves the score to 56.7, but it still cannot guarantee that the distractors lie along the reasoning path. Trajectory-based distractors are far more challenging: traj-random reaches 42.16%, and traj-tiered further pushes the ra-tio to 50.03%, with Tier-1 documents alone reach-ing 63.23%. This higher density of hard distrac-tors aligns with the best downstream performance (59.0). These results confirm that the distractor is a key driver of long-context RL data quality, and that our tiered, trajectory-derived design is more effective than single-search-based or random-based 7Distractor Strategy #Distr. #w/ Rub. Ent-Recall (%) Micro Avg (%) Macro Avg (%) 
+
+traj-tiered 62137 29050 10.34 46.75 50.03 
+
+Tier-1 18206 10629 14.65 58.38 63.23 Tier-2 43931 18421 8.56 41.93 41.75 
+
+traj-random 64066 26528 8.59 41.41 42.16 Tier-1 2677 1710 16.71 63.88 63.79 Tier-2 61389 24818 8.24 40.43 41.24 
+
+search 31412 4372 2.47 13.92 15.00 
+
+random 45392 565 0.16 1.24 1.35 
+
+Table 4: Statistics on how much distractors overlap with rubric entities. Higher ratios indicate harder distractors. 
+
+#Distr. : number of distractor documents. #w/ Rub. : number of distractor documents containing ≥1 rubric entity. 
+
+Ent-Recall : average fraction of rubric entities appearing in a distractor. Micro/Macro Avg : ratio of #w/ Rub. #Distr. ,aggregated globally (micro) or per sample then averaged (macro).                         
+
+> Method AA-LCR MRCR FRAMES LongBench V2 LongReason Avg
+> Qwen3-4B-Thinking-2507 33.2 36.2 76.7 41.7 78.5 53.3 + L ONG TRACE RL( positive&negative )37.0 40.5 79.5 45.5 83.1 57.1 + L ONG TRACE RL( positive-only )41.8 45.8 79.5 44.1 83.8 59.0
+
+Table 5: Performance of L ONG TRACE RL with different reward strategies. 0 50 100 150 200         
+
+> Steps
+> 0.5
+> 0.6
+> 0.7
+> 0.8
+> 0.9
+> Rubric Reward
+> LongTraceRL-pos_only
+> LongTraceRL-pos&neg 050 100 150 200
+> Steps
+> 0.7
+> 0.8
+> 0.9
+> Outcome Reward
+> LongTraceRL-pos_only
+> LongTraceRL-pos&neg 050 100 150 200
+> Steps
+> 0.6
+> 0.7
+> 0.8
+> 0.9
+> Raw Reward
+> LongTraceRL-pos_only
+> LongTraceRL-pos&neg
+
+Figure 4: Rubric, outcome and combined raw reward dynamics for the two reward strategies. 
+
+alternatives. 
+
+4.3.3 Positive-Only 
+
+To verify the effectiveness of the positive-only 
+
+strategy in preventing reward hacking, we com-pare it against a positive&negative variant in which the rubric reward is granted to every roll-out regardless of answer correctness, i.e., r =(1 − α) · roc + α · rrb for all responses. As shown in Table 5, removing the positive-only constraint causes a clear performance drop, with the aver-age score falling from 59.0 to 57.1. The degrada-tion is most pronounced on the reasoning-intensive benchmarks where the rubric signal is meant to help: AA-LCR drops by 4.8 points (41.8 → 37.0) and MRCR by 5.3 points (45.8 → 40.5). The training dynamics in Figure 4 further reveal the underlying mechanism. Throughout training, the 
+
+positive&negative variant exhibits lower rubric and outcome rewards, yet its combined reward ends up higher , because every rollout, including the in-correct ones, can gain a non-trivial rubric term to the aggregate. This misleading objective dilutes the gradient toward genuinely solving the question and biases the policy toward enumerating gold-like entities from the context. 
+
+5 Conclusion 
+
+We present L ONG TRACE RL, a framework that ad-vances long-context RL by constructing challeng-ing training data from trajectory-based distractors and introducing an entity-level rubric reward for fine-grained process supervision. Experiments on five long-context benchmarks across three model families and scales demonstrate consistent improve-ments over existing long-context RL methods. Fur-ther analysis confirms the effectiveness of each design choice. We hope that our approach offers 8a practical and generalizable recipe for further re-search on long-context RL of LLMs. 
+
+6 Limitations 
+
+Our work has several limitations. First, the data construction pipeline relies entirely on the KILT Wikipedia snapshot as its knowledge source, mean-ing all generated questions are grounded in ency-clopedic knowledge. While our experiments show that training on such data transfers well to various downstream benchmarks covering financial, legal, and code documents, the single-source nature of the knowledge graph may limit the diversity of reason-ing patterns in the training data. Second, the search agent trajectories used for distractor construction depend on the capabilities of the particular agent deployed. A stronger or weaker agent would pro-duce different trajectory distributions, potentially affecting the quality and difficulty of the resulting distractors. Investigating how agent capability in-fluences data quality is an interesting direction for future work. 
+
+7 Ethical Considerations 
+
+All models and datasets used in this work are pub-licly available under permissible licenses. Our method does not involve human subjects, private data, or content that raises dual-use concerns. 
+
+References 
+
+Yushi Bai, Xin Lv, Jiajie Zhang, Yuze He, Ji Qi, Lei Hou, Jie Tang, Yuxiao Dong, and Juanzi Li. 2024. Lon-galign: A recipe for long context alignment of large language models. In Findings of the Association for Computational Linguistics: EMNLP 2024, Miami, Florida, USA, November 12-16, 2024 , Findings of ACL, pages 1376–1395. Association for Computa-tional Linguistics. Yushi Bai, Shangqing Tu, Jiajie Zhang, Hao Peng, Xi-aozhi Wang, Xin Lv, Shulin Cao, Jiazheng Xu, Lei Hou, Yuxiao Dong, Jie Tang, and Juanzi Li. 2025. Longbench v2: Towards deeper understanding and reasoning on realistic long-context multitasks. In 
+
+Proceedings of the 63rd Annual Meeting of the As-sociation for Computational Linguistics (Volume 1: Long Papers), ACL 2025, Vienna, Austria, July 27 -August 1, 2025 , pages 3639–3664. Association for Computational Linguistics. Guanzheng Chen, Michael Qizhe Shieh, and Lidong Bing. 2026. Longrlvr: Long-context reinforcement learning requires verifiable context rewards. CoRR ,abs/2603.02146. Zhi Chen, Qiguang Chen, Libo Qin, Qipeng Guo, Hai-jun Lv, Yicheng Zou, Hang Yan, Kai Chen, and Dahua Lin. 2025. What are the essential factors in crafting effective long context multi-hop instruction datasets? insights and best practices. In Proceedings of the 63rd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers), ACL 2025, Vienna, Austria, July 27 - August 1, 2025 ,pages 27129–27151. Association for Computational Linguistics. DeepSeek-AI. 2025. Deepseek-r1: Incentivizing rea-soning capability in llms via reinforcement learning. 
+
+CoRR , abs/2501.12948. Chaochen Gao, Xing Wu, Zijia Lin, Debing Zhang, and Songlin Hu. 2025. Nextlong: Toward effective long-context training without long documents. In 
+
+Forty-second International Conference on Machine Learning, ICML 2025, Vancouver, BC, Canada, July 13-19, 2025 , Proceedings of Machine Learning Re-search. PMLR / OpenReview.net. Xin Guan, Zijian Li, Shen Huang, Pengjun Xie, Jingren Zhou, and Jiuxin Cao. 2026. Evidence-augmented policy optimization with reward co-evolution for long-context reasoning. CoRR , abs/2601.10306. Satyapriya Krishna, Kalpesh Krishna, Anhad Mo-hananey, Steven Schwarcz, Adam Stambler, Shyam Upadhyay, and Manaal Faruqui. 2025. Fact, fetch, and reason: A unified evaluation of retrieval-augmented generation. In Proceedings of the 2025 Conference of the Nations of the Americas Chapter of the Association for Computational Linguistics: Hu-man Language Technologies, NAACL 2025 - Volume 1: Long Papers, Albuquerque, New Mexico, USA, April 29 - May 4, 2025 , pages 4745–4759. Associa-tion for Computational Linguistics. Siheng Li, Cheng Yang, Zesen Cheng, Lemao Liu, Mo Yu, Yujiu Yang, and Wai Lam. 2024. Large language models can self-improve in long-context reasoning. CoRR , abs/2411.08147. Zhan Ling, Kang Liu, Kai Yan, Yifan Yang, Weijian Lin, Ting-Han Fan, Lingfeng Shen, Zhengyin Du, and Jiecao Chen. 2025. Longreason: A synthetic long-context reasoning benchmark via context expansion. 
+
+CoRR , abs/2501.15089. Rui Lu, Zhenyu Hou, Zihan Wang, Hanchen Zhang, Xiao Liu, Yujiang Li, Shi Feng, Jie Tang, and Yux-iao Dong. 2025. Deepdive: Advancing deep search agents with knowledge graphs and multi-turn RL. 
+
+CoRR , abs/2509.10446. OpenAI. 2025. OpenAI MRCR: Long context multi-ple needle in a haystack benchmark. Hugging Face dataset, inspired by the MRCR eval in ?.Fabio Petroni, Aleksandra Piktus, Angela Fan, Patrick Lewis, Majid Yazdani, Nicola De Cao, James Thorne, Yacine Jernite, Vladimir Karpukhin, Jean Maillard, Vassilis Plachouras, Tim Rocktäschel, and Sebastian Riedel. 2021. KILT: a benchmark for knowledge 
+
+9intensive language tasks. In Proceedings of the 2021 Conference of the North American Chapter of the Association for Computational Linguistics: Human Language Technologies , pages 2523–2544, Online. Association for Computational Linguistics. Bowen Ping, Zijun Chen, Yiyao Yu, Tingfeng Hui, Junchi Yan, and Baobao Chang. 2026. Longr: Unleashing long-context reasoning via reinforce-ment learning with dense utility rewards. CoRR ,abs/2602.05758. Zhihong Shao, Peiyi Wang, Qihao Zhu, Runxin Xu, Junxiao Song, Mingchuan Zhang, Y. K. Li, Y. Wu, and Daya Guo. 2024. Deepseekmath: Pushing the limits of mathematical reasoning in open language models. CoRR , abs/2402.03300. Weizhou Shen, Ziyi Yang, Chenliang Li, Zhiyuan Lu, Miao Peng, Huashan Sun, Yingcheng Shi, Shengyi Liao, Shaopeng Lai, Bo Zhang, Dayi-heng Liu, Fei Huang, Jingren Zhou, and Ming Yan. 2025. Qwenlong-l1.5: Post-training recipe for long-context reasoning and memory management. CoRR ,abs/2512.12967. Noah Shinn, Federico Cassano, Ashwin Gopinath, Karthik Narasimhan, and Shunyu Yao. 2023. Re-flexion: language agents with verbal reinforcement learning. In Advances in Neural Information Pro-cessing Systems 36: Annual Conference on Neural Information Processing Systems 2023, NeurIPS 2023, New Orleans, LA, USA, December 10 - 16, 2023 .Shreyas Singh, Kunal Singh, and Pradeep Moturi. 2025. Fathom-deepresearch: Unlocking long horizon in-formation retrieval and synthesis for slms. CoRR ,abs/2509.24107. Artificial Analysis Team. 2025a. Artificial analysis long context reasoning benchmark(lcr). Qwen Team. 2025b. Qwen3 technical report. CoRR ,abs/2505.09388. Harsh Trivedi, Niranjan Balasubramanian, Tushar Khot, and Ashish Sabharwal. 2022. Musique: Multi-hop questions via single-hop question composition. 
+
+Trans. Assoc. Comput. Linguistics , 10:539–554. Fanqi Wan, Weizhou Shen, Shengyi Liao, Yingcheng Shi, Chenliang Li, Ziyi Yang, Ji Zhang, Fei Huang, Jingren Zhou, and Ming Yan. 2025. Qwenlong-l1: Towards long-context large reasoning models with reinforcement learning. CoRR , abs/2505.17667. Siyuan Wang, Gaokai Zhang, Li Lyna Zhang, Ning Shang, Fan Yang, Dongyao Chen, and Mao Yang. 2025. Loongrl: Reinforcement learning for ad-vanced reasoning over long contexts. CoRR ,abs/2510.19363. John Yang, Carlos E. Jimenez, Alexander Wettig, Kil-ian Lieret, Shunyu Yao, Karthik Narasimhan, and Ofir Press. 2024. Swe-agent: Agent-computer in-terfaces enable automated software engineering. In 
+
+Advances in Neural Information Processing Systems 38: Annual Conference on Neural Information Pro-cessing Systems 2024, NeurIPS 2024, Vancouver, BC, Canada, December 10 - 15, 2024 .Zhilin Yang, Peng Qi, Saizheng Zhang, Yoshua Ben-gio, William W. Cohen, Ruslan Salakhutdinov, and Christopher D. Manning. 2018. Hotpotqa: A dataset for diverse, explainable multi-hop question answer-ing. In Proceedings of the 2018 Conference on Em-pirical Methods in Natural Language Processing, Brussels, Belgium, October 31 - November 4, 2018 ,pages 2369–2380. Association for Computational Linguistics. Shunyu Yao, Jeffrey Zhao, Dian Yu, Nan Du, Izhak Shafran, Karthik R. Narasimhan, and Yuan Cao. 2023. React: Synergizing reasoning and acting in language models. In The Eleventh International Conference on Learning Representations, ICLR 2023, Kigali, Rwanda, May 1-5, 2023 . OpenReview.net. Jiajie Zhang, Xin Lv, Ling Feng, Lei Hou, and Juanzi Li. 2026. Chaining the evidence: Robust reinforcement learning for deep search agents with citation-aware rubric rewards. CoRR , abs/2601.06021. Dawei Zhu, Xiyu Wei, Guangxiang Zhao, Wenhao Wu, Haosheng Zou, Junfeng Ran, Xun Wang, Lin Sun, Xiangzheng Zhang, and Sujian Li. 2025a. Chain-of-thought matters: Improving long-context language models with reasoning path supervision. In Find-ings of the Association for Computational Linguis-tics: EMNLP 2025, Suzhou, China, November 4-9, 2025 , pages 3197–3211. Association for Computa-tional Linguistics. Zilin Zhu, Chengxing Xie, Xin Lv, and slime Contribu-tors. 2025b. slime: An llm post-training framework for rl scaling. https://github.com/THUDM/slime .GitHub repository. Corresponding author: Xin Lv. 
+
+10 A Dataset Comparison 
+
+Table 6 compares the training datasets of the long-context RL methods evaluated in our experi-ments. DocQA contains 200 MuSiQue examples (4-hop) and 200 MultiHopRAG examples (2–4 hop), and the remaining 1,191 are math or logic questions without a defined hop count. LoongRL reuses HotpotQA (2-hop), MuSiQue (2–4 hop), and 2WikiMQA (2-hop). Its KeyChain mechanism adds extra UUID-tracing steps on top. LongR-LVR generates questions from single documents via LLM, which require cross-chunk synthesis but do not follow a defined multi-hop chain. In contrast, LONG TRACE RL constructs questions via knowl-edge graph random walks with k = 8 hops, pro-ducing substantially deeper reasoning chains. 
+
+B Case Studies 
+
+Case from rollout data. Figure 5 shows a train-ing rollout on a multi-hop question synthesized by our pipeline, whose reasoning chain spans seven gold entities (Arab-Berbers, Banu Hilal, Zenata, Marinid dynasty, Emirate of Granada, Granada War, Muhammad XII) before arriving at the final answer “Genil”. A natural concern with our entity-recall rubric is that the model might learn to inflate its score by enumerating every entity it sees in the context. The rollout here illustrates the opposite be-havior: L ONG TRACE RL-4B visits each gold entity in the correct order and commits to the final answer. Each cited entity serves a necessary role in the rea-soning chain, and entities outside the gold path are never introduced merely to inflate the rubric score. This is exactly the behavior that the positive-only rubric reward is designed to elicit. 
+
+Case 1: Resolving Conflicting Cues in the Ques-tion. Figures 6 and 7 present a representative AA-LCR example that highlights the reasoning depth our reward formulation aims to promote. The ques-tion intentionally mixes two conflicting cues: its surface label says “medium-sized”, but the supplied headcount of 450 employees actually falls into the ABS large business category ( > 199 employees). The source document further reports two relevant ratios: a general 18 .0% over all businesses, and a rate of 37 .6% specifically for businesses with 200 
+
+to 999 workers. Therefore, to solve the question, one must first recognize this internal contradiction in the question and then retrieve the percentage that matches the actual headcount. As Figure 6 shows, L ONG TRACE RL-GRPO-4B takes a short-cut, selecting the first reasonable figure ( 18 .0% )and missing the answer. In contrast, L ONG TRAC -
+
+> E
+
+RL-4B trained with rubric reward (Figure 7) ex-plicitly flags the inconsistency between “medium-sized” and 450 employees, reclassifies the firms by their actual headcount, and applies the 37 .6% rate to get the correct answer. This example illustrates precisely how L ONG TRACE RL’s design promotes deeper reading and reasoning. 
+
+Case 2: Disambiguating Pronoun Reference Across Clauses. Figures 8 and 9 illustrate a dif-ferent type of reasoning challenge. In this question, two clauses share an ambiguous “this company”: the first clause refers to a company that issued a press release on July 27, 2023 (Digital Realty), while the second clause introduces “one customer with an explicit mention of which stock exchange it trades on” and then asks about that customer ’s exchange. Solving the question therefore requires (i) identifying the press-release issuer, (ii) realiz-ing that the final “this company” refers back to the 
+
+customer rather than the issuer, and (iii) finding the unique customer in the documents whose exchange is explicitly annotated (Equinix, Nasdaq: EQIX). As Figure 8 shows, L ONG TRACE RL-GRPO-4B merges the two clauses into a single entity, incor-rectly treating Digital Realty as the answer. It actu-ally retrieves the Equinix/Nasdaq passage but dis-misses it because of a misapplied date constraint. In contrast, L ONG TRACE RL-4B (Figure 9) re-parses the question structure, explicitly pivots from issuer to customer, scans the documents for the unique customer with an exchange annotation, and returns the correct answer “Nasdaq”. 
+
+Case 3: Understanding a Subtle Qualifier. Fig-ures 10 and 11 highlight a third trap: a subtle filter hidden in the phrase “ within their scope ”. The question asks for documents whose outlook cov-ers the year 2022, which is an inclusive criterion: a document is qualified as long as its forecast pe-riod covers 2022, even when “2022” does not ap-pear in its title. Two documents meet this require-ment: the Deloitte “2022 Engineering and Con-struction Industry Outlook” (an obvious title match) and the ACEC “2021–2025 Engineering Industry Forecast”, which provides explicit 2022 projections (e.g., “$356 billion in 2022”) as part of its five-year forecast. As Figure 10 shows, L ONG TRACE RL-GRPO-4B secretly rewrites the question, focuses solely on the title-level keyword match and dis-11 Dataset #Samples Context Length #Hops Question Source                 
+
+> DocQA 1,591 2K–20K 2–4 Real documents (math, logic, multi-hop) LoongRL 15,000 16K 2–4 HotpotQA, MuSiQue, 2WikiMQA LongRLVR 18,870 8K–64K N/A LLM-generated from book/arXiv/code LONG TRACE RL 2,815 128K 8KG random walk on Wikipedia
+
+Table 6: Comparison of training datasets used in long-context RL methods. 
+
+cards the ACEC document despite having retrieved it. In contrast, L ONG TRACE RL-4B (Figure 11) iterates over each candidate document, recognizes that the ACEC forecast covers 2022, and correctly returns both documents together with their source organizations. 
+
+C Prompts 
+
+We show our used prompts in Figure 12, 13. 12 Question: Begin with a mixed North African population whose identity emerged through cultural blending 
+
+after eastern tribal migrations. One such migrating confederation moved west and weakened local nomadic groups, 
+
+including a Berber confederacy that later produced a ruling house. From that house arose a dynasty that ruled a 
+
+western Maghrebi realm and repeatedly intervened across a narrow sea to support the last Muslim polity there. 
+
+That polity became the final Islamic state in the peninsula and was eventually destroyed in a prolonged campaign 
+
+by united Christian crowns. The war ended when its final ruler formally yielded authority. Contemporary accounts 
+
+place the ceremonial encounter of surrender beside a flowing watercourse near the city. What is the name of that 
+
+watercourse? <DOC_1><DOC_2><DOC_3>……<DOC_N> 
+
+Answer: Genil 
+
+LongTraceRL-4B :
+
+<think> 
+
+I need to follow the chain step by step and match each clue to the documents: 
+
+1. "Mixed North African population, identity emerged through cultural blending after eastern tribal migrations." 
+
+→ Doc [4] Arab-Berbers: mixed Berber/Arab origin, formed via Arab conquest and intermarriage (incl. Banu 
+
+Hilal migration). 
+
+…
+
+So the watercourse is the Genil. 
+
+</think> 
+
+Let me work through the chain step by step, matching each clue with the documents. 
+
+1. Mixed North African population from eastern migrations → Arab-Berbers [Doc 4] :
+
+> "Arab-Berbers are people of mixed Berber, Arab and other non-Berber origin... The Arab-Berber identity came 
+
+into being as a direct result of the Arab conquest of North Africa, and the intermarriage... Banu Hilal and Sulaym 
+
+Arab tribes... intermarried with the local rural mainly Berber populations." 
+
+2. Migrating confederation that weakened a Berber confederacy → Banu Hilal weakened the Zenata [Doc 3] :
+
+> "The Banu Hilal... emigrated to North Africa in the 11th century... they quickly defeated the Zirids and deeply 
+
+weakened the neighboring Hammadid dynasty and the Zenata." 
+
+The Zenata [Doc 1] later produced a ruling house — the Marinids [Doc 5]: "a Sunni Muslim dynasty of Zenata 
+
+Berber descent." 
+
+3. Dynasty ruling a western Maghrebi realm, intervening across a narrow sea → Marinid dynasty [Doc 5] :
+
+> "ruled Morocco from the 13th to the 15th century... supported the Kingdom of Granada in Al-Andalus... attempt 
+
+to gain a direct foothold on the European side of the Strait of Gibraltar." 
+
+4. Final Islamic state in the peninsula, destroyed by united Christian crowns → Emirate of Granada ,
+
+destroyed in the Granada War [Doc 10] :
+
+> "between 1482 and 1491, during the reign of the Catholic Monarchs Isabella I of Castile and Ferdinand II of 
+
+Aragon... ending all Islamic rule on the Iberian peninsula." 
+
+5. Final ruler formally yielding authority → Muhammad XII (Boabdil) [Doc 2] :
+
+> "In January 1492 Muhammad XII of Granada, the last Nasrid ruler... formally relinquished his sovereignty and 
+
+surrendered his territories to Castile." 
+
+6. Watercourse at the ceremonial surrender → From Doc [7] , eyewitness letter to the bishop of Le ón: 
+
+> "the royal procession moved from Santa Fe to a place a little more than a mile from Granada, where Ferdinand 
+
+took up his position by the banks of the Genil." 
+
+Doc [6] confirms the Genil flows through Granada. 
+
+Final Answer: Genil (Genil River) 
+
+Case from rollout data: Fully Solved by LongTraceRL-4B Figure 5: A training rollout from L ONG TRACE RL-4B on a synthesized multi-hop question. 
+
+13 Question: Consider a sample of 560 medium-sized Australian business each with around 450 employees .
+
+How many of these businesses (to the nearest whole number) would we expect to have employees that are 
+
+restrained by co-worker non-solicitation clauses? <DOC_1><DOC_2><DOC_3>……<DOC_N> 
+
+Answer: 211 
+
+LongTraceRL-GRPO-4B :
+
+To answer this question, I need to determine how many of the 560 medium-sized Australian businesses with 
+
+around 450 employees would be expected to have employees restrained by co-worker non-solicitation clauses. 
+
+From Document 1 (the Issues Paper), I can find the relevant statistic: "The ABS survey reported 18.0 per cent 
+
+of businesses used a co-worker non-solicitation clause for some of their workers in 2023." 
+
+This is the key figure I need for my calculation. The document also notes that "The ABS survey also reported that 
+
+67.2 per cent of businesses which used co-worker non-solicitation clauses, used them for over three-quarters of 
+
+their workers" - but this is about the percentage of workers affected within businesses that use these clauses, not 
+
+the percentage of businesses that use them. 
+
+For the calculation: 
+
+• Total businesses: 560 
+
+• Percentage of businesses with co-worker non-solicitation clauses: 18.0% 
+
+• Expected number of businesses: 560 × 0.18 = 100.8 
+
+Rounded to the nearest whole number, this equals 101 businesses. 
+
+The question asks specifically about how many businesses would have employees restrained by co-worker non-
+
+solicitation clauses, not how many employees are affected. Since 18.0% of businesses use co-worker non-
+
+solicitation clauses (for some of their workers), the answer is 101 businesses. 
+
+Therefore, we would expect 101 out of the 560 medium-sized Australian businesses with around 450 employees 
+
+each to have employees restrained by co-worker non-solicitation clauses. 
+
+Answer: 101 
+
+Case 1 on AA-LCR: Failed by LongTraceRL-GRPO-4B 
+
+> Conflicts!
+
+Figure 6: A failure case from AA-LCR where the L ONG TRACE RL-GRPO-4B trained without rubric reward takes a shortcut without resolving the conflict in the question. 
+
+14 Question: Consider a sample of 560 medium-sized Australian business each with around 450 employees .
+
+How many of these businesses (to the nearest whole number) would we expect to have employees that are 
+
+restrained by co-worker non-solicitation clauses? <DOC_1><DOC_2><DOC_3>……<DOC_N> 
+
+Answer: 211 
+
+LongTraceRL-4B :
+
+To answer how many of 560 Australian businesses (each with ~450 employees) would be expected to have 
+
+employees restrained by co-worker non-solicitation clauses, I need to examine the input documents for relevant 
+
+evidence. 
+
+Step 1: Clarify business size definitions 
+
+From Document 1 (Issues Paper): 
+
+> "The ABS defines business size based on employment size, grouped into micro/small business (0-19 
+
+employees), medium-sized business (20-199 employees) and large business (employment size greater than 199 
+
+employees)." 
+
+So under the ABS classification: 
+
+- Micro/small: 0–19 employees 
+
+- Medium-sized: 20–199 employees 
+
+- Large: >199 employees 
+
+The question calls the sample "medium-sized" but each business has ~450 employees, which actually falls in the 
+
+**large ** category (specifically the 200–999 worker bracket). This appears to be a misnomer in the 
+
+question — I'll use the bracket matching the employee count. 
+
+Step 2: Find the prevalence of co-worker non-solicitation clauses 
+
+From Document 1: 
+
+> "The ABS survey reported 18.0 per cent of businesses used a co-worker non-solicitation clause for some of their 
+
+workers in 2023, [37] the least used of the four restraint clauses reported in the survey." 
+
+> "Co-worker non-solicitation clauses were most often used by large businesses, with reported use of 37.7 per 
+
+cent among businesses that have 1,000 or more workers and **37.6 per cent for businesses with between 200 and 
+
+999 workers **." 
+
+This is the critical figure — 450-employee businesses fall in the 200–999 bracket, so the applicable rate is 
+
+37.6%. 
+
+Step 3: Confirm "restrained employees" interpretation 
+
+Also from Document 1: 
+
+> "The ABS survey also reported that 67.2 per cent of businesses which used co-worker non-solicitation clauses, 
+
+used them for over three-quarters of their workers." 
+
+This confirms that businesses using the clauses do in fact have restrained employees. 
+
+Step 4: Cross-check against other documents 
+
+From Document 9 (COSBOA submission), the 18.0% overall figure is repeated, but this is the all-business-size 
+
+average — not specific to 200–999 workers. The 37.6% figure from Document 1 remains the correct one for 
+
+this sample. 
+
+Calculation: 
+
+560 × 0.376 = 210.56 ≈ 211 
+
+Answer: 211 
+
+Case 1 on AA-LCR: Fully Solved by LongTraceRL-4B 
+
+> Conflicts!
+
+Figure 7: A success case from AA-LCR where the L ONG TRACE RL-4B trained with rubric reward identifies the conflict and applies the correct rate (37.6%) to reach the correct answer. 
+
+15 Question: One company in the documents conducted a press release on July 27, 2023. There is only one 
+
+customer with an explicit mention of which stock exchange it trades on within the document set. According to the 
+
+documents, what stock exchange does does this company trade on? <DOC_1><DOC_2><DOC_3>……<DOC_N> 
+
+Answer: Nasdaq 
+
+LongTraceRL-GRPO-4B :
+
+The question specifies there is "only one customer with an explicit mention of which stock exchange it trades on" 
+
+within the document set. Looking through all the documents, Digital Realty is the only company that has an 
+
+explicit mention of which stock exchange it trades on - it trades on the NYSE (New York Stock Exchange) 
+
+with the ticker symbol DLR. 
+
+While Document 3 mentions Equinix (Nasdaq: EQIX), that press release was dated August 2, 2023, not July 27, 
+
+2023 , so it doesn't meet the specific date requirement in the question. 
+
+Therefore, according to the documents, the company that conducted a press release on July 27, 2023 and has an 
+
+explicit mention of which stock exchange it trades on trades on the NYSE (New York Stock Exchange). 
+
+Answer: NYSE 
+
+Case 2 on AA-LCR: Failed by LongTraceRL-GRPO-4B 
+
+refers to the "one customer" 
+
+instead of "one company "Figure 8: A failure case from AA-LCR where the L ONG TRACE RL-GRPO-4B trained without rubric reward incorrectly merges the two clauses into a single entity and answers with the press-release issuer’s exchange. 
+
+16 Question: One company in the documents conducted a press release on July 27, 2023. There is only one 
+
+customer with an explicit mention of which stock exchange it trades on within the document set. According to the 
+
+documents, what stock exchange does does this company trade on? <DOC_1><DOC_2><DOC_3>……<DOC_N> 
+
+Answer: Nasdaq 
+
+LongTraceRL-4B :
+
+To answer the question, I need to (1) identify the company that issued a press release on July 27, 2023, (2) find 
+
+the only customer in the document set with an explicit stock-exchange mention. 
+
+Step 1: Company with a press release on July 27, 2023 
+
+• Document 1 : "Digital Realty Reports Second Quarter 2023 Results" — "Austin, TX — July 27, 2023 — 
+
+Digital Realty (NYSE: DLR)…" 
+
+• Document 2 : Same Digital Realty press release, dated July 27, 2023. 
+
+• Document 3 : Equinix press release dated August 2, 2023 — not a match. 
+
+→ The company is Digital Realty Trust, Inc. (NYSE: DLR) .
+
+Step 2: Customer with an explicit stock-exchange mention 
+
+Document 1 contains Digital Realty's "Top 20 Customers by Annualized Rent" table, including names such as 
+
+Oracle Corporation, IBM, Equinix, LinkedIn, Meta Platforms, JPMorgan Chase, Comcast, AT&T, Zayo, Lumen, 
+
+Rackspace, Cyxtera, etc. The table itself does not mention any stock exchanges. 
+
+Searching for explicit exchange mentions tied to these customers across the documents: 
+
+• Document 3 ("About Equinix") states: "Equinix (Nasdaq: EQIX) is the world's digital infrastructure 
+
+company. " — explicit exchange mention. 
+
+• All other listed customers (Oracle, IBM, Meta, JPMorgan Chase, AT&T, Zayo, etc.) are referenced by name 
+
+only; no explicit stock exchange is stated for them anywhere in the document set. 
+
+Equinix is the only customer with an explicit stock-exchange mention, and it appears in Digital Realty's 
+
+customer table (rank 7). 
+
+Step 3: Confirm uniqueness 
+
+No other customer in the documents has an explicit exchange identifier — only Equinix's "Nasdaq: EQIX" 
+
+qualifies. 
+
+Answer: Nasdaq 
+
+Case 2 on AA-LCR: Fully Solved by LongTraceRL-4B 
+
+refers to the "one customer" 
+
+instead of "one company "Figure 9: A success case from AA-LCR where the L ONG TRACE RL-4B trained with rubric reward keeps the two clauses separate and returns the correct answer. 
+
+17 Question: I am researching construction trends. I am looking for documents that provide outlooks for the 
+
+year 2022 within their scope . Which documents should I read? Please outline the full title of the document and 
+
+which organisation it is from. <DOC_1><DOC_2><DOC_3>……<DOC_N> 
+
+Answer: Deloitte: 2022 Engineering and Construction Industry Outlook, ACEC Research Institute: 2021-2025 
+
+Engineering Industry Forecast. 
+
+LongTraceRL-GRPO-4B :
+
+Based on your request for documents that provide outlooks specifically for the year 2022 within their scope, I've 
+
+identified the most relevant document from the input materials: 
+
+Document Title: "2022 engineering and construction industry outlook" 
+
+Organization: Deloitte 
+
+This document explicitly focuses on the outlook for the year 2022 and provides detailed analysis of the 
+
+engineering and construction industry's expected performance, challenges, and opportunities for that specific year. 
+
+The document includes sections specifically discussing the industry's position for 2022, market dynamics, 
+
+profitability challenges, digital transformation trends, and M&A activity that would impact the industry in that 
+
+year. 
+
+The document is clearly labeled with "2022" in its title and contains forward-looking statements specifically about 
+
+what the industry can expect in 2022, making it the most direct match for your research needs. 
+
+While Document 5 ("2021-2025 Engineering Industry Forecast" by ACEC Research Institute) does include 
+
+2022 in its multi-year forecast, it's a broader 5-year forecast rather than a dedicated 2022 outlook. The 
+
+Deloitte document is the most focused specifically on 2022 as the year of interest. 
+
+This document would be your best starting point for understanding the construction industry's outlook specifically 
+
+for 2022. 
+
+Answer: Deloitte: 2022 Engineering and Construction Industry Outlook 
+
+Case 3 on AA-LCR: Failed by LongTraceRL-GRPO-4B Figure 10: A failure case from AA-LCR where the L ONG TRACE RL-GRPO-4B trained without rubric reward silently rewrites the question and uses a tightened criterion to discard the ACEC document. 
+
+18 Question: I am researching construction trends. I am looking for documents that provide outlooks for the 
+
+year 2022 within their scope . Which documents should I read? Please outline the full title of the document and 
+
+which organisation it is from. <DOC_1><DOC_2><DOC_3>……<DOC_N> 
+
+Answer: Deloitte: 2022 Engineering and Construction Industry Outlook, ACEC Research Institute: 2021-2025 
+
+Engineering Industry Forecast. 
+
+LongTraceRL-4B :
+
+I reviewed all 11 documents to identify those that provide outlooks specifically for 2022 within their scope. 
+
+• Doc 1 — KPMG "Construction in 2030" (Feb 2023): a 2030 projection. Not 2022. 
+
+• Doc 2 — "No turning back" (2021 Global Construction Survey, Aug 2021): 2021 survey, not a 2022-specific 
+
+outlook. Not 2022. 
+
+• Doc 3 — Deloitte "2024 engineering and construction industry outlook" (Nov 2023): explicitly a 2024 outlook. 
+
+Not 2022. 
+
+• Doc 4 — "2020 engineering and construction": outlook for 2020. Not 2022. 
+
+• Doc 5 — ACEC Research Institute, **"2021-2025 Engineering Industry Forecast" **: 5-year forecast covering 
+
+2022 explicitly, e.g. "The Engineering and Design Services sector… will begin to recover over the period, 
+
+growing 3% to $356 billion in 2022." → 2022 outlook ✓
+
+• Doc 6 — "2023 engineering and construction": outlook for 2023, with 2022 only as backward context. Not 
+
+2022. 
+
+• Doc 7 — "The next normal in construction" (June 2020): a 2020 report with forward-looking statements; not 
+
+2022-specific. Not 2022. 
+
+• Doc 8 — McKinsey "From start-up to scale-up" (2023): construction tech trends, not a 2022 outlook. Not 
+
+2022. 
+
+• Doc 9 — Deloitte Research Center for Energy & Industrials, **"2022 engineering and construction industry 
+
+outlook" **: explicitly titled as 2022 outlook ("Preparing for another strong year"; "In 2022, as we move into 
+
+the second year of recovery…" ). → 2022 outlook ✓
+
+• Doc 10 — Deloitte "2021 engineering and construction industry outlook" (Nov 2021): outlook for 2021. Not 
+
+2022. 
+
+• Doc 11 — KPMG "Familiar challenges—new approaches" (2023 Global Construction Survey, June 2023): 
+
+2023 survey. Not 2022. 
+
+Final Answer 
+
+Two documents provide outlooks for 2022 within their scope: 
+
+1. "2021-2025 Engineering Industry Forecast" — ACEC Research Institute (Doc 5): 5-year forecast explicitly 
+
+covering 2022. 
+
+2. "2022 engineering and construction industry outlook" — Deloitte Research Center for Energy & 
+
+Industrials (Doc 9): explicitly a 2022 outlook. 
+
+Case 3 on AA-LCR: Fully Solved by LongTraceRL-4B Figure 11: A success case from AA-LCR where the L ONG TRACE RL-4B trained with rubric reward checks each candidate document and finds both qualifying outlooks with correct organization attributions. 
+
+19 Task Description 
+
+You are provided with: 
+
+• A path: an ordered sequence of entities (nodes) obtained from a random walk on Wikipedia, where 
+
+each node is connected by a specific relationship. 
+
+• Descriptions of each node: detailing key attributes such as names, places, events, or times. 
+
+Your task: 
+
+• Find the connections among nodes from the path, and construct a multi-hop question as hard as 
+
+possible that requires reasoning along the path step by step, using each node and relationship in 
+
+order to arrive at the solution. 
+
+• Select one attribute (could be a name, place, event, or time) from the description of the last node in 
+
+the path as the final unique answer to the question. 
+
+• CRITICAL : When constructing clues, focus on the relationship and connection to the previous 
+
+step, rather than providing intrinsic attributes of the node itself. Do NOT providing unique or 
+
+distinguishing features that would allow direct identification of a node without reasoning through 
+
+the previous steps. The clues MUST guide the reasoning along the path step by step, not enable 
+
+shortcuts. 
+
+• Any obvious, distinct, or detailed clues MUST NOT show up in the question, such as names, 
+
+places, times, or events. Instead, paraphrase or generalize all clues and relationships, so that the 
+
+answer cannot be obtained by simple keyword matching. 
+
+• Every node's information should be mentioned in the question. 
+
+• The question should include up to {num_entities * 2} unique clues. 
+
+• The question should be concise and coherent, with a total character count not exceeding 
+
+{num_entities * 50} .
+
+• The answer MUST be unique, and exactly match the selected attribute from the last node, ensuring 
+
+there is no other answer that satisfies the question. 
+
+Output Format 
+
+``` 
+
+<question>(A multi-step question, arranged in the order of the path, in 
+
+English)</question> 
+
+<answer>(The unique answer corresponding to the selected attribute from the 
+
+last node)</answer> 
+
+<entities>(A python list of all entities needed along the reasoning 
+
+path)</entities> 
+
+``` 
+
+Input 
+
+• Path: {path} 
+
+• Node Descriptions: {intro} 
+
+Prompt for Multi-hop QA Generation Figure 12: Prompt for multi-hop QA generation in L ONG TRACE RL. 
+
+20 Judge whether the following [response] to [question] is correct or not based on the precise and 
+
+unambiguous [correct_answer] below. 
+
+[question] : {question} 
+
+[correct_answer] : {answer} 
+
+[response] : {response} 
+
+Your judgement must be in the format and criteria specified below: 
+
+• extracted_final_answer : The final exact answer extracted from the [response] . Put the extracted 
+
+answer as "None" if there is no exact, final answer to extract from the response. 
+
+• reasoning : Explain why the extracted_final_answer is correct or incorrect based on 
+
+[correct_answer] , focusing only on if there are meaningful differences between [correct_answer] 
+
+and the extracted_final_answer . Do not comment on any background to the problem, do not 
+
+attempt to solve the problem, do not argue for any answer different than [correct_answer] , focus 
+
+only on whether the answers match 
+
+• correct : Answer "yes" if extracted_final_answer matches the [correct_answer] given above, or 
+
+is within a small margin of error for numerical problems. Answer "no" otherwise, i.e. if there if 
+
+there is any inconsistency, ambiguity, non-equivalency, or if the extracted answer is incorrect. 
+
+Prompt for Outcome Reward Judgement Figure 13: Prompt for outcome reward judgement in L ONG TRACE RL. 
+
+21

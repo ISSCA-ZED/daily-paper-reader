@@ -1,0 +1,1094 @@
+Title: TRACE: Toulmin-based Reasoning Assessment through Constructive Elements for LLM CoT Evaluation
+
+URL Source: https://arxiv.org/pdf/2605.29656v1
+
+Published Time: Fri, 29 May 2026 00:58:58 GMT
+
+Number of Pages: 23
+
+Markdown Content:
+# TRACE: Toulmin-based Reasoning Assessment through Constructive Elements for LLM CoT Evaluation 
+
+Yundong Kim 1 2 Heyoung Yang 1
+
+## Abstract 
+
+Evaluating open-ended outputs from large lan-guage models (LLMs) remains challenging due to the absence of ground truth. Existing metrics rely on final-answer accuracy or surface-level statis-tics, leaving the reasoning process itself unex-amined. We introduce TRACE (Toulmin-based Reasoning Assessment through Constructive Ele-ments), a metric that analyzes Chain-of-Thought (CoT) reasoning processes. Rather than judging outcomes, TRACE inspects how arguments are constructed by integrating Toulmin’s argumenta-tion theory with Flavell’s metacognitive frame-work to assess reasoning structure. Experiments on 26.3K QA samples across 7 reasoning models show strong correlation with benchmark accuracy (r = 0 .74 ). Furthermore, TRACE is effective as a reinforcement learning reward signal, out-performing accuracy-only baselines. Together, these results indicate that logically sound reason-ing leads to higher-quality answers. TRACE thus serves as a complementary metric for evaluating open-ended outputs. Code is available at https: //github.com/hyyangkisti/trace .
+
+## 1. Introduction 
+
+Large Language Models (LLMs) have demonstrated remark-able capabilities in complex problem-solving, largely driven by Chain-of-Thought (CoT) reasoning (Wei et al., 2022). By decomposing problems into intermediate steps, models can tackle tasks requiring multi-hop logic, mathematical deduction, and commonsense reasoning. However, as the complexity of these reasoning chains grows, evaluating their 
+
+> 1
+
+Applied Agent Research Center, Korea Institute of Sci-ence and Technology Information (KISTI), Republic of Korea 
+
+> 2
+
+Department of Computer Science and Engineering, University of Seoul, Republic of Korea. Correspondence to: Heyoung Yang 
+
+<hyyang@kisti.re.kr >.
+
+Proceedings of the 43 rd International Conference on Machine Learning , Seoul, South Korea. PMLR 306, 2026. Copyright 2026 by the author(s). Claim 
+
+> Evid
+> Warrant
+> Backing
+> Eval
+> Qual
+> Rebut
+> Monitor
+
+To                                                         
+
+> Claim
+> Evid
+> Warrant
+> Backing
+> Eval
+> Qual
+> Rebut
+> Monitor
+> From
+> .17 .16 .07 .07 .11 .12 .15 .16
+> .25 .18 .10 .07 .11 .10 .09 .11
+> .25 .19 .10 .06 .10 .09 .14 .09
+> .24 .19 .11 .08 .10 .09 .13 .06
+> .23 .13 .05 .07 .12 .12 .14 .15
+> .14 .17 .06 .07 .09 .13 .17 .17
+> .21 .14 .07 .07 .11 .14 .16 .11
+> .13 .28 .07 .11 .07 .13 .11 .11
+
+Kimi-K2-Thinking 
+
+> Claim
+> Evid
+> Warrant
+> Backing
+> Eval
+> Qual
+> Rebut
+> Monitor
+
+To                                                         
+
+> Claim
+> Evid
+> Warrant
+> Backing
+> Eval
+> Qual
+> Rebut
+> Monitor
+> From
+> .15 .13 .09 .04 .07 .18 .18 .16
+> .21 .13 .12 .04 .09 .13 .12 .18
+> .20 .14 .11 .04 .06 .14 .18 .13
+> .19 .14 .15 .06 .05 .16 .15 .10
+> .21 .11 .07 .03 .07 .19 .14 .17
+> .14 .11 .07 .05 .04 .23 .18 .19
+> .18 .10 .09 .04 .05 .22 .17 .16
+> .11 .22 .10 .10 .03 .18 .10 .15
+
+Qwen-Turbo 
+
+> 0.0
+> 0.1
+> 0.2
+> 0.3
+> 0.4
+
+P
+
+> 0.0
+> 0.1
+> 0.2
+> 0.3
+> 0.4
+
+P
+
+Figure 1. Transition heatmaps comparing Kimi-K2-Thinking and Qwen-Turbo. Blue-bordered cells denote Good Transitions (e.g., Evidence → Claim); Red-bordered cells denote Bad Transitions (e.g., Monitoring → Qualifier). 
+
+quality becomes increasingly challenging. Current evalua-tion paradigms focus on outcome-based metrics (e.g., accu-racy, exact match), which assess the final answer but treat the reasoning process as a black box. Reference-free metrics, 1
+
+> arXiv:2605.29656v1 [cs.AI] 28 May 2026 TRACE: Toulmin-based Reasoning Assessment through Constructive Elements for LLM CoT Evaluation
+
+including Perplexity (Radford et al., 2019), Token Length, and Lexical Diversity (MTLD) (McCarthy & Jarvis, 2010), offer insights into statistical fluency or diversity. However, it is difficult to capture whether an LLM engages in genuine logical reasoning relying solely on these metrics. Consequently, there is a growing need for process-based evaluation that can diagnose how a model thinks, not just what it concludes. Although “LLM-as-a-judge” approaches (Zheng et al., 2023) have gained popularity, they are often limited to relative evaluations (e.g., A/B testing) and remain black box in their decision making process, making it diffi-cult to pinpoint specific reasoning flaws. To address these limitations, this study aims to quantify the quality of LLM reasoning by grounding it in established argumentation the-ory and cognitive science. In this paper, we propose TRACE (Toulmin-based 
+
+Reasoning Assessment through Constructive Elements), a novel reference-free framework for evaluating LLM CoT quality based on Toulmin’s Argumentation Model (Toulmin, 2003) and Flavell’s Metacognition Theory (Flavell, 1979). Toulmin’s core abstraction of claim, data, and warrant is domain-agnostic and naturally fits the think-aloud nature of CoT reasoning. As illustrated in the Transition Heatmaps in Figure 1, we operationalize this by decomposing LLM reasoning blocks into sentence-level units and employing TRACE-DeBERTa to multi-label the Constructive Elements inherent in each sentence. These heatmaps quantify the reasoning flow by visualizing the transition probabilities from one element to the next. We classify these shifts based on a predefined Transition Set grounded in Toulmin’s and Flavell’s frameworks. Blue-bordered cells represent ‘Good Transitions’ (e.g., Ev-idence → Claim), indicating robust structural integrity, whereas red-bordered cells represent ‘Bad Transitions’ (e.g., Monitoring → Qualifier), highlighting areas of cognitive confusion. Empirically, we observe that Kimi-k2-thinking exhibits a higher frequency of Good Transitions and sig-nificantly fewer Bad Transitions compared to Qwen-Turbo. This distinction validates our hypothesis that while logical progression correlates with correctness, excessive hesitation often serves as a proxy for reasoning uncertainty rather than effective self regulation. Based on these Constructive Elements, we compute a TRACE Score, a composite metric derived from two com-ponents: (1) State Validity , which assesses the validity of individual reasoning steps based on allowed constructive states, and (2) Transition Coherence , which evaluates the logical flow between steps using a transition matrix. We validated TRACE through three distinct experiments. First, we analyzed the correlation between TRACE Scores and model accuracy across 39 established benchmarks (e.g., MMLU, GPQA) using 7 prominent LLMs, utilizing 26.3K pairs of reasoning blocks. Results demonstrate that TRACE achieves a strong Pearson correlation of ( r = 0 .741 ) with accuracy. Second, we assessed the alignment between TRACE and LLM-as-a-Judge using Arena-Hard-v2.0 (Li et al., 2025), achieving a 64% agreement rate in the MATH category. Third, we demonstrated the practical utility of TRACE as a Reinforcement Learning reward signal on GSM8K, where it yielded superior performance improve-ments (+9.9% over the base model) compared to using accuracy-based rewards alone. 
+
+## 2. Related Work 
+
+QA Benchmarks and CoT Evaluation Standard LLM evaluation has long relied on static Question-Answering (QA) benchmarks like MMLU and GPQA. However, as model capabilities saturate these metrics, recent initiatives such as LiveBench (White et al., 2025) and Humanity’s Last Exam (Phan et al., 2025) have introduced frontier-level problems to enhance discriminative power. Despite their increased difficulty, these benchmarks remain fundamen-tally outcome-based, relying on ground-truth labels (e.g., multiple-choice or short-answer) that overlook the quality of the underlying Chain-of-Thought (CoT) process. To address this, studies like MR-GSM8K (Zeng et al., 2025), CofCA 
+
+(Wu et al., 2025), ProcessBench (Zheng et al., 2025a) and 
+
+PRM (Khalifa et al., 2025) have proposed decomposing rea-soning into intermediate steps for finer-grained evaluation. However, these methods often require step-level correct-ness labels or heavyweight verifier models, limiting their scalability. In contrast, TRACE is designed to be fully reference-free and lightweight, enabling efficient evaluation without ground-truth supervision or expensive inference. 
+
+LLM-as-a-Judge To overcome the rigidity of QA met-rics, the “LLM-as-a-judge” paradigm has gained promi-nence, employing strong models (e.g., GPT-4) as evalua-tors. Benchmarks like FLASK (Ye et al., 2024), AlpacaEval 
+
+(Dubois et al., 2025), WildBench (Lin et al., 2025), and 
+
+Arena-Hard-v2.0 utilize pairwise comparisons to approxi-mate human preference, showing high correlation with the 
+
+LMSYS Chatbot Arena (Chiang et al., 2024). Meanwhile, works like MT-Bench-101 (Bai et al., 2024), JudgeLRM 
+
+(Chen et al., 2025) and HelpSteer2 (Wang et al., 2024b) ex-tend this to multi-turn dialogues using hierarchical capabil-ity scoring rather than simple A/B testing. However, recent research points to potential limitations within this paradigm. Surveys (Chen et al., 2024; Gu et al., 2026; Tan et al., 2025) indicate that LLM judges may occasionally exhibit biases, such as a preference for verbosity or specific positioning. Notably, (Zheng et al., 2025b) observed that models could sometimes achieve high win rates by aligning with these stylistic preferences, even without robust reasoning capabil-2TRACE: Toulmin-based Reasoning Assessment through Constructive Elements for LLM CoT Evaluation 
+
+ities. While recent judge models provide fine-grained rubric scores, engineers often lack visibility into which specific reasoning steps contributed to each score, making it difficult to trace and remediate particular weaknesses. 
+
+Argumentation Mining Early research in this field fo-cused on identifying functional units, such as claims and premises, within human persuasive essays (Stab & Gurevych, 2014). We adapt this established paradigm to the domain of Large Language Models, shifting the fo-cus from human writing to machine-generated Chain-of-Thought (CoT) processes. 
+
+## 3. Methodology 
+
+The TRACE framework employs a two-stage pipeline to quantify LLM reasoning quality. First, reasoning blocks are segmented into sentences via spaCy and classified by TRACE-DeBERTa to identify constructive attributes. Sec-ond, we evaluate the State Validity and Transition Coherence of the resulting label sequence through a rule-based algo-rithm. This yields a metric reflecting both logical integrity and cognitive dissonance. ···                            
+
+> DeBERTa -v3 -base
+> CLS Pooling [1 ×768]
+> Linear [768 ×8]
+> Sigmoid
+> Output (confidence ≥ 0.5)
+> Claim 0.951 →1
+> Qualifier 0.853 →1
+> Evaluation 0.324 →0
+> Backing 0.002 →0
+> Data/Evidence 0.001 →0
+> Rebuttal 0.001 →0
+> Monitoring 0.000 →0
+> Warrant 0.000 →0
+> [Example Input Sentence]
+> This is probably the best
+> algorithm in this logic.
+
+Figure 2. Architecture of TRACE-DeBERTa. The model encodes an input reasoning sentence using DeBERTa-v3-base. The [CLS] representation is projected to an 8-dimensional confidence vector via a linear layer and Sigmoid activation, enabling multi-label classification of constructive elements. 
+
+3.1. TRACE-DeBERTa for Sentence Attributes Labeling Model Selection We select DeBERTa-v3-base (He et al., 2023) as our backbone. While RoBERTa (Liu et al., 2019) remains a strong baseline, we opted for the more recent DeBERTa architecture for its disentangled attention mech-anism. We also considered ModernBERT (Warner et al., 2025), which excels in long-context efficiency. However, (Antoun et al., 2025) reports that DeBERTa retains a slight edge on short-sequence classification tasks. Given that our framework operates on sentence-level inputs, we prioritize DeBERTa for its proven precision in fine-grained classifica-tion. 
+
+Architecture and Data Inspired by the GoEmotions framework (Demszky et al., 2020), TRACE-DeBERTa em-ploys a fine-grained multi-label classification head. As shown in Figure 2, the pooled [CLS] embedding is mapped to an 8-dimensional logit vector via a linear layer, followed by sigmoid activation to produce label probabilities. We apply a sigmoid activation and adopt labels with probability 
+
+≥ 0.5.The model was fine-tuned using BCEWithLogitsLoss with class-specific weights to address label imbalance, where weights were softened by interpolating between uniform and frequency-based values. Training data consisted of ∼100k reasoning sentences annotated by advanced LLMs (GPT-5.1 and Claude 4.5 Sonnet, alternated to mitigate single-model stylistic bias) using few-shot prompts grounded in Toulmin’s and Flavell’s definitions. More details, see Appendix B.1 
+
+Table 1. TRACE-DeBERTa performance evaluated against hu-man annotations (400 sentences stratified across models and label categories, 3 senior NLP researchers, inter-annotator agreement Cohen’s κ = 0 .672 ). Label Precision Recall F1-score Claim 0.696 0.634 0.662 Data/Evidence 0.774 0.588 0.663 Warrant 0.602 0.544 0.547 Backing 0.780 0.612 0.685 Qualifier 0.865 0.783 0.821 Rebuttal 0.712 0.549 0.619 Monitoring 0.803 0.585 0.675 Evaluation 0.610 0.711 0.654 
+
+Macro Avg 0.730 0.626 0.666 
+
+Performance To independently validate the classifier, three senior NLP researchers annotated 400 sentences strat-ified across models and label categories. Inter-annotator agreement reached Cohen’s κ = 0 .672 , reflecting the inher-ent difficulty of this fine-grained task. Against these human labels, TRACE-DeBERTa achieves a Macro F1-score of 0.666 (Table 1). This approaches the inter-annotator agree-ment ceiling, suggesting that remaining errors largely reflect task ambiguity rather than systematic failure. Per-category performance varies with the explicitness of surface markers. 
+
+Qualifier (F1 = 0.821) scores highest, since its linguistic cues are clear. Warrant (F1 = 0.547) scores lowest, since it captures implicit inferential links that overlap with adjacent categories. Overall, the classifier is sufficiently reliable for downstream TRACE score computation. 
+
+3.2. TRACE Score Extraction 
+
+Once the reasoning block is converted into a sequence of label sets L = {l1, l 2, . . . , l n} by TRACE-DeBERTa, we 3TRACE: Toulmin-based Reasoning Assessment through Constructive Elements for LLM CoT Evaluation [Claim]  [Backing,                                                                                                     
+
+> Evaluation] [Rebuttal] [Monitoring] [EMPTY] [Claim,
+> Qualifier]
+> [Claim,
+> Evaluation]
+> Sentence 1 Sentence 2 Sentence 3 Sentence 4 Sentence 5 Sentence 6 Sentence 7
+> + 1
+> Transition
+> Coherence
+> Remove Empty Label
+> + 1 + 1 + 0 + 0 + 0.5 + 1
+> [Claim] [Backing,
+> Evaluation] [Rebuttal] [Monitoring] [Claim,
+> Qualifier]
+> [Claim,
+> Evaluation]
+> Sentence 1 Sentence 2 Sentence 3 Sentence 4 Sentence 6 Sentence 7
+> Question: I want to save memory. Is it
+> risky to use int instead of long long here?
+> Reasoning :
+> We must use long long for this variable .
+> Standard int is invalid here, as the ISO C++
+> standard limits a32 -bit signed integer to a
+> maximum value of $2,147 ,483 ,647 $.It
+> doubles the memory usage, though .Wait,
+> let me calculate the total memory
+> consumption .Okay, hmm .The impact is
+> likely minimal on this server .So, strict
+> usage of long long is the correct approach .
+> Answer :You should use long long despite
+> the memory increase .
+> TRACE -DeBERTa
+> Sentence Based Chunking with  spaCy  S1We must use long long for this variable.
+> S2
+> Standard int is invalid here, as the ISO C++ standard limits
+> a 32 -bit signed integer to a maximum value of
+> $2,147,483,647$.
+> S3It doubles the memory usage, though.
+> S4Wait, let me calculate the total memory consumption.
+> S5Okay, hmm.
+> S6The impact is likely minimal on this server.
+> S7So, strict usage of long long is the correct approach.
+> S1[Claim]
+> S2[Backing, Evaluation]
+> S3[Rebuttal]
+> S4[Monitoring]
+> S5[ ]
+> S6[Claim, Qualifier]
+> S7[Claim, Evaluation]
+> State
+> Validity
+
+State Validity 
+
+- Logical soundness of individual steps. 
+
+Transition Coherence 
+
+- Logical flow between adjacent steps. 
+
+Extract Trace Score from Label Train 
+
+Making Label Train from Reasoning Block 
+
+TRACE Scoring Components        
+
+> Good 2Neutral 2 Neutral 1 Good 1 ,Bad 1 Good 1 ,Neutral 3
+
+Figure 3. Overview of the TRACE Pipeline. The framework operates in two main phases: (Top) Making Label Train from Reasoning Block, where the raw reasoning text is decomposed and multi-labeled by TRACE-DeBERTa (described in Figure 2); and (Bottom) Extract TRACE Score from Label Train, where the resulting label sequence is analyzed for State Validity and Transition Coherence to compute the final metric. 
+
+proceed to the second phase illustrated in Figure 3: Extract Trace Score from Label Train. The scoring mechanism captures both the static structural integrity of individual steps and the dynamic logical flow of the argument. The final TRACE value is defined as a weighted sum of State Validity and Transition Coherence :TRACE = α · Vstate + (1 − α) · Ctrans (1) We assign higher weight to State Validity ( α = 0 .7) based on the principle that local coherence precedes global co-herence. In Toulmin’s framework, a valid argument must first establish well-formed units (e.g., Claim, Data, or their valid combinations) before chaining them into extended reasoning. If individual sentences lack valid argumenta-tive structure, the quality of their sequential flow becomes irrelevant. See Appendix C.1 for empirical validation. 
+
+State Validity ( Vstate ) State Validity evaluates whether each sentence forms a logically sound argument unit. We define a set of Allowed States ( Sallowed ), derived from valid combinations of Toulmin’s components (e.g., Claim, Data, Warrant), while penalizing ambiguous or structurally weak combinations. For each sentence i with label set li, we calculate the Jaccard Similarity J(li, s ) against the allowed states: 
+
+Vstate = 1
+
+N
+
+NX
+
+i=1 
+
+max {J(li, s ) | s ∈ S allowed } (2) To accommodate the diverse nature of reasoning, Sallowed 
+
+includes both single and composite attributes. We define the set as follows: 
+
+Sallowed = {‘Claim’ , ‘Data’ , ‘Warrant’ ,
+
+‘Backing’ , ‘Backing+Evaluation’ , . . . } (3) For instance, a distinct logical statement like ‘Back-ing+Evaluation’ (J = 1.0) contributes fully to valid-ity, whereas a hedged statement like ‘Qualifier+Claim’ 
+
+(J = 0 .5) yields a lower score, reflecting structural uncer-tainty. Consequently, this mechanism inherently penalizes non-constructive attributes such as isolated Monitoring or excessive Qualifiers by assigning them lower validity scores compared to robust argumentative components. 
+
+Transition Coherence ( Ctrans ) Transition Coherence as-sesses the logical quality of the flow between valid reasoning steps. Prior to analysis, we filter out sentences with no as-signed labels (EMPTY), as these typically represent phatic expressions or fillers (e.g., “Let’s see”) that introduce noise without contributing to the argumentative structure. For the remaining sequence of non-empty label sets, we evaluate ev-4TRACE: Toulmin-based Reasoning Assessment through Constructive Elements for LLM CoT Evaluation 
+
+Table 2. Accuracy and TRACE scores across 7 LLMs on 39 benchmarks. Top-2 values per AVERAGE row are in bold .
+
+DATASET GPT-OSS 120B GPT-OSS 20B Claude 3.7 Sonnet Qwen Turbo Qwen Flash DeepSeek R1 Kimi K2 Thinking    
+
+> (max samples per data ≤100)
+
+Acc TRACE Acc TRACE Acc TRACE Acc TRACE Acc TRACE Acc TRACE Acc TRACE AIME aime24 77% 0.644 67% 0.638 37% 0.590 80% 0.564 77% 0.586 93% 0.605 90% 0.628 aime25 87% 0.638 63% 0.608 27% 0.573 53% 0.554 67% 0.579 90% 0.556 80% 0.627  
+
+> AVERAGE
+
+82% 0.641 65% 0.623 32% 0.582 67% 0.559 72% 0.583 92% 0.581 85% 0.628 
+
+GSM8K 99% 0.751 98% 0.686 95% 0.701 99% 0.620 99% 0.636 97% 0.591 98% 0.646 ARC arc-easy 100% 0.726 99% 0.616 99% 0.688 98% 0.567 98% 0.632 100% 0.645 82% 0.676 arc-challenge 96% 0.695 92% 0.614 97% 0.669 95% 0.550 92% 0.626 94% 0.635 79% 0.667  
+
+> AVERAGE
+
+98% 0.711 96% 0.615 98% 0.679 97% 0.559 95% 0.629 97% 0.640 81% 0.672 MMLU college biology 96% 0.724 95% 0.610 99% 0.701 90% 0.585 96% 0.625 98% 0.649 93% 0.669 college chemistry 77% 0.664 77% 0.619 76% 0.666 64% 0.563 71% 0.566 80% 0.595 76% 0.640 college computer science 97% 0.669 94% 0.631 95% 0.674 70% 0.577 75% 0.585 98% 0.605 96% 0.675 college mathematics 97% 0.693 98% 0.651 95% 0.623 49% 0.572 65% 0.604 98% 0.565 95% 0.641 college medicine 90% 0.674 86% 0.616 86% 0.666 86% 0.558 89% 0.599 89% 0.611 85% 0.650 college physics 99% 0.773 99% 0.689 98% 0.720 79% 0.628 77% 0.618 100% 0.626 97% 0.685  
+
+> AVERAGE
+
+93% 0.700 92% 0.636 92% 0.675 73% 0.581 79% 0.600 94% 0.609 90% 0.660 MMLU-PRO biology 86% 0.618 77% 0.609 89% 0.677 87% 0.588 85% 0.604 85% 0.612 90% 0.638 business 81% 0.661 78% 0.592 84% 0.606 82% 0.583 81% 0.571 73% 0.571 87% 0.604 chemistry 81% 0.630 80% 0.618 89% 0.640 83% 0.566 87% 0.611 81% 0.577 89% 0.627 computer science 81% 0.583 79% 0.589 84% 0.649 83% 0.565 83% 0.590 78% 0.588 89% 0.629 economics 82% 0.612 72% 0.605 86% 0.652 80% 0.589 86% 0.603 80% 0.591 87% 0.632 engineering 71% 0.618 63% 0.586 71% 0.605 71% 0.546 74% 0.590 65% 0.564 84% 0.612 health 74% 0.576 65% 0.578 66% 0.605 72% 0.526 72% 0.560 76% 0.551 79% 0.583 history 64% 0.565 58% 0.583 73% 0.574 65% 0.523 65% 0.569 69% 0.591 73% 0.597 law 57% 0.569 39% 0.602 66% 0.618 51% 0.554 58% 0.587 68% 0.579 69% 0.634 math 92% 0.651 92% 0.643 90% 0.653 92% 0.623 92% 0.637 84% 0.595 95% 0.661 other 59% 0.565 52% 0.561 76% 0.604 53% 0.507 64% 0.547 71% 0.541 77% 0.599 philosophy 68% 0.523 64% 0.537 81% 0.588 71% 0.524 71% 0.554 77% 0.546 84% 0.588 physics 86% 0.649 86% 0.616 84% 0.650 86% 0.582 93% 0.617 77% 0.587 90% 0.639 psychology 76% 0.575 70% 0.590 73% 0.612 71% 0.548 75% 0.564 78% 0.579 79% 0.618  
+
+> AVERAGE
+
+76% 0.600 70% 0.594 79% 0.624 75% 0.559 78% 0.586 76% 0.577 84% 0.619 
+
+GPQA gpqa main 67% 0.591 59% 0.563 64% 0.613 38% 0.483 50% 0.541 75% 0.589 72% 0.600 gpqa diamond 67% 0.586 63% 0.556 72% 0.606 36% 0.485 57% 0.538 79% 0.571 74% 0.610  
+
+> AVERAGE
+
+67% 0.589 61% 0.560 68% 0.610 37% 0.484 54% 0.540 77% 0.580 73% 0.605 
+
+SuperGPQA agronomy 40% 0.563 34% 0.528 46% 0.572 44% 0.460 42% 0.501 47% 0.509 53% 0.556 economics 39% 0.607 33% 0.569 50% 0.605 51% 0.500 57% 0.541 60% 0.546 61% 0.603 education 48% 0.566 39% 0.511 54% 0.573 53% 0.458 51% 0.510 49% 0.533 57% 0.582 engineering 56% 0.599 46% 0.571 60% 0.593 58% 0.494 59% 0.525 67% 0.543 70% 0.587 history 35% 0.508 26% 0.481 57% 0.531 40% 0.409 40% 0.442 56% 0.508 53% 0.567 law 42% 0.585 32% 0.555 54% 0.582 47% 0.495 49% 0.537 71% 0.538 73% 0.608 literature & arts 41% 0.497 26% 0.487 57% 0.553 38% 0.437 40% 0.463 56% 0.507 63% 0.564 management 55% 0.560 31% 0.529 59% 0.567 43% 0.461 48% 0.507 57% 0.514 56% 0.562 medicine 48% 0.595 40% 0.560 53% 0.578 56% 0.464 62% 0.541 57% 0.532 61% 0.596 philosophy 50% 0.571 41% 0.538 60% 0.585 51% 0.485 55% 0.527 71% 0.552 59% 0.586 science 69% 0.611 70% 0.599 68% 0.586 68% 0.518 69% 0.554 71% 0.541 77% 0.592 sociology 38% 0.557 35% 0.511 59% 0.567 38% 0.431 47% 0.485 63% 0.513 58% 0.593  
+
+> AVERAGE
+
+47% 0.568 38% 0.537 56% 0.574 49% 0.468 52% 0.511 60% 0.528 62% 0.583 
+
+ery adjacent pair (li, l i+1 ). We define a set of Good Transi-tions (Tgood ), representing robust logical progressions (e.g., 
+
+Data → Claim ), and Bad Transitions (Tbad ), indicating cognitive stalling or circular uncertainty (e.g., Monitoring 
+
+→ Qualifier ). Any transition not explicitly categorized in 
+
+Tgood or Tbad is treated as a Neutral Transition. The classification of transitions is grounded in the theoreti-cal roles of each element. In Toulmin’s framework, Data ,
+
+Warrant , and Backing serve as support-providing elements that should flow toward Claim . Thus, transitions such as 
+
+Data → Claim or Warrant → Claim represent the natural completion of an argumentative unit. Conversely, Monitor-ing and Qualifier signal uncertainty or self-regulation in Flavell’s metacognitive framework. When these elements follow each other (e.g., Monitoring → Qualifier ), the rea-soning process accumulates hesitation without resolution. The coherence score is normalized to [0 , 1] based on the net density of positive transitions: 
+
+Ctrans = 12
+
+ Ngood − Nbad 
+
+Ntotal 
+
++ 1 
+
+
+
+(4) 5TRACE: Toulmin-based Reasoning Assessment through Constructive Elements for LLM CoT Evaluation 
+
+where Ntotal represents the total number of transitions in the reasoning block ( Ntotal = Ngood + Nbad + Nneutral ). This normalization ensures that the metric reflects the density of valid logical progressions relative to the overall length of the chain. These configurations were optimized by empirically val-idating various permutations grounded in Toulmin’s and Flavell’s theories. The full definitions of Sallowed , Tgood ,and Tbad are provided in Appendix B.2 and Appendix B.3. 
+
+## 4. Experiments 
+
+We validate TRACE through three experiments. Experi-ment 1 examines the correlation between TRACE scores and ground-truth accuracy across standard benchmarks. Ex-periment 2 assesses the alignment with “LLM-as-a-judge” preferences on Arena Hard v2.0. Experiment 3 demon-strates the practical utility of TRACE as a reward signal for Reinforcement Learning (RL) to enhance model reasoning capabilities. 
+
+4.1. Experiment 1: Correlation with Benchmark Accuracy Setup We utilized 39 widely-used benchmarks covering diverse domains (Math, Science, Coding, Humanities, etc.), including AIME, GSM8K (Cobbe et al., 2021), ARC (Clark et al., 2018), MMLU (Hendrycks et al., 2021), MMLU-PRO (Wang et al., 2024a), GPQA (Rein et al., 2024) and SuperG-PQA (Du et al., 2025). We evaluated 7 primary LLMs: GPT-oss-120b, GPT-oss-20b (Agarwal et al., 2025), Claude-3.7-Sonnet-20250219 (Anthropic, 2024), Qwen-Turbo (Qwen et al., 2025), Qwen-Flash (Yang et al., 2025), Deepseek-R1-0528 (Guo et al., 2025), and Kimi-K2-Thinking (Team et al., 2025). Since most proprietary models do not expose their intermediate reasoning processes, our analysis predom-inantly employs open-source models. To ensure diversity over depth, we sampled up to 100 instances per dataset, resulting in a total of 26,320 reasoning samples. While this represents a subset, recent studies (Kipnis et al., 2025) suggest that sparse sampling provides a reasonable proxy for assessing overall model capabilities. We standardized evaluations using lm-evaluation-harness (Biderman et al., 2024). 
+
+Main Results We calculated the accuracy for each bench-mark and the mean TRACE value of the generated reasoning blocks. Table 2 presents the detailed breakdown, and Fig-ure 4 visualizes a clear positive linear trend between TRACE and accuracy. Table 3 compares the Pearson ( r) and Spearman ( ρ) correla-tions of TRACE against baseline metrics. TRACE achieves a Pearson correlation of +0.741, drastically outperforming 0.40 0.45 0.50 0.55 0.60 0.65 0.70 0.75 
+
+TRACE mean   
+
+> 0.3
+> 0.4
+> 0.5
+> 0.6
+> 0.7
+> 0.8
+> 0.9
+> 1.0
+> Benchmark accuracy
+> Figure 4. Scatter plot of benchmark accuracy versus mean TRACE score across all model-benchmark pairs ( n= 273 ).
+
+surface-level metrics such as Token Length ( r = −0.147 ), Perplexity ( r = +0 .221 ) and MTLD ( r = −0.207 ). While extended reasoning typically correlates with improved per-formance within a controlled setting (i.e., a fixed model and task), raw token length becomes unreliable when comparing across heterogeneous models and benchmarks. Similarly, lexical diversity and fluency show limited predictive power, suggesting that the structural validity captured by TRACE is a far better predictor of correctness than statistical text properties.              
+
+> Table 3. Correlation between evaluation metrics and benchmark accuracy. Method Pearson rSpearman ρ
+> Token Length −0.147 −0.186 Perplexity +0.221 +0.145 MTLD −0.207 −0.244
+> TRACE (Ours) +0.741 +0.755
+
+Furthermore, as shown in Table 4, TRACE maintains strong correlation ( r > 0.78 ) across all 7 models. This robust intra-model correlation suggests that TRACE can be effective for model alignment—maximizing TRACE within a model’s native generation style may help unlock its peak reasoning potential. This per-model view shows that, with model identity controlled, the correlation observed in aggregate also holds within each individual model. A similar pattern appears within the same model family. In Table 2, GPT-OSS-120B yields higher mean TRACE scores than GPT-OSS-20B across the benchmark groups. This is consistent with the expected effect of model scale. 6TRACE: Toulmin-based Reasoning Assessment through Constructive Elements for LLM CoT Evaluation 
+
+Table 4. per-model correlation between TRACE mean and bench-mark accuracy. LLM Pearson r n Benchmarks gpt-oss-120b 0.8216 39 gpt-oss-20b 0.8555 39 claude-3.7-sonnet 0.8106 39 qwen-turbo 0.8179 39 qwen-flash 0.9144 39 deepseek-r1 0.8340 39 kimi-k2-thinking 0.7829 39 Incorrect Correct            
+
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> TRACE Score
+> n=384 n=3536
+> = +0.057
+> Math & Logic
+> Incorrect Correct
+> n=683 n=2117
+> = +0.060
+> CS & Engineering
+> Incorrect Correct
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> TRACE Score
+> n=1701 n=5299
+> = +0.071
+> Natural Sciences
+> Incorrect Correct
+> n=856 n=1944
+> = +0.044
+> Medicine & Health
+> Incorrect Correct
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> TRACE Score
+> n=1585 n=2615
+> = +0.038
+> Biz, Econ & Law
+> Incorrect Correct
+> n=2391 n=3209
+> = +0.046
+> Humanities & Social Sci.
+
+Figure 5. TRACE score distributions for correct vs. incorrect answers by domain. 
+
+Domain Analysis To investigate how reasoning struc-ture impacts performance across different fields, we clus-tered the 39 benchmarks into 6 categories: Math & Logic, CS & Engineering, Natural Sciences, Medicine & Health, Biz/Econ/Law, and Humanities & Social Sci. The detailed mapping is provided in Appendix A.4. We generated violin plots Figure 5 to visualize the distribution of TRACE values for Correct vs. Incorrect answers. We observed that for correct answers, the TRACE value is consistently higher than for incorrect ones. We quan-tified this by calculating the difference in means ( ∆μ =
+
+μcorrect − μincorrect ): • Math & Logic: ∆μ = +0 .057 
+
+• CS & Engineering: ∆μ = +0 .060 
+
+• Natural Sciences: ∆μ = +0 .071 (Highest) 
+
+• Medicine & Health: ∆μ = +0 .044 
+
+• Humanities & Social Sci.: ∆μ = +0 .046 
+
+• Biz, Econ & Law: ∆μ = +0 .038 (Lowest) 
+
+The results indicate that in logic-intensive domains like Natural Sciences and Math, the gap is most pronounced, suggesting that tasks requiring rigorous deductive steps are more sensitive to argumentative structure. In contrast, do-mains relying more on knowledge retrieval (Biz/Law) show a smaller, yet still positive, gap. With domain controlled as a variable, TRACE separates correct from incorrect an-swers across all six categories, with a larger gap in deductive domains and a smaller gap in knowledge-retrieval domains. 
+
+4.2. Experiment 2: Alignment with LLM-as-a-judge Setup To evaluate TRACE in an open-ended generation setting where ground truth is not always binary, we used the Arena Hard v2.0 benchmark (English subset). We pitted DeepSeek-R1 against QwQ-32b and used GPT-4.1 as the judge to determine the “Winner.” We then assessed whether TRACE (and baselines) could correctly predict the winner by assigning the win to the model with the higher metric score. 
+
+Table 5. Performance comparison of different metrics in prediction accuracy against GPT-4.1 judge on Arena Hard v2.0 (EN). Method coding creative writing math Token Length 44.22% 47.85% 36.78% Perplexity 49.21% 47.79% 50.57% MTLD 52.96% 53.45% 58.62% 
+
+TRACE (Ours) 55.78% 50.00% 64.37% 
+
+Results Table 5 summarizes the prediction accuracy of each metric against the GPT-4.1 judge decisions. In Math tasks, TRACE achieved a prediction accuracy of 64.37%, outperforming heuristic baselines. In Coding, TRACE also led with 55.78%. However, for Creative Writing, MTLD proved to be a more effective predictor 53.45%, which aligns 7TRACE: Toulmin-based Reasoning Assessment through Constructive Elements for LLM CoT Evaluation 
+
+with the expectation that creative tasks prioritize lexical diversity over argumentative structure. While these results show improvements over baselines, the overall prediction accuracies remain moderate. We attribute this to two primary factors. First, TRACE is designed to detect argumentative structure and cognitive dissonance, not factual correctness; a model may reason fluently yet produce erroneous intermediate steps or conclusions, lead-ing to disagreement with LLM judge decisions. Second, the current pipeline processes all textual content uniformly, including code blocks and narrative segments. These non-argumentative elements introduce noise into the constructive element classification, as TRACE-DeBERTa was trained predominantly on natural language reasoning and LaTeX equations, resulting in limited robustness to inputs domi-nated by raw code or creative narrative. Nevertheless, the performance in the Math category aligns with the design of TRACE, which focuses on deductive reasoning structures. This suggests that the metric provides a relevant signal in reasoning-intensive domains. It also remains lightweight relative to LLM-judge approaches (Ap-pendix A.3), making it easy to apply as a quick diagnostic. 
+
+4.3. Experiment 3: TRACE as a Reinforcement Learning Reward Signal Setup We fine-tuned the DeepSeek-R1-Distill-Qwen-1.5B model using Group Relative Policy Optimization (GRPO) (Shao et al., 2024). To isolate the benefit of struc-tural guidance, we defined a composite reward function 
+
+R(o, y ∗) as: 
+
+R(o, y ∗) = λacc · racc (o, y ∗) + rtrace (o) + rlen (o) (5) where the individual reward components are defined as fol-lows: 
+
+racc (o, y ∗) = I(extract (o) = y∗) (6) 
+
+rtrace (o) = α · Vstate (o) + (1 − α) · Ctrans (o) (7) 
+
+rlen (o) = 2
+
+π arctan( k · Nsent ) (8) Here, I(·) denotes the indicator function for factual correct-ness, and rtrace (o) represents the structural reward derived from our metric (Section 3.2). We set λacc = 2 .0 to prior-itize accuracy. Crucially, for the auxiliary length reward 
+
+rlen (o), we utilize a scaling factor k = 0 .2 to encourage a chain-of-thought (CoT) length exceeding 30 sentences. This ensures sufficient context for reliable TRACE extrac-tion while enforcing comparable CoT lengths across settings to serve as a control variable for verbosity. We also analyzed reward hacking behavior under different reward combina-tions, with details provided in Appendix D.3. To rigorously evaluate TRACE, we compared the 
+
+Base model (SFT) against two RL settings: a Ac-curacy+Length trained with only racc and rlen , and 
+
+TRACE+Accuracy+Length trained with the full reward including rtrace . By enforcing consistent CoT lengths across the latter two settings, we isolate the specific contribution of structural optimization from the effects of increased token generation. We utilized the GSM8K training set for RL fine-tuning, selected based on TRACE’s relatively higher alignment with judge preferences in mathematical reasoning (Section 4.2). For evaluation, we reported performance on the GSM8K test set (in-distribution) and the ARC-Challenge test set (out-of-distribution); the latter was chosen because the domain analysis in Section 4.1 showed the largest perfor-mance gap between correct and incorrect answers. By ob-serving performance changes when using TRACE as an RL reward signal, this setup allows us to verify consistency with the findings from Experiments 1 and 2. All RL experiments were implemented using the Transformer Reinforcement Learning (TRL) library (von Werra et al., 2020). Detailed training loss function and hyperparameters are provided in Appendix D.          
+
+> Table 6. Performance comparison of DeepSeek-R1-Distill-Qwen-1.5B on GSM8K and ARC-Challenge using different rewards.
+> Method GSM8K ARC-Challenge
+> Base Model (SFT) 74.75% 55.80% Accuracy + Length 77.86% 57.93%
+> TRACE + Accuracy + Length 84.69% 59.90%
+
+Results As shown in Table 6, training with accuracy and length rewards alone (Accuracy + Length) yields measur-able improvements over the Base model, confirming that en-couraging longer reasoning provides some benefit. However, incorporating TRACE into the reward function produces substantially larger gains on both in-distribution (GSM8K) and out-of-distribution (ARC-Challenge) benchmarks. These results suggest that incorporating structural guid-ance via TRACE provides complementary benefits beyond accuracy-based rewards. With the base model fixed and CoT length held constant across both RL settings, the per-formance gap indicates that TRACE can help guide models toward sounder reasoning processes rather than merely re-warding verbosity. 
+
+## 5. Limitations 
+
+TRACE evaluates argumentative structure and cognitive flow, not factual correctness. This design leads to inherent 8TRACE: Toulmin-based Reasoning Assessment through Constructive Elements for LLM CoT Evaluation 
+
+failure modes. False positives occur when a model reasons fluently from an incorrect premise: the logical structure appears sound, but the conclusion is wrong due to factual errors, calculation mistakes, or misunderstanding of the question. False negatives arise when a model arrives at the correct answer through hesitant, poorly structured reasoning, such as lucky guesses, pattern matching, or memorization recall, which TRACE penalizes despite the correct outcome. We organize these failure modes into a four-quadrant taxon-omy based on TRACE score (high/low) and answer correct-ness, with case studies provided in Appendix E. The applicable scope of TRACE is shaped by these failure modes. The domain analysis in Section 4.1 shows that the gap between correct and incorrect TRACE values is larger in deductive domains and smaller in knowledge-retrieval domains, and the judge alignment in Section 4.2 shows higher prediction accuracy in math than in creative writing. Together, these observations suggest that TRACE is best used in reasoning-intensive settings where argumentative structure is informative, and applied with caution to tasks dominated by factual recall, code, or open-ended narrative. Additionally, spaCy and TRACE-DeBERTa have limited ro-bustness to mixed-format inputs such as code blocks, LaTeX equations, and narrative content, which can affect sentence segmentation and classification quality. Finally, TRACE is ratio-based and does not account for reasoning length or intermediate step correctness. We plan to pursue improved methods that incorporate these factors in future work. 
+
+## 6. Conclusion 
+
+We introduced TRACE, a reference-free metric for evaluat-ing LLM reasoning by analyzing Chain-of-Thought struc-ture through Toulmin’s argumentation framework. Our experiments across 7 models and 39 benchmarks show that TRACE correlates strongly with ground-truth accuracy (r = 0 .74 ), outperforming surface-level metrics. TRACE also serves as an effective RL reward signal, providing com-plementary benefits beyond accuracy-only training. We deliberately adopted rule-based scoring to prioritize in-terpretability, enabling direct inspection of penalized states and transitions. TRACE is not intended to replace existing evaluation methods. We expect that incorporating more sophisticated classifiers and additional humanities theories will further refine this framework. This line of research sug-gests that grounding LLM analysis in argumentation theory offers a promising direction toward explainable AI. 
+
+## Acknowledgments 
+
+This work has been supported by the Korea Institute of Science and Technology Information (grant K26L2M3C7). 
+
+## Impact Statement 
+
+This paper presents work whose goal is to advance the inter-pretability of LLM reasoning evaluation. We do not foresee direct negative societal consequences from this work. 
+
+## References 
+
+Agarwal, S., Ahmad, L., Ai, J., Altman, S., Applebaum, A., Arbus, E., Arora, R. K., Bai, Y., Baker, B., Bao, H., et al. gpt-oss-120b & gpt-oss-20b model card. arXiv preprint arXiv:2508.10925 , 2025. Anthropic. The claude 3 model family: Opus, sonnet, haiku. 2024. URL https://api.semanticscholar. org/CorpusID:268232499 .Antoun, W., Sagot, B., and Seddah, D. Modernbert or debertav3? examining architecture and data influence on transformer encoder models performance. arXiv preprint arXiv:2504.08716 , 2025. Bai, G., Liu, J., Bu, X., He, Y., Liu, J., Zhou, Z., Lin, Z., Su, W., Ge, T., Zheng, B., and Ouyang, W. MT-bench-101: A fine-grained benchmark for evaluating large language models in multi-turn dialogues. In Ku, L.-W., Martins, A., and Srikumar, V. (eds.), Proceedings of the 62nd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) , pp. 7421–7454, Bangkok, Thailand, August 2024. Association for Com-putational Linguistics. doi: 10.18653/v1/2024.acl-long. 401. URL https://aclanthology.org/2024. acl-long.401/ .Biderman, S., Schoelkopf, H., Sutawika, L., Gao, L., Tow, J., Abbasi, B., Aji, A. F., Ammanamanchi, P. S., Black, S., Clive, J., et al. Lessons from the trenches on repro-ducible evaluation of language models. arXiv preprint arXiv:2405.14782 , 2024. Chen, G. H., Chen, S., Liu, Z., Jiang, F., and Wang, B. Humans or LLMs as the judge? a study on judgement bias. In Al-Onaizan, Y., Bansal, M., and Chen, Y.-N. (eds.), Proceedings of the 2024 Conference on Empiri-cal Methods in Natural Language Processing , pp. 8301– 8327, Miami, Florida, USA, November 2024. Association for Computational Linguistics. doi: 10.18653/v1/2024. emnlp-main.474. URL https://aclanthology. org/2024.emnlp-main.474/ .Chen, N., Hu, Z., Zou, Q., Wu, J., Wang, Q., Hooi, B., and 9TRACE: Toulmin-based Reasoning Assessment through Constructive Elements for LLM CoT Evaluation 
+
+He, B. Judgelrm: Large reasoning models as a judge. 
+
+arXiv preprint arXiv:2504.00050 , 2025. Chiang, W.-L., Zheng, L., Sheng, Y., Angelopoulos, A. N., Li, T., Li, D., Zhang, H., Zhu, B., Jordan, M., Gonzalez, J. E., and Stoica, I. Chatbot arena: An open platform for evaluating llms by human preference, 2024. Clark, P., Cowhey, I., Etzioni, O., Khot, T., Sabharwal, A., Schoenick, C., and Tafjord, O. Think you have solved question answering? try arc, the ai2 reasoning challenge. 
+
+arXiv preprint arXiv:1803.05457 , 2018. Cobbe, K., Kosaraju, V., Bavarian, M., Chen, M., Jun, H., Kaiser, L., Plappert, M., Tworek, J., Hilton, J., Nakano, R., et al. Training verifiers to solve math word problems. 
+
+arXiv preprint arXiv:2110.14168 , 2021. Demszky, D., Movshovitz-Attias, D., Ko, J., Cowen, A., Nemade, G., and Ravi, S. GoEmotions: A dataset of fine-grained emotions. In Jurafsky, D., Chai, J., Schluter, N., and Tetreault, J. (eds.), Proceedings of the 58th Annual Meeting of the Association for Computational Linguistics ,pp. 4040–4054, Online, July 2020. Association for Com-putational Linguistics. doi: 10.18653/v1/2020.acl-main. 372. URL https://aclanthology.org/2020. acl-main.372/ .Du, X., Yao, Y., Ma, K., et al. SuperGPQA: Scaling LLM evaluation across 285 graduate disciplines. In 
+
+The Thirty-ninth Annual Conference on Neural Informa-tion Processing Systems Datasets and Benchmarks Track ,2025. URL https://openreview.net/forum? id=6WgflzYQpf .Dubois, Y., Galambosi, B., Liang, P., and Hashimoto, T. B. Length-controlled alpacaeval: A simple way to debias automatic evaluators, 2025. URL https://arxiv. org/abs/2404.04475 .Flavell, J. H. Metacognition and cognitive monitoring: A new area of cognitive–developmental inquiry. American psychologist , 34(10):906, 1979. Gu, J., Jiang, X., Shi, Z., Tan, H., Zhai, X., Xu, C., Li, W., Shen, Y., Ma, S., Liu, H., Wang, S., Zhang, K., Lin, Z., Zhang, B., Ni, L., Gao, W., Wang, Y., and Guo, J. A survey on llm-as-a-judge. The Innovation , pp. 101253, 2026. ISSN 2666-6758. doi: https://doi.org/10.1016/j.xinn.2025.101253. URL https://www.sciencedirect.com/ science/article/pii/S2666675825004564 .Guo, D., Yang, D., Zhang, H., Song, J., Wang, P., Zhu, Q., Xu, R., Zhang, R., Ma, S., Bi, X., et al. Deepseek-r1 incentivizes reasoning in llms through reinforcement learning. Nature , 645:633–638, sep 2025. doi: 10.1038/ s41586-025-09422-z. URL https://doi.org/10. 1038/s41586-025-09422-z .He, P., Gao, J., and Chen, W. DeBERTav3: Improving de-BERTa using ELECTRA-style pre-training with gradient-disentangled embedding sharing. In The Eleventh In-ternational Conference on Learning Representations ,2023. URL https://openreview.net/forum? id=sE7-XhLxHA .Hendrycks, D., Burns, C., Basart, S., Zou, A., Mazeika, M., Song, D., and Steinhardt, J. Measuring massive multitask language understanding. In International Conference on Learning Representations , 2021. URL https:// openreview.net/forum?id=d7KBjmI3GmQ .Khalifa, M., Agarwal, R., Logeswaran, L., Kim, J., Peng, H., Lee, M., Lee, H., and Wang, L. Process reward models that think. arXiv preprint arXiv:2504.16828 , 2025. Kipnis, A., Voudouris, K., Buschoff, L. M. S., and Schulz, E. metabench - a sparse benchmark of reasoning and knowledge in large language models. In The Thirteenth International Conference on Learning Representations ,2025. URL https://openreview.net/forum? id=4T33izzFpK .Li, T., Chiang, W.-L., Frick, E., Dunlap, L., Wu, T., Zhu, B., Gonzalez, J. E., and Stoica, I. From crowdsourced data to high-quality benchmarks: Arena-hard and bench-builder pipeline. In Forty-second International Con-ference on Machine Learning , 2025. URL https: //openreview.net/forum?id=KfTf9vFvSn .Lin, B. Y., Deng, Y., Chandu, K., Ravichander, A., Py-atkin, V., Dziri, N., Bras, R. L., and Choi, Y. Wildbench: Benchmarking LLMs with challenging tasks from real users in the wild. In The Thirteenth International Confer-ence on Learning Representations , 2025. URL https: //openreview.net/forum?id=MKEHCx25xp .Liu, Y., Ott, M., Goyal, N., Du, J., Joshi, M., Chen, D., Levy, O., Lewis, M., Zettlemoyer, L., and Stoyanov, V. Roberta: A robustly optimized bert pretraining approach. 
+
+arXiv preprint arXiv:1907.11692 , 2019. McCarthy, P. M. and Jarvis, S. Mtld, vocd-d, and hd-d: A validation study of sophisticated approaches to lexical diversity assessment. Behavior research methods , 42(2): 381–392, 2010. Phan, L., Gatti, A., Han, Z., Li, N., Hu, J., Zhang, H., Zhang, C. B. C., Shaaban, M., Ling, J., Shi, S., et al. Humanity’s last exam. arXiv preprint arXiv:2501.14249 , 2025. Qwen, :, Yang, A., Yang, B., Zhang, B., Hui, B., Zheng, B., Yu, B., Li, C., Liu, D., Huang, F., Wei, H., Lin, H., Yang, J., Tu, J., Zhang, J., Yang, J., Yang, J., Zhou, J., Lin, J., 10 TRACE: Toulmin-based Reasoning Assessment through Constructive Elements for LLM CoT Evaluation 
+
+Dang, K., Lu, K., Bao, K., Yang, K., Yu, L., Li, M., Xue, M., Zhang, P., Zhu, Q., Men, R., Lin, R., Li, T., Tang, T., Xia, T., Ren, X., Ren, X., Fan, Y., Su, Y., Zhang, Y., Wan, Y., Liu, Y., Cui, Z., Zhang, Z., and Qiu, Z. Qwen2.5 technical report, 2025. Radford, A., Wu, J., Child, R., Luan, D., Amodei, D., Sutskever, I., et al. Language models are unsupervised multitask learners. OpenAI blog , 1(8):9, 2019. Rein, D., Hou, B. L., Stickland, A. C., Petty, J., Pang, R. Y., Dirani, J., Michael, J., and Bowman, S. R. GPQA: A graduate-level google-proof q&a benchmark. In First Conference on Language Modeling , 2024. URL https: //openreview.net/forum?id=Ti67584b98 .Shao, Z., Wang, P., Zhu, Q., Xu, R., Song, J., Bi, X., Zhang, H., Zhang, M., Li, Y. K., Wu, Y., and Guo, D. Deepseek-math: Pushing the limits of mathematical reasoning in open language models, 2024. Stab, C. and Gurevych, I. Identifying argumentative dis-course structures in persuasive essays. In Moschitti, A., Pang, B., and Daelemans, W. (eds.), Proceedings of the 2014 Conference on Empirical Methods in Nat-ural Language Processing (EMNLP) , pp. 46–56, Doha, Qatar, October 2014. Association for Computational Lin-guistics. doi: 10.3115/v1/D14-1006. URL https: //aclanthology.org/D14-1006/ .Tan, S., Zhuang, S., Montgomery, K., Tang, W. Y., Cuadron, A., Wang, C., Popa, R., and Stoica, I. Judgebench: A benchmark for evaluating LLM-based judges. In The Thir-teenth International Conference on Learning Represen-tations , 2025. URL https://openreview.net/ forum?id=G0dksFayVq .Team, K., Bai, Y., Bao, Y., Chen, G., Chen, J., Chen, N., Chen, R., Chen, Y., Chen, Y., Chen, Y., et al. Kimi k2: Open agentic intelligence. arXiv preprint arXiv:2507.20534 , 2025. Toulmin, S. E. The uses of argument . Cambridge university press, 2003. von Werra, L., Belkada, Y., Tunstall, L., Beeching, E., Thrush, T., Lambert, N., Huang, S., Rasul, K., and Gallou ´edec, Q. Trl: Transformer reinforcement learn-ing. https://github.com/huggingface/trl ,2020. Wang, Y., Ma, X., Zhang, G., Ni, Y., Chandra, A., Guo, S., Ren, W., Arulraj, A., He, X., Jiang, Z., Li, T., Ku, M., Wang, K., Zhuang, A., Fan, R., Yue, X., and Chen, W. Mmlu-pro: A more robust and challenging multi-task language understanding benchmark. In Globerson, A., Mackey, L., Belgrave, D., Fan, A., Paquet, U., Tomczak, J., and Zhang, C. (eds.), Advances in Neural Information Processing Systems , volume 37, pp. 95266–95290. Cur-ran Associates, Inc., 2024a. doi: 10.52202/079017-3018. Wang, Z., Dong, Y., Delalleau, O., Zeng, J., Shen, G., Egert, D., Zhang, J. J., Sreedhar, M. N., and Kuchaiev, O. Help-steer 2: Open-source dataset for training top-performing reward models. In The Thirty-eight Conference on Neu-ral Information Processing Systems Datasets and Bench-marks Track , 2024b. URL https://openreview. net/forum?id=PvVKUFhaNy .Warner, B., Chaffin, A., Clavi ´e, B., Weller, O., Hallstr ¨om, O., Taghadouini, S., Gallagher, A., Biswas, R., Lad-hak, F., Aarsen, T., Adams, G. T., Howard, J., and Poli, I. Smarter, better, faster, longer: A modern bidi-rectional encoder for fast, memory efficient, and long context finetuning and inference. In Che, W., Nabende, J., Shutova, E., and Pilehvar, M. T. (eds.), Proceed-ings of the 63rd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) ,pp. 2526–2547, Vienna, Austria, July 2025. Association for Computational Linguistics. ISBN 979-8-89176-251-0. doi: 10.18653/v1/2025.acl-long.127. URL https: //aclanthology.org/2025.acl-long.127/ .Wei, J., Wang, X., Schuurmans, D., Bosma, M., ichter, b., Xia, F., Chi, E., Le, Q. V., and Zhou, D. Chain-of-thought prompting elicits reasoning in large language models. In Koyejo, S., Mohamed, S., Agarwal, A., Belgrave, D., Cho, K., and Oh, A. (eds.), Advances in Neural Informa-tion Processing Systems , volume 35, pp. 24824–24837. Curran Associates, Inc., 2022. White, C., Dooley, S., Roberts, M., Pal, A., Feuer, B., Jain, S., Shwartz-Ziv, R., Jain, N., Saifullah, K., Dey, S., Shubh-Agrawal, Sandha, S. S., Naidu, S. V., Hegde, C., LeCun, Y., Goldstein, T., Neiswanger, W., and Goldblum, M. Livebench: A challenging, contamination-limited LLM benchmark. In The Thirteenth International Confer-ence on Learning Representations , 2025. URL https: //openreview.net/forum?id=sKYHBTAxVa .Wu, J., Yang, L., Wang, Z., Okumura, M., and Zhang, Y. CofCA: A STEP-WISE counterfactual multi-hop QA benchmark. In The Thirteenth International Confer-ence on Learning Representations , 2025. URL https: //openreview.net/forum?id=q2DmkZ1wVe .Yang, A., Li, A., Yang, B., Zhang, B., Hui, B., Zheng, B., Yu, B., Gao, C., Huang, C., Lv, C., Zheng, C., Liu, D., Zhou, F., Huang, F., Hu, F., Ge, H., Wei, H., Lin, H., Tang, J., Yang, J., Tu, J., Zhang, J., Yang, J., Yang, J., Zhou, J., Zhou, J., Lin, J., Dang, K., Bao, K., Yang, K., Yu, L., Deng, L., Li, M., Xue, M., Li, M., Zhang, P., Wang, P., Zhu, Q., Men, R., Gao, R., Liu, S., Luo, S., Li, 11 TRACE: Toulmin-based Reasoning Assessment through Constructive Elements for LLM CoT Evaluation 
+
+T., Tang, T., Yin, W., Ren, X., Wang, X., Zhang, X., Ren, X., Fan, Y., Su, Y., Zhang, Y., Zhang, Y., Wan, Y., Liu, Y., Wang, Z., Cui, Z., Zhang, Z., Zhou, Z., and Qiu, Z. Qwen3 technical report, 2025. Ye, S., Kim, D., Kim, S., Hwang, H., Kim, S., Jo, Y., Thorne, J., Kim, J., and Seo, M. FLASK: Fine-grained language model evaluation based on alignment skill sets. In The Twelfth International Conference on Learning Represen-tations , 2024. URL https://openreview.net/ forum?id=CYmF38ysDa .Yu, Q., Zhang, Z., Zhu, R., Yuan, Y., Zuo, X., YuYue, Dai, W., Fan, T., Liu, G., Liu, J., Liu, L., Liu, X., Lin, H., Lin, Z., Ma, B., Sheng, G., Tong, Y., Zhang, C., Zhang, M., Zhang, R., Zhang, W., Zhu, H., Zhu, J., Chen, J., Chen, J., Wang, C., Yu, H., Song, Y., Wei, X., Zhou, H., Liu, J., Ma, W.-Y., Zhang, Y.-Q., Yan, L., Wu, Y., and Wang, M. DAPO: An open-source LLM reinforcement learning system at scale. In The Thirty-ninth Annual Conference on Neural Information Processing Systems ,2026. URL https://openreview.net/forum? id=2a36EMSSTp .Zeng, Z., Chen, P., Liu, S., Jiang, H., and Jia, J. MR-GSM8k: A meta-reasoning benchmark for large language model evaluation. In The Thirteenth International Conference on Learning Representations , 2025. URL https:// openreview.net/forum?id=br4H61LOoI .Zheng, C., Zhang, Z., Zhang, B., Lin, R., Lu, K., Yu, B., Liu, D., Zhou, J., and Lin, J. ProcessBench: Identifying process errors in mathematical reasoning. In Che, W., Nabende, J., Shutova, E., and Pilehvar, M. T. (eds.), Pro-ceedings of the 63rd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) ,pp. 1009–1024, Vienna, Austria, July 2025a. Association for Computational Linguistics. ISBN 979-8-89176-251-0. doi: 10.18653/v1/2025.acl-long.50. URL https: //aclanthology.org/2025.acl-long.50/ .Zheng, L., Chiang, W.-L., Sheng, Y., Zhuang, S., Wu, Z., Zhuang, Y., Lin, Z., Li, Z., Li, D., Xing, E., Zhang, H., Gonzalez, J. E., and Stoica, I. Judging llm-as-a-judge with mt-bench and chatbot arena. In Oh, A., Naumann, T., Globerson, A., Saenko, K., Hardt, M., and Levine, S. (eds.), Advances in Neural Information Processing Sys-tems , volume 36, pp. 46595–46623. Curran Associates, Inc., 2023. Zheng, X., Pang, T., Du, C., Liu, Q., Jiang, J., and Lin, M. Cheating automatic LLM benchmarks: Null models achieve high win rates. In The Thirteenth In-ternational Conference on Learning Representations ,2025b. URL https://openreview.net/forum? id=syThiTmWWm .12 TRACE: Toulmin-based Reasoning Assessment through Constructive Elements for LLM CoT Evaluation 
+
+## A. Experimental Details 
+
+A.1. Model Snapshots 
+
+Table 7 summarizes the model versions used in our experiments. For the correlation analysis (Experiment 1), we used the latest available snapshots of each model. For Arena Hard v2.0 (Experiment 2), we used DeepSeek-R1 and QwQ-32B with GPT-4.1 as the judge. Finally, for the reinforcement learning experiments (Experiment 3), we utilized DeepSeek-R1-Distill-Qwen-1.5B. 
+
+Table 7. Model snapshots used in experiments. 
+
+Model Snapshot Date Experiment 
+
+gpt-oss-120b Aug 4, 2025 Experiment 1 (Section 4.1) gpt-oss-20b Aug 4, 2025 Experiment 1 (Section 4.1) Claude-3.7-Sonnet Feb 19, 2025 Experiment 1 (Section 4.1) Qwen-Turbo Apr 28, 2025 Experiment 1 (Section 4.1) Qwen-Flash Jul 28, 2025 Experiment 1 (Section 4.1) DeepSeek-R1 May 28, 2025 Experiment 1 (Section 4.1) Kimi-K2-Thinking Nov 4, 2025 Experiment 1 (Section 4.1) DeepSeek-R1 Jan 20, 2025 Experiment 2 (Section 4.2) QwQ-32B Mar 5, 2025 Experiment 2 (Section 4.2) GPT-4.1 (Judge) Apr 14, 2025 Experiment 2 (Section 4.2) DeepSeek-R1-Distill-Qwen-1.5B Jan 20, 2025 Experiment 3 (Section 4.3) 
+
+A.2. Average Token Length per Model 
+
+Token counts were computed using the tiktoken library with the cl100k base encoding. Table 8 reports the mean token length and mean sentences of reasoning blocks for each model. 
+
+Table 8. Mean token length and sentences of reasoning blocks per model. 
+
+Model Mean Tokens Mean Sentences Experiment 
+
+gpt-oss-120b 503 30 Experiment 1 (Section 4.1) gpt-oss-20b 846 55 Experiment 1 (Section 4.1) Claude-3.7-Sonnet 1048 37 Experiment 1 (Section 4.1) Qwen-Turbo 1616 94 Experiment 1 (Section 4.1) Qwen-Flash 2198 111 Experiment 1 (Section 4.1) Kimi-K2-Thinking 2257 117 Experiment 1 (Section 4.1) DeepSeek-R1 2773 124 Experiment 1 (Section 4.1) DeepSeek-R1 3903 197 Experiment 2 (Section 4.2) QwQ-32B 5199 40 Experiment 2 (Section 4.2) 
+
+A.3. Computational Cost Comparison 
+
+We compare the computational cost of TRACE against a representative 7B LLM judge in Table 9. The measurements use a single NVIDIA A100 GPU for GPU latency, and a standard CPU configuration for CPU-only latency. 
+
+Table 9. Computational cost comparison between TRACE and a 7B LLM judge per sample. 
+
+TRACE LLM Judge (7B) 
+
+Model size 184M 7B VRAM < 2GB ∼16GB Latency (GPU) ∼2s ∼4s Latency (CPU only) ∼10s Impractical 
+
+13 TRACE: Toulmin-based Reasoning Assessment through Constructive Elements for LLM CoT Evaluation 
+
+A.4. Domain Categorization 
+
+For the domain analysis in Section 4.1, we grouped the 39 benchmarks into 6 categories as shown in Table 10.         
+
+> Table 10. Domain categorization of benchmarks.
+> Domain Benchmarks
+> Math & Logic AIME24, AIME25 ARC Easy, Challenge GSM8K MMLU College Mathematics MMLU-Pro Math CS & Engineering MMLU College Computer Science MMLU-Pro Computer Science, Engineering SuperGPQA Engineering Natural Sciences GPQA Main, Diamond MMLU College Biology, College Chemistry, College Physics MMLU-Pro Biology, Chemistry, Physics SuperGPQA Science, Agronomy Medicine & Health MMLU College Medicine MMLU-Pro Health, Other SuperGPQA Medicine Biz, Econ & Law MMLU-Pro Business, Economics, Law SuperGPQA Economics, Law, Management Humanities & Social Sci. MMLU-Pro History, Philosophy, Psychology SuperGPQA Education, History, Literature & Arts, Philosophy
+
+A.5. Baseline Implementation Details 
+
+We implemented three baseline metrics for comparison: 
+
+Token Length. We tokenized reasoning blocks using tiktoken with the cl100k base encoding. In pairwise comparisons, the response with more tokens is predicted as the winner. 
+
+Perplexity (PPL). We computed perplexity using GPT-2 with a rolling window approach (context length = 1, max sequence length = 1024). In pairwise comparisons, lower perplexity is predicted as the winner. 
+
+MTLD. We calculated the Measure of Textual Lexical Diversity (MTLD) using the lexicalrichness library with default parameters. In pairwise comparisons, higher MTLD (more lexical diversity) is predicted as the winner. 14 TRACE: Toulmin-based Reasoning Assessment through Constructive Elements for LLM CoT Evaluation 
+
+## B. TRACE Framework Details 
+
+B.1. TRACE-DeBERTa Training Data Details 
+
+TRACE-DeBERTa was fine-tuned from microsoft/deberta-v3-base on approximately 100K reasoning sentences. Labels were generated by prompting GPT-5.1 with detailed definitions and few-shot examples based on Toulmin’s Argu-mentation Model and Flavell’s Metacognition Theory. 
+
+Label Definitions 
+
+Toulmin’s Argumentation Model: 
+
+• Claim : A conclusion, assertion, or answer being argued for. • Data/Evidence : Concrete facts, observations, or given information. • Warrant : Reasoning that connects evidence to claim. • Backing : Support for the warrant (definitions, theorems, principles). • Qualifier : Expressions of certainty or uncertainty. • Rebuttal : Counterarguments, exceptions, or alternative considerations. 
+
+Flavell’s Metacognition Theory (extended): 
+
+• Monitoring : Self-checking, tracking progress, noticing errors. • Evaluation : Judging the quality or correctness of reasoning. 
+
+Few-Shot Examples (Excerpt) 
+
+Mathematical Reasoning: 
+
+“By the tower law of field extensions, we have: [K : F ] = [ K : E] · [E : F ].” → [Backing] 
+
+“So the degree of the field extension is 4.” → [Claim] 
+
+“Wait, I need to be more careful because p = (1 , 2, 5, 4)(2 , 3) .” → [Monitoring] 
+
+Multi-Label Cases: 
+
+“[Q(√2) : Q] = 2 because √2 is irrational.” → [Evidence, Warrant] 
+
+“The answer is (B), which is correct.” → [Claim, Evaluation] 
+
+“I think most people would say that lying is wrong.” → [Claim, Qualifier, Backing] 
+
+No Label Cases: 
+
+“Hmm.” → [ ] 
+
+“Okay, let’s tackle this question.” → [ ] 
+
+“Thank you for listening.” → [ ] 
+
+B.2. Allowed States 
+
+State Validity is computed based on the following set of allowed states, derived from valid combinations of Toulmin’s components: 
+
+Allowed States 
+
+• Single labels: Claim , Data/Evidence , Warrant , Backing , Evaluation 
+
+• Composite labels: Claim+Data/Evidence , Claim+Evaluation , Data/Evidence+Warrant ,
+
+Warrant+Backing , Backing+Evaluation 
+
+15 TRACE: Toulmin-based Reasoning Assessment through Constructive Elements for LLM CoT Evaluation 
+
+B.2.1. L ABEL DISTRIBUTION PER MODEL 
+
+Figure 6 illustrates the proportion of constructive elements, derived from 3.9K blocks per model in Section 4.1. We observe that the ratios of these elements within reasoning blocks vary significantly across models. 0.0 0.1 0.2 0.3 0.4 
+
+Ratio 
+
+Claim 
+
+Data/Evidence 
+
+Warrant 
+
+Backing 
+
+Evaluation 
+
+Qualifier 
+
+Rebuttal 
+
+Monitoring 
+
+> 17.2%
+> 30.0%
+> 13.4%
+> 14.0%
+> 15.6%
+> 7.2%
+> 9.9%
+> 13.9%
+
+Claude-3.7-Sonnet 
+
+0.0 0.1 0.2 0.3 0.4 
+
+Ratio 
+
+Claim 
+
+Data/Evidence 
+
+Warrant 
+
+Backing 
+
+Evaluation 
+
+Qualifier 
+
+Rebuttal 
+
+Monitoring 
+
+> 18.1%
+> 33.6%
+> 13.6%
+> 9.0%
+> 10.7%
+> 20.4%
+> 14.0%
+> 12.9%
+
+Deepseek-R1 
+
+0.0 0.1 0.2 0.3 0.4 
+
+Ratio 
+
+Claim 
+
+Data/Evidence 
+
+Warrant 
+
+Backing 
+
+Evaluation 
+
+Qualifier 
+
+Rebuttal 
+
+Monitoring 
+
+> 20.7%
+> 34.5%
+> 7.5%
+> 6.5%
+> 7.0%
+> 13.9%
+> 9.2%
+> 11.8%
+
+GPT-oss-120b 
+
+0.0 0.1 0.2 0.3 0.4 
+
+Ratio 
+
+Claim 
+
+Data/Evidence 
+
+Warrant 
+
+Backing 
+
+Evaluation 
+
+Qualifier 
+
+Rebuttal 
+
+Monitoring 
+
+> 21.3%
+> 29.8%
+> 5.5%
+> 5.2%
+> 7.7%
+> 17.3%
+> 13.2%
+> 16.3%
+
+GPT-oss-20b 
+
+0.0 0.1 0.2 0.3 0.4 
+
+Ratio 
+
+Claim 
+
+Data/Evidence 
+
+Warrant 
+
+Backing 
+
+Evaluation 
+
+Qualifier 
+
+Rebuttal 
+
+Monitoring 
+
+> 23.5%
+> 28.9%
+> 8.2%
+> 9.0%
+> 10.3%
+> 11.3%
+> 12.9%
+> 11.9%
+
+Kimi-K2-Thinking 
+
+0.0 0.1 0.2 0.3 0.4 
+
+Ratio 
+
+Claim 
+
+Data/Evidence 
+
+Warrant 
+
+Backing 
+
+Evaluation 
+
+Qualifier 
+
+Rebuttal 
+
+Monitoring 
+
+> 21.5%
+> 27.6%
+> 13.8%
+> 8.6%
+> 11.0%
+> 17.5%
+> 14.4%
+> 21.3%
+
+Qwen-Flash 
+
+0.0 0.1 0.2 0.3 0.4 
+
+Ratio 
+
+Claim 
+
+Data/Evidence 
+
+Warrant 
+
+Backing 
+
+Evaluation 
+
+Qualifier 
+
+Rebuttal 
+
+Monitoring 
+
+> 20.5%
+> 24.7%
+> 11.9%
+> 7.0%
+> 6.8%
+> 19.8%
+> 16.3%
+> 18.9%
+
+Qwen-Turbo 
+
+Figure 6. Distribution of constructive elements across models, derived from 26.3K reasoning blocks in Section 4.1. 
+
+16 TRACE: Toulmin-based Reasoning Assessment through Constructive Elements for LLM CoT Evaluation 
+
+B.3. Good and Bad Transition Definitions 
+
+We systematically explored various transition set configurations. Initially, we tested three-way and four-way classifications (e.g., separating “moderately good” from “strongly good”), but these finer-grained distinctions introduced noise without improving correlation—the essential contrast between logical progression and cognitive stalling was already captured by the binary Good/Bad distinction. To select the optimal transition sets, we enumerated all possible permutations of transition pairs and evaluated each configuration by its correlation with benchmark accuracy. The final sets reported here achieved the highest correlation among all tested configurations while remaining consistent with the theoretical principles of Toulmin’s argumentation model and Flavell’s metacognitive framework. Transitions not assigned to either set are treated as neutral. Transition Coherence is computed based on the following transition sets: 
+
+Good Transitions 
+
+Logical progressions that indicate sound argumentation flow: Data/Evidence → Claim evidence-based conclusion Data/Evidence → Warrant explaining the evidence Warrant → Claim reasoning leads to conclusion Claim → Backing supporting the assertion Claim → Evaluation assessing the conclusion Backing → Claim grounded assertion Backing → Evaluation validating the support Monitoring → { Claim, Data/Evidence, Backing, Evaluation } productive self-correction Rebuttal → { Claim, Backing } resolving counterarguments 
+
+Bad Transitions 
+
+Patterns indicating cognitive stalling or circular uncertainty: Monitoring ↔ Monitoring repetitive self-checking Qualifier ↔ Qualifier compounding uncertainty Monitoring ↔ Qualifier hesitation loops Rebuttal ↔ Rebuttal unresolved contradictions Rebuttal ↔ Qualifier uncertain counterarguments 17 TRACE: Toulmin-based Reasoning Assessment through Constructive Elements for LLM CoT Evaluation 
+
+## C. Hyperparameter Selection 
+
+C.1. Effect of α on Correlation and Accuracy 
+
+The weight α in the TRACE score formula balances State Validity and Transition Coherence. Figure 7 shows the effect of α
+
+on both Pearson correlation with benchmark accuracy and prediction accuracy on Arena Hard v2.0 (Math). We selected 
+
+α = 0 .7 as it achieves near-optimal performance on both metrics. 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 
+
+State Validity Weight 
+
+0.50 
+
+0.55 
+
+0.60 
+
+0.65 
+
+0.70 
+
+0.75 
+
+0.80 
+
+Optimal Weight 
+
+> Peak
+> Peak
+> TRACE & Benchmark Correlation
+> Arena Hard v2.0 MATH Accuracy
+
+Figure 7. Effect of α on Pearson correlation with benchmark accuracy and prediction accuracy on Arena Hard v2.0 (Math). The shaded region indicates near-optimal performance. 
+
+C.2. Statistical Significance 
+
+For the selected hyperparameter ( α = 0 .7), we report the correlation coefficients with 95% confidence intervals computed via Fisher’s z-transformation. 
+
+Table 11. Statistical significance of TRACE correlation at α = 0 .7.
+
+Metric Coefficient 95% CI p-value 
+
+Pearson r 0.741 [0.683, 0.791] < 0.001 
+
+Spearman ρ 0.755 [0.699, 0.802] < 0.001 
+
+All correlations are statistically significant at p < 0.001 across the full range of α values (see Appendix C.1). 18 TRACE: Toulmin-based Reasoning Assessment through Constructive Elements for LLM CoT Evaluation 
+
+## D. Reinforcement Learning Implementation Details 
+
+In Experiment 3, we utilized the TRL (Transformer Reinforcement Learning) framework to fine-tune the DeepSeek-R1-Distill-Qwen-1.5B model. This section details the reward formulation, the optimization objective, and the specific hyperparameters used in our experiments. 
+
+D.1. Reward Formulation 
+
+As described in the main text, we employed a composite reward function R(o, y ∗) consisting of three components: accuracy, structural quality (TRACE), and length control. The precise mathematical formulation used in the training loop is as follows: 
+
+R(o, y ∗) = λacc · I(extract (o) = y∗) + rtrace (o) + rlen (o) (9) where: • Accuracy Reward ( racc ): A binary reward where I(·) is 1 if the extracted answer matches the ground truth, and 0 otherwise. We applied a scaling weight of λacc = 2 .0.• TRACE Reward ( rtrace ): Computed as a weighted sum of State Validity ( Vstate ) and Transition Coherence ( Ctrans ) with 
+
+α = 0 .7:
+
+rtrace (o) = 0 .7 · Vstate (o) + 0 .3 · Ctrans (o)
+
+• Length Reward ( rlen ): defined to prevent brevity bias while discouraging excessive verbosity: 
+
+rlen (o) = 2
+
+π arctan(0 .2 · Nsent )
+
+Here, Nsent denotes the number of sentences in the reasoning chain, and the slope k = 0 .2 was chosen to encourage chains of approximately 40 sentences. 
+
+D.2. Optimization Objective (GRPO) 
+
+We optimized the policy πθ using Group Relative Policy Optimization (GRPO) . For each prompt q, we sampled a group of G = 4 completions {o1, . . . , o G}.
+
+Advantage Computation To reduce variance and reward relative improvement, the advantage ˆAi,t for the i-th completion is computed by normalizing the total rewards within the group: 
+
+ˆAi = Ri − mean ({R1, . . . , R G})
+
+std ({R1, . . . , R G}) + ϵ (10) where Ri is the total reward for completion oi.
+
+Loss Function The model is trained using the clipped surrogate objective. Following recent best practices for reasoning models (e.g., DeepSeek-R1), we set the KL-divergence coefficient β = 0 , relying on group-relative advantages for regularization. The loss function is defined as: 
+
+LGRPO (θ) = − 1
+
+G
+
+> G
+
+X
+
+> i=1
+
+1
+
+|oi|
+
+> |oi|
+
+X
+
+> t=1
+
+min 
+
+
+
+ρi,t ˆAi, clip (ρi,t , 1 − ϵ, 1 + ϵ) ˆAi
+
+
+
+(11) where ρi,t = πθ (oi,t |q,o i,<t ) 
+
+> πold (oi,t |q,o i,<t )
+
+is the probability ratio between the current and old policies, and ϵ = 0 .2 is the clipping range. 19 TRACE: Toulmin-based Reasoning Assessment through Constructive Elements for LLM CoT Evaluation 
+
+D.3. Reward Hacking under Different Reward Combinations 
+
+During preliminary experiments, we observed reward hacking patterns under different reward combinations: • TRACE only: The CoT length collapsed sharply, with outputs reduced to a single claim followed by minimal evidence and no hedging. A similar collapse has been reported in DAPO (Yu et al., 2026). • TRACE + Length: Even with length controlled, the model produced well-structured but factually irrelevant reasoning, optimizing transition patterns without grounding. • TRACE + Accuracy + Length: Adding the accuracy reward anchored factual grounding, while TRACE and length jointly shaped structural quality and verbosity. This combination mitigated the hacking patterns observed above. 
+
+D.4. Hyperparameters 
+
+Table 12 lists the specific hyperparameters used for the GRPO training. All experiments were conducted on a single node with NVIDIA A100 GPUs using vLLM for accelerated generation.  
+
+> Table 12. Hyperparameters for GRPO training on GSM8K.
+
+Hyperparameter Value 
+
+Model & Data 
+
+Base Model DeepSeek-R1-Distill-Qwen-1.5B Dataset GSM8K (Train Split) 
+
+Training (GRPO) 
+
+Number of Generations ( G) 4Learning Rate 1 × 10 −6
+
+Batch Size (per device) 4Gradient Accumulation 4Num Epochs 1Optimizer AdamW Precision bf16 Clip Range ( ϵ) 0.2 KL Coefficient ( β) 0.0 20 TRACE: Toulmin-based Reasoning Assessment through Constructive Elements for LLM CoT Evaluation 
+
+## E. Qualitative Analysis 
+
+E.1. Case Studies 
+
+To better understand TRACE’s behavior, we categorize the possible outcomes into four quadrants based on TRACE score (High/Low) and answer correctness (Correct/Incorrect). Each quadrant contains distinct failure or success modes: 
+
+High TRACE + Correct (Expected Positive) 
+
+• Normal case : Sound argumentation structure with factually correct premises leading to correct conclusion. • Over-reasoning : Excessive but well-structured reasoning that arrives at the correct answer. 
+
+Low TRACE + Incorrect (Expected Negative) 
+
+• Normal case : Poor structure combined with factual errors, leading to wrong conclusion. • Confused rambling : Incoherent reasoning with no clear logical progression. • Circular reasoning : Repetitive self-referential statements without advancing toward a conclusion. 
+
+High TRACE + Incorrect (False Positive) 
+
+• Factual error with good structure : Incorrect premise propagated through logically valid steps (see Appendix E.2). • Question misunderstanding : Correctly structured reasoning applied to a misinterpreted problem. • Calculation error : Sound reasoning with arithmetic mistakes in the final step. • Outdated knowledge : Well-formed argument based on obsolete or incorrect information. • Wrong final selection : Correct reasoning followed by selection of the wrong answer choice. 
+
+Low TRACE + Correct (False Negative) 
+
+• Lucky guess with hesitation : Uncertain, hesitant reasoning that coincidentally arrives at the correct answer (see Appendix E.3). • Pattern matching : Direct keyword matching without explicit reasoning. • Memorization recall : Retrieved answer from memory without constructing an argument. • Incomplete reasoning : Abandoned logical reasoning in favor of intuition. • Self-doubt override : Initially correct reasoning undermined by excessive self-questioning, yet returning to the original answer. We present two representative case studies illustrating the most analytically interesting quadrants: High TRACE + Incorrect 
+
+(Appendix E.2), which reveals the fundamental limitation that structural validity does not guarantee factual correctness, and Low TRACE + Correct (Appendix E.3), which demonstrates how TRACE can identify brittle reasoning even when outcomes happen to be correct. 21 TRACE: Toulmin-based Reasoning Assessment through Constructive Elements for LLM CoT Evaluation 
+
+E.2. Case Study 1: False Positive High TRACE + Incorrect Answer Model: Claude-3.7-Sonnet 
+
+Task: Electrochemistry (GPQA) 
+
+Question: “Thermodynamically, oxygen is a ...... oxidant in basic solutions. Kinetically, oxygen reacts ...... in acidic solutions. Which combination of weaker/stronger and faster/slower is correct?” 
+
+Ground Truth: (C) weaker – slower Model Answer: (D) weaker – faster 
+
+TRACE Score: 0.86 (Vstate = 0 .90 , Ctrans = 0 .76 )
+
+Sentence Label Vs Tg Tb Valid 
+
+Part 1: Thermodynamic Analysis (Correct) 
+
+This question asks about oxygen’s behavior both thermodynamically and kinetically in different pH environments. [Data] 1.0 – – –In acidic solution: O2 + 4 H+ + 4 e− → 2H2O , E◦ = +1 .23 V. In basic solution: O 2 + 2 H2O + 4 e− → 4OH −, E◦ = +0 .40 V. [Data] 1.0 0 0 ✓
+
+Since the reduction potential is more positive in acidic solution (+1.23 V) than in basic solution (+0.40 V), oxygen is a stronger oxidant in acidic conditions. [Data, Warrant] 1.0 1 0 ✓
+
+Therefore, in basic solutions, oxygen is a weaker oxidant. [Claim] 1.0 2 0 ✓
+
+Part 2: Kinetic Analysis (Incorrect Premise) 
+
+For the kinetics part, I need to think about the reaction rates of oxygen. [Monitoring] 0.0 0 0 –In general, protons (H +) can catalyze many redox reactions involving oxygen. [Backing] 1.0 1 0 ✗
+
+Acidic solutions have higher concentrations of H +, which can facilitate the reduction of oxygen by providing protons needed in the reaction. [Backing, Warrant] 1.0 0 0 ✗
+
+The reduction of oxygen in acidic solutions typically proceeds through multi-electron, multi-proton transfer steps, which can be accelerated by higher proton availability. [Backing] 1.0 0 0 ✗
+
+Therefore, oxygen reactions are often faster in acidic solutions. [Claim] 1.0 1 0 ✗
+
+Part 3: Conclusion & Self-Verification 
+
+The answer that matches this combination is (D) weaker – faster. [Claim, Evaluation] 1.0 2 0 ✗
+
+Actually, let me double-check my thermodynamic reasoning once more: The standard reduction potential for oxygen is indeed higher in acidic conditions than in basic conditions. [Data, Monitoring] 0.5 0 0 –This means oxygen has a greater tendency to gain electrons in acidic conditions, making it a stronger oxidant in acidic conditions. [Backing, Warrant] 1.0 2 0 ✓
+
+Conversely, oxygen is a weaker oxidant in basic conditions. [Claim] 1.0 2 0 ✓
+
+For kinetics, the presence of protons in acidic solutions generally accel-erates oxygen reduction reactions. [Backing] 1.0 1 0 ✗
+
+So my analysis confirms the answer: (D) weaker – faster . [Claim, Evaluation] 1.0 2 0 ✗
+
+Analysis: The model correctly applied thermodynamic reasoning using standard reduction potentials ( E◦), arriving at the correct conclusion that oxygen is a weaker oxidant in basic solutions. However, the kinetic analysis contains a factual error :the assumption that “higher proton availability accelerates oxygen reduction” is an overgeneralization. In practice, oxygen reduction kinetics in acidic media are often slower due to higher overpotential barriers and different mechanistic pathways. Despite exhibiting well-formed argumentation structure with clear Evidence → Warrant → Claim progressions and productive self-verification (double-checking), the incorrect premise propagated through logically valid steps to a wrong conclusion. This case illustrates a fundamental limitation: TRACE evaluates structural validity, not factual correctness .
+
+22 TRACE: Toulmin-based Reasoning Assessment through Constructive Elements for LLM CoT Evaluation 
+
+E.3. Case Study 2: False Negative Low TRACE + Correct Answer Model: GPT-oss-20B 
+
+Task: Psychology (MMLU) 
+
+Question: “A father brings his 22-year-old son for evaluation. Within the past 6 weeks, this formerly socially active young man has quit his job, has become withdrawn, and now spends most of his time in his room watching TV. He reports that he occasionally receives messages from aliens through the TV. What is the most appropriate DSM-IV diagnosis?” 
+
+Ground Truth: (E) Schizophreniform Disorder Model Answer: (E) Schizophreniform Disorder 
+
+TRACE Score: 0.42 (Vstate = 0 .37 , Ctrans = 0 .52 )
+
+Sentence Label Vs Tg Tb Valid 
+
+Part 1: Initial Hesitation 
+
+We need to answer: DSM-IV diagnosis for 22-year-old with 6 weeks of symptoms... [] 0.0 – – –That suggests psychotic symptoms: auditory hallucinations? [Monitoring, Rebuttal] 0.0 – – –“Messages from aliens” could be auditory hallucination or delusion. [Claim, Qualifier] 0.5 2 2 –
+
+Part 2: Reasoning with Uncertainty 
+
+DSM-IV: Schizophreniform disorder requires 1–6 months of schizophrenia-like symptoms. [Backing] 1.0 1 0 ✓
+
+Brief reactive psychosis is for acute stressor, but no stressor mentioned. [Rebuttal] 0.0 0 0 ✓
+
+So likely Schizophreniform Disorder. [Claim, Qualifier] 0.5 1 1 –Also could be Schizophrenia if >6 months, but only 6 weeks. [Qualifier, Rebuttal] 0.0 0 2 ✓
+
+Part 3: Uncertain Verification 
+
+So answer E. Let’s double-check: Schizophreniform: 1–6 months of schizophrenia symptoms. [Claim, Data, Monitoring] 0.67 1 1 ✓
+
+Yes. [] 0.0 – – –So answer is (E). [Claim] 1.0 2 0 ✓
+
+Analysis: Despite arriving at the correct answer, this reasoning trace exhibits significant structural weakness. The model shows persistent cognitive stalling , cycling between Qualifier and Rebuttal states (e.g., “could be...” → “Also could be...”). Although some good transitions occur ( Tg = 7 ), the Tbad count of 6 is notably high relative to the short reasoning chain, reflecting transitions such as [Claim, Qualifier] → [Qualifier, Rebuttal] that indicate uncertainty loops rather than logical progression. The low Vstate scores (averaging 0.37) further reveal that most sentences lack well-formed argumentative structure. The correct answer appears to result from domain knowledge recall rather than systematic deduction. This case demonstrates that low TRACE scores can flag unreliable reasoning processes even when outcomes are correct —useful for identifying brittle predictions that may fail under distribution shift. 
+
+23
