@@ -1,0 +1,760 @@
+Title: Caliper: Probing Lexical Anchors versus Causal Structure in LLMs
+
+URL Source: https://arxiv.org/pdf/2606.04915v1
+
+Published Time: Thu, 04 Jun 2026 01:10:41 GMT
+
+Number of Pages: 15
+
+Markdown Content:
+# Caliper: Probing Lexical Anchors versus Causal Structure in LLMs 
+
+Zhenyu Yu 
+
+Fudan University 
+
+yuzhenyuyxl@foxmail.com 
+
+Shuigeng Zhou 
+
+Fudan University 
+
+sgzhou@fudan.edu.cn 
+
+Abstract 
+
+Large language models reach 50 to 70% accu-racy on causal reasoning benchmarks such as CLadder, but it is unclear whether this reflects structural reasoning or lexical pattern match-ing. We introduce Caliper , a controlled pertur-bation that replaces semantic variable names with placeholder tokens while preserving the causal graph and probabilistic specification of each question. Across nine instruction-tuned LLMs from 3.8B to 671B and three causal reasoning benchmarks, lexical anonymization yields robust accuracy drops of `7.6, `27 .0,and `11 .1 pp on a local 3.8B–14B set, ris-ing to `29 .6 and `18 .0 pp on CRASS and e-CARE across nine frontier models spanning the 2024–2026 generations. Of 40 engaged model-by-benchmark cells, 39 show a positive gap, and the gap collapses by 17 ˆ on CLadder’s pseudoword subset. Structured scaffolding and few-shot in-context learning each narrow the gap, but mainly by lowering P0 accuracy on smaller models rather than recovering P1. Cur-rent instruction-tuned LLMs, evaluated zero-shot, show little evidence of structural causal reasoning once lexical anchors are removed. 
+
+1 Introduction 
+
+Whether large language models reason causally or pattern match on the surface form of causal lan-guage remains contested (Liu et al., 2025; Shrestha et al., 2025; Miliani et al., 2025). The CLad-der benchmark of Jin et al. (2023) reports GPT-4 at 62% accuracy on a Pearl ladder battery while LLaMa-1 reaches only 44%. The size gap admits two readings. Larger models may have acquired an emergent causal inference ability (Yu et al., 2025; Zhou et al., 2024; Feng et al., 2025). Alternatively, they may simply hold richer lexical priors over common English variable names such as smoking 
+
+and cancer , and those priors substitute for infer-ence on benchmark questions that happen to use the same surface vocabulary (Chi et al., 2024; Chen et al., 2025; Menta et al., 2025). On the standard benchmark the two hypotheses are observationally indistinguishable, since every question carries both its causal structure and its everyday English word-ing (Dehghanighobadi et al., 2025). To disentangle these two readings, we introduce 
+
+Caliper , a controlled perturbation that preserves the causal graph and the probabilistic specification of each question while replacing the semantic vari-able names with placeholder tokens. Smoking be-comes X1 and cancer becomes X2, and the rest of the question is left exactly as it was. Any accuracy drop under this perturbation cannot be attributed to a change in the underlying causal task and must reflect a loss of surface lexical content. The con-tested question becomes a falsifiable measurement. A model with structural causal reasoning ability should be invariant under Caliper, whereas a model that relies on lexical priors should not. We apply this measurement to fourteen instruction-tuned LLMs on three causal rea-soning benchmarks, CLadder, CRASS, and e-CARE. The local set spans 3.8B–14B (Phi-3-mini, Qwen2.5-7B, Mistral-7B-v0.3, Llama-3.1-8B, AWQ-quantized Qwen2.5-14B). The frontier set spans nine open-weight models across the Llama, Qwen, DeepSeek, and Hermes-3 families. The analysis dissects the perturbation effect across Pearl rungs, fine-grained query types, story do-mains, and the pre-existing nonsensical subset of CLadder, and tests whether three standard prompt-ing interventions, a structured scaffolding prompt, few-shot in-context learning, and the CausalCoT prompt of Jin et al. (2023), can recover the accuracy that Caliper removes. 
+
+Contributions. 
+
+• Caliper perturbation. A structure-preserving lexical perturbation grounded in CLadder’s structural causal model (SCM)  
+
+> arXiv:2606.04915v1 [cs.CL] 3 Jun 2026 Figure 1: Overview of the Caliper perturbation. Each variable surface form in a causal-QA item is replaced with a placeholder symbol Xi, while the causal graph, joint distribution, query, and gold answer are preserved.
+
+metadata, with a part-of-speech aware ex-tension to multiple-choice questions (MCQ) benchmarks without SCM annotation. • Lexical mediation of causal accuracy. The Caliper gap localises to interventional and counterfactual queries, concentrates on ATE items and high-prior story domains, and van-ishes on the pre-existing nonsensical subset, identifying surface lexical content as the me-diator of benchmark performance. • Persistence across scale and prompting. 
+
+The gap replicates on CRASS, e-CARE, and four frontier models from 70B to 671B, and resists structured scaffolding, few-shot in-context learning, and CausalCoT. 
+
+2 Related Work 
+
+Benchmarking causal reasoning in LLMs. 
+
+CLadder (Jin et al., 2023) is a dataset of roughly 10,000 yes/no questions stratified by the three rungs of Pearl’s causal hierarchy (Pearl, 2009) and grounded in symbolic structural causal mod-els. CRASS (Frohberg and Binder, 2022) and e-CARE (Du et al., 2022) provide multiple-choice counterfactual and commonsense causal reasoning tasks. Beyond these question-answering bench-marks, recent work probes adjacent capabilities such as causal discovery (Zhou et al., 2024; Feng et al., 2025) and explicit-connective causal reason-ing (Miliani et al., 2025), and surveys methodolog-ical efforts to strengthen LLM causal performance (Liu et al., 2025; Yu et al., 2025). Across these efforts, large size gaps between GPT-4 and smaller models have been read both as evidence for emer-gent causal inference (Kıcıman et al., 2023) and, in tension, as evidence for sophisticated pattern matching (Zeˇ cevi´ c et al., 2023). Our work provides a direct probe that disentangles the two readings. 
+
+Surface perturbation probes. Surface perturba-tion is a long-standing probe of model robustness (Ribeiro et al., 2020), and spurious surface-form-to-label correlations have been shown to drive per-formance in NLI (McCoy et al., 2019) and com-monsense benchmarks (Elazar et al., 2021). Mem-orization of pretraining text has been quantified by Carlini et al. (2023) and exploited in evaluation by Magar and Schwartz (2022), with recent work refining the measurement of memorization through probabilistic extraction (Hayes et al., 2025) and model-attribution analysis (Menta et al., 2025). A parallel line of work (Chen et al., 2025) surveys data-contamination effects on LLM evaluation and motivates moving from static to dynamic bench-marks. Caliper extends this line of work to causal reasoning, where the structural task is fixed by an SCM and surface lexicalization can be cleanly fac-tored out. 
+
+Causal parrots. The parroting hypothesis, artic-ulated qualitatively by Zeˇ cevi´ c et al. (2023), posits that LLMs may answer causal questions by par-roting memorized correlations rather than reason-ing over a causal model. Recent work has quanti-fied this concern through several routes. Chi et al. (2024) construct the CausalProbe-2024 benchmark from post-cutoff news articles to factor out training-data overlap, concluding that LLMs are limited to level-1 causal reasoning. Shrestha et al. (2025) revisit the claim on CLadder and test structured prompting as a mitigation, and Dehghanighobadi et al. (2025) show that LLM-generated counter-factual explanations frequently disagree with the model’s own predictions. Caliper takes a comple-mentary route by leaving the benchmark fixed and varying only the lexical surface form. It provides quantitative cross-architecture evidence on four-teen LLMs across three benchmarks, with the effect localised to specific query types and story domains. 3 The Caliper Framework 
+
+3.1 Preliminaries Structural causal models. We follow the stan-dard definition of an SCM as a tuple M “xV, U, F, P pU qy over endogenous variables V , ex-ogenous noise U , structural equations F , and a noise distribution P pU q (Pearl, 2009). The in-duced DAG GpMq has an edge Vj Ñ Vi whenever 
+
+Vj P Pa pViq.
+
+Pearl ladder. Pearl’s causal hierarchy partitions causal queries into three rungs: Rung 1 (Obs.): P pY | X “ xq, (1) Rung 2 (Int.): P pY | do pX “ xqq , (2) Rung 3 (CF): P pYX“x | X “ x1, Y “ y1q, (3) where do p¨q denotes a structural intervention that removes the equation for X and fixes X “ x, and the counterfactual in Eq. (3) is well-defined for deterministic-functional SCMs. 
+
+SCM-grounded causal QA. We assume a causal-QA item q specified as a tuple xMq, ϕ q, Q q, t q, y ‹ 
+
+> q
+
+y
+
+consisting of an SCM Mq, a lexicalization map 
+
+ϕq : V Ñ L that assigns each SCM variable Vi
+
+a surface English realization ϕqpViq, a query Qq
+
+at one of the three rungs together with a query-type label tq, and a gold answer y‹ 
+
+> q
+
+. Caliper is defined for any benchmark with this structure, and in our experiments the running example is CLad-der (Jin et al., 2023), whose variable_mapping 
+
+field provides ϕq and whose generator instanti-ates Realize below. A typical lexicalization on the smoking–cancer story gives ϕqpV1q “ smoking ,
+
+ϕqpV2q “ tar deposit , ϕqpV3q “ cancer .
+
+3.2 Definition and Invariance Definition. Let ˜ϕ be the anonymous lexicaliza-tion map that sends every SCM variable Vi to the placeholder symbol Xi:
+
+˜ϕpViq “ Xi, i “ 1, . . . , n. (4) The Caliper transformation T takes a question q “xMq, ϕ q, Q q, t q, y ‹ 
+
+> q
+
+y and returns 
+
+T pqq “ Realize `Mq, ˜ϕ, Q q, t q, y ‹
+
+> q
+
+˘, (5) where Realize is the benchmark’s deterministic surface-form generator. The pipeline is illustrated in Figure 1, and the explicit implementation is given in Algorithm 1. We write P0pqq “ q for the original question and P1pqq “ T pqq for its lexically anonymized counterpart. 
+
+Invariance properties. By construction, T pre-serves four properties of q:
+
+G`MT pqq
+
+˘ “ GpMqq, (6) 
+
+PT pqqpV, U q “ PqpV, U q, (7) 
+
+`QT pqq, t T pqq
+
+˘ “ `Qq, t q
+
+˘, (8) 
+
+y‹  
+
+> Tpqq
+
+“ y‹ 
+
+> q
+
+. (9) 
+
+Identifiability implication. For any oracle rea-soner R that operates only on the SCM Mq, the query Qq, and the structural equations Fq, the an-swer on T pqq is necessarily identical to the answer on q:
+
+Rpqq “ RpT pqqq @q. (10) Our experimental design is grounded in Eq. (10) .For a model M , any deviation M pT pqqq ‰ M pqq
+
+on a fixed-rung subset cannot be attributed to a change in the underlying causal task and must re-flect M ’s sensitivity to the surface realization ϕq.The perturbation is therefore a structure-preserving ablation rather than noise injection. The condi-tional probabilities, the do-operator semantics, and the SCM graph are all present in T pqq, so a rea-soner that operates over them can still produce the correct answer. 
+
+3.3 Instantiation Procedure. We restrict the replacement table to variables that appear in the question text and re-index them by first occurrence, so that X1, X 2, . . . 
+
+follow reading order. Each surface form, together with its plural and morphological variants, is then mapped to its placeholder token. Substitution is performed with word-boundary matching and is case-insensitive, so Smoking , smoking , and SMOK-ING are all replaced by the same Xi. Replacement keys are sorted by descending length so that multi-word realizations such as tar deposit are matched before any of their substrings. 
+
+Morphological variants. The set 
+
+MorphVariants pwq covers regular plurals, common irregular forms (e.g., wife/wives ,
+
+child/children , foot/feet ), and the -y/-ies , -f/-ves ,and -fe/-ves rules. Verb-derived gerunds in the lexicalization map are captured automatically. 
+
+Scope of replacement. Only variable surface forms listed by ϕq are anonymized. Causal connec-tives, probability terms, numerical values, and func-tion words remain untouched. Using the lexical-ization map rather than regex matching avoids the Algorithm 1 Caliper perturbation T
+
+Require: Question q with SCM Mq, lexicaliza-tion ϕq, gold y‹
+
+> q
+
+Ensure: Anonymized question T pqq 
+
+> 1:
+
+s Ð Text pqq; R Ð t u  
+
+> 2:
+
+Re-index variables in Vq appearing in s as 
+
+Vπp1q, . . . , V πpmq by first occurrence  
+
+> 3:
+
+for i “ 1 to m, w Ð ϕqpVπpiqq do  
+
+> 4:
+
+Rrws Ð Xi; Rrw1s Ð Xi for w1 P
+
+MorphVariants pwq 
+
+> 5:
+
+end for  
+
+> 6:
+
+for each key k in R, sorted by descending length do  
+
+> 7:
+
+s Ð WordBoundaryReplace ps, k, R rksq Ź case-insensitive  
+
+> 8:
+
+end for  
+
+> 9:
+
+return Realize ps, Mq, Q q, t q, y ‹ 
+
+> q
+
+q
+
+false positives that arise when variable names over-lap with English function words. Exact word lists for our benchmark instantiations see Appendix C. 
+
+Adaptation to benchmarks without SCM anno-tation. For causal-QA benchmarks that do not provide ϕq, we use a part-of-speech aware variant of Caliper. Each item is part-of-speech tagged, ev-ery NOUN and PROPN token is mapped to a place-holder symbol X1, X 2, . . . by first occurrence, and the resulting mapping is applied consistently across the premise, the question, and every option. Verbs, adverbs, prepositions, valence adjectives, causal connectives, modals, and function words are left untouched, so the structural relation between the premise and the options is preserved. 
+
+4 Experiments 
+
+4.1 Experimental Setup Datasets. The main analysis uses CLadder (Jin et al., 2023), from which we draw a stratified sam-ple of 1,500 questions (500 per Pearl rung) from the commonsensical subset. The commonsensical sub-set uses common English variable names such as 
+
+smoking and cancer . The nonsensical subset uses pseudoword variables and is held out for the falsi-fiability test. For cross-benchmark replication we additionally use the full CRASS test set (Frohberg and Binder, 2022) of 274 four-way counterfactual MCQ items and a stratified 1,000-item subsample of the e-CARE (Du et al., 2022) validation split. 
+
+Models. We evaluate fourteen instruction-tuned LLMs in two sets. The local set comprises five LLMs from 3.8B to 14B parameters: Phi-3-mini-4k-instruct (Abdin et al., 2024), Mistral-7B-Instruct-v0.3 (Jiang et al., 2023), Llama-3.1-8B-Instruct (Grattafiori et al., 2024), Qwen2.5-7B-Instruct, and the AWQ-quantized Qwen2.5-14B-Instruct (Qwen Team, 2025). The frontier set comprises nine open-weight models grouped by family: three Llama models (Llama-3.3-70B-Instruct, Llama-4-Scout, Llama-4-Maverick (Grattafiori et al., 2024)), two Qwen models (Qwen2.5-72B-Instruct, Qwen3-Max (Qwen Team, 2025)), three DeepSeek models (DeepSeek-V3, DeepSeek-V3.1, DeepSeek-V3.2 (DeepSeek-AI, 2024)), and Hermes-3-Llama-3.1-405B (Nous Re-search, 2024). 
+
+Evaluation Metrics. We report per-rung accu-racy on P0 and P1 and define the per-rung lexical gap as 
+
+∆rpM q “ acc rpM, P 0q ´ acc rpM, P 1q, (11) with cross-model mean ¯∆r “|M|´1ř  
+
+> MPM
+
+∆rpM q. Per-item confidence is the larger of the two normalised first-token prob-abilities on tyes , no u. We test H0 : ¯∆r “ 0 against 
+
+H1 : ¯∆r ą 0 on t∆rpM qu with the one-sided exact sign test, and report a 95% bootstrap percentile confidence interval (CI) (Efron and Tibshirani, 1993) on ¯∆r with B “ 1,000 resamples. 
+
+Implementation Details. Local inference uses HuggingFace Transformers with greedy decoding and fp16 weights on a single NVIDIA RTX 4090D GPU. Frontier inference uses a system message constraining the model to emit only the answer to-ken. On CLadder we score Yes /No by first-token logprob; on CRASS and e-CARE we score each op-tion by its mean per-token log-probability (Brown et al., 2020) and predict the argmax. Predictions that emit no parseable answer token are marked 
+
+invalid , with rates of 0.0–0.5% under Direct, at most 12% under Scaffold and Few-shot in-context learning (ICL), and higher under CausalCoT. 
+
+4.2 Comparison across Causal Rungs 
+
+Per-model accuracy on P0 and P1 across the three rungs is reported in Table 1 and visualised in Ap-pendix Figure A1. The cross-model mean inter-ventional gap is `7.6 pp and is positive in all five architectures, with a 95% bootstrap CI of Obs Int CF Model P0 P1 ∆ P0 P1 ∆ P0 P1 ∆
+
+Phi-3-mini 49.4 52.8 ´3.4 64.8 58.6 `6.2 53.8 51.6 `2.2 Qwen2.5-7B 48.8 48.8 `0.0 61.8 52.0 `9.8 56.8 55.8 `1.0 Mistral-7B 50.4 49.8 `0.6 58.4 51.2 `7.2 55.6 54.4 `1.2 Llama-3.1-8B 50.2 48.6 `1.6 59.8 53.6 `6.2 53.8 50.6 `3.2 Qwen2.5-14B 55.0 56.0 ´1.0 64.0 55.4 `8.6 60.2 54.4 `5.8 
+
+Mean 50.8 51.2 ´0.4 61.8 54.2 `7.6 56.0 53.4 `2.7 
+
+Table 1: CLadder commonsensical accuracy across three rungs under original ( P0) and anonymized ( P1) prompts; 
+
+∆ “ P0 ´ P1 (pp). 101 102 103
+
+> Model size
+> −2
+> 0
+> 2
+> 4
+> 6
+> 8
+> 10
+> 12
+> CLadder interventional-rung gap (pp)
+> Phi-3-mini
+> Qwen2.5-7B
+> Mistral-7B
+> Llama-3.1-8B
+> Qwen2.5-14B
+> Llama-3.3-70B
+> Qwen2.5-72B
+> DeepSeek-V3 (671B)
+> Hermes-3-405B
+> Local (3.8B--14B)
+> Frontier (70B--671B)
+> Frontier outlier (Hermes-3, Nous SFT)
+> Local fit: gap = +1.58*log(B) +4.46
+
+Figure 2: CLadder interventional gap by model size (log scale). Local set (blue circles) fit by a log-linear trend; frontier set (orange squares) overlaid. Hermes-3-405B (red diamond) is the only reversal and is CLadder-specific. 
+
+r` 6.4, `8.8s pp. The one-sided exact sign test rejects the null of zero gap at p « 0.031 , cor-responding to all five per-model gaps being pos-itive. The observational gap is ´0.4 pp with a CI of r´ 2.1, `0.9s pp. This clean null rules out a generic task-difficulty confound that would de-grade all rungs equally. The counterfactual gap is positive but smaller, at `2.7 pp with a CI of 
+
+r` 1.3, `4.2s pp. This pattern runs against the con-ventional Pearl-ladder difficulty ordering, in which counterfactual reasoning is typically described as the most demanding rung, yet under our lexical perturbation it is less affected than interventional reasoning. We attribute this to the structure of CLadder’s counterfactual questions, which already involve non-lexicalized conditioning machinery (a factual world and a counterfactual world) that con-tributes most of the answer signal independently of the variable names. 
+
+4.3 Query-Type Analysis 
+
+The interventional rung is decomposed into its three query types in Table 2 and Appendix Fig-
+
+Rung Query type P0 (%) P1 (%) ∆ (pp) 
+
+Obs marginal 50.5 50.4 `0.2 ˘ 2.0 correlation 50.5 51.2 ´0.7 ˘ 2.8 exp_away 54.5 58.6 ´4.1 ˘ 8.0 Int ate 72.0 61.3 `10.7 ˘ 4.3 
+
+collider_bias 58.5 50.8 `7.7 ˘ 4.2 backadj 53.1 48.3 `4.8 ˘ 5.2 CF nie 52.2 49.0 `3.2 ˘ 5.4 nde 54.3 51.3 `3.0 ˘ 6.8 det-counterfactual 60.6 57.7 `2.8 ˘ 1.8 ett 54.2 52.0 `2.1 ˘ 1.1 
+
+Table 2: Cross-model mean gap ∆ (˘ standard devia-tion) by Pearl-ladder query type, n “ 5 models. 
+
+ure A2, with full per-model per-query-type accu-racies given in Appendix A 1. The gap is heavily concentrated in ATE queries at `10 .7 ˘ 4.3 pp, with the smaller interventional types contributing 
+
+`7.7 ˘ 4.2 pp for collider_bias and `4.8 ˘ 5.2 pp for backadj . All three observational sub-types show gaps statistically indistinguishable from zero. ATE is the canonical interventional question of the form “does treatment X cause outcome Y ”. It corre-sponds most directly to the form of causal claim a model could memorize from pretraining text, for example “smoking causes cancer”. The concentra-tion of the gap on ATE queries is consistent with the lexical memorization account. 
+
+4.4 Scaling Behaviour 
+
+Within the local set we observe a non-monotonic scaling pattern on the ATE-specific gap. Qwen2.5-14B shows the smallest ATE gap at `3.1 pp, the 7B–8B models cluster between `13 and `14 pp, and Phi-3-mini at 3.8B sits below them at `8.6
+
+pp, plausibly because its training mixes a synthetic textbook corpus (Abdin et al., 2024) that shifts the memorization profile. The interventional-rung 
+
+> 1
+
+Query-type labels follow the CLadder query_type field; see Appendix Table A1 for the full-term mapping. Phi-3-mini   
+
+> Qwen2.5-7B
+> Mistral-7B
+> Llama-3.1-8B
+> Qwen2.5-14B
+> −0.125
+> −0.100
+> −0.075
+> −0.050
+> −0.025
+> 0.000
+> 0.025
+> 0.050
+> 0.075
+> Confidence  Δ (P1 − P0)
+> Obs
+> CC (stable correct)
+> CW (correct →wrong)
+> Phi-3-mini
+> Qwen2.5-7B
+> Mistral-7B
+> Llama-3.1-8B
+> Qwen2.5-14B
+> Int
+> Phi-3-mini
+> Qwen2.5-7B
+> Mistral-7B
+> Llama-3.1-8B
+> Qwen2.5-14B
+> CF
+
+Figure 3: Confidence shift ( P1 ´ P0) on stable-correct items (CC, green) and flipped items (CW, red) by rung. On the interventional panel the CW drop is consistently larger than the CC drop. 
+
+mean gap is plotted against model size in Figure 2 across all 14 evaluated models. The nine fron-tier models span 70B to 671B (total parameters) and two release generations (2024 and 2025–2026). Their per-model gaps range from ´0.8 to `10 .2
+
+pp, with a frontier mean of `6.7 pp, within 1 pp of the local mean of `7.6 pp. Scaling from 14B to 671B does not close the gap; the 2025–2026 genera-tion (Llama-4, Qwen3-Max, DeepSeek-V3.1/V3.2) shows gaps of `5.0 to `9.8 pp, fully consistent with the 2024 generation. The single direction reversal on Hermes-3-405B is CLadder-specific (CRASS `33 .2, e-CARE `18 .8 pp; Table 4). This model is Nous Research’s non-standard SFT/DPO tuning of Llama-3.1-405B-base, distinct from the first-party chat tunings of the other frontier models, and its CLadder reversal suggests that the tuning recipe interacts specifically with the yes/no tem-plate rather than reflecting structural robustness to lexical perturbation. 
+
+4.5 Confidence Analysis 
+
+We split items into two outcome classes by joint correctness on P0 and P1. The class CC denotes items the model gets correct on both. The class CW denotes items the model gets correct on P0 but wrong on P1, that is, items flipped by the perturba-tion. If P1 were merely degrading model behaviour at random, we would expect uniform confidence drops on CC and CW. Confidence drops are not uniform across outcome classes (Figure 3). On the interventional rung, CW items show confidence drops two to five times larger than CC items in ev-ery model. Qwen2.5-14B is the most striking case, with a CW drop of ´0.135 against a CC drop of 
+
+´0.025 . Models therefore produce wrong answers under P1 with conscious uncertainty rather than 
+
+Model Common ∆ Nonsense ∆ Engaged 
+
+Phi-3-mini `6.2 `0.6 ✓
+
+Qwen2.5-7B `9.8 `0.0 ✗
+
+Mistral-7B `7.2 `1.0 ✗
+
+Llama-3.1-8B `6.2 ´2.0 ✓
+
+Qwen2.5-14B `8.6 `0.2 ✓
+
+Mean (All models) `7.6 „0 3/5 
+
+Mean (Engaged only) — ´0.4 —
+
+Table 3: Within-benchmark falsifiability test on the inter-ventional rung, comparing CLadder’s commonsensical and nonsensical subsets. 
+
+with random noise. 
+
+4.6 Domain Analysis 
+
+Per-question gaps are aggregated by CLad-der’s story domain, extracted from story_id 
+
+prefixes with manual merging of near-duplicates (smoke /smoking and encouage-ment /encouragement ). The top five and bottom five domains ranked by cross-model mean gap are listed in Appendix Table A4. The effect is sharply domain dependent. Domains with strong real-world causal priors show large positive gaps that are robust across models. Examples range from vaccine at `21 .3 pp to smoking at 
+
+`12 .1 pp, with candle and obesity in between (full ranking in Appendix Table A4). Domains that lack such priors show small or reversed effects, including water at ´8.8 pp, nature , and orange .The observed heterogeneity rules out a uniform difficulty injection and points to memorized lexical priors as the mediator. 
+
+4.7 Falsifiability Test 
+
+We re-ran the same five models on a 500-per-rung stratified sample of the nonsensical subset (Ta-CLadder CRASS e-CARE Model Size P0 P1 ∆ P0 P1 ∆ P0 P1 ∆                                                                                                                                                                
+
+> Local (3.8B–14B)
+> Phi-3-mini 3.8B 64.8 58.6 `6.2 69.0 46.4 `22.6 65.4 56.6 `8.8 Qwen2.5-7B ;7B 61.8 52.0 `9.8 32.9 32.9 0.0 50.0 50.0 0.0 Mistral-7B 7B 58.4 51.2 `7.2 83.6 49.6 `34.0 68.7 57.2 `11.5 Llama-3.1-8B 8B 59.8 53.6 `6.2 73.4 42.7 `30.7 67.6 57.5 `10.1 Qwen2.5-14B 14B 64.0 55.4 `8.6 73.4 52.5 `20.9 71.4 57.6 `13.8
+> Local mean —61.8 54.2 `7.6 74.8 47.8 `27.0 68.3 57.2 `11.1
+> Frontier (70B and above)
+> Llama-3.3-70B 70B 70.6 60.8 `9.8 94.2 71.9 `22.3 82.3 62.8 `19.5 Qwen2.5-72B 72B 68.2 63.0 `5.2 94.2 60.6 `33.6 84.5 64.9 `19.6 Llama-4-Scout 109B :63.8 57.0 `6.8 82.8 55.8 `27.0 70.8 58.3 `12.5 Llama-4-Maverick 400B :59.8 54.0 `5.8 89.8 67.5 `22.3 80.4 64.1 `16.3 Hermes-3-405B ‹405B 66.0 66.8 ´0.8 90.9 57.7 `33.2 82.8 64.0 `18.8 DeepSeek-V3 671B :65.0 54.8 `10.2 93.4 61.3 `32.1 81.9 65.4 `16.5 DeepSeek-V3.1 685B :59.6 51.2 `8.4 93.1 57.3 `35.8 81.7 61.7 `20.0 DeepSeek-V3.2 685B :60.6 50.8 `9.8 90.5 52.9 `37.6 82.3 61.8 `20.5 Qwen3-Max „1T :63.8 58.8 `5.0 95.5 72.7 `22.8 82.8 64.4 `18.4
+> Frontier mean —64.2 57.5 `6.7 91.6 62.0 `29.6 81.1 63.0 `18.1
+
+Table 4: Cross-benchmark and cross-scale gap on CLadder (interventional rung), CRASS ( n “ 274 ), and e-CARE (n “ 1000 stratified subsample). ; Qwen2.5-7B collapses on CRASS and e-CARE and is excluded from the engaged mean on those two benchmarks. ‹ Hermes-3 uses non-standard SFT/DPO instruction tuning of Llama-3.1-405B-base. : Mixture-of-experts models reported at total parameter count. 
+
+ble 3). The cross-model mean interventional gap is ´0.04 pp across all five models, and ´0.4 pp re-stricted to the three models that remain engaged. This is a 19 ˆ reduction from the commonsensical 
+
+`7.6 pp gap. The direction is no longer consistent across models, and every per-model gap satisfies 
+
+|∆| ă 2.1 pp. A secondary finding is that on the nonsensical subset, Qwen2.5-7B emits no on 100% of interventional questions and Mistral-7B emits 
+
+yes on 92% (Appendix Table A3). The same two models show much lower top-class shares on com-monsensical CLadder, ranging from 71% to 92%, indicating greater output variation when lexical an-chors are present. For these 7B-class models, lex-ical content of variable names functions not only as an accuracy shortcut but as a precondition for producing varied outputs on causal questions at all. The remaining three models stay engaged on nonsense yet score near chance. 
+
+4.8 Cross-Benchmark Replication Local and frontier set. Per-model accuracy and gap are in Table 4 and Figure A3. The cross-model mean gap on the engaged local models is `27 .0 pp (CRASS) and `11 .1 pp (e-CARE), both with every per-model gap positive. Across the nine frontier models the mean rises to `29 .6 pp (CRASS) and 
+
+`18 .0 pp (e-CARE), again with every per-model gap positive. The lexical-fragility effect is therefore not a small-model artifact, and it persists across all frontier models. Frontier P0 accuracy on CRASS reaches 90–96%, so the larger frontier gaps reflect more absolute accuracy lost when lexical anchors are removed rather than a lower floor. 
+
+Item-level correlation. An item-level analysis in Appendix D finds a positive correlation between the number of replaced noun tokens and the per-item flip rate (Spearman ρ “ 0.23 on CRASS, 
+
+ρ “ 0.15 on e-CARE), so denser noun content per item plausibly explains part of the magnitude difference between CRASS and CLadder. 
+
+Combined significance. Across the benchmarks, all 13 model-benchmark pairs on the local engaged set show a positive gap. Adding the nine-model frontier set contributes another 27 pairs of which 26 are positive. The combined evidence is 39 of 40 positive pairs. A one-sided exact sign test against the null of zero direction gives p « 3.7 ˆ 10 ´11 .
+
+Engagement collapse. Qwen2.5-7B collapses to a single answer token (top-class share 1.00 ) on CLadder nonsense, CRASS, and e-CARE, and Mistral-7B collapses on CLadder under perturba-tion. The other three local models and all nine frontier models remain engaged, indicating that en-gagement collapse is an intrinsic limitation of some 7B class models rather than a benchmark property. 4.9 Prompting Mitigation Prompting strategies (see Table 5). Direct is the minimal one-shot template that asks for a single Yes 
+
+or No token and serves as the baseline used through-out the preceding analyses. CausalCoT (Jin et al., 2023) is a four-step prompt originally validated on GPT-4 that asks the model to identify the causal graph, the query type, the necessary adjustment set, and then to compute the answer. Scaffold is a five-step structured scaffolding prompt we test as a candidate mitigation, asking the model to list the causal graph as edges, write the intervention as a 
+
+do p¨q specification, and provide a final answer in a strictly parseable form, with the exact template given in Appendix C. Few-shot ICL prepends five in-context demonstrations from the CLadder com-monsensical interventional rung, disjoint from the evaluation pool and balanced three yes to two no ,each presented in its original lexicalized form re-gardless of whether the test item is P0 or P1, with the same first-token logprob scoring as Direct. 
+
+Scaffold and Few-shot. The scaffold reduces the cross-model mean gap from `7.0 pp under Direct to `3.8 pp, and Few-shot ICL further to `1.4 pp. The reduction is largely a P0 regression on smaller models. Under the scaffold, Qwen2.5-14B drops 12.8 pp on P0, Llama-3.1-8B 10.6 pp, and Phi-3-mini 10.0 pp. Under Few-shot, Qwen2.5-7B, Mistral-7B, and Phi-3-mini regress on P0 by 6 to 11 pp; restricted to the four smaller models the Few-shot mean gap is still `2.6 pp. The only case where demonstrations enable an instruction-tuned LLM to solve P1 items above its P0 baseline is Qwen2.5-14B under Few-shot ( P1 “ 72 .2% vs Direct P0 “
+
+64 .0%), matching the scale dependence in Figure 2. 
+
+CausalCoT. It produces no parseable yes/no an-swer in 14.6 to 70.1% of cases across the five mod-els, with mean P0 accuracy of 30.9%, well below chance. Our data indicate it does not scale-port to 7B–14B instruction-tuned models, in tension with its frequent use as a baseline in this regime. 
+
+5 Discussion 
+
+Capability versus behaviour. The lexical-mediation pattern is not an artifact of weak prompt-ing at small scale. Scaling from 14B to 671B does not close the gap, and frontier mean gaps on CRASS and e-CARE exceed their local counter-parts. The scaffold and few-shot ICL each reduce the CLadder gap on the local set, but on four of five                                                                                      
+
+> Model Method P0(%) P1(%) ∆(pp) Invalid
+> Phi-3-mini Direct 62.0 56.2 `5.8 0.2% CausalCoT 44.4 33.0 `11.4 35.2% Scaffold 52.0 48.4 `3.6 5.5% Qwen2.5-7B Direct 63.2 52.6 `10.6 0.0% CausalCoT 16.8 13.8 `3.0 70.1% Scaffold 68.0 59.2 `8.8 0.0% Mistral-7B Direct 59.6 54.0 `5.6 0.0% CausalCoT 46.8 44.8 `2.0 14.6% Scaffold 61.2 57.0 `4.2 0.2% Llama-3.1-8B Direct 63.4 57.0 `6.4 0.0% CausalCoT 19.4 16.0 `3.4 65.2% Scaffold 52.8 50.8 `2.0 11.3% Qwen2.5-14B Direct 65.0 58.4 `6.6 0.0% CausalCoT 27.0 21.2 `5.8 55.2% Scaffold 52.2 51.8 `0.4 0.1%
+> Mean Direct 62.6 55.6 `7.0 0.0%
+> Mean CausalCoT 30.9 25.8 `5.1 48.1%
+> Mean Scaffold 57.2 53.4 `3.8 3.4%
+
+Table 5: Effect of prompting strategy on lexical fragility at the interventional rung. 
+
+models the reduction comes from P0 regression rather than P1 improvement. Only Qwen2.5-14B under few-shot improves P1 above its P0 baseline. Our claim is therefore restricted to standard zero-shot evaluation and is silent on what fine-tuning or richer elicitation might achieve. 
+
+Reasoning-tuned ablation. As DeepSeek-R1 is reasoning-tuned rather than instruction-tuned, it lies outside the frontier set of Table 4. R1 shows positive gaps on all benchmarks ( `3.2 pp on CLad-der, `15 .7 pp on CRASS, `15 .1 pp on e-CARE), uniformly smaller than the non-reasoning frontier means ( `6.7, `29 .6, `18 .0 pp respectively), sug-gesting that multi-step reasoning partially mitigates but does not eliminate lexical reliance. Invalid-output rates are elevated ( „20%) due to post-reasoning answer extraction. The gap direction is positive on all benchmarks regardless of whether invalid items are counted as wrong or excluded. 
+
+6 Conclusion 
+
+We introduced Caliper , a controlled lexical pertur-bation that probes LLM causal reasoning while pre-serving the causal graph. Across nine instruction-tuned LLMs and three benchmarks, the gap local-izes to ATE queries, collapses on a pseudoword subset, and resists three prompting interventions, indicating that reported accuracies are better un-derstood as memorized lexical priors than direct evidence of causal inference. Limitations 
+
+We note three limitations. (1) Our model set spans open-weight instruction-tuned LLMs from 3.8B to 671B; closed-API proprietary models and models fine-tuned on causal-reasoning corpora are out of scope and may behave differently. (2) Mechanism analyses (query-type, domain, confidence) are con-ducted on CLadder only, since CRASS ( n “ 274 )has limited per-cell sample size, and we report only cross-model aggregates on CRASS and e-CARE. (3) The Caliper perturbation occasionally produces mildly ungrammatical phrases when a CLadder variable is a gerund (e.g. drinking ). The conver-gence of the gap on specific rungs, query types, and domains, together with its collapse on the nonsen-sical subset, rules out grammatical degradation as the dominant driver. 
+
+Ethics Statement 
+
+This work probes the causal reasoning behaviour of publicly released instruction-tuned language mod-els on three public benchmarks (CLadder, CRASS, e-CARE). No human subjects, personally identifi-able information, or proprietary data are involved. Our findings identify a measurement limitation in standard zero-shot evaluation and are not a claim about the upper bound of what such models can do under fine-tuning or richer elicitation. 
+
+References 
+
+Marah Abdin, Sam Ade Jacobs, Ammar Ahmad Awan, and 1 others. 2024. Phi-3 technical report: A highly capable language model locally on your phone. arXiv preprint arXiv:2404.14219 .Tom B. Brown, Benjamin Mann, Nick Ryder, Melanie Subbiah, Jared Kaplan, Prafulla Dhariwal, Arvind Neelakantan, and 1 others. 2020. Language models are few-shot learners. In Advances in Neural Infor-mation Processing Systems (NeurIPS) .Nicholas Carlini, Daphne Ippolito, Matthew Jagielski, Katherine Lee, Florian Tramèr, and Chiyuan Zhang. 2023. Quantifying memorization across neural lan-guage models. In International Conference on Learn-ing Representations (ICLR) .Simin Chen, Yiming Chen, Zexin Li, Yifan Jiang, Zhongwei Wan, Yixin He, Dezhi Ran, Tianle Gu, Haizhou Li, Tao Xie, and Baishakhi Ray. 2025. Benchmarking large language models under data con-tamination: A survey from static to dynamic evalu-ation. In Proceedings of the 2025 Conference on Empirical Methods in Natural Language Processing (EMNLP) .Haoang Chi, He Li, Wenjing Yang, Feng Liu, Long Lan, Xiaoguang Ren, Tongliang Liu, and Bo Han. 2024. Unveiling causal reasoning in large language models: Reality or mirage? In Advances in Neural Information Processing Systems (NeurIPS) .DeepSeek-AI. 2024. DeepSeek-V3 technical report. 
+
+Preprint , arXiv:2412.19437. Zahra Dehghanighobadi, Asja Fischer, and Muham-mad Bilal Zafar. 2025. Can LLMs explain them-selves counterfactually? In Proceedings of the 2025 Conference on Empirical Methods in Natural Lan-guage Processing (EMNLP) .Li Du, Xiao Ding, Kai Xiong, Ting Liu, and Bing Qin. 2022. e-CARE: A new dataset for exploring explain-able causal reasoning. In Proceedings of the 60th Annual Meeting of the Association for Computational Linguistics (ACL) , pages 432–446. Bradley Efron and Robert J. Tibshirani. 1993. An Intro-duction to the Bootstrap . Chapman & Hall/CRC. Yanai Elazar, Hongming Zhang, Yoav Goldberg, and Dan Roth. 2021. Back to square one: Artifact detec-tion, training and commonsense disentanglement in the Winograd schema. In Proceedings of the 2021 Conference on Empirical Methods in Natural Lan-guage Processing (EMNLP) .Tao Feng, Lizhen Qu, Niket Tandon, Zhuang Li, Xiaoxi Kang, and Gholamreza Haffari. 2025. On the relia-bility of large language models for causal discovery. In Proceedings of the 63rd Annual Meeting of the Association for Computational Linguistics (ACL) .Jörg Frohberg and Frank Binder. 2022. CRASS: A novel data set and benchmark to test counterfactual reasoning of large language models. In Proceedings of the Thirteenth Language Resources and Evalua-tion Conference (LREC) , pages 2126–2140. Aaron Grattafiori, Abhimanyu Dubey, Abhinav Jauhri, Abhinav Pandey, Abhishek Kadian, and 1 others. 2024. The Llama 3 herd of models. arXiv preprint arXiv:2407.21783 .Jamie Hayes, Marika Swanberg, Harsh Chaudhari, Itay Yona, Ilia Shumailov, Milad Nasr, Christopher A. Choquette-Choo, Katherine Lee, and A. Feder Cooper. 2025. Measuring memorization in language models via probabilistic extraction. In Proceedings of the 2025 Conference of the Nations of the Amer-icas Chapter of the Association for Computational Linguistics (NAACL) .Albert Q. Jiang, Alexandre Sablayrolles, Arthur Men-sch, Chris Bamford, Devendra Singh Chaplot, Diego de las Casas, Florian Bressand, Gianna Lengyel, Guil-laume Lample, Lucile Saulnier, and 1 others. 2023. Mistral 7B. arXiv preprint arXiv:2310.06825 .Zhijing Jin, Yuen Chen, Felix Leeb, Luigi Gre-sele, Ojasv Kamal, Zhiheng Lyu, Kevin Blin, Fer-nando Gonzalez Adauto, Max Kleiman-Weiner, Mrinmaya Sachan, and Bernhard Schölkopf. 2023. CLadder: Assessing causal reasoning in language models. In Advances in Neural Information Process-ing Systems (NeurIPS) .Emre Kıcıman, Robert Ness, Amit Sharma, and Chen-hao Tan. 2023. Causal reasoning and large language models: Opening a new frontier for causality. arXiv preprint arXiv:2305.00050 .Xiaoyu Liu, Paiheng Xu, Junda Wu, Jiaxin Yuan, Yifan Yang, Yuhang Zhou, Fuxiao Liu, Tianrui Guan, Hao-liang Wang, Tong Yu, Julian McAuley, Wei Ai, and Furong Huang. 2025. Large language models and causal inference in collaboration: A comprehensive survey. In Findings of the Association for Computa-tional Linguistics: NAACL 2025 .Inbal Magar and Roy Schwartz. 2022. Data contamina-tion: From memorization to exploitation. In Proceed-ings of the 60th Annual Meeting of the Association for Computational Linguistics (ACL), Short Papers ,pages 157–165. Tom McCoy, Ellie Pavlick, and Tal Linzen. 2019. Right for the wrong reasons: Diagnosing syntactic heuris-tics in natural language inference. In Proceedings of the 57th Annual Meeting of the Association for Computational Linguistics (ACL) , pages 3428–3448. Tarun Ram Menta, Susmit Agrawal, and Chirag Agar-wal. 2025. Analyzing memorization in large lan-guage models through the lens of model attribution. In Proceedings of the 2025 Conference of the Na-tions of the Americas Chapter of the Association for Computational Linguistics (NAACL) .Martina Miliani, Serena Auriemma, Alessandro Bondielli, Emmanuele Chersoni, Lucia Passaro, Irene Sucameli, and Alessandro Lenci. 2025. ExpliCa: Evaluating explicit causal reasoning in large language models. In Findings of the Association for Computa-tional Linguistics: ACL 2025 .Nous Research. 2024. Hermes 3 technical report. 
+
+Preprint , arXiv:2408.11857. Judea Pearl. 2009. Causality: Models, Reasoning, and Inference , 2 edition. Cambridge University Press, Cambridge, UK. Qwen Team. 2025. Qwen2.5 technical report. Preprint ,arXiv:2412.15115. Marco Tulio Ribeiro, Tongshuang Wu, Carlos Guestrin, and Sameer Singh. 2020. Beyond accuracy: Be-havioral testing of NLP models with CheckList. In 
+
+Proceedings of the 58th Annual Meeting of the Asso-ciation for Computational Linguistics (ACL) , pages 4902–4912. Rahul Babu Shrestha, Simon Malberg, and Georg Groh. 2025. From causal parrots to causal prophets? To-wards sound causal reasoning with large language models. In Proceedings of the 5th International Con-ference on Natural Language Processing for Digital Humanities (NLP4DH) .Longxuan Yu, Delin Chen, Siheng Xiong, Qingyang Wu, Dawei Li, Zhikai Chen, Xiaoze Liu, and Liang-ming Pan. 2025. CausalEval: Towards better causal reasoning in language models. In Proceedings of the 2025 Conference of the Nations of the Ameri-cas Chapter of the Association for Computational Linguistics (NAACL) .Matej Zeˇ cevi´ c, Moritz Willig, Devendra Singh Dhami, and Kristian Kersting. 2023. Causal parrots: Large language models may talk causality but are not causal. 
+
+Transactions on Machine Learning Research .Yu Zhou, Xingyu Wu, Beicheng Huang, Jibin Wu, Liang Feng, and Kay Chen Tan. 2024. CausalBench: A comprehensive benchmark for causal learning capa-bility of LLMs. arXiv preprint arXiv:2404.06349 .Appendix A Full Per-Model and Per-Query-Type Results 
+
+This appendix complements the aggregated results in Section 4 by providing the underlying per-model breakdowns. Each CLadder query_type code la-bel used in our tables and figures is mapped to its corresponding causal-inference term in Table A1. Per-model accuracy on P0 and P1, together with the lexical gap ∆ for every (model, query-type) cell, is then reported in Table A2, from which the cross-model means and standard deviations sum-marised in Table 2 are derived. Cells with n ă 5
+
+are omitted.                          
+
+> Label Rung Full term
+> marginal Obs marginal probability PpYq
+> correlation Obs correlation PpY|Xq
+> exp_away Obs explaining away
+> ate Int average treatment effect (ATE)
+> collider_bias Int collider bias
+> backadj Int backdoor adjustment
+> nde CF natural direct effect (NDE)
+> nie CF natural indirect effect (NIE)
+> ett CF effect of treatment on the treated (ETT)
+> det-cf CF deterministic counterfactual
+
+Table A1: Mapping between CLadder query_type field values (used as column labels in tables and figures) and their full causal-inference terms. 
+
+Note on small sample cells. Some observational sub-types such as exp_away have n “ 29 , which yields wider per-model confidence intervals. The cross-model aggregation reported in the main text reduces this noise. 
+
+B Qualitative Examples 
+
+We provide three CW flips (correct on P0, wrong on P1) from Qwen2.5-14B on the interventional rung, selected by the largest confidence drop. Each example shows the original question ( P0), the lex-ically anonymized version ( P1), and the model’s prediction with its confidence. 
+
+Example 1. Gold answer is no . P0 prediction is no with confidence 0.995 . P1 prediction is yes 
+
+with confidence 0.527 . Variables in the original question are treatment , unobserved , drug , freckles .
+
+P0 (original). “For patients not assigned the drug treatment, the probability of freckles is 30%. For patients assigned the drug treatment, the probabil-ity of freckles is 29%. For patients not assigned the drug treatment, the probability of taking of all assigned drugs is 18%. For patients assigned the drug treatment, the probability of taking of all assigned drugs is 59%. Will taking of all assigned drugs increase the chance of freckles?” 
+
+P1 (lexically anonymized). “For patients not as-signed the X1 X2, the probability of X3 is 30%. For patients assigned the X1 X2, the probability of X3 is 29%. For patients not assigned the X1
+
+X2, the probability of taking of all assigned X1 is 18%. For patients assigned the X1 X2, the prob-ability of taking of all assigned X1 is 59%. Will taking of all assigned X1 increase the chance of 
+
+X3?” 
+
+Example 2. Gold answer is yes . P0 prediction is yes with confidence 1.000 . P1 prediction is no 
+
+with confidence 0.547 . Variables are drinking , wife ,
+
+alarm .
+
+P0. “For people who do not drink coffee, the prob-ability of ringing alarm is 42%. For people who drink coffee, the probability of ringing alarm is 66%. Will drinking coffee increase the chance of ringing alarm?” 
+
+P1. “For people who do not drink coffee, the probability of ringing X1 is 42%. For people who drink coffee, the probability of ringing X1
+
+is 66%. Will X2 coffee increase the chance of ringing X1?” 
+
+Example 3. Gold answer is no . P0 prediction is no with confidence 0.988 . P1 prediction is yes 
+
+with confidence 0.547 . Variables are treatment ,
+
+unobserved , having , cholesterol .
+
+P0. “For patients not assigned the drug treatment, the probability of low cholesterol is 71%. For patients assigned the drug treatment, the proba-bility of low cholesterol is 76%. For patients not assigned the drug treatment, the probability of having a sister is 48%. For patients assigned the drug treatment, the probability of having a sister is 8%. Will having a sister increase the chance of low cholesterol?” 
+
+P1. “For patients not assigned the drug X1, the probability of low X2 is 71%. For patients as-signed the drug X1, the probability of low X2 is 76%. For patients not assigned the drug X1, the probability of X3 a sister is 48%. For patients as-signed the drug X1, the probability of X3 a sister is 8%. Will X3 a sister increase the chance of low 
+
+X2?” 
+
+Observations. In all three examples the P0 pre-diction is high confidence (at least 0.99 ) and cor-rect. After lexical anonymization the confidence collapses to roughly 0.55 and the answer flips. The pattern is consistent with the model exploiting lexi-cal content (the implausibility of a causal link from 
+
+drugs to freckles , or from sister to cholesterol )rather than performing structural inference over the supplied conditional probabilities. Examples 2 Model Rung Query Type n P0 (%) P1 (%) ∆ (pp) 
+
+Qwen2.5-14B Obs marginal 260 57.3 56.5 `0.8 correlation 211 51.7 54.5 ´2.8 exp_away 29 58.6 62.1 ´3.5 Int ate 222 77.9 74.8 `3.1 
+
+backadj 252 53.6 39.7 `13.9 collider_bias 26 46.2 42.3 `3.9 CF det-counterfactual 176 67.1 61.4 `5.7 ett 171 57.3 55.0 `2.3 nde 53 62.3 49.1 `13.2 nie 100 52.0 44.0 `8.0 Qwen2.5-7B Obs marginal 260 48.1 46.5 `1.6 correlation 211 49.8 49.3 `0.5 exp_away 29 48.3 65.5 ´17.2 Int ate 222 68.9 55.4 `13.5 
+
+backadj 252 57.1 50.4 `6.7 collider_bias 26 46.2 38.5 `7.7 CF det-counterfactual 176 61.9 58.5 `3.4 ett 171 57.9 54.4 `3.5 nde 53 47.2 54.7 ´7.5 nie 100 51.0 54.0 ´3.0 Llama-3.1-8B Obs marginal 260 51.9 49.2 `2.7 correlation 211 48.3 48.8 ´0.5 exp_away 29 48.3 41.4 `6.9 Int ate 222 71.2 57.2 `14.0 
+
+backadj 252 47.6 48.0 ´0.4 collider_bias 26 80.8 76.9 `3.9 CF det-counterfactual 176 55.1 55.1 0.0 ett 171 49.1 48.0 `1.1 nde 53 56.6 50.9 `5.7 nie 100 58.0 47.0 `11.0 Mistral-7B-v0.3 Obs marginal 260 47.3 49.2 ´1.9 correlation 211 54.0 50.2 `3.8 exp_away 29 51.7 51.7 0.0 Int ate 222 69.8 55.4 `14.4 
+
+backadj 252 48.0 48.0 0.0 collider_bias 26 61.5 46.2 `15.4 CF det-counterfactual 176 58.0 55.7 `2.3 ett 171 55.6 55.0 `0.6 nde 53 54.7 50.9 `3.8 nie 100 52.0 53.0 ´1.0 Phi-3-mini Obs marginal 260 48.1 50.4 ´2.3 correlation 211 48.8 53.1 ´4.3 exp_away 29 65.5 72.4 ´6.9 Int ate 222 72.1 63.5 `8.6 
+
+backadj 252 59.1 55.2 `4.0 collider_bias 26 57.7 50.0 `7.7 CF det-counterfactual 176 60.8 58.0 `2.8 ett 171 50.9 48.0 `2.9 nde 53 50.9 50.9 0.0 nie 100 48.0 47.0 `1.0 
+
+Table A2: Full per-model per-query-type accuracy and lexical perturbation gap for our evaluation. ATE rows are bolded to highlight the locus of the effect. Sample size n refers to each cell’s P0 question count. 
+
+and 3 illustrate the grammatical artefact noted in the Limitations. When a variable name is a gerund (drinking , having ), replacement produces mildly ungrammatical phrasing such as “ X2 coffee”. The convergence of behavioural evidence across rung, query type, domain, and nonsense (§4) excludes grammar as the dominant mechanism. 
+
+C Prompt Templates 
+
+Direct prompt. Used in Section 4.2 through Sec-tion 4.7. 
+
+{question} Answer with a single token, Yes or No. After the token, optionally explain in one sentence. Answer: Commonsense Nonsense Model P0 P1 P0 P1
+
+Phi-3-mini no 65% no 71% no 82% no 81% Qwen2.5-7B no 71% no 72% no 100% : no 100% :
+
+Mistral-7B yes 81% yes 92% : yes 92% : yes 92% :
+
+Llama-3.1-8B yes 76% yes 82% yes 78% yes 85% Qwen2.5-14B no 83% no 64% no 83% no 58% 
+
+Table A3: Top-class share of yes/no predictions on the interventional rung. : marks ě 90% single-class col-lapse. On commonsensical questions all 5 models re-main engaged. On nonsensical questions Qwen2.5-7B and Mistral-7B collapse to majority predictions, provid-ing direct evidence that lexical anchors are a prerequisite for inferential engagement. 
+
+Domain Gap (pp) σ (pp) All positive? 
+
+High-prior domains (top 5) 
+
+vaccine `21.3 15.4 ✓
+
+candle `18.5 9.2 ✓
+
+penguin `18.5 20.4 ✗
+
+encouragement `17.1 8.6 ✓
+
+obesity `16.7 12.9 ✓
+
+Neutral domains (bottom 5) 
+
+tax ´1.7 17.0 ✗
+
+simpson ´4.2 9.7 ✗
+
+orange ´4.4 5.4 ✗
+
+nature ´5.5 4.5 ✗
+
+water ´8.8 7.5 ✗
+
+Table A4: Top 5 and bottom 5 story domains by inter-ventional lexical gap (cross-model mean). The effect is concentrated in domains with strong real-world causal priors (vaccines, obesity, smoking) and is absent or re-versed in neutral domains (water, nature, tax). σ is across-model std-dev. 
+
+CausalCoT prompt. From Jin et al. (2023). Used in Section 4.9. 
+
+{question} To answer this question, follow these steps. 1. Identify the causal structure (variables and direct relationships). 2. Determine the type of query (observational, interventional, or counterfactual). 3. Identify the necessary causal adjustment (e.g., backdoor variables). 4. Compute the answer based on the causal logic. Then provide your final answer as Yes or No. 
+
+Scaffold prompt. Used in Section 4.9. 
+
+{question} To answer this rigorously, you MUST complete the following scaffold. [SCAFFOLD-1: CAUSAL_GRAPH] List ONLY the directed edges as aPython-style list of tuples. Example: [(“smoking”, “cancer”), (“smoking”, “tar”), (“tar”, “cancer”)] Edges = [SCAFFOLD-2: QUERY_TYPE] Choose exactly one. OBSERVATIONAL /INTERVENTIONAL / COUNTERFACTUAL. Type = [SCAFFOLD-3: INTERVENTION_SPEC] (skip if OBSERVATIONAL) For INTERVENTIONAL or COUNTERFACTUAL, write do(VAR=value) explicitly. do() = [SCAFFOLD-4: WORLDS] (mandatory for COUNTERFACTUAL only) factual_world = {var: value, ...} counterfactual_world = {var: value, ...} [SCAFFOLD-5: COMPUTATION] Using only the scaffolds above, derive Yes or No in 1 to 3 sentences. Reasoning: [FINAL] Final Answer: Yes or Final Answer: No 
+
+Generation hyperparameters. For all three prompts we use greedy decoding with 
+
+do_sample=False and pad_token_id =eos_token_id . The max_new_tokens setting differs by prompt. For Direct we use 32, for CausalCoT 256, and for Scaffold 512. 
+
+Parser. For Direct, we extract the first yes or no 
+
+substring at the start of the generated text. For CausalCoT, we take the last yes or no substring in the output. For Scaffold, we apply a strict regex 
+
+Final\s*Answer\s*:?\s*(Yes|No) with a last yes or no fallback. Outputs that contain no yes 
+
+or no token are counted as invalid .
+
+D Item-Level Noun-Density Analysis on CRASS and e-CARE 
+
+The CRASS gap of `27 .0 pp is roughly 3.5ˆ the CLadder interventional-rung gap of `7.6 pp (§4.8). A natural candidate explanation is that CRASS scenarios contain more replaceable noun tokens per item than CLadder questions, so each perturbed item loses more memorized lexical signal. We test this directly. 
+
+Setup. For each item we record (i) the number of unique NOUN/PROPN tokens that the Caliper per-turbation replaced, denoted k, and (ii) the per-item flip rate f , defined as the fraction of models that were correct on P0 and wrong on P1, restricted to items where at least two models were correct on P0
+
+(so f is well-defined and not dominated by items the models never solve). We compute Pearson r
+
+and Spearman ρ between k and f .
+
+Results. The correlations and the binned flip-rate pattern are reported in Table A5. Both benchmarks show positive correlations, modest in magnitude. e-CARE shows a clean monotonic relationship across four bins, with flip rate rising from 20 .9% when 0–2 nouns are replaced to 36 .9% when 8 or more are replaced. CRASS shows a similar pattern but plateaus at the 3–4 bin, possibly because items with 5 or more replaceable nouns are rare in CRASS (n “ 23 ).                                     
+
+> Dataset Pearson rSpearman ρnitems
+> CRASS `0.179 `0.231 234 e-CARE `0.154 `0.148 798
+> Bin ( knouns) CRASS e-CARE Flip Rate nItems Flip Rate nItems
+> 0–2 0.295 83 0.209 15 3–4 0.454 126 0.218 157 5–7 0.442 23 0.309 454 8+ ——0.369 172
+
+Table A5: Item-level relationship between number of re-placed noun/propn tokens ( k) and per-item flip rate ( f ). Top: cross-item correlations. Bottom: f binned by k.The 8+ bin contains no CRASS items: by construction of the CRASS test set, no item yields more than seven replaceable NOUN/PROPN tokens. 
+
+Interpretation. The positive correlations and the monotonic e-CARE binning support the hypothesis that more replaceable noun content per item leads to larger lexical fragility. The effect size is modest (ρ « 0.15 –0.23 ), which means noun count alone does not account for the cross-benchmark differ-ence in average gap. Other factors (MCQ choice count, topic familiarity, sentence-level structure) plausibly contribute. The finding is therefore best read as compatible with a noun-density mechanism rather than as isolating it. Phi-3-mini 
+
+Qwen2.5-7B 
+
+Mistral-7B 
+
+Llama-3.1-8B 
+
+Qwen2.5-14B 
+
+−0.04 
+
+−0.02 
+
+0.00 
+
+0.02 
+
+0.04 
+
+0.06 
+
+0.08 
+
+0.10 
+
+0.12 
+
+> Lexical Gap ( P0 − P1)
+
+-3.4 
+
++0.0 +0.6 
+
++1.6 
+
+-1.0 
+
++6.2 
+
++9.8 
+
++7.2 
+
++6.2 
+
++8.6 
+
++2.2 
+
++1.0 +1.2 
+
++3.2 
+
++5.8 
+
+Rung 
+
+Obs Int CF Figure A1: Lexical perturbation gap ( P0 ´ P1) by model and rung. The interventional gap (orange) is positive in all five models. The observational gap (blue) hovers around zero. marginal 
+
+correlation 
+
+exp_away 
+
+ate 
+
+collider_bias 
+
+backadj 
+
+nie 
+
+nde 
+
+det-counterfactual 
+
+ett 
+
+−0.15 
+
+−0.10 
+
+−0.05 
+
+0.00 
+
+0.05 
+
+0.10 
+
+0.15 
+
+> Lexical Gap ( P0 − P1)
+
++0.2 -0.7 
+
+-4.1 
+
++10.7 
+
++7.7 
+
++4.8 +3.2 +3.0 
+
++2.8 +2.1 
+
+Rung 
+
+Obs Int CF 
+
+Figure A2: Cross-model mean gap by query type with ˘ std-dev error bars ( n “ 5 models). ATE shows the largest gap. Phi-3-mini                 
+
+> Qwen2.5-7B
+> Mistral-7B
+> Llama-3.1-8B
+> Qwen2.5-14B
+> Llama-3.3-70B
+> Qwen2.5-72B
+> Hermes-3-405B
+> DeepSeek-V3
+> Llama-4-Scout
+> Llama-4-Mav.
+> Qwen3-Max
+> DeepSeek-V3.1
+> DeepSeek-V3.2
+> 0
+> 10
+> 20
+> 30
+> 40
+> Lexical gap,  P0 − P1 (pp)
+> +6.2
+> +9.8
+> +7.2 +6.2
+> +8.6 +9.8
+> +5.2
+> -0.8
+> +10.2
+> +6.8 +5.8 +5.0
+> +8.4 +9.8
+> +22.6
+> +0.0
+> +33.9
+> +30.7
+> +20.8 +22.3
+> +33.6 +33.2 +32.1
+> +27.0
+> +22.3 +22.8
+> +35.8
+> +37.6
+> +8.8
+> +0.0
+> +11.5 +10.1
+> +13.8
+> +19.5 +19.6 +18.8
+> +16.5
+> +12.5
+> +16.3
+> +18.4 +20.0 +20.5
+> Local Frontier 2024 Frontier 2025--2026
+> CLadder (int rung)
+> CRASS
+> e-CARE
+
+Figure A3: Per-model lexical perturbation gap on three benchmarks across fourteen models (five local at 3.8B–14B and nine frontier from 70B to over 1T, separated by the vertical dotted line). Hatched bars mark engagement collapse (top-class share ě 0.90 ), affecting Qwen2.5-7B on every benchmark in the local set, with no frontier model collapsing. The single direction reversal (Hermes-3-405B on CLadder, ´0.8 pp) is benchmark-specific, as the same model shows `33 .2 pp on CRASS and `18 .8 pp on e-CARE.

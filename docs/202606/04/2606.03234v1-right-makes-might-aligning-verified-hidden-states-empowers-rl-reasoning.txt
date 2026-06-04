@@ -1,0 +1,557 @@
+Title: Right Makes Might: Aligning Verified Hidden States Empowers RL Reasoning
+
+URL Source: https://arxiv.org/pdf/2606.03234v1
+
+Published Time: Wed, 03 Jun 2026 01:03:20 GMT
+
+Number of Pages: 16
+
+Markdown Content:
+# Right Makes Might: Aligning Verified Hidden States Empowers RL Reasoning 
+
+## Ziyue Wang 1,2∗, Aomufei Yuan 1∗, Yongfu Zhu 2∗, Shuai Dong 2,3, Wenpu Liu 1,2,
+
+## Yiran Yao 5, Weichu Xie 1,2, Yuqi Xu 1,2, Caoyuan Ma 2,4, Wenqi Shao 2, Xiaoying Zhang 2, Nan Duan 2, Jiaqi Wang 2,†
+
+> 1
+
+Peking University , 2JINGDONG , 3Shanghai Innovation Institute , 4The University of Tokyo ,
+
+> 5
+
+Tianjin University 
+
+## Abstract 
+
+Reinforcement Learning from Verifiable Rewards (RLVR) has become the dominant approach for improving mathematical reasoning in large language models, yet current methods reduce each correct rollout to a single reward bit, ignoring the geometric structure shared among their hidden states. Investigating this structure, we find that at the anchor token (the position immediately before the answer marker), correct rollouts converge naturally because they must produce the same answer (cosine similarity ≈ 0.84 ), yet each retains residual variance from its unique reasoning path. Encouraging full alignment at this point pushes the model to extract a unified “correct decision” representation, reducing sensitivity to which reasoning path was taken. Based on this observation, we propose Hidden-Align, an auxiliary loss function that aligns the last-layer hidden states of correct rollouts at the anchor token during RL training, with zero overhead in both training and inference. On eight mathematical reasoning benchmarks, Hidden-Align improves average pass@ 1 over the DAPO baseline by 3.8, 6.2, and 5.4 percentage points on Qwen3-1.7B, 4B, and 14B respectively, with consistent pass@ k gains across all three scales, supported by ablations on loss type, anchor position, layer depth, and loss weight.  
+
+> Date:
+
+June 3, 2026  
+
+> Correspondence:
+
+wangziyue@tju.edu.cn 
+
+## 1 Introduction 
+
+Reinforcement Learning from Verifiable Rewards (RLVR) has become the dominant approach for mathemati-cal reasoning in large language models [4, 8, 21, 32, 34]. Methods such as DAPO and GRPO generate groups of rollouts per prompt, score each with a binary correctness reward, and update the policy via group-relative advantages. This pipeline achieves strong gains on competition-level math benchmarks, yet it reduces every correct rollout to a single reward bit. When multiple rollouts in a group solve the same problem correctly, the geometric relationships among their internal representations are discarded. While regularization techniques such as KL penalties [18] exist, they operate on the output distribution. While recent work has used hid-den states for reward prediction [5] and reward model regularization [31], no existing method aligns correct rollouts’ hidden states as a training signal during RL. We investigate whether this structure can be exploited as an auxiliary training signal by analyzing the hidden 1    
+
+> arXiv:2606.03234v1 [cs.LG] 2 Jun 2026 10 50510
+
+Token offset relative to \boxed{ start 
+
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Cosine similarity (correct pairs)
+> \boxed{...}
+> anchor token
+
+(a) Fixed scale, across layers     
+
+> L0
+> L4
+> L8
+> L12
+> L16
+> L20
+> L24
+> L28
+> L32
+> L36 (last)
+> 10 50510
+
+Token offset relative to \boxed{ start 
+
+> \boxed{...}
+
+(b) Fixed layer, across scales  
+
+> Qwen3-1.7B (L28)
+> Qwen3-4B (L36)
+> Qwen3-14B (L40) Figure 1
+
+Pairwise cosine similarity of correct rollouts’ hidden states, plotted against token position relative to 
+
+\boxed{ . (a) Across all layers of Qwen3-4B, the last layer (L36, red) exhibits uniquely strong position-dependent variation, with a clear peak at the anchor token (offset = −1); shallower layers show weaker variation. (b) At the last layer across three model scales (1.7B, 4B, 14B), the same pattern holds consistently: similarity peaks at the anchor token, forming a compact but not fully converged cluster ( cos ≈ 0.84 ). 
+
+states of RL-trained models during reasoning. We begin by probing the pairwise cosine similarity of correct rollouts’ hidden states across token positions [1, 37] (Figure 1). The results show a clear positional structure: in the reasoning chain, hidden states are dispersed as each rollout follows a different path, reflecting the diverse reasoning strategies cultivated by RL training. Near the answer tokens, they converge sharply ( > 0.9)because all correct rollouts produce the same answer. Past the answer, similarity drops again. Between these regions sits the anchor token , the position immediately before the answer marker \boxed{ . Here, hidden states are compact (cosine similarity ≈ 0.84 ) yet not fully converged, occupying a unique sweet spot. We also notice that the last layer’s curve stands out from shallower layers, exhibiting far stronger position-dependent variation in Figure 1(a). Repeating the analysis on the last layer across three model scales of Qwen3 [30], we find the same pattern consistently in Figure 1(b). Inspired by the effectiveness of representa-tion alignment in other domains [33], we hypothesize that actively aligning these hidden states, encouraging their cosine similarity toward full agreement, would push the model to distill the common structure shared by diverse correct reasoning paths into a robust decision representation. We propose Hidden-Align, an auxiliary loss that maximizes the pairwise cosine similarity of correct rollouts’ last-layer hidden states at the anchor token during RL training. Since the hidden states are already produced during rollout, this adds zero overhead in both training and inference. We systematically ablate each design choice (loss type, anchor position, layer depth, and loss weight), showing that the proposed configuration is uniquely effective. In summary, we make the following contributions: 
+
+• We identify and quantify a consistent geometric phenomenon in RL-trained reasoning models: at the anchor token, correct rollouts’ last-layer hidden states converge naturally but incompletely, and this pattern holds consistently across model scales. 
+
+• We propose Hidden-Align, an auxiliary loss for RL training that aligns correct rollouts’ hidden states at the anchor token, with a two-phase backward pass that enables exact gradient computation under micro-batch training (§3). 
+
+• On eight math benchmarks across Qwen3-1.7B, 4B, and 14B, Hidden-Align improves both pass@ 1 and pass@ k over the DAPO baseline, with zero training and inference overhead. Systematic ablations on loss type, position, layer, and weight confirm that the proposed configuration is uniquely effective (§4). 22 Related Work 
+
+2.1 Reinforcement Learning for LLM Reasoning 
+
+RLVR has become the standard approach for improving mathematical reasoning in LLMs. DeepSeek-R1 [4] demonstrated that pure RL training can induce emergent chain-of-thought reasoning, leading to broad adop-tion of group-relative optimization methods. Among these, GRPO [21] computes advantages within each rollout group, eliminating the need for a separate value model, and DAPO [32] further refines it with clip-higher, dynamic sampling, and token-level loss rebalancing. A growing family of variants further improves the policy optimization objective: Dr. GRPO [13] corrects normalization biases, VAPO [34] stabilizes value estimation, and others address advantage shaping [22, 23, 35, 36], negative-sample utilization [3, 17], KL penalty design [10], intrinsic exploration [25], reward granularity [29], error diversity [12], and rank bias [8]. All these methods operate at the token-probability level, optimizing the policy gradient, advantage function, or sampling strategy. Hidden-Align is orthogonal: it introduces a training signal in the hidden representation space, and can be combined with any of the above algorithms. 
+
+2.2 Representation Alignment as a Training Signal 
+
+Aligning intermediate representations with a reference target is effective in several domains. REPA [33] aligns diffusion transformer hidden states to DINOv2 features via cosine similarity, achieving a 17.5 × training speedup and state-of-the-art generation quality. Earlier, contrastive and relational distillation methods [19, 26] established that aligning representational structure, rather than matching output distributions, transfers knowledge more effectively. In the speech domain, Wang et al. [28] use a representation alignment reward during RL training to close the reasoning gap between text and speech modalities, demonstrating that hidden-state similarity can serve directly as a reward signal. These works establish that representation alignment is a broadly effective training principle; we bring it to RL-based reasoning for the first time, aligning correct rollouts’ hidden states at a specific token position rather than distilling from an external model. 
+
+2.3 Hidden States in Reinforcement Learning 
+
+Several recent works use LLM hidden states within the RL pipeline, though none perform alignment among correct rollouts. Guo et al. [5] show that a simple linear probe on hidden states can predict reward nearly as well as a full reward model, confirming that hidden states encode correctness information. Yang et al. [31] regularize the reward model’s hidden states to prevent over-optimization, improving generalization. Sun et al. [24] reveal step-specific geometry in reasoning trajectories but do not intervene on these representations. CRAFT [14] uses contrastive learning to separate safe from unsafe reasoning trajectories, targeting safety rather than reasoning performance. Representation-based intrinsic rewards in traditional RL [6, 20, 27] are exploration-oriented, whereas Hidden-Align is attraction-oriented: it rewards similarity among correct rollouts at a specific position, consolidating diverse reasoning paths into a unified decision representation. 
+
+## 3 Methodology 
+
+Our method adds a single auxiliary loss to standard RLVR training. Given a group of rollouts generated by the policy, we extract the last-layer hidden state at the anchor token from each correct rollout and maximize their pairwise cosine similarity. Figure 2 illustrates the combined objective L = LDAPO + λ ⋅ Lcos and the overall training pipeline. We use DAPO [32] as our base RL algorithm throughout. Below, we describe the base algorithm (§3.1), the alignment loss (§3.2), the gradient derivation (§3.3), the rationale for our design choices (§3.4), and integration with the RL training pipeline (§3.5). 
+
+3.1 Preliminary: Group-Relative Policy Optimization 
+
+We build upon DAPO [32], a representative group-relative RLVR method. For each training prompt q, the policy πθ generates a group of n responses {y1, . . . , y n}. Each response yi (i = 1, . . . , n ) receives a binary 3Step 1 Step 2 Step 3 
+
+∫ x 2 = ?  
+
+> Prompt
+
+LLM Rollout 
+
+S4,1 Answer       
+
+> L=LRL +λ·Lcos
+> Training Objective
+> Sampled Rollouts
+> Gradient
+> Update
+> Step 4 Step 5
+
+S1,2 S1,3 Answer S1,1 
+
+S2,2 S2,3 Answer S2,1 
+
+S3,2 S3,3 Answer S3,1 
+
+S4,2 S4,3  
+
+> Answer
+> Answer
+> Answer
+
+S3,2 S3,3 
+
+S1,2 S1,3 S1,1 
+
+S2,2 S2,3 S2,1 
+
+S3,1       
+
+> Anchor Token
+> “\boxed{ ”
+> Filter
+> Correct
+> Sequences
+> h1h2h3
+> Lcos
+> 1-cos (hi,hj )
+> Scattered Consolidated
+> Improved
+> Hidden -State
+> Similarity
+> Hidden States @ Anchor Token
+
+Figure 2 Overview of Hidden-Align. 
+
+Steps 1--3 : A prompt is fed to the LLM, which generates multiple rollouts; correct sequences are identified by reward verification. 
+
+Step 4 : From correct sequences, we extract last-layer hidden states at the anchor token (immediately before \boxed{ ). 
+
+Center : These hidden states are initially scattered; our alignment loss Lcos = 1 − cos (hi, hj ) consolidates them. 
+
+Step 5 : The combined objective L = LDAPO + λ ⋅ Lcos is used for gradient update. 
+
+reward ri ∈ {0, 1} from a verifier. The group-relative advantage is: 
+
+Ai = ri − μr
+
+σr + ϵ (1) where μr and σr are the mean and standard deviation of rewards within the group, and ϵ is a small constant for numerical stability. The policy is updated via clipped surrogate loss: 
+
+LDAPO = −E [min (ρiAi, clip (ρi, 1−ϵl, 1+ϵh)Ai)] (2) where ρi = πθ (yi∣q)/ πold (yi∣q) is the importance ratio, πold is the policy before the current update, and ϵl, ϵh
+
+are the lower and upper clip bounds defined in DAPO. 
+
+3.2 Hidden-Align Loss 
+
+Anchor Token Definition. For each response yi in the group, we locate the first occurrence of the \boxed{ 
+
+token sequence in the generated output. The anchor token is defined as the token immediately preceding this marker, i.e., the point where the model has arrived at its answer but has not yet begun writing it. We extract the hidden state hi at this position from the last transformer layer, i.e., the final representation before the LM head projects to vocabulary logits. As shown in Figure 1, the anchor token occupies a middle ground in cosine similarity: higher than the reasoning chain ( ∼0.4) because correct rollouts are converging toward the same answer, but lower than the answer tokens themselves ( > 0.9), where similarity is too high for any auxiliary loss to provide meaningful gradients. 4Alignment Loss. For each prompt group, let C = {i ∶ ri = 1} be the set of correct responses, and let 
+
+P = {( i, j ) ∶ i, j ∈ C, i < j} be all correct-answer pairs. We compute the average pairwise cosine similarity among correct rollouts’ hidden states: 
+
+Lcos = 1 − 1
+
+∣P ∣ ∑
+
+> (i,j )∈P
+
+cos (hi, hj ) (3) where cos (hi, hj ) = ˆh⊺ 
+
+> i
+
+ˆhj with ˆhi = hi/∥ hi∥. The L2 normalization affects the gradient computation, which we derive in §3.3. The loss is only computed when ∣C∣ ≥ 2; groups with fewer than two correct responses are skipped. The total training loss combines the standard policy gradient with the alignment term: 
+
+L = LDAPO + λ ⋅ Lcos , λ = 0.001 (4) 
+
+Design Choices. We consider five candidate loss types defined on the anchor token hidden states within each prompt group: 
+
+• Alignment : pull together correct rollouts (maximize pairwise cosine similarity). 
+
+• Separation : push apart correct and incorrect rollouts (minimize cross-group cosine similarity). 
+
+• Negative : push apart incorrect rollouts from each other (minimize pairwise cosine similarity among incor-rect). 
+
+• Diversity : push apart all rollouts regardless of correctness (minimize global pairwise cosine similarity). 
+
+• Cluster : pull together all rollouts regardless of correctness (maximize global pairwise cosine similarity). We adopt alignment as our primary loss. Separation is likely redundant with the DAPO advantage; diversity and negative losses oppose the natural convergence; cluster conflates correct and incorrect rollouts. We also evaluate combinations of these losses. The small λ = 0.001 reflects the fact that correct rollouts are already partially aligned at the anchor token ( cos ≈ 0.84 ); a stronger signal would interfere with the primary RL objective. We verify all these choices in §4.3. 
+
+3.3 Gradient Derivation 
+
+Gradient of the Alignment Loss. We derive the gradient of Lcos (Eq. 3) with respect to the raw hidden state 
+
+hi. Expanding the cosine similarity as cos (hi, hj ) = ˆh⊺ 
+
+> i
+
+ˆhj with ˆhi = hi/∥ hi∥, we first compute the Jacobian of L2 normalization: 
+
+∂ ˆhi
+
+∂hi
+
+= 1
+
+∥hi∥ (I − ˆhi ˆh⊺ 
+
+> i
+
+) (5) The gradient of a single cosine term sij = ˆh⊺ 
+
+> i
+
+ˆhj with respect to hi:
+
+∂s ij 
+
+∂hi
+
+= 1
+
+∥hi∥ (ˆhj − sij ˆhi) (6) Therefore, the gradient of Lcos with respect to hi (for a correct sample i in group g): 
+
+∂Lcos 
+
+∂hi
+
+= − 1
+
+∣P ∣ ∑
+
+> j∈Cg
+> j≠i
+
+1
+
+∥hi∥ (ˆhj − sij ˆhi) (7) where Cg is the set of correct responses in group g. Intuitively, the gradient pushes ˆhi toward the other correct hidden states ˆhj in its group, with a projection term sij ˆhi that prevents trivial collapse to a single point. 53.4 Why It Works 
+
+Correct rollouts already cluster more tightly than correct–incorrect pairs at the anchor token, suggesting that the alignment loss reinforces an existing trend rather than imposing an artificial constraint. However, this clustering remains incomplete: correct rollouts arrive at the same answer via different reasoning paths, and their hidden states encode a mixture of path-specific details and a shared “correct decision” signal (see Appendix A for the full distribution). By aligning these hidden states, we do not suppress the diversity of reasoning paths, which unfolds earlier in the sequence and is unaffected by a loss applied only at the anchor token. Instead, we encourage the model to factor out path-specific variance at the point of decision, distilling the common structure that leads to a correct answer. This explains the improvement on both pass@ 1 and pass@ k, as confirmed in Figure 3. A more consistent decision representation makes greedy decoding more likely to land on the correct answer (pass@ 1). Moreover, the process of distilling common structure across diverse paths deepens the model’s understanding of what constitutes a correct solution, improving its ability to find correct answers even through novel reasoning paths (pass@ k). 
+
+3.5 Integration with RL Training Pipeline 
+
+Challenge: Micro-Batch Training. Computing Eq. 7 requires access to all correct embeddings ˆhj from the same group (i.e., rollouts generated from the same prompt). In standard RL training, each optimization step processes a large mini-batch of rollouts, which is further divided into micro-batches to fit GPU mem-ory (see Appendix B for details). This structure is essential for stable gradient estimation and training efficiency. However, samples from the same group may be split across different micro-batches, complicating the computation of the alignment loss across a complete group. Gathering all group members into memory simultaneously would cause out-of-memory failures under typical training configurations, while computing the loss on incomplete groups would yield approximate gradient estimates. 
+
+Two-Phase Solution. We decompose the backward pass into two phases:  
+
+> Phase 1 (Gather):
+
+We forward-pass all micro-batches sequentially with gradient computation disabled, which avoids storing the computation graph and significantly reduces memory usage. From each forward pass, we collect the anchor embedding, group identifier, and correctness label for every sample. These embeddings are L2-normalized and detached from the computation graph to serve as fixed references in Phase 2.  
+
+> Phase 2 (Backward):
+
+For each micro-batch chunk, we re-forward the correct samples in training mode to obtain gradient-attached embeddings ˆhi. For each anchor i, we compute the loss against the detached references from the same group: 
+
+L(i) 
+
+> cos
+
+= − 1
+
+∣P ∣ ∑
+
+> j∈Cg
+> j≠i
+
+ˆh⊺
+
+> i
+
+¯ˆhj (8) where ¯ˆhj are detached (gradients flow only through ˆhi, not through ¯ˆhj ). The total loss Lcos = ∑i L(i) 
+
+> cos
+
+yields the exact same gradients as Eq. 7: although each term only backpropagates through one anchor, every pair 
+
+(i, j ) is visited twice (once with i as the anchor and once with j), so both sides receive the correct gradient. This decomposition achieves exact gradient computation with bounded memory usage, and requires no mod-ification to the standard mini-batch/micro-batch training structure. 
+
+Group-Preserving Batch Reordering. In data-parallel training, rollouts are distributed across GPUs. If samples from the same group are assigned to different GPUs, the alignment loss cannot access the complete set of correct pairs within that group. We address this by reordering the training batch so that all rollouts sharing the same prompt are co-located on a single GPU. To prevent memory imbalance, we additionally ensure that each GPU receives a similar total workload during reordering. 64 Experiments 
+
+4.1 Experimental Setup 
+
+Models. We use Qwen3-4B as the primary model for main results and all ablation experiments, and Qwen3-1.7B and Qwen3-14B for scale verification. We apply Hidden-Align on top of DAPO training. 
+
+Training Data. We use DAPO-Math-17K [32], a standard RLVR training set of 17,398 mathematical prob-lems covering competition math, algebra, geometry, number theory, and combinatorics. All problems have answers enclosed in \boxed{} , enabling automated reward verification. 
+
+Benchmarks. We evaluate on eight mathematical reasoning benchmarks spanning competition math and general math: AIME 2024/2025/2026 [15], AMC 2023/2024 [16], HMMT Feb 2025 [7] (competition-level, 30–45 questions each); Minerva Math [11] (general math), and OlympiadBench [9] (olympiad-level). 
+
+Metrics. We report accuracy on all benchmarks following standard RLVR evaluation protocols. Detailed evaluation settings (sampling parameters, number of trials) are provided in Appendix B. 
+
+4.2 Main Results 
+
+Table 1 Main results on mathematical reasoning benchmarks. Detailed evaluation settings are provided in the Appendix.                                                                                                  
+
+> Method Size AIME24 AIME25 AIME26 AMC23 AMC24 HMMT Minerva Olympiad Avg
+> Qwen3-4B (base) 24.79 21.98 17.29 69.22 45.35 11.25 56.25 54.15 37.53 + DAPO 4B 48.12 43.44 40.31 88.28 58.75 19.79 53.68 63.35 51.97 + DAPO + Hidden-Align 59.17 51.46 50.31 91.41 62.15 27.08 56.62 67.06 58.16
+> Qwen3-1.7B (base) 14.27 10.42 8.33 46.56 27.99 4.69 36.76 41.54 23.82 + DAPO 1.7B 29.06 25.83 19.90 68.12 47.43 14.06 44.85 49.70 37.37 + DAPO + Hidden-Align 31.87 27.50 24.27 73.83 47.57 16.98 52.21 55.34 41.20
+> Qwen3-14B (base) 29.48 25.52 17.60 72.97 49.58 11.25 61.03 58.61 40.76 + DAPO 14B 60.94 51.98 49.79 92.27 64.10 31.35 58.82 72.85 60.26 + DAPO + Hidden-Align 68.12 61.67 60.94 93.98 65.62 34.58 64.71 75.82 65.68
+
+Table 1 presents our main results. On the 4B model, Hidden-Align improves average accuracy by 6.19 
+
+percentage points over the DAPO baseline. The largest gains are on AIME 2024 (+11.05pp), AIME 2026 (+10.00pp), and HMMT (+7.29pp). The improvement is consistent across all three model scales, confirming that the method generalizes. 
+
+Pass@ k Analysis. Beyond greedy accuracy, we evaluate Pass@ k to measure the model’s coverage of correct solutions across multiple attempts. We sample n = 32 responses per prompt at temperature 0.2 and compute Pass@ k using the unbiased estimator from [2]. Note that this differs from the greedy pass@ 1 in Table 1, which uses temperature 0. As shown in Figure 3, Hidden-Align achieves higher Pass@ k across most values of k on all six competition benchmarks. The gap is especially pronounced on harder benchmarks (AIME 2025/2026, HMMT). 
+
+4.3 Ablation Studies 
+
+We ablate each design choice of Hidden-Align to verify its necessity. All ablations are conducted on Qwen3-4B with DAPO training. 
+
+Loss Type. We compare the five loss types defined in §3.2. Since correct rollouts already cluster at the anchor token, a pull-together signal (alignment) reinforces this existing trend. In contrast, separation duplicates the role of the DAPO advantage, which already differentiates correct from incorrect via reward; diversity and negative losses actively fight the natural convergence; and cluster mixes correct and incorrect rollouts 71 2 4 8 16 32 
+
+> k
+> 40
+> 60
+> 80
+> Pass@k (%)
+
+AIME 2024      
+
+> 124816 32
+> k
+> 20
+> 40
+> 60
+> 80
+> Pass@k (%)
+
+AIME 2025      
+
+> 124816 32
+> k
+> 20
+> 40
+> 60
+> 80
+> Pass@k (%)
+
+AIME 2026      
+
+> 124816 32
+> k
+> 70
+> 80
+> 90
+> 100
+> Pass@k (%)
+
+AMC 2023      
+
+> 124816 32
+> k
+> 50
+> 60
+> 70
+> 80
+> Pass@k (%)
+
+AMC 2024      
+
+> 124816 32
+> k
+> 20
+> 40
+> Pass@k (%)
+
+HMMT Feb 2025   
+
+> Base model DAPO + Hidden-Align
+
+Figure 3 Pass@ k curves on six competition benchmarks for Qwen3-4B (temperature 0.2, n=32 ). Hidden-Align (red) outperforms DAPO (blue) and the base model (gray dashed) across most values of k.
+
+Table 2 Loss type ablation (all at anchor token, last layer, λ = 0.001 ). Only alignment yields consistent improvement. 
+
+Loss Type AIME24 AIME26 AMC24 HMMT Avg 
+
+DAPO (baseline) 48.12 40.31 58.75 19.79 41.74 Alignment (ours) 59.17 50.31 62.15 27.08 49.68 
+
+Separation 46.35 41.88 57.36 19.17 41.19 Diversity 49.69 45.21 61.94 24.17 45.25 Negative 49.06 45.83 58.40 24.38 44.42 Cluster 46.46 40.73 60.14 23.12 42.61 Align. + Sep. 45.62 41.25 59.93 22.40 42.30 Align. + Neg. 53.33 49.17 60.69 24.90 47.02 Align. + Div. 44.48 38.02 59.24 17.92 39.92 
+
+indiscriminately. Table 2 confirms that only alignment yields consistent improvement, while combinations with other losses dilute or negate the gain. 
+
+Anchor Position. We apply the alignment loss at different token positions relative to \boxed{ . Figure 4 illustrates the four candidate positions. As discussed in §3.2, the anchor token occupies a unique sweet spot in cosine similarity; other positions are either too converged (answer tokens) or too dispersed (reasoning chain). Table 3 confirms that only the anchor token yields substantial improvement. 
+
+Layer Depth. We apply the alignment loss at different transformer layers. As shown in Figure 1(a), only the last layer exhibits strong position-dependent variation in cosine similarity; shallower layers show weaker variation, meaning the anchor token is less distinctive at those depths. Table 4 confirms that only the last layer (Layer 36) produces a clear gain, while intermediate layers show marginal or no improvement. 
+
+Loss Weight. We vary λ from 0.0001 to 0.01 . Since correct rollouts are already partially aligned at the anchor token ( cos ≈ 0.84 ), only a moderate λ is needed. Too small a value provides insufficient signal; too large a value overpowers the RL objective and destabilizes training. Table 5 shows that λ = 0.001 is optimal, with λ = 0.01 causing training divergence. 8…    
+
+> Chain \boxed {4
+
+# …   
+
+> Thoughts 2}
+
+# … <EOS> … The answer is    
+
+> Reasoning tokens \boxed {…}
+> pre_boxed
+> (Anchor token)
+> pre_boxed_open answer position pre_eos
+> of
+
+Figure 4 Token positions evaluated in the position ablation. The anchor token (pre_boxed) is immediately before the \boxed{ marker. 
+
+Table 3 Position ablation (alignment loss, last layer, λ = 0.001 ). 
+
+Anchor Position AIME24 AIME26 AMC24 HMMT Avg 
+
+DAPO (baseline) 48.12 40.31 58.75 19.79 41.74 pre_boxed (ours) 59.17 50.31 62.15 27.08 49.68 
+
+pre_eos 43.65 41.04 57.92 21.35 40.99 pre_boxed_open 48.02 43.33 61.32 23.02 43.92 answer position 48.12 42.71 58.82 22.19 42.96 
+
+Table 4 Layer ablation (alignment loss, anchor token, λ = 0.001 ). 
+
+Layer AIME24 AIME26 AMC24 HMMT Avg 
+
+DAPO (baseline) 48.12 40.31 58.75 19.79 41.74 Layer 16 45.00 43.85 62.15 24.38 43.85 Layer 24 47.40 44.27 61.88 21.98 43.88 Layer 28 44.69 44.58 62.99 20.62 43.22 Layer 32 49.48 43.44 60.07 23.75 44.19 Layer 36 (ours) 59.17 50.31 62.15 27.08 49.68 Table 5 Loss weight ablation (alignment loss, anchor token, last layer). 
+
+λ AIME24 AIME26 AMC24 HMMT Avg 
+
+DAPO (baseline) 48.12 40.31 58.75 19.79 41.74 0.0001 47.29 44.90 59.03 20.42 42.91 0.0005 50.21 43.75 59.31 21.77 43.76 
+
+0.001 (ours) 59.17 50.31 62.15 27.08 49.68 
+
+0.005 42.71 39.06 57.15 22.81 40.43 0.01 † 35.83 35.83 52.71 19.06 35.86  
+
+> †
+
+Training diverged after step 100; results reported at step 80. 
+
+94.4 Analysis 
+
+Alignment Loss and Reward. Figure 5 compares the alignment loss Lcos and accuracy reward between Hidden-Align and the DAPO baseline over the course of training. In (a), the alignment loss for Hidden-Align starts high and gradually decreases, indicating that correct rollouts’ hidden states are being actively aligned at the anchor token. For comparison, we also monitor the same metric on the DAPO baseline (which does not optimize it): the baseline shows a similar but weaker downward trend in early training, suggesting that RL training alone induces partial alignment. Moreover, around step 400–500, the baseline’s alignment loss spikes sharply, indicating that the natural clustering breaks down in later training stages. In contrast, Hidden-Align maintains stable alignment throughout. In (b), Hidden-Align generally achieves higher accuracy reward than the baseline, particularly during steps 200–300. The overall trend confirms that aligning correct rollouts’ hidden states provides a beneficial training signal.      
+
+> Figure 5 (a) Alignment loss Lcos and (b) accuracy reward over training steps for Qwen3-4B. Hidden-Align (red) shows active alignment loss reduction; the baseline’s alignment loss (monitored but not optimized) spikes in later stages. In (b), faint lines show raw per-step values and bold lines show smoothed trends. Hidden-Align generally achieves higher reward.
+
+Accuracy over Training Steps. Figure 6 shows per-benchmark accuracy at multiple training checkpoints. Hidden-Align consistently outperforms DAPO on competition-level benchmarks (AIME 2024/2025/2026, HMMT), with the gap emerging as early as step 80 and widening through step 160–200. On easier benchmarks (AMC 2023/2024), both methods perform similarly, as they are closer to the ceiling. Both methods peak around step 160–200 and gradually decline afterward; we report the best checkpoint for each configuration. 
+
+## 5 Conclusion 
+
+We present Hidden-Align, a lightweight auxiliary loss that aligns correct rollouts’ hidden states at the anchor token during RL training. Starting from the observation that correct rollouts naturally cluster at this position but retain residual variance from diverse reasoning paths, we show that a single alignment loss ( λ = 0.001 ) at the last transformer layer can distill their shared decision structure into a more robust representation. On eight mathematical reasoning benchmarks, Hidden-Align improves average accuracy over the DAPO baseline by 3.83, 6.19, and 5.42 percentage points on Qwen3-1.7B, 4B, and 14B respectively, with consistent pass@ k
+
+gains and zero overhead in both training and inference. Systematic ablations on loss type, anchor position, layer depth, and loss weight confirm that the proposed configuration is uniquely effective. 10 Figure 6 Per-benchmark accuracy over training steps for Qwen3-4B. Hidden-Align (red) outperforms DAPO (blue) on most benchmarks throughout training, with the largest gains on competition-level benchmarks (AIME, HMMT). The gray dashed line indicates the base model (before RL training). Both methods peak around step 160–200 and gradually decline afterward. 
+
+## Limitations 
+
+• We validate Hidden-Align only on mathematical reasoning tasks with \boxed{} answer format. Extending to other tasks requires identifying the corresponding anchor position for each answer format. 
+
+• The hyperparameter λ is fixed throughout training. Adaptive scheduling conditioned on training progress could further improve results. 
+
+• We verify on 1.7B, 4B, and 14B models. Validation on even larger scales (70B+) is future work. 
+
+## Ethical Considerations 
+
+This work improves mathematical reasoning in LLMs through a representation-level auxiliary loss applied during RL training. It does not involve human subjects, private data, or content generation in sensitive domains. The training data (DAPO-Math-17K) consists of publicly available mathematical problems. We do not foresee specific ethical risks beyond those common to general-purpose LLM reasoning research. 11 References 
+
+[1] Yonatan Belinkov. Probing classifiers: Promises, shortcomings, and advances. Computational Linguistics, 48(1): 207–219, 2022. [2] Mark Chen, Jerry Tworek, Heewoo Jun, Qiming Yuan, Henrique Ponde de Oliveira Pinto, Jared Kaplan, Harri Edwards, Yuri Burda, Nicholas Joseph, Greg Brockman, et al. Evaluating large language models trained on code. arXiv preprint arXiv:2107.03374, 2021. [3] Yuyang Ding, Chi Zhang, Juntao Li, Haibin Lin, and Min Zhang. Fapo: flawed-aware policy optimization for efficient and reliable reasoning. arXiv preprint arXiv:2510.22543, 2025. [4] Daya Guo, Dejian Yang, Haowei Zhang, Junxiao Song, Peiyi Wang, Qihao Zhu, Runxin Xu, Ruoyu Zhang, Shirong Ma, Xiao Bi, et al. Deepseek-r1: Incentivizing reasoning capability in llms via reinforcement learning. arXiv preprint arXiv:2501.12948, 2025. [5] Jizhou Guo, Zhaomin Wu, and S Yu Philip. Reward inside the model: A lightweight hidden-state reward model for llm’s best-of-n sampling. In 2nd AI for Math Workshop@ ICML 2025, 2025. [6] Tarun Gupta, Peter Karkus, Tong Che, Danfei Xu, and Marco Pavone. Foundation models for semantic novelty in reinforcement learning. arXiv preprint arXiv:2211.04878, 2022. [7] Harvard-MIT Mathematics Tournament. HMMT february competition. https://www.hmmt.org/ , 2025. [8] Andre Wang He, Daniel Fried, and Sean Welleck. Rewarding the unlikely: Lifting grpo beyond distribution sharpening. In Proceedings of the 2025 Conference on Empirical Methods in Natural Language Processing, pages 25559–25571, 2025. [9] Chaoqun He, Renjie Luo, Yuzhuo Bai, Shengding Hu, Zhen Thai, Junhao Shen, Jinyi Hu, Xu Han, Yujie Huang, Yuxiang Zhang, et al. Olympiadbench: A challenging benchmark for promoting agi with olympiad-level bilingual multimodal scientific problems. In Proceedings of the 62nd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers), pages 3828–3850, 2024. [10] Minjie Hong, Zirun Guo, Yan Xia, Zehan Wang, Ziang Zhang, Tao Jin, and Zhou Zhao. Apo: Enhancing reasoning ability of mllms via asymmetric policy optimization. arXiv preprint arXiv:2506.21655, 2025. [11] Aitor Lewkowycz, Anders Andreassen, David Dohan, Ethan Dyer, Henryk Michalewski, Vinay Ramasesh, Am-brose Slone, Cem Anil, Imanol Schlag, Theo Gutman-Solo, et al. Solving quantitative reasoning problems with language models. Advances in neural information processing systems, 35:3843–3857, 2022. [12] Wenpu Liu, Yuqi Xu, Weichu Xie, Yongfu Zhu, Shuai Dong, Ziyue Wang, Wenqi Shao, Xiaoying Zhang, Tong Yang, Nan Duan, et al. Leveraging error diversity in group rollouts for reinforcement learning. arXiv preprint arXiv:2605.17333, 2026. [13] Zichen Liu, Changyu Chen, Wenjun Li, Penghui Qi, Tianyu Pang, Chao Du, Wee Sun Lee, and Min Lin. Under-standing r1-zero-like training: A critical perspective. arXiv preprint arXiv:2503.20783, 2025. [14] Haozheng Luo, Yimin Wang, Jiahao Yu, Binghui Wang, and Yan Chen. Contrastive reasoning alignment: Rein-forcement learning from hidden representations. arXiv preprint arXiv:2603.17305, 2026. [15] Mathematical Association of America. AIME problems and solutions. https://maa.org/ , 2024. [16] Mathematical Association of America. AMC 10/12 problems and solutions. https://maa.org/ , 2024. [17] Gongrui Nan, Siye Chen, Jing Huang, Mengyu Lu, Dexun Wang, Chunmei Xie, Weiqi Xiong, Xianzhou Zeng, Qixuan Zhou, Yadong Li, et al. Ngrpo: Negative-enhanced group relative policy optimization. arXiv preprint arXiv:2509.18851, 2025. [18] Long Ouyang, Jeffrey Wu, Xu Jiang, Diogo Almeida, Carroll Wainwright, Pamela Mishkin, Chong Zhang, Sand-hini Agarwal, Katarina Slama, Alex Ray, et al. Training language models to follow instructions with human feedback. Advances in neural information processing systems, 35:27730–27744, 2022. [19] Wonpyo Park, Dongju Kim, Yan Lu, and Minsu Cho. Relational knowledge distillation. In Proceedings of the IEEE/CVF conference on computer vision and pattern recognition, pages 3967–3976, 2019. [20] Roberta Raileanu and Tim Rocktäschel. Ride: Rewarding impact-driven exploration for procedurally-generated environments. arXiv preprint arXiv:2002.12292, 2020. 
+
+12 [21] Zhihong Shao, Peiyi Wang, Qihao Zhu, Runxin Xu, Junxiao Song, Xiao Bi, Haowei Zhang, Mingchuan Zhang, YK Li, Yang Wu, et al. Deepseekmath: Pushing the limits of mathematical reasoning in open language models. arXiv preprint arXiv:2402.03300, 2024. [22] Vaishnavi Shrivastava, Ahmed Awadallah, Vidhisha Balachandran, Shivam Garg, Harkirat Behl, and Dimitris Papailiopoulos. Sample more to think less: Group filtered policy optimization for concise reasoning. arXiv preprint arXiv:2508.09726, 2025. [23] Marco Simoni, Aleksandar Fontana, Giulio Rossolini, Andrea Saracino, and Paolo Mori. Gtpo: Stabilizing group relative policy optimization via gradient and entropy control. arXiv preprint arXiv:2508.03772, 2025. [24] Lihao Sun, Hang Dong, Bo Qiao, Qingwei Lin, Dongmei Zhang, and Saravan Rajmohan. Llm reasoning as trajectories: Step-specific representation geometry and correctness signals. arXiv preprint arXiv:2604.05655, 2026. [25] Yan Sun, Jia Guo, Stanley Kok, Zihao Wang, Zujie Wen, and Zhiqiang Zhang. Efficient reinforcement learning for large language models with intrinsic exploration. arXiv preprint arXiv:2511.00794, 2025. [26] Yonglong Tian, Dilip Krishnan, and Phillip Isola. Contrastive representation distillation. arXiv preprint arXiv:1910.10699, 2019. [27] Boyuan Wang, Yun Qu, Yuhang Jiang, Jianzhun Shao, Chang Liu, Wenming Yang, and Xiangyang Ji. Llm-empowered state representation for reinforcement learning. arXiv preprint arXiv:2407.13237, 2024. [28] Chaoren Wang, Heng Lu, Xueyao Zhang, Shujie Liu, Yan Lu, Jinyu Li, and Zhizheng Wu. Closing the modality reasoning gap for speech large language models. arXiv preprint arXiv:2601.05543, 2026. [29] Weichu Xie, Haozhe Zhao, Wenpu Liu, Yongfu Zhu, Liang Chen, Minghao Ye, Zirong Chen, Yuqi Xu, Shuai Dong, Ziyue Wang, et al. Step-wise rubric rewards for llm reasoning. arXiv preprint arXiv:2605.17291, 2026. [30] An Yang, Anfeng Li, Baosong Yang, Beichen Zhang, Binyuan Hui, Bo Zheng, Bowen Yu, Chang Gao, Chengen Huang, Chenxu Lv, et al. Qwen3 technical report. arXiv preprint arXiv:2505.09388, 2025. [31] Rui Yang, Ruomeng Ding, Yong Lin, Huan Zhang, and Tong Zhang. Regularizing hidden states enables learning generalizable reward model for llms. Advances in Neural Information Processing Systems, 37:62279–62309, 2024. [32] Qiying Yu, Zheng Zhang, Ruofei Zhu, Yufeng Yuan, Xiaochen Zuo, Yu Yue, Weinan Dai, Tiantian Fan, Gaohong Liu, Lingjun Liu, et al. Dapo: An open-source llm reinforcement learning system at scale. Advances in Neural Information Processing Systems, 38:113222–113244, 2026. [33] Sihyun Yu, Sangkyung Kwak, Huiwon Jang, Jongheon Jeong, Jonathan Huang, Jinwoo Shin, and Saining Xie. Representation alignment for generation: Training diffusion transformers is easier than you think. arXiv preprint arXiv:2410.06940, 2024. [34] Yu Yue, Yufeng Yuan, Qiying Yu, Xiaochen Zuo, Ruofei Zhu, Wenyuan Xu, Jiaze Chen, Chengyi Wang, TianTian Fan, Zhengyin Du, et al. Vapo: Efficient and reliable reinforcement learning for advanced reasoning tasks. arXiv preprint arXiv:2504.05118, 2025. [35] Yuzhong Zhao, Yue Liu, Junpeng Liu, Jingye Chen, Xun Wu, Yaru Hao, Tengchao Lv, Shaohan Huang, Lei Cui, Qixiang Ye, et al. Geometric-mean policy optimization. arXiv preprint arXiv:2507.20673, 2025. [36] Chujie Zheng, Shixuan Liu, Mingze Li, Xiong-Hui Chen, Bowen Yu, Chang Gao, Kai Dang, Yuqiong Liu, Rui Men, An Yang, et al. Group sequence policy optimization. arXiv preprint arXiv:2507.18071, 2025. [37] Andy Zou, Long Phan, Sarah Chen, James Campbell, Phillip Guo, Richard Ren, Alexander Pan, Xuwang Yin, Mantas Mazeika, Ann-Kathrin Dombrowski, et al. Representation engineering: A top-down approach to ai transparency. arXiv preprint arXiv:2310.01405, 2023. 
+
+13 APPENDIX 
+
+## A Cosine Similarity Distributions 
+
+To verify that correct rollouts cluster more tightly than other pairs at the anchor token, we compute pairwise cosine similarities on 1,000 prompts from the DAPO-Math-17K training set, using the base Qwen3-4B model with 10 rollouts per prompt. Figure 7 shows the distribution of pairwise cosine similarity at the last layer (Layer 36) for three token positions. Position (a) is the anchor token , the token immediately before the \boxed{ marker, where the model has finished reasoning but has not yet begun writing the answer. Here, correct–correct pairs (blue) are clearly shifted toward higher similarity compared to correct–wrong (orange) and wrong–wrong (red) pairs, confirming that correct rollouts naturally cluster more tightly at this position. Position (b) is the token at the start of the answer region, where the model is about to generate the answer digits. All three distributions collapse to near 1.0, and this convergence is dominated by correct–correct pairs, since correct rollouts produce the same answer and thus their hidden states become nearly identical. This leaves no room for an auxiliary loss to provide meaningful gradient signal. Position (c) is the last token of the response (pre-EOS), where the model is about to terminate generation. While some clustering is visible, this position carries no semantic significance for reasoning; any similarity here reflects formatting patterns rather than decision quality.  
+
+> Figure 7 Pairwise cosine similarity distributions at three token positions (Qwen3-4B, Layer 36). (a) At the anchor token, correct–correct pairs cluster more tightly than other pairs. (b) In the answer region, all correct-correct pairs converge near 1.0. (c) At the end of sequence, distributions overlap with no useful structure.
+
+## B Training Details 
+
+Mini-Batch and Micro-Batch in RL Training. In RLVR training, each optimization step begins with a 
+
+rollout phase : the current policy generates a large batch of responses (the mini-batch) across many prompts. This mini-batch must be large enough to provide stable gradient estimates, since the group-relative advantage 
+
+Ai is computed within each prompt group and benefits from seeing many groups per update. However, the subsequent training phase —which runs forward and backward passes through the full model—cannot fit the entire mini-batch into GPU memory at once. The mini-batch is therefore split into smaller micro-batches that are processed sequentially, with gradients accumulated before each optimizer step. This mini-batch/micro-batch structure is standard in RL training and cannot be easily modified without affecting training stability or efficiency. 
+
+Evaluation Settings. For greedy evaluation (pass@1), we use temperature = 0 with a maximum generation length of 32,768 tokens and thinking mode disabled. For pass@ k evaluation, we sample n = 32 responses per 14 Table 6 Training hyperparameters.  
+
+> Parameter Value
+
+Base model Qwen3-4B Qwen3-1.7B Qwen3-14B Training data DAPO-Math-17K RL algorithm DAPO Learning rate 1 × 10 −6
+
+Optimizer AdamW ( β1=0.9, β2=0.999 )Weight decay 1 × 10 −2
+
+LR warmup 0Clip ratio (high/low) 0.2 / 0.2 KL penalty disabled Online filtering enabled Rollout n 10 Rollout batch size 64 Global batch size 64 Micro batch size 1Max prompt length 2048 Max response length 8192 Tensor parallel size 2GPUs 8 × A100/H100 Training epochs 2Save frequency every 20 steps 
+
+Hidden-Align-specific 
+
+λpos (cohesion) 0.001 
+
+λsep / λdiv / λneg 0Layer index −1 (last layer) Anchor position pre_boxed_last_token Warmup start step 0 Warmup steps 60 
+
+prompt with temperature = 0.2. Pass@ k is computed using the unbiased estimator [2]: pass@ k = 1 − (n−ck )(nk)
+
+where n is the total number of samples and c is the number of correct samples. All evaluations use tensor parallelism of 1 (greedy) or 2 (pass@32) with vLLM, and GPU memory utilization of 0.9. We report the best checkpoint for each configuration, selected by greedy accuracy on the validation set. 
+
+## C Case Study 
+
+Table 7 illustrates the “knowing but not doing” phenomenon that Hidden-Align addresses. On this geometry problem (AIME 2024 I, Problem 11), the DAPO baseline can find the correct answer ( 104 ) in some rollouts (11/32), but its most frequent incorrect output is 291 , a plausible intermediate value. With Hidden-Align, the model’s correct-answer rollout rate increases dramatically (26/32), and the dominant greedy output shifts to the correct answer. This demonstrates how alignment loss consolidates the “correct decision” representation, making the model’s greedy behavior align with its best sampling capability. 
+
+## D Hidden States vs. Logits Alignment 
+
+To verify that aligning hidden states is not equivalent to aligning output logits, we run an additional ex-periment replacing the last-layer hidden states with the pre-softmax logits in the alignment loss, keeping all 15 other settings identical. Table 8 shows that logit alignment performs substantially worse than hidden-state alignment and offers no improvement over the DAPO baseline. This confirms that the alignment signal is specific to the hidden representation space and does not trivially reduce to output-level matching.  
+
+> Table 7
+
+Case study on AIME 2024 I Problem 11. Hidden-Align shifts the dominant mode from an incorrect intermediate value to the correct answer.  
+
+> Problem
+
+Rectangles ABCD and EF GH are drawn such that D, E, C, F 
+
+are collinear. Also, A, D, H, G all lie on a circle. If BC = 16 ,
+
+AB = 107 , F G = 17 , and EF = 184 , what is the length of CE ? 
+
+> Ground truth
+
+104  
+
+> DAPO baseline
+
+11/32 correct; most frequent wrong answer: 291 (8/32)  
+
+> Hidden-Align
+
+26/32 correct; wrong answers scattered (no dominant mode)  
+
+> Table 8
+
+Hidden-state vs. logit alignment (Qwen3-4B, anchor token, λ = 0.001 ).     
+
+> Method AIME24 AIME26 AMC24 HMMT
+
+DAPO (baseline) 48.12 40.31 58.75 19.79 Logit (pre-softmax) 46.67 45.42 58.54 19.90 Hidden-state (ours) 59.17 50.31 62.15 27.08 
+
+16
