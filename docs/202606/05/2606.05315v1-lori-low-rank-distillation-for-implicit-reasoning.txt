@@ -1,0 +1,468 @@
+Title: LoRi: Low-Rank Distillation for Implicit Reasoning
+
+URL Source: https://arxiv.org/pdf/2606.05315v1
+
+Published Time: Fri, 05 Jun 2026 00:11:02 GMT
+
+Number of Pages: 12
+
+Markdown Content:
+# LoRi: Low-Rank Distillation for Implicit Reasoning 
+
+Ryan Solgi 1, Jiayi Tian 1, Zheng Zhang 1
+
+> 1
+
+University of California-Santa Barbara, USA 
+
+solgi@ucsb.edu , zhengzhang@ece.ucsb.edu 
+
+Abstract 
+
+Implicit chain-of-thought (iCoT) methods aim to internalize reasoning in large language models, but often underperform explicit CoT prompting. We empirically find that hidden-state reasoning trajectories exhibit low-rank structure. Motivated by this observation, we propose a low-rank distillation framework that transfers reasoning by aligning teacher and stu-dent trajectories in a shared low-rank tensor subspace using first- and second-order statis-tics. The resulting formulation captures the global structure of reasoning while supporting a compact latent reasoning process. We eval-uate the method across multiple model fam-ilies, including LLaMA and Qwen, at differ-ent scales on mathematical reasoning bench-marks. Our approach consistently improves performance, especially on challenging multi-step tasks, approaching explicit CoT accuracy and outperforming prior iCoT distillation meth-ods. The code is available at https://github. com/rmsolgi/lori 
+
+1 Introduction 
+
+Large language models (LLMs) exhibit strong rea-soning abilities under explicit chain-of-thought (CoT) prompting (Wei et al., 2022; Zelikman et al., 2022). However, explicit CoT is computation-ally expensive, can encourage reliance on non-robust patterns, and is sensitive to inference proce-dures (Li et al., 2024; Lin et al., 2025; Wang et al., 2022; Yao et al., 2023). As a result, recent work has explored more efficient reasoning paradigms that reduce dependence on explicit textual ratio-nales (He et al., 2026; Li et al., 2025b). Implicit chain-of-thought (iCoT) encodes rea-soning in latent representations rather than explicit text (Deng et al., 2024a; Hao et al., 2024). Re-cent iCoT distillation approaches transfer explicit rationales into latent reasoning states (Shen et al., 2025; Wu et al., 2025; Kuzina et al., 2025; Wei et al., 2025), but still underperform explicit CoT on difficult mathematical reasoning tasks. A key challenge is that explicit reasoning steps lack a clear correspondence to latent dynamics, making token-to-latent transfer inherently ill-posed. Exist-ing methods rely on local supervision (Shen et al., 2025) or sampled intermediate states (Kuzina et al., 2025), which may not fully capture the global rea-soning trajectory. Prior work suggests that model representations exhibit low-dimensional geometric structure (Yu and Wu, 2023; Golowich et al., 2025; Modell et al., 2025; Park et al., 2024). While recent studies an-alyze reasoning through trajectory geometry and separability (Sun et al., 2026; Zhou et al., 2026; Li et al., 2025a), they do not directly examine the low-rank structure of hidden states across tokens and layers. By stacking hidden states across layers and CoT tokens, we find that the normalized cumu-lative singular values grow rapidly with rank (Ap-pendix A), indicating that reasoning trajectories are well-approximated by low-dimensional subspaces. Motivated by this observation, we propose a low-rank iCoT distillation framework that aligns the global geometry of the teacher’s reasoning trajec-tory through low-rank statistical representations. Instead of mimicking explicit reasoning steps, the student learns the low-dimensional subspace un-derlying the teacher’s reasoning dynamics [Fig. 1 (a)]. This allows the student to capture the principal reasoning structure with a short latent trajectory, enabling length-invariant and efficient distillation. Our main contributions are summarized below: • Low-rank iCoT distillation. We propose an iCoT distillation framework that transfers reason-ing by aligning teacher and student trajectories in a shared low-rank subspace using first- and second-order hidden-state statistics. • Efficient, length-invariant global reasoning transfer. The formulation transfers long CoT rea-soning into short latent trajectories independent 1    
+
+> arXiv:2606.05315v1 [cs.CL] 3 Jun 2026 (a) High-level overview of LoRi. Qwen2.5-0.5B LLaMA-3.2-1B LLaMA-3.2-3B LLaMA-3.1-8B
+> 0
+> 5
+> 10
+> 15
+> 20
+> 25
+> 30
+> 35
+> Accuracy
+> GSM8K-Hard Accuracy Across Models
+> Method
+> NoCoT
+> CODI
+> PCCoT
+> KAVA
+> LoRi
+> SFT-CoT
+> iCoT
+> COCONUT
+> SIM-CoT (b) Representative reasoning results on GSM8K-Hard.
+
+Figure 1: Overview of the proposed low-rank iCoT distillation framework and its reasoning performance. (a) Low-rank factors learned from the teacher hidden states are used to project teacher and student representations into a shared low-rank subspace. The projected low-rank representations are then matched through a loss function. (b) LoRi improves reasoning accuracy over prior implicit CoT baselines across model scales on GSM8K-Hard. 
+
+of sequence length, yielding efficient reasoning with a small number of latent steps and without requiring additional intermediate supervision. • Consistent gains across models and bench-marks. Across models and scales, LoRi con-sistently outperforms prior iCoT methods, im-proving accuracy by up to ∼12% and achieving strong gains on GSM8K-Hard [up to ∼10%, as shown in Fig. 1 (b)]. At larger scales, LoRi sub-stantially narrows the gap to explicit CoT. 
+
+2 Background and Related Work 
+
+iCOT Distillation. In reasoning, a model pre-dicts the final answer y conditioned on an interme-diate reasoning process τ given an input x,
+
+p(y, τ | x) = p(τ | x) p(y | x, τ ),
+
+where τ may correspond to explicit textual ratio-nales (explicit CoT) or implicit internal reasoning processes (iCoT). Following prior work (Shen et al., 2025; Kuzina et al., 2025; Wei et al., 2025), we con-sider a teacher–student distillation framework to transfer reasoning from CoT into iCoT. • Teacher Model. The teacher generates a natural language reasoning trajectory r = ( r1, · · · , r N )
+
+and defines the joint conditional distribution 
+
+pT (y, r | x) = pT (r | x) pT (y | x, r).
+
+• Student Model. The student constructs a latent reasoning trajectory {zt}Kt=1 , where K ≪ N
+
+and each zt represents a hidden reasoning state. The trajectory is generated recursively as 
+
+zt = fθ(x, z1: t−1) , t = 1 , . . . , K, 
+
+where fθ is the student model, with z1 initial-ized from x. The final answer is then generated autoregressively: 
+
+pS (y | x, z1, . . . , zK ).
+
+• Training. The student is trained through an ob-jective of the form 
+
+L = Lreason + λLtask ,
+
+where Lreason transfers reasoning behavior from explicit CoT teacher into latent reasoning dynam-ics, Ltask supervises answer prediction, and λ
+
+balances the two objectives. Although iCoT improves inference efficiency, it often reduces reasoning accuracy. Existing meth-ods mainly differ in how they transfer reasoning from explicit CoT into iCoT. Stepwise Internal-ization (Deng et al., 2024a) gradually removes CoT tokens through iterative fine-tuning, while COCONUT (Hao et al., 2024) replaces textual rea-soning with hidden-state dynamics. Recent ap-proaches rely on distillation (Deng et al., 2024b): CODI (Shen et al., 2025) distills reasoning at the answer boundary, PCCoT (Wu et al., 2025) adds to-kens for intermediate reasoning states, KAVA (Kuz-ina et al., 2025) aligns KV-cache dynamics, and SIM-CoT (Wei et al., 2025) uses step-level super-vision to guide reasoning trajectories. 
+
+Low-Dimensional Structure. The manifold hy-pothesis states that high-dimensional data often lie on a low-dimensional manifold capturing their in-trinsic structure (Bengio et al., 2013; Fefferman 2et al., 2016; Chen et al., 2022). Recent work sug-gests that LLM representations exhibit similar low-dimensional geometry, including approximately low-rank structure of activations (Yu and Wu, 2023; Chen et al., 2024; Liu et al., 2025), linear semantic directions (Park et al., 2024), representation mani-fold structure (Modell et al., 2025), and low-rank behavior in output logits (Golowich et al., 2025). 
+
+Reasoning Geometry. In reasoning tasks, Sun et al. (2026) show that reasoning trajectories pass through step-specific subspaces that become in-creasingly separable with depth. Zhou et al. (2026) characterize reasoning as smooth flows shaped by logical structure, while Li et al. (2025a) propose a reasoning manifold where correct trajectories con-centrate in low-dimensional regions and errors arise from deviations. Together, these studies suggest that high-dimensional reasoning trajectories can be effectively approximated by low-dimensional subspaces or manifolds. 
+
+3 The LoRi Method 
+
+We view the teacher’s reasoning process as a tra-jectory in hidden-state space that lies near a low-dimensional subspace. From this perspective, dis-tillation need not enforce step-by-step correspon-dence; instead, it should align the student’s latent reasoning dynamics with the dominant structure of the teacher’s trajectory. Motivated by this view, we propose LoRi (Low-Rank iCoT), a distillation framework that transfers reasoning from explicit chain-of-thought into a compact implicit latent pro-cess. LoRi combines two complementary objec-tives: rationale-level alignment, which preserves the global geometry of the teacher’s trajectory, and anchor-level alignment, which regularizes the tran-sition from latent reasoning to answer generation. Together with an efficient training scheme based on precomputed low-rank representations, LoRi enables scalable, length-invariant distillation from a CoT teacher to an iCoT student. 
+
+3.1 Low-Rank iCoT Distillation Distillation loss. The goal of distillation is to transfer the reasoning structure encoded in the teacher’s explicit rationales r into the student’s la-tent reasoning dynamics z, while preserving the student’s ability to generate explicit step-by-step solutions and final answers. We train the student with the composite objective 
+
+L = LLR + λ LCE ,
+
+where LCE is a cross entropy that supervises the student’s explicit output sequence, LLR aligns the student’s latent reasoning states with the teacher’s hidden representations in a low-rank subspace, and 
+
+λ balances the two terms. Intuitively, LLR encour-ages both models to share the dominant low-rank structure of the teacher’s reasoning trajectory, im-proving the student’s stability and generalization. 
+
+Low-rank term. We define LLR as the sum of two complementary components, 
+
+LLR = Lrationale + β Lanchor ,
+
+where Lrationale aligns the student’s latent reason-ing dynamics with the teacher’s hidden states over the full reasoning trajectory, and Lanchor aligns the student’s representation at the answer prediction position with the teacher’s corresponding hidden state, while β controlling its relative weight. The former captures the global low-rank structure of the teacher’s reasoning process, while the latter pro-vides a localized signal that guides the transition from internal reasoning to answer generation. 
+
+3.2 Rationale Level Alignment ( Lrationale )
+
+To transfer reasoning capability, we align the stu-dent’s hidden states with the teacher’s reasoning trajectory in a low-rank subspace. Let HT ∈
+
+RN ×L×H denote the teacher’s hidden states for rationale tokens, where L is the number of lay-ers and H is the hidden dimension. Similarly, let 
+
+HS ∈ RK×L×H be the student’s hidden states for its implicit reasoning steps. Instead of di-rectly matching these high-dimensional tensors, we project them into a shared low-rank subspace and align their low-dimensional representations through a statistical matching objective (Fig. 2). 
+
+Tucker Representation for Reasoning Tra-jectories. According to the Tucker decompo-sition (De Lathauwer et al., 2000), a tensor 
+
+X ∈ RN ×L×H is factorized into a tensor core 
+
+Q ∈ RrN ×rL×rH and orthonormal factor matrices 
+
+UN ∈ RN ×rN , UL ∈ RL×rL , UH ∈ RH×rH :
+
+X ≈ Q ×1 UN ×2 UL ×3 UH ,
+
+where ×n denotes the mode-n tensor product (see Appendix D). We construct a low-rank Tucker-style representation of the teacher’s hidden states along the layer and hidden dimensions by extracting low-rank factor matrices via SVD (top left singular vec-tors) of unfolded HT along the layer and hidden 3Figure 2: Overview of low-rank rationale-level alignment in LoRi. 
+
+dimensions, yielding orthonormal column matri-ces UL ∈ RL×rL and UH ∈ RH×rH , respec-tively, which capture the dominant subspaces of the teacher’s hidden-state representations. Each reasoning state is then projected as 
+
+G = X ×2 U⊤ 
+
+> L
+
+×3 U⊤ 
+
+> H
+
+,
+
+where X denotes either HT or HS . This yields low-dimensional representations GT ∈ RN ×rL×rH
+
+for the teacher and GS ∈ RK×rL×rH for the stu-dent. We then reshape these tensors along the last two modes to obtain matrix representations 
+
+GT ∈ RN ×(rLrH ), GS ∈ RK×(rLrH ),
+
+where each row corresponds to a reasoning step represented in the shared low-rank subspace. 
+
+Statistical Alignment in Low-rank Space. We align student and teacher representations by match-ing the first- and second-order statistics of their projections in a shared low-rank subspace. For 
+
+G ∈ RM ×(rLrH ), where M = N for the teacher and M = K for the student, we define 
+
+μ = 1
+
+M
+
+> M
+
+X
+
+> m=1
+
+Gm, :, C = 1
+
+M G⊤G.
+
+Let (CT , μT ) and (CS , μS ) denote the statistics computed from GT and GS , respectively. We de-fine the rationale-level loss as 
+
+Lrationale = ωC ∥CS − CT ∥2 
+
+> F
+
++ ωμ ∥μS − μT ∥22 ,
+
+where ωC and ωμ weight covariance and mean alignment. Matching covariance aligns the prin-cipal low-rank structure, while matching means aligns the trajectory centroids. Together, these con-straints guide the student toward the teacher’s rea-soning geometry and discourage degenerate solu-tions such as collapsed latent trajectories. This objective transfers the global structure of the teacher’s reasoning process without token-level alignment and remains invariant to reasoning length. The low-rank factors UL and UH are pre-computed from the teacher and fixed during train-ing, enabling efficient projection without repeated factorization. 
+
+3.3 Anchor-Level Alignment ( Lanchor )
+
+While the rationale-level objective captures global reasoning structure, it does not explicitly constrain the transition from latent reasoning to answer gen-eration. To address this, we introduce a localized alignment term at the answer prediction position. This position corresponds to a fixed prompt-aligned token (e.g., “The final answer is”), which serves as a consistent transition between reasoning and answer generation rather than part of the reasoning trajectory itself (Figure 3). Let Hanchor  
+
+> T
+
+∈ RB×L×H denote the collection of teacher hidden states at the answer prediction position across B training samples. We construct a low-rank Tucker decomposition of this tensor, yielding factor matrices 
+
+U(a) 
+
+> B
+
+∈ RB×rB , U(a) 
+
+> L
+
+∈ RL×rL , U(a) 
+
+> H
+
+∈ RH×rH .
+
+In our formulation, we use the hidden-mode fac-tor U(Aa H , which captures the dominant subspace of the teacher’s hidden representations at the anchor 4Figure 3: Overview of low-rank anchor alignment in LoRi. 
+
+position across the dataset. For a given sample, let 
+
+hℓ, h′ 
+
+> ℓ
+
+∈ RH , for ℓ = 1 , . . . , L , denote the teacher and student hidden states at the answer token across layers. The anchor-level loss is defined as 
+
+Lanchor = 1
+
+L
+
+> L
+
+X
+
+> ℓ=1
+
+U(a)⊤ 
+
+> H
+
+hℓ − U(a)⊤ 
+
+> H
+
+h′ 
+
+> ℓ
+> 22
+
+.
+
+This formulation leverages a shared low-rank sub-space learned across training samples, ensuring that the student’s representation at the answer pre-diction point aligns with the dominant structure of the teacher’s hidden states at that location, while remaining complementary to the global alignment enforced by Lrationale .
+
+3.4 Implications for Reasoning Reasoning compression. The low-rank structure provides a geometric explanation for why long chain-of-thought reasoning can be compressed into a shorter latent trajectory. Since the teacher’s hidden-state trajectory lies near a low-rank sub-space, its dominant variation can be represented us-ing a limited number of degrees of freedom, largely independent of sequence length. By aligning the student within this subspace, the student is encour-aged to reproduce the principal reasoning dynamics without explicitly matching each reasoning step. 
+
+Length invariance. Importantly, our formulation is invariant to the length of the reasoning trajectory. Since alignment is performed through aggregated statistics rather than step-wise correspondence, the student can construct a shorter latent trajectory that matches the global geometry of the teacher. This provides an intuitive justification for transfer-ring reasoning from long explicit CoT sequences to compact implicit reasoning processes. 
+
+3.5 Relation to Prior Work 
+
+Our method differs from prior iCoT distillation ap-proaches in both supervision and training. In the following we compare LoRi with representative prior work CODI (Shen et al., 2025), KAVA (Kuz-ina et al., 2025) and SIM-CoT (Wei et al., 2025): • CODI aligns representations at a single boundary token, reducing supervision to a point-wise con-straint and overlooking the structure of the rea-soning trajectory. As a result, it struggles to trans-fer multi-step reasoning dynamics. In contrast, our method captures the full reasoning trajectory through a low-rank representation, supplemented by a localized anchor term that constrains the transition from reasoning to answer generation at a fixed answer-boundary position. • KAVA distills teacher KV-cache trajectories through step-wise alignment in KV space us-ing sampled rationale tokens. By contrast, LoRi models the reasoning process through low-rank hidden-state geometry, enabling length-invariant distillation without token-level sampling. • SIM-CoT (Wei et al., 2025) applies step-level supervision by aligning latent states with explicit reasoning tokens via an auxiliary decoder. Our method instead avoids explicit step-wise align-ment and supervises the student through low-rank trajectory structure. Finally, existing iCoT distillation methods rely on joint teacher–student training with online 5Table 1: Accuracy (%) of different reasoning methods on math benchmarks across models. The best iCoT method is shown in bold, and the second-best method is underlined. Explicit CoT results are shown in gray. Parentheses denote CODI/KAVA results without their final-step dropping heuristic.                                                                                                                               
+
+> Model Method GSM8K GSM8K-Hard SVAMP Average
+> Qwen2.5-0.5B SFT-CoT 52.3 16.2 62.3 43.6 NoCoT 31.5 7.4 34.5 24.5 CODI 37.5 8.1 47.0 30.9 PCCOT 20.5 4.1 33.0 19.2 KAVA 46.9 10.8 50.6 36.1 LoRi 50.0 15.2 63.0 42.7
+> LoRi-E 52.0 16.9 62.7 43.9 LLaMA-3.2-1B SFT-CoT 58.4 20.1 61.0 46.5 NoCoT 30.9 7.1 44.1 27.4 iCoT 19.0 4.4 40.9 21.4 CODI 55.6 (47.2) 12.8 61.1 43.2 COCONUT 45.3 9.9 48.8 34.7 KAVA 56.5 (51.2) 12.7 58.9 42.7 PCCoT 54.2 12.9 57.7 41.6 LoRi 54.9 13.9 64.0 44.3
+> LoRi-E 58.1 14.9 64.3 45.8 LLaMA-3.2-3B SFT-CoT 74.9 32.5 78.7 62.0 NoCoT 41.7 10.5 56.9 36.4 PCCoT 54.7 13.5 69.5 45.9 CODI 61.0 15.0 72.4 49.5 KAVA 65.7 15.2 72.7 51.2 SIM-CoT 62.3 14.6 74.9 50.6 LoRi 70.0 21.9 75.0 55.6
+> LoRi-E 74.3 24.1 79.3 59.2 LLaMA-3.1-8B SFT-CoT 76.6 34.3 81.0 64.0 NoCoT 39.5 9.8 55.3 34.9 CODI 61.1 15.5 78.1 51.6 SIM-CoT 64.1 16.3 79.4 53.3 LoRi 79.3 26.1 83.3 62.9
+> LoRi-E 80.4 27.2 83.3 63.6
+
+teacher inference. In contrast, we adopt a two-stage procedure: teacher-derived low-rank factors are precomputed once, after which the student is fine-tuned independently on a subset of the training data. This substantially reduces training cost while preserving effective reasoning transfer. 
+
+4 Results 
+
+4.1 Experimental Setup 
+
+Following prior work, we evaluate LoRi on stan-dard mathematical reasoning benchmarks, which provide rigorous tests of multi-step reasoning through structured problem solving and verifiable answers (Sprague et al., 2024). We compare LoRi against NoCoT, CODI (Shen et al., 2025), KAVA (Kuzina et al., 2025), SIM-CoT (Wei et al., 2025), PCCoT (Wu et al., 2025), COCONUT (Hao et al., 2024), and SFT-CoT across Qwen (Bai et al., 2023) and LLaMA (Dubey et al., 2024) model families. To study scalability, we eval-uate models ranging from 0.5B to 8B parameters. SFT-CoT serves as an upper-bound reference since it relies on explicit reasoning at inference time, whereas LoRi targets implicit reasoning. The teacher model is first fine-tuned on the full GSM8K-Aug dataset (Deng et al., 2024a,b) and then frozen during distillation. The student is ini-tialized from the same base model and trained on a random 128-sample subset of GSM8K-Aug. We report final-answer accuracy based on extracted nu-merical outputs. Additional implementation details and hyperparameters are provided in Appendix C. 
+
+4.2 Accuracy Comparison 
+
+Table 1 summarizes performance on several bench-marks and model scales. Overall, LoRi consis-tently outperforms prior implicit reasoning meth-ods and substantially narrows the gap to full CoT models. This suggests that low-rank alignment captures global reasoning dependencies that token-level methods fail to model. 6Performance w.r.t. Model Scale. For small models, LoRi provides strong gains over prior implicit reasoning methods. On Qwen2.5-0.5B, LoRi achieves an average accuracy of 42 .7% , sub-stantially outperforming CODI ( 30 .9% ), KAVA (36 .1% ), and PCCoT ( 19 .2% ). On LLaMA-3.2-1B, LoRi reaches the best average accuracy among iCoT methods ( 44 .3% ), although its advantage over CODI and KAVA is more nuanced: CODI and KAVA obtain slightly higher accuracy on GSM8K, while LoRi performs better on GSM8K-Hard and SVAMP. Moreover, when CODI and KAVA are evaluated without their final-step dropping heuris-tic (Kuzina et al., 2025), LoRi outperforms them by a clear margin. This is notable because LoRi does not use step-level supervision or heuristic rationale truncation. For larger models, the gains are pronounced. On LLaMA-3.2-3B, LoRi achieves 55 .6% average ac-curacy, outperforming all implicit baselines by a clear margin. On LLaMA-3.1-8B, LoRi reaches 
+
+62 .9% , approaching the performance of full CoT models ( 64 .0% ). These results suggest that the proposed method scales effectively, substantially narrowing the gap between implicit and explicit reasoning. 
+
+Hard Reasoning Tasks. The improvements are particularly notable on GSM8K-Hard, which re-quires more complex multi-step reasoning. For ex-ample, on LLaMA-3.2-3B, LoRi improves perfor-mance from 15 .2% (KAVA) to 21 .9% ; on LLaMA-3.1-8B, LoRi achieves 26 .1% , substantially out-performing CODI ( 15 .5% ) and SIM-CoT ( 16 .3% ). This suggests that capturing the global structure of reasoning through low-rank alignment is especially beneficial for harder reasoning tasks. 
+
+Capability of Explicit Reasoning. To evaluate whether LoRi preserves explicit reasoning ability, we test LoRi-E, which uses the same student model but performs standard CoT generation at inference time. LoRi-E achieves performance comparable to SFT-CoT across all models and benchmarks. For instance, on LLaMA-3.1-8B, LoRi-E attains an average accuracy of 63 .6% , close to 64 .0% for SFT-CoT. These results suggest that the proposed distillation method preserves explicit reasoning ca-pability while enabling both implicit and explicit reasoning at inference time.                 
+
+> Table 2: Training cost on NVIDIA RTX 6000 GPUs. FT: teacher fine-tuning. Distill: reasoning distillation. Other iCoT distillation methods (e.g., PCCoT, KAVA, and SIM-CoT) have similar training cost with CODI.
+> Model Method Stage GPU-h LLaMA-1B CODI Distill 16.5 LoRi FT + Distill 4.75 + 0.02
+> LLaMA-3B CODI Distill 30.9 LoRi FT + Distill 8.8 + 0.03 0
+> 1
+> 2
+> 3
+> 4
+> 5
+> 6
+> 7
+> 8
+> LLaMA-3.2-1B LLaMA-3.2-3B LLaMA-3.1-8B
+> Latency (Sec/Sample)
+> Model
+> CoT iCoT
+> Figure 4: Inference latency comparison. Note: LoRi and prior iCoT methods have almost the same inference cost since they use the same latent-step inference procedure.
+
+4.3 Training Efficiency 
+
+Beyond accuracy, LoRi also improves training effi-ciency over prior implicit reasoning methods. Exist-ing iCoT distillation approaches, including CODI, KAVA, and SIM-CoT, rely on joint teacher–student training with repeated teacher forward passes to ob-tain intermediate representations, resulting in sub-stantial computational overhead. In contrast, LoRi uses a two-stage procedure: all teacher-derived quantities are precomputed once, and the student is trained on only a subset of the training data. Despite this simplified pipeline, LoRi maintains strong benchmark performance while significantly improving training efficiency and scalability as summarized in Table 2. In practice, the distilla-tion overhead becomes effectively negligible, mak-ing LoRi a more scalable and accessible approach for implicit reasoning distillation. We use CODI as a representative baseline for training-cost com-parison since related iCoT distillation methods (e.g., PCCoT, KAVA, and SIM-CoT) employ simi-lar joint teacher–student training procedures with repeated teacher forward passes, leading to very similar computational overhead. 
+
+4.4 Inference Latency 
+
+We compare the inference latency of LoRi-based iCoT and explicit CoT. Latency is measured as av-70                 
+
+> 20
+> 40
+> 60
+> 80
+> 2345678
+> Accuracy (%)
+> Latent Reasoning Steps
+> GSM8K GSM8K-Hard SVAMP 0
+> 20
+> 40
+> 60
+> 80
+> 100
+> 32 96 160 224 288 352 416 480
+> Accuracy (%)
+> Sample Size
+> LLaMA-3.2-1B LLaMA-3.2-3B
+> LLaMA-3.1-8B Qwen2.5-0.5B Figure 5: Ablation studies on reasoning steps (left) and training sample size (right).
+
+erage wall-clock time per sample. CoT generates full reasoning sequences autoregressively, whereas iCoT uses a fixed number of latent steps ( K = 5 )followed by short answer generation, significantly reducing decoding cost. As shown in Figure 4, iCoT consistently achieves lower latency across all model scales. Specifically, it is about 6.9 ×
+
+faster for LLaMA-3.2-1B and 5.1 × faster for both LLaMA-3.2-3B and LLaMA-3.1-8B. These results confirm the efficiency advantages of iCoT while showing that LoRi preserves this benefit alongside improved reasoning performance. Since LoRi and prior iCoT methods use the same latent-step in-ference procedure, their inference complexity is almost the same; the main difference lies in the distillation strategy during training. 
+
+4.5 Ablation Studies 
+
+We study the effect of the number of latent reason-ing steps K and the number of training samples used for distillation on model performance. 
+
+Ablation on Latent Reasoning Steps. Figure 5 reports benchmark accuracy as the number of latent steps K varies from 2 to 8. Performance consis-tently improves from K = 2 to K = 5 , suggesting that a minimum number of latent reasoning itera-tions is needed to capture the underlying reasoning dynamics. The best results are achieved at K = 5 
+
+across all datasets, indicating that this setting pro-vides sufficient capacity to represent the dominant low-rank reasoning structure. Increasing K beyond 5 yields no further gains and occasionally causes slight degradation, implying that additional steps introduce redundancy rather than useful computa-tion. Overall, these results support the view that reasoning trajectories can be compressed into a small number of latent steps without sacrificing essential structure. 
+
+Ablation on Training Sample Size. Figure 5 shows that accuracy improves rapidly in the low-data regime and saturates after roughly 128 sam-ples across all model scales, indicating that strong performance can be achieved with only a small subset of the training data. One explanation is that the effective degrees of freedom of the distillation problem are limited: although the teacher produces long chain-of-thought trajectories, the information needed for the student may lie in a low-dimensional subspace. Under this view, distillation only needs to recover the dominant reasoning structure rather than the full trajectory. Consequently, relatively few samples are sufficient to estimate this struc-ture, leading to rapid gains followed by saturation. This observation supports our low-rank formula-tion and suggests that the reasoning signal relevant for distillation is highly compressible. 
+
+5 Conclusion 
+
+We have proposed LoRi, a low-rank formulation for iCoT distillation. Empirically, LoRi outper-formed prior implicit reasoning methods across model families, scales, and benchmarks and re-duced the gap of iCoT with explicit CoT while preserving the efficiency advantages of implicit reasoning. In addition, the proposed method signif-icantly reduced computational overhead, making distillation lightweight and scalable. The results also support a geometric perspective of reason-ing: long chain-of-thought trajectories can be ef-fectively compressed by preserving their low-rank structure. This perspective provides a principled and efficient alternative to existing iCoT distillation approaches and suggests that the essential dynam-ics of reasoning are governed by a low-dimensional subspace that can be exploited for both learning and inference. 8Limitations 
+
+The proposed formulation is motivated by an em-pirical observation that hidden-state reasoning tra-jectories exhibit strong low-rank structures across models and benchmarks. While LoRi improves reasoning accuracy and training efficiency, the the-oretical relationship between low-rank representa-tion geometry and reasoning capability is still not fully understood. Future work could further investi-gate the geometry of reasoning trajectories and the role of low-dimensional structure in CoT reasoning from a theoretical perspective. 
+
+References 
+
+Jinze Bai et al. 2023. Qwen technical report. 
+
+arXiv:2309.16609 .Yoshua Bengio, Aaron Courville, and Pascal Vincent. 2013. Representation learning: A review and new perspectives. IEEE Transactions on Pattern Analysis and Machine Intelligence , 35(8):1798–1828. Zhuotong Chen, Qianxiao Li, and Zheng Zhang. 2022. Self-healing robust neural networks via closed-loop control. Journal of machine learning research ,23(319):1–54. Zhuotong Chen, Zihu Wang, Yifan Yang, Qianxiao Li, and Zheng Zhang. 2024. PID control-based self-healing to improve the robustness of large language models. Transactions on machine learning research .Karl Cobbe, Vineet Kosaraju, Mohammad Bavarian, Mark Chen, Heewoo Jun, Lukasz Kaiser, Matthias Plappert, Jerry Tworek, Jacob Hilton, Reiichiro Nakano, Christopher Hesse, and John Schulman. 2021. Training verifiers to solve math word prob-lems. arXiv preprint arXiv:2110.14168 .Lieven De Lathauwer, Bart De Moor, and Joos Vande-walle. 2000. A multilinear singular value decomposi-tion. SIAM Journal on Matrix Analysis and Applica-tions , 21(4):1253–1278. Yuntian Deng, Yejin Choi, and Stuart Shieber. 2024a. From explicit cot to implicit cot: Learning to internalize cot step by step. arXiv preprint arXiv:2405.14838 .Yuntian Deng, Kiran Prsad, Roland Fernandez, Paul Smolensky, Vishrav Chaudhary, and Stuart Shieber. 2024b. Implicit chain-of-thought reason-ing via knowledge distillation. arXiv preprint at arXiv:2311.01460 .Abhimanyu Dubey, Abhinav Jauhri, Ankur Pandey, et al. 2024. The llama 3 herd of models. 
+
+arXiv:2407.21783 .Charles Fefferman, Sanjoy Mitter, and Hariharan Narayanan. 2016. Testing the manifold hypothe-sis. Journal of the American Mathematical Society ,29(4):983–1049. Luyu Gao, Aman Madaan, Shuyan Zhou, Uri Alon, Pengfei Liu, Yiming Yang, Jamie Callan, and Gra-ham Neubig. 2022. Pal: Program-aided language models. arXiv .Noah Golowich, Allen Liu, and Abhishek Shetty. 2025. Sequences of logits reveal the low rank structure of language models. arXiv preprint arXiv:2510.24966 .Shibo Hao, Sainbayar Sukhbaatar, DiJia Su, Xian Li, Zhiting Hu, Jason Weston, and Yuandong Tian. 2024. Training large language models to reason in a contin-uous latent space. arXiv preprint arXiv:2412.06769 .Zhenghao He, Guangzhi Xiong, Bohan Liu, San-chit Sinha, and Aidong Zhang. 2026. Reasoning beyond chain-of-thought: A latent computational mode in large language models. arXiv preprint arXiv:2601.08058 .Anna Kuzina, Maciej Pioro, Paul N. Whatmough, and Babak Ehteshami Bejnordi. 2025. Kava: Latent rea-soning via compressed kv-cache distillation. arXiv preprint arXiv:2510.02312 .Bo Li, Guanzhi Deng, Ronghao Chen, Junrong Yue, Shuo Zhang, Qinghua Zhao, Linqi Song, and Lijie Wen. 2025a. Rema: A unified reasoning manifold framework for interpreting large language models. 
+
+arXiv preprint arXiv:2509.22518 .Jindong Li, Yali Fu, Li Fan, Jiahong Liu, Yao Shu, Chengwei Qin, Menglin Yang, Irwin King, and Rex Ying. 2025b. Implicit reasoning in large language models: A comprehensive survey. arXiv preprint arXiv:2509.02350 .Zhiyuan Li, Hong Liu, Denny Zhou, and Tengyu Ma. 2024. Chain of thought empowers transformers to solve inherently serial problems. In The Twelfth In-ternational Conference on Learning Representations (ICLR) .Zicheng Lin, Tian Liang, Jiahao Xu, Qiuzhi Liu, Xing Wang, Ruilin Luo, Chufan Shi, Siheng Li, Yujiu Yang, and Zhaopeng Tu. 2025. Critical tokens matter: Token-level contrastive estimation enhances llm’s rea-soning capability. In Proceedings of the 42nd Inter-national Conference on Machine Learning (ICML) .Ziyue Liu, Ruijie Zhang, Zhengyang Wang, Mingsong Yan, Zi Yang, Paul D Hovland, Bogdan Nicolae, Franck Cappello, Sui Tang, and Zheng Zhang. 2025. CoLA: Compute-efficient pre-training of llms via low-rank activation. In Proceedings of the 2025 Con-ference on Empirical Methods in Natural Language Processing , pages 4627–4645. Alexander Modell, Patrick Rubin-Delanchy, and Nick Whiteley. 2025. The origins of representation man-ifolds in large language models. arXiv preprint arXiv:2505.18235 .
+
+9Kiho Park, Yo Joong Choe, and Victor Veitch. 2024. The linear representation hypothesis and the geom-etry of large language models. In Proceedings of the 41st International Conference on Machine Learn-ing (ICML) , volume 235 of Proceedings of Machine Learning Research , pages 39643–39666. PMLR. Arkil Patel, Satwik Bhattamishra, and Navin Goyal. 2021. Svamp: A dataset of verbally perturbed math word problems. In Proceedings of the 2021 Confer-ence of the North American Chapter of the Associa-tion for Computational Linguistics (NAACL) .Zhenyi Shen, Hanqi Yan, Linhai Zhang, Zhanghao Hu, Yali Du, and Yulan He. 2025. Codi: Compress-ing chain-of-thought into continuous space via self-distillation. arXiv preprint arXiv:2502.21074 .Zayne Sprague, Fangcong Yin, Juan Diego Rodriguez, Dongwei Jiang, Manya Wadhwa, Prasann Singhal, Xinyu Zhao, Xi Ye, Kyle Mahowald, and Greg Dur-rett. 2024. To cot or not to cot? chain-of-thought helps mainly on math and symbolic reasoning. arXiv preprint arXiv:2409.12183 .Lihao Sun, Hang Dong, Bo Qiao, Qingwei Lin, Dong-mei Zhang, and Saravan Rajmohan. 2026. Llm rea-soning as trajectories: Step-specific representation geometry and correctness signals. arXiv preprint arXiv:2604.05655 .Xuezhi Wang, Jason Wei, Dale Schuurmans, Quoc V. Le, Ed H. Chi, Sharan Narang, Aakanksha Chowd-hery, and Denny Zhou. 2022. Self-consistency im-proves chain of thought reasoning in language mod-els. arXiv preprint arXiv:2203.11171 .Jason Wei, Xuezhi Wang, Dale Schuurmans, Maarten Bosma, Brian Ichter, Fei Xia, Ed H. Chi, Quoc V. Le, and Denny Zhou. 2022. Chain-of-thought prompt-ing elicits reasoning in large language models. In 
+
+Advances in Neural Information Processing Systems ,volume 35, pages 24824–24837. Curran Associates, Inc. Xilin Wei, Xiaoran Liu, Yuhang Zang, Xiaoyi Dong, Yuhang Cao, Jiaqi Wang, Xipeng Qiu, and Dahua Lin. 2025. Sim-cot: Supervised implicit chain-of-thought. arXiv preprint arXiv:2509.20317 .Haoyi Wu, Zhihao Teng, and Kewei Tu. 2025. Paral-lel continuous chain-of-thought with jacobi iteration. 
+
+arXiv preprint arXiv:2506.18582 .Shunyu Yao, Dian Yu, Jeffrey Zhao, Izhak Shafran, Thomas L. Griffiths, Yuan Cao, and Karthik Narasimhan. 2023. Tree of thoughts: Deliberate problem solving with large language models. In Ad-vances in Neural Information Processing Systems .Hao Yu and Jianxin Wu. 2023. Compressing transform-ers: Features are low-rank, but weights are not! In 
+
+Proceedings of the AAAI Conference on Artificial Intelligence , volume 37, pages 11007–11015. Eric Zelikman, Yuhuai Wu, Jesse Mu, and Noah D. Goodman. 2022. Star: Bootstrapping reasoning with reasoning. In Advances in Neural Information Pro-cessing Systems .Yufa Zhou, Yixiao Wang, Xunjian Yin, Shuyan Zhou, and Anru R. Zhang. 2026. The geometry of reason-ing: Flowing logics in representation space. In In-ternational Conference on Learning Representations (ICLR) .
+
+10 0 10 20 30 40 50 60 
+
+> Rank
+> 0.4
+> 0.5
+> 0.6
+> 0.7
+> 0.8
+> 0.9
+> 1.0
+> Normalized sum of singular values
+> Mean
+
+Figure 6: Normalized sum of singular values versus rank for stacked hidden states of all layers and all CoT tokens of LLaMA-3.2-1B model, where each curve cor-responds to a single GSM8K example. 
+
+A Low-rank Analysis of CoT Hidden States 
+
+For this analysis, we stack the hidden states cor-responding to all transformer layers and all CoT rationale tokens into a single matrix and compute its singular value decomposition (SVD). Figure 6 shows the normalized cumulative singular values across GSM8K examples for LLaMA-3.2-1B. De-spite the model having a hidden dimension of 2048, the singular values decay rapidly and are largely concentrated within a relatively small rank. This strong low-rank structure suggests significant com-pressibility in hidden-state reasoning dynamics, motivating the use of low-rank representations for implicit reasoning distillation. 
+
+B Ablation of the Anchor Loss Term 
+
+Table 3 shows that the anchor-level loss Lanchor 
+
+generally improves performance, with the largest gains observed for smaller models. For Qwen2.5-0.5B, it yields substantial improvements on both GSM8K and SVAMP, indicating a strong additional supervision signal. For larger models, the effect is less pronounced, with improvements on some benchmarks and minor degradations on others. No-tably, the magnitude of these degradations is con-siderably smaller than the observed gains, suggest-ing that the anchor term acts as a stable comple-mentary signal to the low-rank rationale alignment. Overall, the largest benefits are observed in smaller models, while the effects become more nuanced at larger scales. Importantly, the proposed distil-lation method remains effective even without the anchor term, indicating that the global low-rank alignment alone captures a substantial portion of 
+
+Table 3: Effect of the anchor loss term on accuracy across models.                   
+
+> Model Setting GSM8K SVAMP
+> Qwen2.5-0.5B No Anchor 39.8 54.7 With Anchor 50.0 63.0
+> LLaMA-3.2-1B No Anchor 52.8 64.3
+> With Anchor 54.9 64.0 LLaMA-3.2-3B No Anchor 71.3 77.3 With Anchor 70 83.3
+
+Table 4: Hyperparameter settings. 
+
+Hyperparameter Value 
+
+RL 8
+
+RH 256 
+
+R(a) 
+
+> L
+
+8
+
+R(a) 
+
+> H
+
+128 
+
+R(a) 
+
+> B
+
+64 
+
+λ 1
+
+β 10 −5
+
+ωC 1
+
+ωμ 10 −2
+
+Learning rate 2 · 10 −5
+
+Epochs 1Samples 128 the reasoning signal. 
+
+C Implementation Details and Hyperparameter 
+
+We assume a pretrained teacher model that pro-duces high-quality chain-of-thought rationales. The teacher is kept fixed and used to extract hidden states for both the rationale tokens and the answer prediction position. From these, we precompute the low-rank projection factors and anchor-level targets as described in Sec. 3.2 and Sec. 3.3. The student model is then trained on sampled training examples using the proposed loss in Eq. (3.1). We evaluate the model on standard mathematical reasoning benchmarks, including GSM8K (Cobbe et al., 2021), GSM8K-Hard (Gao et al., 2022), and SVAMP (Patel et al., 2021). Hyperparameter set-tings for LoRi corresponding to the results in Ta-ble 1 is reported in Table 4. Here, RL and RH
+
+denote the ranks used for the low-rank decomposi-tion of rationale representations, while R(a) 
+
+> L
+
+, R(a) 
+
+> H
+
+,and R(a) 
+
+> B
+
+are the Tucker ranks for anchor factoriza-tion. We use a shared hyperparameter configura-11 tion across all models, except for R(a) 
+
+> L
+
+, which is increased for larger models (e.g., LLaMA 3B and 8B) to 16 due to their greater depth, while all other parameters remain fixed. 
+
+D Tensor Contraction 
+
+The operation ×n denotes contraction of a tensor with a matrix along mode n. In index form, the expression 
+
+X = Q ×1 UN ×2 UL ×3 UH
+
+corresponds to 
+
+Xn,t,h =
+
+> rN
+
+X
+
+> m=1
+> rL
+
+X
+
+> i=1
+> rH
+
+X
+
+> j=1
+
+Qm,i,j (UN )n,m 
+
+· (UL)t,i (UH )h,j (1) which contracts X along the first, second and third modes. 12

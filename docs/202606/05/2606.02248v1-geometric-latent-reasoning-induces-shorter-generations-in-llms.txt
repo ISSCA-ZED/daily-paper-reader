@@ -1,0 +1,653 @@
+Title: Geometric Latent Reasoning Induces Shorter Generations in LLMs
+
+URL Source: https://arxiv.org/pdf/2606.02248v1
+
+Published Time: Tue, 02 Jun 2026 02:47:00 GMT
+
+Number of Pages: 19
+
+Markdown Content:
+# Geometric Latent Reasoning Induces Shorter Generations in LLMs 
+
+Shashi Kumar 1,2,∗ Yacouba Kaloga 1,∗
+
+Petr Motlicek 1,3 Ina Kodrasi 1 Andrea Cavallaro 21Idiap Research Institute, Switzerland 
+
+> 2
+
+EPFL, Switzerland 3BUT, Czech Republic 
+
+{shashi.kumar, yacouba.kaloga}@idiap.ch 
+
+## Abstract 
+
+Large language models solve complex problems by generating lengthy chains of explicit reasoning tokens. While effective, this makes reasoning expensive, length-sensitive, and constrained to (discrete) natural language. While latent reasoning offers a continuous alternative, determining useful structures for intermediate latent states is an open challenge. In this paper, we formulate latent reasoning as a geomet-ric path-approximation problem within the model’s pretrained token-embedding space. We introduce Geometric Latent Reasoning (GLR), which uses a lightweight transition head to predict iterative direction updates in embedding space. Using textual chain-of-thought traces as anchors, GLR learns to approximate discrete reasoning trajectories while permitting continuous deviations from exact token embeddings. Evaluations on mathematical reasoning benchmarks using Qwen3 models reveal an emergent phenomenon: geometric latent reasoning induces sub-stantially shorter generations without an explicit length objective. By replacing early explicit reasoning with continuous latent steps, models often reach correct answers using substantially fewer total generation steps. These findings suggest that continuous trajectories act as compact intermediate reasoning states, exposing a new tradeoff between latent computation budget, output length, and accuracy. 
+
+## 1 Introduction 
+
+Large language models (LLMs) increasingly rely on explicit reasoning traces, such as Chain-of-Thought (CoT), to solve complex, multi-step problems [ 1 , 2 , 3 ]. However, forcing intermediate steps into discrete natural language creates significant computational overhead. This process leads to lengthy reasoning traces and forces the model to prematurely commit to specific discrete tokens at every step. To circumvent the rigidity of text-based reasoning, latent reasoning shifts interme-diate computation into continuous representation spaces. While prior approaches explore feeding unconstrained hidden states back into the model [ 4], distilling soft traces via auxiliary models [ 5, 6], or introducing external latent modules [ 7], a fundamental challenge remains: determining the optimal structure for intermediate continuous states. Unconstrained states often suffer from an embedding-space mismatch, while auxiliary modules introduce complex distillation dependencies. In this paper, we take a geometric view of reasoning. We first view standard textual chain-of-thought as a discrete trajectory through the model’s pretrained token-embedding space (Figure 1a). This motivates our approach: rather than learning a separate unconstrained latent space, we hypothesize that useful intermediate states are not limited to exact discrete tokens, and that local neighborhoods around these trajectories can also support meaningful computation. Our method, Geometric Latent   
+
+> ∗Equal contribution. Preprint.
+> arXiv:2606.02248v1 [cs.CL] 1 Jun 2026 (a) (b) (c)
+
+Figure 1: Geometric view of latent reasoning as an embedding-space trajectory. (a) Standard chain-of-thought forces reasoning through a sequence (black arrows) of exact vocabulary embeddings (purple dots). (b) GLR learns continuous displacement vectors (red arrows) to approximate these transitions. Dashed circles denote local neighborhoods where continuous states may remain meaning-ful model inputs. (c) At inference, continuous latent steps deviate from the explicit text path. By not forcing intermediate steps into discrete tokens, the model bypasses redundant transitions, taking a geometric shortcut before resuming standard token generation. 
+
+Reasoning (GLR) , adds a lightweight latent transition head that predicts continuous embedding-space direction updates to approximate these token-induced trajectories (Figure 1b). During training, these updates are anchored to textual CoT traces with a position-discounted mean-squared-error objective, allowing later latent states to deviate more from the original text trace. At inference time, GLR replaces an initial segment of explicit reasoning with a fixed number of continuous latent steps, allowing the model to bypass redundant discrete transitions before standard text token decoding resumes (Figure 1c). The number of latent steps controls how computation is allocated between embedding-space updates and explicit token generation, exposing a new tradeoff between latent computation budget, output length, and accuracy. We evaluate GLR on mathematical reasoning benchmarks using Qwen3 [ 8] models. Across model sizes and benchmarks, GLR induces shorter generations without an explicit length objective. Com-pared with chain-of-thought supervised fine-tuning, GLR often produces correct answers with substantially fewer generated tokens, especially under constrained generation budgets. These results suggest that pretrained token-embedding spaces can support useful intermediate reasoning states beyond discrete tokens, and that geometric latent updates provide a simple mechanism for controlling the cost and form of test-time reasoning. Our main contributions are as follows: • We formulate latent reasoning as a geometric path-approximation problem within the pretrained token-embedding space, providing a structured alternative to unconstrained hidden-state feedback and unconstrained latent modules. • We introduce GLR, a method that learns continuous embedding-space updates from textual CoT trajectories using a simple, position-discounted transition objective. • We show that GLR induces shorter generations on mathematical reasoning benchmarks, allowing models to produce correct answers with substantially fewer generated tokens without an explicit length penalty. • We identify an accuracy–length tradeoff governed by the number of latent steps, exposing a new inference-time control over the allocation of computation between continuous latent updates and explicit text generation. 
+
+## 2 Related Work 
+
+Discrete reasoning in LLMs. Chain-of-thought (CoT) prompting improves LLM reasoning by eliciting intermediate natural-language steps before predicting a final answer [ 1]. This behavior can be strengthened through supervised fine-tuning [ 2 ], reinforcement learning [ 3], and scaling test-time compute budgets [ 9, 10 ]. Notably, outcome-supervised reasoning can also increase rea-soning length, as models may learn to allocate more test-time computation to improve final-answer accuracy rather than to produce shorter traces [ 11 ]. To explore alternative solutions, methods like self-consistency [ 12 ] and Tree-of-Thought [ 13 ] sample or search over multiple textual trajectories. However, because intermediate computation in these methods is strictly autoregressive, exploring paths requires generating multiple lengthy sequences. Furthermore, forcing every reasoning step into 2discrete text produces long traces that are not always faithful to the model’s true internal compu-tation [ 14 , 15 ]. Our work studies a complementary direction: performing part of the intermediate computation in continuous latent states before returning to standard decoding. 
+
+Latent reasoning in LLMs. To bypass discrete token generation, recent methods explore replacing parts of explicit CoT with continuous reasoning states. Continuous thought methods feed raw hidden states directly back into the model as subsequent inputs [ 4 ]. Other approaches construct latent reasoning traces via knowledge distillation from teacher models [ 5, 16 , 6 , 17 ] or introduce external latent modules, such as VQ-VAEs [ 7]. While these methods demonstrate the viability of non-verbalized reasoning, structuring these continuous states remains a fundamental challenge. Unconstrained hidden states often suffer from distribution shifts when fed back as inputs, distillation pipelines introduce complex training dependencies, and external modules may not align naturally with the model’s pretrained representation geometry. GLR avoids these architectural frictions by strictly constraining latent reasoning to the model’s pretrained token-embedding space. 
+
+Soft tokens and embedding-space explorations. Closest to our setting are soft-token and hybrid reasoning methods, which use continuous interpolations of token embeddings as intermediate in-puts [18, 19]. These methods provide crucial empirical evidence that LLMs can process continuous inputs within the embedding space without breaking, and that the token-embedding space preserves useful computational structure. However, prior work primarily utilizes soft tokens as a decoding or prompting mechanism, typically constructing representations dynamically from the model’s next-token probability distribution. In contrast, GLR treats the token-embedding space as a geometry for reasoning trajectories. Rather than taking a weighted sum of the vocabulary, it learns local directional updates to explicitly step through the embedding space. 
+
+Positioning. Our work bridges explicit CoT and latent reasoning through a geometric formulation. Unlike text-only reasoning, which must serialize every step, and unconstrained latent methods, which operate outside the model’s pretrained input geometry, GLR learns continuous approximations of textual paths. The resulting method provides a lightweight way to trade explicit token generation for latent computation, yielding shorter generations without relying on explicit length penalties. 
+
+## 3 Method 
+
+In this section, we present our latent reasoning formulation. We first interpret textual chain-of-thought reasoning as a trajectory in the model’s token-embedding space, then motivate the use of meaningful local deviations around this trajectory. We then introduce our learned latent-transition mechanism and explain how a small number of latent steps can reduce subsequent token generation. 
+
+3.1 Preliminaries 
+
+We use u1: k to denote the sequence (u1, . . . , u k), and u<i to denote the prefix (u1, . . . , u i−1).
+
+Chain-of-thought as an embedding-space trajectory. Consider an input question q1: n for which the model generates a reasoning trace followed by a final answer: 
+
+<think> t1: m </think> a1: ℓ.
+
+Here, t1: m denotes the chain-of-thought tokens and a1: ℓ denotes the answer tokens. At each reasoning step i, the model produces a hidden state hti ∈ Rd from the current context (q1: n, t <i ). This hidden state induces a distribution over the vocabulary, 
+
+pθ (· | q1: n, t <i ) = softmax( Wout hti),
+
+from which the next thought token ti is sampled: 
+
+ti ∼ pθ (· | q1: n, t <i ).
+
+Once selected, ti is mapped to its input embedding 
+
+eti = Ein (ti),
+
+3which is fed back into the model to produce the next hidden state hti. Thus, although the visible chain-of-thought is a discrete sequence of tokens, it induces a sequence of input embeddings 
+
+et
+
+> 1
+
+, et
+
+> 2
+
+, . . . , etm.
+
+We view this sequence as a reasoning trajectory in the model’s embedding space (Figure 1a). Under this perspective, searching for better reasoning can also be interpreted as searching over trajectories in the continuous input space through which the model performs reasoning. 
+
+Local continuity of embedding-space reasoning states. This trajectory view is useful only if neighborhoods around token embeddings can remain meaningful inputs to the model (Figure 1b). A minimal justification comes from the model itself: for a fixed prefix (q1: n, t <i ), the Transformer defines a continuous map Fθ (· | q1: n, t <i ) : eti 7 → hti from the current input embedding to the corresponding hidden state. Therefore, a small perturbation δe of an embedding is expected to produce a nearby hidden state, 
+
+Fθ (eti + δe | q1: n, t <i ) ≈ Fθ (eti | q1: n, t <i ) for small ∥δe∥2.
+
+Since this hidden state is then projected to the vocabulary distribution, nearby hidden states are expected to induce nearby predictive behavior. This continuity argument does not imply that arbitrary embedding-space points are useful. However, soft-token and continuous-thinking methods [ 18 , 5 ] provide direct empirical evidence that language models can process continuous inputs that do not correspond to a single discrete token. Instead of feeding back a sampled token embedding eti = Ein (ti), these methods may feed a soft embedding 
+
+˜eti = X
+
+> v∈V
+
+pθ (v | q1: n, t <i )Ein (v), X
+
+> v∈V
+
+pθ (v | q1: n, t <i ) = 1 .
+
+Although ˜eti generally does not equal any single vocabulary embedding, it can still support coherent reasoning when fed back into the model. This supports the hypothesis that neighborhoods around token-induced embedding trajectories contain meaningful intermediate latent states. 
+
+3.2 Geometric Latent Reasoning 
+
+Rather than searching over arbitrary latent states, we learn local transitions around token-induced embedding trajectories. The goal is to keep latent reasoning within the pretrained input geometry while allowing the learned transition to move toward continuous states that improve subsequent token prediction. 
+
+Learning latent transitions. We add to the language model a lightweight latent transition head (Figure 2) 
+
+gϕ : Rd → Rd,
+
+implemented as a linear layer on top of the model hidden states. Although the latent trajectory is defined in the input token-embedding space, the transition is predicted from the final hidden state associated with the current reasoning context. Given hti−1, the head predicts an embedding-space update 
+
+∆ˆ eti = gϕ(hti−1).
+
+Rather than predicting an arbitrary next embedding, the head predicts a local displacement along the token-induced embedding trajectory. Let 
+
+eti = Ein (ti)
+
+be the embedding of the i-th thought token. We define the target transition as the difference between consecutive reasoning-token embeddings: 
+
+∆eti = eti − eti−1,
+
+where e0 denotes the embedding immediately preceding the first thought token, e.g. the embedding of 
+
+<think> . The transition head is trained to approximate this displacement using a position-discounted Mean Squared Error: 
+
+L∆ = 1
+
+m
+
+> m
+
+X
+
+> i=1
+
+γi−1 gϕ(hti−1) − ∆eti 
+
+> 22
+
+,
+
+where 0 < γ ≤ 1 is a discount factor that reduces the transition penalty for later reasoning positions. 4Figure 2: Training pipeline for Geometric Latent Reasoning (GLR). Left (first forward pass): 
+
+The model processes the original discrete sequence to collect both the exact ( ∆tk) and predicted ( ˆ∆tk)embedding-space displacements between consecutive reasoning tokens. Right (second forward pass): Discrete thought embeddings ( et) are replaced with continuous latent states ( ˆet) obtained by applying the Transition Head output from the first pass (i.e., ˆ∆tk). The model then processes this modified sequence to compute the final objectives: standard cross-entropy on the answer tokens (a1: l), preserving generation capabilities, and a transition objective that anchors the continuous latent updates (i.e., the second Transition Head output, ˆˆ∆tk) to the true discrete trajectory update ( ∆tk). 
+
+Training with latent replacements. To ensure the model can robustly condition on continuous inputs without representation collapse, we train GLR using a two-pass procedure (Figure 2). Let 
+
+s1: N = ( q1: n, <think> , t 1: m, </think> , a 1: ℓ) denote the full supervised sequence. In the first for-ward pass, the model processes the original discrete sequence and predicts an embedding-space transition for each discrete reasoning position. For each thought token ti, we construct a latent replacement 
+
+ˆei = ei−1 + gϕ(hti−1).
+
+The embeddings inside the <think> span are replaced by these latent embeddings, and the model is run again on the modified sequence. This second forward pass is used to compute the latent transition objective; no cross-entropy (CE) loss is applied to the replaced reasoning tokens. Final objective is 
+
+L = LCE + λL∆,
+
+where LCE preserves token-generation behavior on the unmasked answer tokens of the original sequence, while L∆ trains the transition head to follow local movements along the token-induced embedding trajectory. This decoupling reflects the role of the two objectives: the CE loss maintains the standard language-modeling behavior, while the transition loss learns how to move within the continuous embedding space already shaped by pretraining. Note that we do not apply token-level CE to the latent replacement positions. The latent states in GLR are not intended to be independently verbalizable tokens; they are continuous intermediate states whose utility is measured by their effect on downstream answer generation. In preliminary experiments, applying CE to latent positions degraded performance, likely because it forces each latent state back toward immediate vocabulary prediction and counteracts the geometric relaxation introduced by the transition objective. 
+
+Latent reasoning at inference. At inference time, once the model enters the reasoning span, we choose a latent steps K that specifies how many reasoning steps are performed in continuous space before returning to standard token decoding. Let ee1 = Ein (<think> ) initialize the latent reasoning trajectory. For i = 1 , . . . , K , the model predicts a transition from the current hidden state hi and updates the latent input as 
+
+ˆei = ˆ ei−1 + gϕ(hti−1).
+
+5The resulting continuous embedding is fed directly back into the model instead of the embedding of a sampled token. Once the number of latent steps is exhausted, the model resumes normal token-level reasoning and answer generation. Thus, GLR moves through the embedding space without forcing every intermediate step to correspond to a vocabulary token. This may allow the model to bypass transitions that are useful for (readable) chain-of-thought but may carry little reasoning content, thereby reducing the amount of explicit reasoning text needed before answer generation. 
+
+## 4 Experiments 
+
+Our experiments investigate how Geometric Latent Reasoning (GLR) alters the allocation of compu-tation between continuous latent transitions and explicit token generation. We aim to answer three questions: (1) Does GLR improve accuracy under strictly constrained generation budgets? (2) Does the geometric objective reduce the total number of sequential steps required to solve a problem? (3) How does the latent-step budget K dictate the tradeoff between generation length and accuracy? 
+
+4.1 Setup Models and training data. We evaluate GLR using Qwen3-0.6B and Qwen3-1.7B [ 8]. Both models are initialized from their pretrained checkpoints to ensure a well-formed token-embedding space. For GLR, the latent transition head ( gϕ) is initialized from scratch, adding approximately 1M and 4M trainable parameters to the 0.6B and 1.7B models, respectively. All models are fine-tuned on a randomly sampled 10K-example subset of the math split from the Open-R1 Mixture-of-Thoughts dataset [ 20 , 21 ], which provides high-quality textual chain-of-thought traces. We filter out examples exceeding 8,192 tokens. Additional details in Appendix B.1. 
+
+Training configurations. We compare GLR against a standard supervised fine-tuning baseline (C OT-SFT), trained using the standard next-token cross-entropy objective over the same 10K CoT traces. For GLR, the model is augmented with the latent transition head and trained using the two-pass procedure described in Section 3. Crucially, we freeze the input token-embedding layer for all experiments. Allowing embeddings to update while gϕ simultaneously learns to predict displacements between them creates a non-stationary target that destabilizes training [ 22 , 23 ]. To ensure a fair comparison, the embedding layer is also frozen for the C OT-SFT baseline. Additional training hyperparameters are detailed in Appendix A. 
+
+Evaluation setup. We evaluate pass@1 accuracy under greedy decoding across six mathematical benchmarks. We primarily analyze the accuracy–length frontier on GSM8K [ 24 ] for foundational arithmetic and MATH500 [ 25 ] for complex derivations. To assess generalization, we evaluate on MultiArith [ 26 ], AMC23 [ 27 ], and OlympiadBench [ 28 ]. Crucially, we include SVAMP [ 29 ], a set of highly simplified arithmetic problems, to observe whether GLR bypasses redundant reasoning traces. Accuracy is computed using the lm-evaluation-harness framework [ 30 ]. Additional details are provided in Appendix B.2. At inference, GLR-K executes K continuous latent steps before resuming standard autoregressive token decoding. For Qwen3-0.6B, we evaluate K ∈ { 5, 10 , 20 , 50 }.For Qwen3-1.7B, we expand this to K ∈ { 5, 10 , 20 , 50 , 80 , 100 }, hypothesizing that larger models possess more expressive embedding spaces capable of supporting longer continuous trajectories. Decoding is constrained to fixed maximum generation limits: 2048 steps for arithmetic bench-marks (GSM8K, SVAMP, MultiArith) and 4096 steps for advanced reasoning (MATH500, AMC23, OlympiadBench). To measure efficiency, we define generation length as all model steps after the prompt. For C OT-SFT, this counts all generated text tokens. For GLR, this counts the K latent steps plus all subsequent text tokens. This is a conservative accounting for GLR: each latent step still requires a Transformer forward pass, but bypasses the vocabulary projection, instead applies the tran-sition head. For Qwen3-1.7B, latent rollout replaces a roughly 300M-weight vocabulary projection with a 4M-parameter transition head. Because our GLR decoder uses a custom HuggingFace [ 31 ]implementation while C OT-SFT is decoded with vLLM [ 32 ], we report hardware-independent step counts rather than wall-clock latency; Appendix E provides additional compute accounting details. Finally, when plotting length distributions, we measure only successful generations to isolate the minimal active steps required to reach a correct answer. 664 128 256 512 1024 2048          
+
+> 0
+> 20
+> 40
+> 60
+> 80
+> 100
+> Accuracy (%)
+> (a)
+> Qwen3-0.6B  CoT-SFT
+> GLR-5
+> GLR-10
+> GLR-20
+> GLR-50
+> CoT-SFT GLR-5 GLR-10 GLR-20 GLR-50
+> 50
+> 100
+> 200
+> 500
+> 1000
+> 2048
+> Generated tokens
+> (b)
+> 64 128 256 512 1024 2048
+
+Generation length budget (tokens)       
+
+> 0
+> 20
+> 40
+> 60
+> 80
+> 100
+> Accuracy (%)
+> (c)
+> Qwen3-1.7B  CoT-SFT
+> GLR-5
+> GLR-10
+> GLR-20
+> GLR-50
+> GLR-80
+> GLR-100
+> CoT-SFT GLR-5 GLR-10 GLR-20 GLR-50 GLR-80 GLR-100
+
+Method  
+
+> 50
+> 100
+> 200
+> 500
+> 1000
+> 2048
+> Generated tokens
+> (d)
+> Accuracy vs. Generation Length Budget Generated tokens for correct answers
+
+Figure 3: GLR shifts the accuracy–length frontier and reduces generation length on GSM8K. 
+
+Models are fine-tuned on same training sets. Left: Pass@1 accuracy as a function of the generation length budget. GLR improves accuracy under constrained budgets compared to standard CoT (C OT-SFT). Right: Distribution of total generated steps for correct answers. GLR reaches the correct solution in substantially fewer total steps. GLR-K denotes inference with K latent steps. Right y-axes are log-scaled; points at 2048 indicate truncated generations. 
+
+4.2 Results: Accuracy and Generation Length Latent steps shift the accuracy–length frontier. Figures 3 and 4 (left columns) show pass@1 accuracy under increasing generation budgets. At small budgets ( ≤ 256 steps on GSM8K and ≤ 512 
+
+steps on MATH500), C OT-SFT is near zero accuracy, since its explicit CoT trace is usually truncated before the model reaches an answer. GLR is substantially more accurate in this regime. For example, on MATH500 with Qwen3-1.7B at a 512-step budget, C OT-SFT solves nearly 0% of problems, while GLR-10 solves over 40% . Since the budget counts both latent steps and subsequent text tokens, this gain is not due to a larger generation budget. In fact, this equal-step budget is conservative: during the first K GLR steps, the model uses the lightweight transition head rather than the full vocabulary projection. The constrained-budget gain therefore suggests that the initial latent transitions replace part of the explicit reasoning prefix, allowing token decoding to resume from a more advanced reasoning state. This interpretation is supported by the K = 0 ablation in Section 4.4. Disabling latent rollout at inference causes the same GLR model to return to long explicit generations, whereas using even a small number of continuous latent steps substantially shortens successful trajectories. Thus, the constrained-budget gains arise from the use of continuous transitions at inference, not merely from the GLR training recipe or loss masking. 
+
+Successful generations require fewer generated steps. The right columns of Figures 3 and 4 show total generation length conditioned on correctness, counting both latent steps and text tokens. Across model sizes and benchmarks, correct GLR generations require substantially fewer steps than correct COT-SFT generations. On MATH500 with Qwen3-1.7B, the median correct C OT-SFT generation is approximately 2,000 tokens, whereas moderate latent budgets such as GLR-10 and GLR-20 reduce the median to roughly 350 total steps. This reduction is not explicitly optimized: GLR uses no length penalty and is trained only to match local embedding-space transitions while preserving answer generation (Section 3). The shorter successful trajectories therefore suggest that the latent prefix carries part of the reasoning state that C OT-SFT must otherwise externalize through many autoregressive tokens. Appendix D shows the corresponding length distributions over all evaluated examples, including incorrect and truncated generations. 7128 256 512 1024 2048 4096          
+
+> 0
+> 20
+> 40
+> 60
+> 80
+> 100
+> Accuracy (%)
+> (a)
+> Qwen3-0.6B  CoT-SFT
+> GLR-5
+> GLR-10
+> GLR-20
+> GLR-50
+> CoT-SFT GLR-5 GLR-10 GLR-20 GLR-50
+> 50
+> 100
+> 200
+> 500
+> 1000
+> 2000
+> 4096
+> Generated tokens
+> (b)
+> 128 256 512 1024 2048 4096
+
+Generation length budget (tokens)       
+
+> 0
+> 20
+> 40
+> 60
+> 80
+> 100
+> Accuracy (%)
+> (c)
+> Qwen3-1.7B  CoT-SFT
+> GLR-5
+> GLR-10
+> GLR-20
+> GLR-50
+> GLR-80
+> GLR-100
+> CoT-SFT GLR-5 GLR-10 GLR-20 GLR-50 GLR-80 GLR-100
+
+Method  
+
+> 50
+> 100
+> 200
+> 500
+> 1000
+> 2000
+> 4096
+> Generated tokens
+> (d)
+> Accuracy vs. Generation Length Budget Generated tokens for correct answers
+
+Figure 4: Emergent reduction in generation length on complex mathematical reasoning (MATH500). Left: Pass@1 accuracy vs generation budget. GLR shifts the accuracy–length frontier leftward on problems requiring long derivations. Right: Generation length distributions for correct solutions. Moderate latent steps (e.g., GLR-10 or GLR-20) greatly reduce the median number of generated steps compared to the C OT-SFT baseline. Decoding cap is 4096 tokens. 
+
+The latent-step budget controls the accuracy–length tradeoff. The latent-step budget K deter-mines how much of the reasoning prefix is performed in continuous space before token decoding resumes. Its effect is non-monotonic (Figures 3 and 4): moderate values of K yield the strongest accuracy–length tradeoff, whereas large values such as GLR-80 or GLR-100 on Qwen3-1.7B reduce accuracy. This suggests a stability limit for uninterrupted latent reasoning. Since gϕ is trained as a local transition model, repeatedly applying it without discrete token grounding can accumulate errors and move the latent state away from the token-induced reasoning trajectory. We analyze this geometric drift directly in Section 4.4. 
+
+Latent and explicit reasoning are complementary at large budgets. At the largest generation budgets we evaluate (2048 steps for GSM8K and 4096 steps for MATH500), C OT-SFT recovers and often outperforms GLR in final accuracy. Thus, GLR improves the accuracy–length frontier mainly in the constrained-budget regime. One likely factor is accumulated geometric drift: GLR replaces an early discrete prefix with autoregressive latent updates, so local transition errors can move the state away from the token-induced reasoning trajectory before text decoding resumes. This effect may be amplified by training scale: due to compute constraints, our GLR models are trained on only 10K CoT examples, which may not be enough to align the continuous transition head across the full range of token-induced trajectories. These results suggest a complementary role for the two modes: latent transitions can compress early reasoning, while explicit tokens provide a more stable scratchpad when large decoding budgets are available. 
+
+4.3 Generalization to other benchmarks Shorter generations emerge across diverse math benchmarks. We next evaluate GLR on four additional benchmarks: SVAMP, MultiArith, AMC23, and OlympiadBench. These datasets span sim-ple arithmetic, multi-step word problems, and competition-style mathematics. The same qualitative pattern appears across these settings: GLR improves accuracy under constrained generation budgets and reduces the number of generated steps among correct solutions. Full accuracy–length curves and length distributions for MultiArith, AMC23, and OlympiadBench are reported in Appendix C and D. 864 128 256 512 1024 2048    
+
+> Generation length budget (tokens)
+> 0
+> 20
+> 40
+> 60
+> 80
+> 100
+> Accuracy (%)
+> Accuracy vs. generation length budget (SVAMP)
+> CoT-SFT (0.6B)
+> GLR-20 (0.6B)
+> CoT-SFT (1.7B)
+> GLR-10 (1.7B)
+> CoT-SFT (0.6B) GLR-20 (0.6B) CoT-SFT (1.7B) GLR-10 (1.7B)
+> Method
+> 50
+> 100
+> 200
+> 500
+> 1000
+> 2048
+> Generated tokens
+> Generated tokens for correct answers (SVAMP)
+
+Figure 5: GLR reduces redundant reasoning traces on SVAMP. Left: Accuracy vs. generation budget. On these simpler arithmetic problems where C OT-SFT generates long traces, GLR maintains high accuracy under strict budgets ( ≤ 128 or 256 tokens). Right: Generation length distributions for correct answers. While C OT-SFT expends hundreds of generated tokens to solve simple problems, GLR reduces the median generation length to approximately 100 steps. 
+
+Latent transitions bypass redundant steps on simple arithmetic. SVAMP provides a direct test of whether shorter generations reflect useful latent computation rather than only benchmark difficulty (Figure 5). Most problems require simple arithmetic operations, such as addition and subtraction. Nevertheless, C OT-SFT produces long explicit reasoning traces: correct solutions have median lengths of roughly 500–700 tokens depending on model size. This shows that explicit CoT can incur large serialization overhead even when the required computation is short. GLR reduces this overhead sharply, solving the same problems in roughly 100 total generated steps. This gap supports our hypothesis: the latent prefix carries part of the early reasoning state, allowing the model to skip redundant explicit steps and resume decoding closer to the answer-producing part of the trajectory. 
+
+4.4 Understanding Latent Dynamics GLR-0 GLR-5 GLR-10 
+
+> 50
+> 100
+> 200
+> 500
+> 1000
+> 2048
+> Generated tokens
+> GSM8K: Generated tokens for correct answers
+
+Figure 6: Generation length for Qwen3-1.7B GLR model at K = 0 vs. K > 0 on GSM8K. 
+
+Continuous displacements drive generation efficiency. By construction, the transition head 
+
+gϕ predicts continuous embedding-space dis-placement vectors that need not coincide with exact transitions between vocabulary embed-dings. To isolate the effect of this continuous deviation on the reasoning process, we evaluate the Qwen3-1.7B GLR model at K = 0 . In this regime, the model cannot use gϕ at inference and instead follows exact discrete token updates from the first reasoning step. Thus, K = 0 con-trols for the training recipe itself: it uses the same GLR-trained backbone and loss masking, but disables latent rollout at inference. As shown in Figure 6, this exact discrete update regime produces long successful trajectories on GSM8K, with a median length of approximately 1,000 generated tokens. In contrast, using the learned continuous displacements predicted by gϕ for only a few steps ( K ∈ { 5, 10 }) reduces the median length to under 200 tokens. This gap shows that the learned deviations from the token-embedding path are not arbitrary perturbations. They carry useful reasoning state, allowing the model to move away from exact token-by-token transitions and resume decoding closer to an answer-producing region of the reasoning trajectory. The large gap between K = 0 and K > 0 also indicates that the length reduction is not explained solely by the absence of CE on reasoning tokens; it appears only when the learned continuous transitions are actually used at inference. 
+
+Continuous representations transition into explicit text. We also inspect the text generated immediately after the K latent updates. Appendix F shows examples where decoding resumes mid-reasoning, using problem-specific quantities that would normally appear earlier in an explicit CoT trace. This provides direct qualitative support for our main interpretation: the latent prefix does more than shorten the visible text; it moves the model into a partially advanced reasoning state before standard decoding resumes. 95 Conclusions 
+
+We introduced Geometric Latent Reasoning (GLR), formulating LLM reasoning as a continuous path-approximation problem within the pretrained token-embedding space. By training a lightweight transition head to predict local, CoT-anchored directional updates, GLR shifts computation from discrete text to continuous representations. Our evaluations on mathematical benchmarks demonstrate that replacing early explicit reasoning with these latent steps implicitly induces shorter generations, reaching correct answers using substantially fewer generated tokens. By exposing a controllable inference-time tradeoff between latent transitions, output length, and accuracy, GLR provides a principled geometric foundation for token-efficient reasoning. 
+
+## References 
+
+[1] Jason Wei, Xuezhi Wang, Dale Schuurmans, Maarten Bosma, Fei Xia, Ed Chi, Quoc V Le, Denny Zhou, et al. Chain-of-thought prompting elicits reasoning in large language models. 
+
+Advances in neural information processing systems , 35:24824–24837, 2022. [2] Xiang Yue, Xingwei Qu, Ge Zhang, Yao Fu, Wenhao Huang, Huan Sun, Yu Su, and Wenhu Chen. Mammoth: Building math generalist models through hybrid instruction tuning. arXiv preprint arXiv:2309.05653 , 2023. [3] Zhihong Shao, Peiyi Wang, Qihao Zhu, Runxin Xu, Junxiao Song, Xiao Bi, Haowei Zhang, Mingchuan Zhang, YK Li, Yang Wu, et al. Deepseekmath: Pushing the limits of mathematical reasoning in open language models. arXiv preprint arXiv:2402.03300 , 2024. [4] Shibo Hao, Sainbayar Sukhbaatar, DiJia Su, Xian Li, Zhiting Hu, Jason Weston, and Yuandong Tian. Training large language models to reason in a continuous latent space. arXiv preprint arXiv:2412.06769 , 2024. [5] Yige Xu, Xu Guo, Zhiwei Zeng, and Chunyan Miao. Softcot: Soft chain-of-thought for efficient reasoning with llms. arXiv preprint arXiv:2502.12134 , 2025. [6] Zhenyi Shen, Hanqi Yan, Linhai Zhang, Zhanghao Hu, Yali Du, and Yulan He. Codi: Compressing chain-of-thought into continuous space via self-distillation. arXiv preprint arXiv:2502.21074 , 2025. [7] DiJia Su, Hanlin Zhu, Yingchen Xu, Jiantao Jiao, Yuandong Tian, and Qinqing Zheng. Token assorted: Mixing latent and text tokens for improved language model reasoning. arXiv preprint arXiv:2502.03275 , 2025. [8] An Yang, Anfeng Li, Baosong Yang, Beichen Zhang, Binyuan Hui, Bo Zheng, Bowen Yu, Chang Gao, Chengen Huang, Chenxu Lv, et al. Qwen3 technical report. arXiv preprint arXiv:2505.09388 , 2025. [9] Niklas Muennighoff, Zitong Yang, Weijia Shi, Xiang Lisa Li, Li Fei-Fei, Hannaneh Hajishirzi, Luke Zettlemoyer, Percy Liang, Emmanuel Candès, and Tatsunori Hashimoto. s1: Simple test-time scaling. arXiv preprint arXiv:2501.19393 , 2025. [10] Charlie Snell, Jaehoon Lee, Kelvin Xu, and Aviral Kumar. Scaling llm test-time compute opti-mally can be more effective than scaling model parameters. arXiv preprint arXiv:2408.03314 ,2024. [11] Daya Guo, Dejian Yang, Haowei Zhang, Junxiao Song, Peiyi Wang, Qihao Zhu, Runxin Xu, Ruoyu Zhang, Shirong Ma, Xiao Bi, et al. Deepseek-r1: Incentivizing reasoning capability in llms via reinforcement learning. arXiv preprint arXiv:2501.12948 , 2025. [12] Xuezhi Wang, Jason Wei, Dale Schuurmans, Quoc Le, Ed Chi, Sharan Narang, Aakanksha Chowdhery, and Denny Zhou. Self-consistency improves chain of thought reasoning in language models. arXiv preprint arXiv:2203.11171 , 2022. [13] Shunyu Yao, Dian Yu, Jeffrey Zhao, Izhak Shafran, Tom Griffiths, Yuan Cao, and Karthik Narasimhan. Tree of thoughts: Deliberate problem solving with large language models. Ad-vances in neural information processing systems , 36:11809–11822, 2023. 10 [14] Miles Turpin, Julian Michael, Ethan Perez, and Samuel Bowman. Language models don’t always say what they think: Unfaithful explanations in chain-of-thought prompting. Advances in Neural Information Processing Systems , 36:74952–74965, 2023. [15] Tamera Lanham, Anna Chen, Ansh Radhakrishnan, Benoit Steiner, Carson Denison, Danny Hernandez, Dustin Li, Esin Durmus, Evan Hubinger, Jackson Kernion, et al. Measuring faithfulness in chain-of-thought reasoning. arXiv preprint arXiv:2307.13702 , 2023. [16] Yuntian Deng, Kiran Prasad, Roland Fernandez, Paul Smolensky, Vishrav Chaudhary, and Stuart Shieber. Implicit chain of thought reasoning via knowledge distillation. arXiv preprint arXiv:2311.01460 , 2023. [17] Yige Xu, Xu Guo, Zhiwei Zeng, and Chunyan Miao. Softcot++: Test-time scaling with soft chain-of-thought reasoning. arXiv preprint arXiv:2505.11484 , 2025. [18] Zhen Zhang, Xuehai He, Weixiang Yan, Ao Shen, Chenyang Zhao, Shuohang Wang, Yelong Shen, and Xin Eric Wang. Soft thinking: Unlocking the reasoning potential of llms in continuous concept space. arXiv preprint arXiv:2505.15778 , 2025. [19] Zhenrui Yue, Bowen Jin, Huimin Zeng, Honglei Zhuang, Zhen Qin, Jinsung Yoon, Lanyu Shang, Jiawei Han, and Dong Wang. Hybrid latent reasoning via reinforcement learning. arXiv preprint arXiv:2505.18454 , 2025. [20] Hugging Face. Open r1: A fully open reproduction of deepseek-r1, January 2025. [21] Anton Lozhkov, Hynek Kydlíˇ cek, Loubna Ben Allal, Guilherme Penedo, Edward Beeching, Quentin Gallouédec, Nathan Habib, Lewis Tunstall, and Leandro von Werra. Openr1-math-220k. 
+
+https://huggingface.co/datasets/open-r1/OpenR1-Math-220k , 2025. [22] Volodymyr Mnih, Koray Kavukcuoglu, David Silver, Andrei A Rusu, Joel Veness, Marc G Bellemare, Alex Graves, Martin Riedmiller, Andreas K Fidjeland, Georg Ostrovski, et al. Human-level control through deep reinforcement learning. nature , 518(7540):529–533, 2015. [23] Kaiming He, Haoqi Fan, Yuxin Wu, Saining Xie, and Ross Girshick. Momentum contrast for unsupervised visual representation learning. In Proceedings of the IEEE/CVF conference on computer vision and pattern recognition , pages 9729–9738, 2020. [24] Karl Cobbe, Vineet Kosaraju, Mohammad Bavarian, Mark Chen, Heewoo Jun, Lukasz Kaiser, Matthias Plappert, Jerry Tworek, Jacob Hilton, Reiichiro Nakano, et al. Training verifiers to solve math word problems. arXiv preprint arXiv:2110.14168 , 2021. [25] Dan Hendrycks, Collin Burns, Saurav Kadavath, Akul Arora, Steven Basart, Eric Tang, Dawn Song, and Jacob Steinhardt. Measuring mathematical problem solving with the math dataset. 
+
+arXiv preprint arXiv:2103.03874 , 2021. [26] Subhro Roy and Dan Roth. Solving general arithmetic word problems. In Proceedings of the 2015 conference on empirical methods in natural language processing , pages 1743–1752, 2015. [27] An Yang, Beichen Zhang, Binyuan Hui, Bofei Gao, Bowen Yu, Chengpeng Li, Dayiheng Liu, Jianhong Tu, Jingren Zhou, Junyang Lin, et al. Qwen2. 5-math technical report: Toward mathematical expert model via self-improvement. arXiv preprint arXiv:2409.12122 , 2024. [28] Chaoqun He, Renjie Luo, Yuzhuo Bai, Shengding Hu, Zhen Thai, Junhao Shen, Jinyi Hu, Xu Han, Yujie Huang, Yuxiang Zhang, et al. Olympiadbench: A challenging benchmark for promoting agi with olympiad-level bilingual multimodal scientific problems. In Proceedings of the 62nd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) , pages 3828–3850, 2024. [29] Arkil Patel, Satwik Bhattamishra, and Navin Goyal. Are nlp models really able to solve simple math word problems? In Proceedings of the 2021 conference of the North American chapter of the association for computational linguistics: human language technologies , pages 2080–2094, 2021. 11 [30] Leo Gao, Jonathan Tow, Baber Abbasi, Stella Biderman, Sid Black, Anthony DiPofi, Charles Foster, Laurence Golding, Jeffrey Hsu, Alain Le Noac’h, Haonan Li, Kyle McDonell, Niklas Muennighoff, Chris Ociepa, Jason Phang, Laria Reynolds, Hailey Schoelkopf, Aviya Skowron, Lintang Sutawika, Eric Tang, Anish Thite, Ben Wang, Kevin Wang, and Andy Zou. The language model evaluation harness, 07 2024. [31] Thomas Wolf, Lysandre Debut, Victor Sanh, Julien Chaumond, Clement Delangue, Anthony Moi, Pierric Cistac, Tim Rault, Rémi Louf, Morgan Funtowicz, et al. Huggingface’s transform-ers: State-of-the-art natural language processing. arXiv preprint arXiv:1910.03771 , 2019. [32] Woosuk Kwon, Zhuohan Li, Siyuan Zhuang, Ying Sheng, Lianmin Zheng, Cody Hao Yu, Joseph E. Gonzalez, Hao Zhang, and Ion Stoica. Efficient memory management for large lan-guage model serving with pagedattention. In Proceedings of the ACM SIGOPS 29th Symposium on Operating Systems Principles , 2023. 12 A Hyperparameters 
+
+Both the C OT-SFT baseline and our proposed GLR models were fine-tuned using the identical underlying language modeling hyperparameters to ensure a strictly controlled comparison. Training was conducted using bfloat16 mixed precision on one Nvidia H100 (80GB) GPU. The models were trained for 5 epochs with a cosine learning rate scheduler and a 5% warmup ratio. To manage memory with a large maximum sequence length of 8,192 tokens, we employed gradient checkpointing and a micro-batch size of 1, utilizing 16 gradient accumulation steps to achieve an effective global batch size of 16. Table 1 details the standard optimization hyperparameters. Table 1: Standard fine-tuning hyperparameters shared across all models. 
+
+Hyperparameter Value 
+
+Training Epochs 5Max Sequence Length 8,192 Effective Global Batch Size 16 Micro-batch Size 1Gradient Accumulation Steps 16 Optimizer AdamW Adam β1, β 2 0.9, 0.95 Peak Learning Rate 4 × 10 −5
+
+Learning Rate Schedule Cosine Warmup Ratio 0.05 Weight Decay 1 × 10 −4
+
+Precision bfloat16 
+
+Gradient Checkpointing True 
+
+GLR-Specific Configurations. For models equipped with Geometric Latent Reasoning, the token embedding layer was frozen ( freeze_input_embeddings=True ) as discussed in Section 4.1. The transition head was trained using Mean Squared Error (MSE) to predict the directional displacement vectors ( ∆ei). The transition objective discount factor ( γ, representing the decay over the reasoning sequence) was set to 0.999 . Finally, aligned with our formulation in Section 3, we explicitly disabled cross-entropy supervision on the latent replacement tokens ( ce_latent_tokens=False ) during the second forward pass, ensuring the transition head was optimized strictly via the geometric transition objective. 
+
+## B Dataset and Benchmark Details 
+
+This section provides additional details regarding the datasets used for fine-tuning our models and the benchmarks used for evaluation. 
+
+B.1 Training Data 
+
+All models (C OT-SFT and GLR) were trained on a controlled subset of the Mixture-of-Thoughts 
+
+dataset, provided as part of the Open-R1 initiative [20, 21]. • Dataset Source: https://huggingface.co/datasets/open-r1/ Mixture-of-Thoughts 
+
+• Filtering and Processing: We randomly sampled exactly 10,000 examples from the math 
+
+split. This dataset provides high-quality, supervised chain-of-thought traces ideal for anchor-ing our geometric transition objective. To fit the computational limits of our training setup, we filtered out any examples where the total tokenized length (prompt + reasoning trace + answer) exceeded 8,192 tokens. 13 B.2 Evaluation Benchmarks 
+
+To assess both foundational arithmetic and highly complex mathematical reasoning, we evaluated our models across 6 distinct benchmarks under greedy decoding. The benchmarks are summarized in Table 2. Table 2: Summary of mathematical reasoning benchmarks used for evaluation. 
+
+Benchmark Num. Samples Problem Type Difficulty Level 
+
+GSM8K [24] 1,319 Arithmetic Word Problems Foundational SVAMP [29] 300 Arithmetic Word Problems Foundational MultiArith [26] 180 Multi-step Arithmetic Foundational MATH500 [25] 500 Advanced Mathematics Hard AMC23 [27] 40 Competition Mathematics Very Hard OlympiadBench [28] 674 Olympiad-level Mathematics Extremely Hard 
+
+Foundational Arithmetic. 
+
+• GSM8K https://huggingface.co/datasets/openai/gsm8k : A standard dataset of high-quality grade-school math word problems requiring 2 to 8 steps of basic arithmetic. • SVAMP https://huggingface.co/datasets/ChilleD/SVAMP : A challenge set created by applying varying structures to simple word problems. As discussed in Section 4.4, SVAMP is particularly useful for observing how models over-generate on simple logic. • MultiArith https://huggingface.co/datasets/ChilleD/MultiArith : A dataset specifically focused on arithmetic word problems that require multiple reasoning steps to resolve. 
+
+Advanced and Competition Mathematics. 
+
+• MATH500 https://huggingface.co/datasets/HuggingFaceH4/MATH-500 : A 500-problem subset of the MATH dataset, encompassing diverse, structurally complex domains including algebra, geometry, and calculus. • AMC23 https://huggingface.co/datasets/math-ai/amc23 : A collection of recent problems from the American Mathematics Competitions (AMC), testing advanced logical deduction and theorem application. • OlympiadBench https://huggingface.co/datasets/Hothan/OlympiadBench/ viewer/OE_TO_maths_en_COMP : The math-specific subset of OlympiadBench, represent-ing the highest tier of problem difficulty (e.g., IMO-level problems) requiring rigorous, long-form derivations. 
+
+## C Results on other benchmarks 
+
+This section provides the full accuracy–length tradeoff curves and generation length distributions (for correct answers) on the remaining three evaluation benchmarks. Figures 7, 8, and 9 display the results for AMC23, OlympiadBench, and MultiArith, respectively. Consistent with the main findings on GSM8K, MATH500, and SVAMP, GLR shifts the accuracy–length frontier and reduces the median number of generated steps required to solve the problems. This confirms that the emergent reduction in generation length generalizes across both foundational multi-step arithmetic and advanced competition mathematics. 14 64 128 256 512 1024 2048 4096 
+
+Generation length budget (tokens) 
+
+> 0
+> 20
+> 40
+> 60
+> 80
+> 100
+> Accuracy (%)
+
+Accuracy vs. generation length budget (AMC23)    
+
+> CoT-SFT (0.6B)
+> GLR-20 (0.6B)
+> CoT-SFT (1.7B)
+> GLR-10 (1.7B)
+> CoT-SFT (0.6B) GLR-20 (0.6B) CoT-SFT (1.7B) GLR-10 (1.7B)
+
+Method 
+
+> 50
+> 100
+> 200
+> 500
+> 1000
+> 2000
+> 4096
+> Generated tokens
+
+Generated tokens for correct answers (AMC23) Figure 7: Accuracy and generation length on AMC23. GLR reduces the median generation length on competition mathematics). 64 128 256 512 1024 2048 4096 
+
+Generation length budget (tokens) 
+
+> 0
+> 20
+> 40
+> 60
+> 80
+> 100
+> Accuracy (%)
+
+Accuracy vs. generation length budget (OlympiadBench)    
+
+> CoT-SFT (0.6B)
+> GLR-20 (0.6B)
+> CoT-SFT (1.7B)
+> GLR-10 (1.7B)
+> CoT-SFT (0.6B) GLR-20 (0.6B) CoT-SFT (1.7B) GLR-10 (1.7B)
+
+Method 
+
+> 50
+> 100
+> 200
+> 500
+> 1000
+> 2000
+> 4096
+> Generated tokens
+
+Generated tokens for correct answers (OlympiadBench) 
+
+Figure 8: Accuracy and generation length on OlympiadBench. GLR shifts the accuracy–length frontier on Olympiad-level mathematical reasoning. 64 128 256 512 1024 2048 
+
+Generation length budget (tokens) 
+
+> 0
+> 20
+> 40
+> 60
+> 80
+> 100
+> Accuracy (%)
+
+Accuracy vs. generation length budget (MultiArith)    
+
+> CoT-SFT (0.6B)
+> GLR-20 (0.6B)
+> CoT-SFT (1.7B)
+> GLR-10 (1.7B)
+> CoT-SFT (0.6B) GLR-20 (0.6B) CoT-SFT (1.7B) GLR-10 (1.7B)
+
+Method 
+
+> 50
+> 100
+> 200
+> 500
+> 1000
+> 2048
+> Generated tokens
+
+Generated tokens for correct answers (MultiArith) 
+
+Figure 9: Accuracy and generation length on MultiArith. GLR reduces the generated steps required for foundational multi-step arithmetic problems. 
+
+## D Generated token distribution over full benchmark 
+
+In the main text (Section 4.2), we report generation lengths exclusively for correct answers to isolate the number of model steps required for a successful solution. In this section, we present the generation length distributions across all evaluated problems, including incorrect answers and generations that reached the decoding cap. Figures 10 and 11 show these full distributions for the primary benchmarks, while Figures 12, 13, and 14 provide the distributions for the remaining datasets. These figures demonstrate that GLR produces shorter generations across the entire evaluation set. This indicates that the method reduces the overall test-time generation length, rather than only producing shorter outputs when the model successfully reaches the correct answer. 15 CoT-SFT GLR-5 GLR-10 GLR-20 GLR-50 
+
+Method 
+
+> 50
+> 100
+> 200
+> 500
+> 1000
+> 2048
+> Generated tokens
+
+Qwen3-0.6B       
+
+> CoT-SFT GLR-5 GLR-10 GLR-20 GLR-50 GLR-80 GLR-100
+
+Method 
+
+Qwen3-1.7B 
+
+Generated tokens for all answers (GSM8K) Figure 10: Distribution of total generated tokens across all answers on GSM8K. CoT-SFT GLR-5 GLR-10 GLR-20 GLR-50 
+
+Method 
+
+> 50
+> 100
+> 200
+> 500
+> 1000
+> 2000
+> 4096
+> Generated tokens
+
+Qwen3-0.6B       
+
+> CoT-SFT GLR-5 GLR-10 GLR-20 GLR-50 GLR-80 GLR-100
+
+Method 
+
+Qwen3-1.7B 
+
+Generated tokens for all answers (MATH500) 
+
+Figure 11: Distribution of total generated tokens across all answers on MATH500. CoT-SFT (0.6B) GLR-20 (0.6B) CoT-SFT (1.7B) GLR-10 (1.7B) 
+
+# Method 
+
+50 
+
+100 
+
+200 
+
+500 
+
+1000 
+
+2000 
+
+4096 
+
+> Generated tokens
+
+## Generated token distribution for all answers (AMC23) 
+
+Figure 12: Distribution of total generated tokens across all answers on AMC23. 16 CoT-SFT (0.6B) GLR-20 (0.6B) CoT-SFT (1.7B) GLR-10 (1.7B) 
+
+# Method 
+
+50 
+
+100 
+
+200 
+
+500 
+
+1000 
+
+2000 
+
+4096 
+
+> Generated tokens
+
+## Generated token distribution for all answers (OlympiadBench) Figure 13: Distribution of total generated tokens across all answers on OlympiadBench. CoT-SFT (0.6B) GLR-20 (0.6B) CoT-SFT (1.7B) GLR-10 (1.7B) 
+
+# Method 
+
+50 
+
+100 
+
+200 
+
+500 
+
+1000 
+
+2048 
+
+> Generated tokens
+
+## Generated token distribution for all answers (MultiArith) 
+
+Figure 14: Distribution of total generated tokens across all answers on MultiArith. 
+
+## E Compute Accounting 
+
+Our primary efficiency metric counts latent steps and decoded tokens equally. This provides a hardware-independent comparison of sequential model steps, but it is conservative for GLR. A standard decoded token requires a Transformer forward pass followed by the full vocabulary projection and token selection. In contrast, a latent step requires the Transformer forward pass followed only by the transition head gϕ, and does not evaluate the vocabulary head. Thus, GLR reduces generation cost through two mechanisms: it shortens the number of sequential steps needed for successful solutions, and it reduces the number of vocabulary-head evaluations during the latent rollout. For Qwen3-1.7B, the vocabulary head contains roughly 300M parameters, whereas the GLR transition head contains roughly 4M parameters. Therefore, during the first K latent steps, GLR replaces the large vocabulary projection with a much smaller learned transition. This does not make a latent step equivalent to a 4M-parameter operation, since the Transformer forward pass is still required. However, it does mean that counting a latent step and a decoded token equally understates the reduction in vocabulary-projection from latent rollout. We do not report wall-clock latency because our current GLR decoder is implemented as a custom HuggingFace forward-pass modification, while the C OT-SFT baseline is decoded with vLLM. 17 GSM8K, Qwen3-1.7B, GLR-20  
+
+> <|im_start|> user
+> Question: The ratio of men to women on a bus is 5:9. If the total number of passengers on the bus is 84, and 20 women alight from the bus at the next stop, how many women have remained on the bus?\nAnswer: <|im_end|> <|im_start|> assistant
+> <think> {20 latent steps} 54 - 20 = 34.
+> </think> The ratio of men to women on the bus is 5:9. To find the number of men and women, we first determine the total parts in the ratio: \n\\(5 + 9 = 14\\). \n\nSince the total number of passengers is 84, each part corresponds to: \n\\(\\frac{84}{14} = 6\\). \n\nCalculating the number of men and women: \n- Men: \\(5 \\times 6 = 30\\) \n- Women: \\(9 \\times 6 = 54\\) \n\nAfter 20 women alight, the remaining number of women is: \n\\(54 - 20 = 34\\). \n\nThe final answer is \\(\\boxed{34}\\) <|im_end|>
+
+Figure 15: Qualitative example of latent-to-text transition. A Qwen3-1.7B GLR-20 generation on GSM8K. After 20 latent steps inside the reasoning span, the model resumes explicit text generation mid-solution, directly using the relevant quantity and operation ( 54 − 20 = 34 ) before emitting the final answer. We display the continuous updates as {20 latent steps} ; special tokens are shown in teal and latent-step placeholders in orange. 
+
+> GSM8K, Qwen3-1.7B, GLR-50
+> <|im_start|> user
+> Question: The ratio of men to women on a bus is 5:9. If the total number of passengers on the bus is 84, and 20 women alight from the bus at the next stop, how many women have remained on the bus?\nAnswer: <|im_end|> <|im_start|> assistant
+> <think> {50 latent steps} </think> he ratio of men to women on the bus is 5:9. The total number of passengers is 84. First, we calculate the number of men and women:\n\n1. The total parts in the ratio are \\(5 + 9 = 14\\).\n2. Number of men: \\(\\frac{5}{14} \\times 84 = 30\\).\n3. Number of women: \\(\\frac{9}{14} \\times 84 = 54\\).\n\nAt the next stop, 20 women alight. The remaining women on the bus are:\n\\[54 - 20 = 34\\].\n\n\\boxed{34} <|im_end|>
+
+Figure 16: Qualitative example of latent-to-text transition. A Qwen3-1.7B GLR-50 generation on GSM8K. We display the continuous updates as {50 latent steps} ; special tokens are shown in teal and latent-step placeholders in orange. These implementations have different serving stacks and optimization levels, making direct latency comparisons confounded. A fair end-to-end speed comparison requires an optimized GLR serving implementation, which we leave to future work. 
+
+## F Qualitative Examples of Latent-to-Text Transitions 
+
+We provide qualitative examples illustrating how GLR transitions from continuous latent updates back to explicit token generation. In each example, {K latent steps} denotes the K continuous latent steps performed inside the reasoning span; these steps are not decoded into text. The tokens shown after {K latent steps} are the first explicit tokens generated once standard decoding resumes. These examples complement the quantitative results in Section 4.4: after the latent prefix, the model often continues from a problem-specific intermediate state rather than restarting a full explicit chain-of-thought trace. Figure 15 shows a GSM8K example from Qwen3-1.7B with K = 20 latent steps. The model resumes text generation with the relevant operation, 54 − 20 = 34 , and then emits the final answer. 18 GSM8K, Qwen3-1.7B, GLR-80 
+
+> <|im_start|> user
+> Question: The ratio of men to women on a bus is 5:9. If the total number of passengers on the bus is 84, and 20 women alight from the bus at the next stop, how many women have remained on the bus?\nAnswer: <|im_end|> <|im_start|> assistant
+> <think> {80 latent steps} </think> The ratio of men to women on the bus is 5:9. The total number of passengers is 84. First, we calculate the total parts in the ratio:\n\n\\[\n5 + 9 = 14 \\text{ parts}\n\\]\n\nEach part corresponds to:\n\n\\[\n84 \\div 14 = 6\n\\]\n\nThus, the number of men is \\(5 \\times 6 = 30\\) and the number of women is \\(9 \\times 6 = 54\\).\n\nAt the next stop, 20 women alight. The remaining number of women is:\n\n\\[\n54 - 20 = 34\n\\]\n\n\\[\n\\boxed{34}\n\\] <|im_end|>
+
+Figure 17: Qualitative example of latent-to-text transition. A Qwen3-1.7B GLR-80 generation on GSM8K. We display the continuous updates as {80 latent steps} ; special tokens are shown in teal and latent-step placeholders in orange. 
+
+## G Future Work 
+
+Future work should scale GLR to larger models and substantially larger reasoning datasets, as our current experiments are limited by compute and use only a 10K-example subset. Another promising direction is to replace deterministic path approximation with diffusion- or flow-style latent trajectory modeling, where test-time scaling can be viewed as sampling multiple points or paths in continuous reasoning space. Finally, GLR should be evaluated beyond mathematics, including science, code generation, theorem proving, planning, and multi-hop reasoning, to test whether the observed compression effect is domain-general. 
+
+## H Limitations 
+
+This study is limited by training scale: due to compute constraints, we fine-tune only relatively small Qwen3 models on 10K CoT examples, which may understate the potential of GLR and contribute to drift at large latent budgets. Our evaluation is also focused on mathematical reasoning, so it remains unclear whether the same accuracy–length tradeoff holds for other domains such as science, code, and general reasoning. Finally, replacing explicit reasoning with continuous states makes part of the model’s computation less interpretable. Although GLR reduces both generated steps and vocabulary-head evaluations, we do not report wall-clock latency because our GLR inference currently uses a custom HuggingFace implementation while the C OT-SFT baseline uses vLLM. Consequently, our efficiency claims are limited to hardware-independent generation and projection-count accounting rather than optimized serving latency. 
+
+## I Broader Impacts 
+
+This work frames latent reasoning as a geometric path-approximation problem in a model’s pretrained token-embedding space, and shows that GLR can replace early explicit CoT tokens with continuous latent steps to induce shorter generations. This perspective may help reduce the inference cost of reasoning-heavy LLMs by exposing an explicit tradeoff between latent computation budget, output length, and accuracy. However, because GLR hides part of the reasoning trajectory inside non-verbalized embedding-space states, it may make model behavior harder to inspect than standard CoT decoding. Future uses of GLR-style methods should therefore pair token-efficient latent inference with careful answer verification, drift monitoring, and tools for interpreting latent-to-text transitions. 19

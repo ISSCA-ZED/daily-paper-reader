@@ -1,0 +1,223 @@
+Title: Entity Binding Failures in Speech LLM Reasoning: Diagnosis and Chain-of-Thought Intervention
+
+URL Source: https://arxiv.org/pdf/2606.04474v1
+
+Published Time: Thu, 04 Jun 2026 00:36:28 GMT
+
+Number of Pages: 6
+
+Markdown Content:
+# Entity Binding Failures in Speech LLM Reasoning: Diagnosis and Chain-of-Thought Intervention 
+
+# Ming-Hao Hsu 1, Xiaohai Tian 2, Jun Zhang 2, Zhizheng Wu 1,∗∗  
+
+> 1
+
+# School of Data Science, The Chinese University of Hong Kong, Shenzhen, China  
+
+> 2
+
+# ByteDance, China 
+
+hsuminghao1006@gmail.com, xiaohai171@gmail.com, zhangjun.jarry@bytedance.com, wuzhizheng@cuhk.edu.cn 
+
+# Abstract 
+
+Speech Large Language Models (SLLMs) underperform their text counterparts on complex reasoning. We reveal that this modality gap is not a uniform cognitive deficit. Evaluating three diverse SLLMs, we show speech-to-text (S2T) matches or exceeds text-to-text (T2T) on spatial, syntactic, and factual tasks. However, on logical tasks requiring entity tracking, S2T accuracy collapses to chance. We diagnose this localized degra-dation as an entity binding failure: continuous speech features cause models to lose precise entity-property associations during implicit reasoning. To resolve this, we propose Entity-Aware Chain-of-Thought (EA-CoT), forcing SLLMs to explicitly enu-merate entities and bind them to claims before reasoning. Strik-ingly, EA-CoT bridges the gap, even when spoken names are misrecognized, yielding up to a 24.4% absolute accuracy im-provement. Ablations confirm these gains stem entirely from explicit semantic binding, reframing the gap as a resolvable bot-tleneck. 
+
+Index Terms : speech language models, reasoning, entity bind-ing, chain-of-thought, modality gap 
+
+# 1. Introduction 
+
+Speech Large Language Models (SLLMs) can directly process spoken input, enabling natural conversational interactions with-out relying on cascaded text transcription [1, 2, 3, 4]. However, recent benchmarking indicates that these models consistently underperform their text-based counterparts on complex reason-ing tasks [5, 6, 7, 8]. Previous studies have provided valuable macroscopic insights into this speech-to-text (S2T) versus text-to-text (T2T) modality gap, often attributing it to generalized in-formation dilution or modality-level representation divergence [9, 10, 11, 12]. Building upon these broad observations, we investigate the modality gap at a fine-grained, task-specific level. By evalu-ating two architecturally diverse SLLMs (Qwen2.5-Omni and Phi-4-Multimodal) across multiple reasoning categories, we re-veal that the performance degradation is highly uneven. On many tasks, such as spatial navigation, syntactic ordering, and factual understanding, S2T performance is fully comparable to T2T performance. Instead, the severe modality gap is dispro-portionately concentrated in specific categories, most notably logical reasoning tasks that require entity tracking. For instance, on the web of lies task, S2T accuracy across both models plum-mets to chance levels, while T2T baselines range up to 92%. We diagnose that this localized degradation stems from the inherent nature of speech encoding. To efficiently process continuous audio sequences, SLLM encoders heavily rely on 
+
+> ** indicates the corresponding author.
+
+temporal pooling and downsampling mechanisms [13, 14, 15, 16]. While these operations effectively extract global semantic information—preserving performance on general comprehen-sion and spatial tasks—they inevitably blur fine-grained acous-tic details and discrete token boundaries. Consequently, when the model attempts to implicitly track entities and their chang-ing properties, the smoothed-out continuous features cause it to lose track of precise details. This manifests as entity binding failures: the model understands the overall context but fails to maintain strict associations between specific entities and their changing states within its deep internal reasoning layers. To overcome this structural bottleneck, we propose Entity-Aware Chain-of-Thought (EA-CoT), an inference-time inter-vention that bypasses the fragile implicit acoustic tracking. EA-CoT forces the SLLM to explicitly enumerate entities and bind them to their respective claims in the generated text space be-fore executing step-by-step reasoning. Strikingly, enforcing this explicit structural binding allows S2T performance to recover to near-T2T levels. Furthermore, we observe that this intervention succeeds even if the SLLM’s transcription of the entity name is phonetically altered or not totally accurate (e.g., mapping the spoken name “Ka” to “Cass”). As long as the model establishes a consistent textual anchor in the CoT to bind properties to, the logical reasoning chain remains intact. This profoundly demon-strates that the critical failure in SLLM logical reasoning is not merely a superficial speech recognition error, but a structural semantic binding failure caused by acoustic detail loss. Our core contributions are: • Task-Specific Gap Diagnosis: We demonstrate that the S2T/T2T modality gap is not a uniform cognitive deficit, but is heavily concentrated in entity-tracking tasks. Excluding these, S2T reasoning is largely comparable to T2T. • Mechanistic Explanation: We link SLLM logical failures to the loss of acoustic details through encoder pooling, showing that blurred token boundaries disrupt implicit entity binding while global semantics remain preserved. • Effective Targeted Intervention: We introduce EA-CoT to force explicit entity-property binding. Compared against structured control prompts on other tasks, this targeted in-tervention uniquely bridges the modality gap in logical rea-soning (yielding up to a +24.4 pp improvement) and remains effective even when exact entity names are misrecognized. 
+
+# 2. Related Work 
+
+The Speech-Text Modality Gap. Recent end-to-end Speech Large Language Models (SLLMs) achieve strong conversa-tional abilities but consistently underperform their text coun-terparts on complex reasoning benchmarks [5, 6, 7, 17]. Prior 
+
+> arXiv:2606.04474v1 [cs.CL] 3 Jun 2026
+
+studies have approached this modality gap primarily from a macroscopic perspective. Layer-wise and representation-level analyses attribute the performance degradation to generalized information dilution [9] or modality alignment divergence [10], suggesting that the continuous and redundant nature of speech tokens hinders stable late-layer decisions. Concurrent works at-tempt to close this gap via training-time cross-modal distillation or trajectory alignment [18, 19]. Building upon these founda-tional observations, our work takes a task-specific diagnostic approach. We demonstrate that the SLLM reasoning gap is not a uniform cognitive deficit, but rather a highly localized fail-ure. Continuous speech encoding preserves global semantics for most tasks but specifically disrupts the precise tracking re-quired for entity-centric logical reasoning. 
+
+Entity Binding in Foundation Models. The “binding problem”—the cognitive capacity to robustly associate specific entities with their dynamic properties and states—is a recog-nized vulnerability in neural architectures [20]. Mechanistic in-terpretability studies reveal that text-based LLMs rely on spe-cialized internal vectors to maintain these links [21], and entity tracking remains fragile even in pure text scenarios [22, 23]. Similarly, binding failures have been shown to drive multi-object reasoning errors in Vision-Language Models [24]. We are the first to extend this critical theoretical lens to the speech modality. We identify that the temporal pooling and downsam-pling mechanisms inherent to SLLM encoders, while effective for extracting global semantics, severely blur the discrete token boundaries required for semantic binding. This architectural trait makes implicit spoken entity tracking catastrophically vul-nerable, establishing binding failure as the primary bottleneck of the SLLM modality gap. 
+
+Chain-of-Thought for Modality Adaptation. Chain-of-Thought (CoT) prompting fundamentally enhances LLM rea-soning by externalizing intermediate deductive steps [25, 26, 27, 28, 29]. In the audio domain, recent multimodal CoT adap-tations primarily focus on analyzing explicit acoustic events (e.g., environmental sounds) [30] or internalizing ASR tran-scripts to reduce response latency [31]. However, applying generic CoT (e.g., “Let us think step by step”) to SLLMs on logical tasks yields minimal improvement because the implicit mapping between continuous audio features and discrete en-tities is already corrupted. Unlike prior methods, our Entity-Aware CoT (EA-CoT) serves as a targeted structural interven-tion. Rather than relying on fragile implicit acoustic tracking, EA-CoT forces the model to explicitly enumerate and project blurred acoustic entities into a stable text space before reason-ing. By establishing robust textual anchors, EA-CoT success-fully bypasses the modality-induced binding bottleneck, even when phonetic recognition is imperfect. 
+
+# 3. Method 
+
+3.1. Per-Task Gap Analysis 
+
+Rather than reporting a single aggregate modality gap, we eval-uate speech and text inputs separately on each BBH category. We use four categories from the VoiceBench BBH split [5, 32]: 
+
+hyperbaton , navigate , sports understanding , and web of lies , to-taling 1,000 items (250 per category). Each item is presented as both synthesized speech and plain text to the same model, en-abling paired accuracy comparisons. This decomposition pre-cisely reveals which reasoning abilities are most affected by the speech modality. Baseline     
+
+> EA-CoT
+> ~256 tokens
+> ✗
+> Entity binding failure
+> ~1024 tokens (structured reasoning)
+> ✓
+> Explicit entity binding
+> Audio / Text Speech LLM Answer
+> Audio / Text Speech LLM
+> Entity
+> Enum
+> Claim
+> Record
+> Step-by-
+> Step Answer
+
+Figure 1: Method overview. The baseline generates a direct answer within 256 tokens, during which entity binding can fail for speech inputs. EA-CoT instructs the model to enumerate entities, record claims, and reason step by step within 1,024 tokens, converting implicit binding into explicit text. 
+
+3.2. Task-Specific Structured Chain-of-Thought 
+
+To address the entity binding bottleneck diagnosed in Section 1, we design a prompting strategy that forces the model to make the implicit binding process explicit. For web of lies , the Entity-Aware Chain-of-Thought (EA-CoT) prompt prepends four in-structions before the task input (as illustrated in Figure 1): 1. Entity enumeration. List all people mentioned. 2. Claim recording. Write down each statement linking a per-son to a property. 3. Step-by-step reasoning. Resolve each claim in sequence. 4. Answer extraction. Produce the answer in the required for-mat. This forces the SLLM to externalize entity-property asso-ciations into generated text, converting fragile implicit track-ing into explicit textual anchoring. The maximum generation length is expanded to 1,024 tokens to accommodate the reason-ing trace. To rigorously isolate the entity binding bottleneck, we deploy structured control prompts for the remaining cate-gories. These force explicit step-by-step reasoning without en-tity tracking: listing and classifying adjectives by type ( hyper-baton ), sequentially tracking coordinate changes from the ori-gin ( navigate ), and identifying sports to evaluate action plausi-bility ( sports ). These isomorphic controls ensure that EA-CoT’s disproportionate S2T gain on web of lies reflects targeted se-mantic repair rather than generic CoT benefits. 
+
+3.3. Token Budget Control 
+
+Increasing the generation limit from 256 to 1,024 tokens intro-duces a confound, as models may improve simply by having more space to reason. To disentangle the instruction effect from the token budget effect, we evaluate a baseline with 1,024 to-kens but the default instruction, denoted BL(1024). The de-composition is: 
+
+∆Total = [ BL 1024 − BL 256 ]budget + [ CoT − BL 1024 ]instruction (1) This is applied to both speech and text inputs across both mod-els. Qwen Phi-4      
+
+> 0
+> 20
+> 40
+> 60
+> 80
+> 100
+> Accuracy  (%)
+> S2T Baseline
+> S2T + Best CoT
+> T2T Baseline
+> Qwen Phi-4
+> 0
+> 10
+> 20
+> 30
+> 40
+> S2T-T2T Gap  (pp)
+> Baseline Gap
+> After CoT
+
+Figure 2: Speech recovery and gap reduction on web of lies. Left: speech accuracy rises from chance toward the text base-line after CoT. Right: the gap shrinks substantially across both models. 
+
+# 4. Experiments 
+
+4.1. Setup 
+
+Two state-of-the-art speech LLMs spanning different architec-tures are evaluated. Qwen2.5-Omni-7B [33] employs a dedi-cated thinker module that generates internal reasoning tokens before the visible response. Phi-4-Multimodal [34] generates responses directly without a separate reasoning module. Both models are evaluated in their released configurations without fine-tuning. Four categories from VoiceBench BBH [5] are used, each containing 250 items for a total of 1,000 samples. Each item is evaluated with both speech and text input using the same model. A format guard ensures responses match the expected answer format, with fallback extraction when needed. Statistical sig-nificance is assessed using McNemar’s test on paired outcomes. The baseline generation budget is 256 tokens. CoT experiments use 1,024 tokens, as described in Section 3.2. 
+
+4.2. Main Results 
+
+Table 1 presents the full results. As predicted by the entity bind-ing hypothesis, web of lies shows by far the largest baseline gap, with both models at chance level on speech despite text accu-racy ranging up to 91.6%. Most other categories show baseline gaps below 8 pp, and two categories even slightly favor speech over text. Excluding web of lies , Qwen speech accuracy exceeds text by +1 .9 pp, and the Phi-4 gap shrinks from 13.1 to 3.9 pp. 
+
+Web of lies alone accounts for the vast majority of the overall modality gap across both models. Task-specific CoT improves speech-input accuracy by +8 .6
+
+to +9 .1 pp overall for Qwen and Phi-4, both significant by McNemar’s test. On web of lies , entity enumeration yields 
+
++16 .8 pp for Qwen and +24 .4 pp for Phi-4, as shown in Fig-ure 2. The magnitude of recovery scales with text-input accu-racy on the same task. Phi-4 has the strongest text baseline at 91.6% and recovers +24 .4 pp, while Qwen at 86.8% recovers 
+
++16 .8 pp. Critically, web of lies is the only category where speech gains exceed text gains. Qwen speech improves by +16 .8 pp versus +8 .8 pp for text, and Phi-4 speech improves by 
+
++24 .4 pp versus −4.4 pp for text. For all other categories, text benefits more from our structured controls than speech does. This asymmetry confirms that entity binding is a speech-specific bottleneck, not a general reasoning deficit. Qwen S2T Qwen T2T Phi-4 S2T Phi-4 T2T 
+
+> 0
+> 2
+> 4
+> 6
+> 8
+> Accuracy Change (pp)
+> +4.6pp
+> +5.3pp
+> +7.8pp
+> +2.3pp
+> Token Budget
+> Instruction
+
+Figure 3: Decomposition of performance gains. The improve-ment on speech inputs is driven almost entirely by the structured EA-CoT instruction, whereas merely increasing the token bud-get provides negligible benefit. 
+
+4.3. Token Budget Control 
+
+Using the decomposition in Equation (1), we verify that the speech improvement is instruction-driven rather than a side ef-fect of the larger token budget. Increasing the generation limit from 256 to 1,024 tokens without changing the instruction pro-duces no improvement on speech input, with ∆ ≤ 0.2 pp for both models. For text input, the same token increase yields up to +4 .1 pp for Qwen. Since task-specific CoT achieves +8 .6
+
+to +9 .1 pp on speech, the entire gain comes from the instruc-tion content, not from additional generation capacity. This dy-namic is visually summarized in Figure 3. This asymmetry di-rectly supports the entity binding hypothesis. Speech inputs suffer from a binding failure that extra tokens cannot resolve, but structured instructions can. Text inputs encode entities in a form the model can already bind, so more tokens enable deeper reasoning. 
+
+4.4. Ablation Study 
+
+Table 2 ablates EA-CoT components on Qwen speech-input 
+
+web of lies with 250 items. Each row tests one component independently. Step-by-step and entity enumeration both in-clude format enforcement. Format enforcement alone provides 
+
++4 .0 pp, indicating some baseline errors stem from formatting rather than reasoning. Adding step-by-step reasoning to the for-mat baseline yields +7 .6 pp total. Entity enumeration with for-mat yields the largest gain at +10 .4 pp, accounting for 59% of the full EA-CoT effect and contributing +6 .4 pp beyond format alone. The full combination achieves +17 .6 pp, confirming that explicit entity listing is the most critical component, consistent with the entity binding hypothesis. 
+
+# 5. Analysis 
+
+Semantic Binding vs. Acoustic Recognition. If the speech-text gap simply arose from mishearing names (ASR errors), corrupting names in text inputs should trigger a similar perfor-mance collapse. However, replacing 100% of person names with random strings in T2T web of lies (Table 3) reduces Qwen’s accuracy by only 3.6 pp, accounting for barely 11% of the 34 pp S2T gap. This confirms that the bottleneck lies in maintaining semantic associations across reasoning steps, not in acoustic perception. Further corroborating this, Table 4 il-lustrates that EA-CoT successfully tracks the logical chain even when the model transcribes spoken names inconsistently (e.g., mapping “Ka” to “Cass” and “Inga” to “Ignatia”). By external-izing entities into explicit text, EA-CoT establishes stable an-chors that preserve reasoning regardless of phonetic precision. Table 1: BBH accuracy (%) across two SLLMs (1,000 items). Scores are S2T / T2T to highlight the modality gap directly. BL = baseline (256 tokens). CoT = task-specific structured chain-of-thought with 1,024 tokens. Best S2T result per model is in bold .
+
+Model Method Overall HYP NAV SPO WOL Qwen2.5-Omni BL 59.9 / 67.0 73.2 / 72.0 58.0 / 52.8 55.6 / 56.4 52.8 / 86.8 CoT 68.5 / 84.3 62.4 / 83.2 80.4 / 80.8 61.6 / 77.6 69.6 / 95.6 
+
+Phi-4-MM BL 53.6 / 66.7 56.4 / 61.6 59.2 / 58.0 48.0 / 55.6 50.8 / 91.6 CoT 62.7 / 77.6 54.8 / 77.2 66.4 / 82.0 54.4 / 64.0 75.2 / 87.2 Table 2: EA-CoT ablation on Qwen S2T web of lies, 250 items. Entity enumeration provides the largest individual contribution at 59% of the full effect. 
+
+Component Acc (%) ∆ vs BL % of full 
+
+Baseline 51.6 – –+ Format only 55.6 +4 .0 23% + Step-by-step 59.2 +7 .6 43% + Entity enum 62.0 +10 .4 59% Full EA-CoT 69.2 +17 .6 100% Table 3: Entity corruption on T2T web of lies, 250 items, Qwen. Even 100% name corruption reduces accuracy by only 3.6 pp, far less than the 34 pp S2T gap. 
+
+Corruption BL (256) EA-CoT ∆
+
+0% 89.6 95.6 +6 .0
+
+25% 89.2 94.4 +5 .2
+
+50% 84.8 93.2 +8 .4
+
+75% 88.4 94.0 +5 .6
+
+100% 86.0 92.0 +6 .0
+
+Intervention Specificity. EA-CoT specifically targets se-mantic binding. Applying a generic CoT prompt (“Let us think step by step”) to Qwen yields only a marginal +2 .4 pp gain on 
+
+web of lies , proving that explicit entity enumeration ( +16 .8 pp) is the critical catalyst. Conversely, when EA-CoT is applied to MMSU [35]—an acoustic-heavy benchmark where critical par-alinguistic cues are inherently lost in text—it yields no improve-ment (Table 5). This validates that our intervention strictly re-pairs semantic structural binding rather than acting as a generic reasoning enhancer. 
+
+Recovery Requires Text-Level Capability. EA-CoT’s ef-ficacy inherently depends on foundational text-level capability. On web of lies , the degree of S2T recovery scales monotoni-cally with T2T accuracy. Both models boast strong T2T base-lines ( > 86% ) and recover substantially in speech ( +24 .4 and 
+
++16 .8 pp). Output-level analysis reveals the mechanism: Phi-4’s speech baseline mostly produces bare answers (97% of out-puts under 30 characters) despite generating full step-by-step chains on text input. CoT prompting successfully restores this reasoning activation. By bypassing modality-induced bottle-necks, CoT can effectively externalize the binding capability that the SLLM already possesses in its text representation. 
+
+Inference Latency Trade-off. While EA-CoT effectively repairs the modality gap, it inherently increases inference la-tency. Externalizing the binding process significantly expands the generated token sequence, explicitly trading generation speed for logical accuracy. For real-time spoken dialogue sys-Table 4: Example S2T output on web of lies, Qwen. EA-CoT enumerates entities and tracks the chain correctly despite name transcription differences. 
+
+Input (speech): Alexis tells the truth. Shenna says Alexis tells the truth. Yolanda says Shenna tells the truth. Ka says Yolanda tells the truth. Inga says Ka tells the truth. Does Inga tell the truth? Gold: Yes BL (256 tok): No. ×
+
+EA-CoT (1024 tok): The people mentioned are Alexis, Shanna, Yolanda, Cass, and Ignatia. Alexis tells the truth. Shanna says Alexis tells the truth, so Shanna is telling the truth. Yolanda says Shanna tells the truth, so Yolanda is telling the truth. Cass says Yolanda tells the truth, so Cass is telling the truth. Ignatia says Cass tells the truth, so Ignatia is telling the truth. The answer is yes. ✓
+
+Table 5: Specificity validation: BBH (semantic) vs. MMSU (acoustic) [35]. On MMSU, where tasks depend on acoustic cues, the gap reverses. Entity enumeration produces no gain on MMSU, confirming EA-CoT targets semantic binding specif-ically. 
+
+Model BBH (TTS, 1K) MMSU (natural, 2.4K) S2T / T2T ( ∆) S2T / T2T ( ∆)Qwen 59.9 / 67.0 ( −7.1) 80.1 / 49.0 ( +31 .0)
+
+Phi-4 53.6 / 66.7 ( −13 .1) 71.9 / 47.5 ( +24 .5)
+
+tems, this overhead is a practical limitation. Future optimiza-tions could explore distilling these explicit reasoning traces back into the model’s implicit representations to maintain struc-tural robustness without the autoregressive delay. 
+
+# 6. Conclusion 
+
+Entity binding failure is the primary driver of the S2T/T2T modality gap in complex reasoning. We demonstrate that SLLMs maintain robust performance on spatial and factual tasks, but tasks requiring continuous entity tracking collapse to chance-level accuracy on speech inputs. To address this, we in-troduce Entity-Aware Chain-of-Thought (EA-CoT), which by-passes fragile implicit acoustic tracking by forcing models to explicitly enumerate and bind entities in text before reasoning. This intervention bridges the S2T gap by up to +24 .4 pp on entity-centric tasks, effectively repairing the logical chain even when acoustic entities are phonetically misrecognized. While highly effective, EA-CoT is an inference-time prompting strategy that roughly triples token generation and latency. Additionally, our evaluation relies on TTS-generated speech and 7B-class models; real-world acoustic noise and larger architectures may introduce varied compound effects. Future work should explore representation-level architectural alignments, such as intrinsically synchronizing cross-modal en-tity binding subspaces [21], to dynamically stabilize continuous entity tracking without the overhead of explicit prompting. 
+
+# 7. Disclosure of AI Tool Use 
+
+A generative AI assistant was used for editing and polishing the manuscript. All experimental design, implementation, analysis, and scientific claims are the work of the authors. 
+
+# 8. References 
+
+[1] P. K. Rubenstein et al. , “Audiopalm: A large language model that can speak and listen,” CoRR , vol. abs/2306.12925, 2023. [2] C. Tang, W. Yu, G. Sun, X. Chen, T. Tan, W. Li, L. Lu, Z. Ma, and C. Zhang, “SALMONN: towards generic hearing abilities for large language models,” in ICLR . OpenReview.net, 2024. [3] D. Zhang, S. Li, X. Zhang, J. Zhan, P. Wang, Y. Zhou, and X. Qiu, “Speechgpt: Empowering large language models with intrinsic cross-modal conversational abilities,” in EMNLP (Findings) , ser. Findings of ACL, vol. EMNLP 2023. Association for Computa-tional Linguistics, 2023, pp. 15 757–15 773. [4] Y. Chu, J. Xu, X. Zhou, Q. Yang, S. Zhang, Z. Yan, C. Zhou, and J. Zhou, “Qwen-audio: Advancing universal audio understanding via unified large-scale audio-language models,” 2023. [Online]. Available: https://arxiv.org/abs/2311.07919 [5] Y. Chen, X. Yue, C. Zhang, X. Gao, R. T. Tan, and H. Li, “Voicebench: Benchmarking llm-based voice assistants,” CoRR ,vol. abs/2410.17196, 2024. [6] C. Yang, N. Ho, Y. Piao, and H. Lee, “SAKURA: on the multi-hop reasoning of large audio-language models based on speech and audio information,” in INTERSPEECH . ISCA, 2025. [7] Y. Lin, Z. Hu, Q. Wang, Y. Liu, H. Zhang, J. Subramanian, N. Vlassis, H. H. Li, and Y. Chen, “Voice evaluation of reason-ing ability: Diagnosing the modality-induced performance gap,” 
+
+CoRR , vol. abs/2509.26542, 2025. [8] B. Wang, X. Zou, G. Lin, S. Sun, Z. Liu, W. Zhang, Z. Liu, A. Aw, and N. F. Chen, “Audiobench: A universal benchmark for audio large language models,” in NAACL (Long Papers) . Association for Computational Linguistics, 2025, pp. 4297–4316. [9] M.-H. Hsu, X. Zhang, X. Tian, J. Zhang, and Z. Wu, “Anatomy of the modality gap: Dissecting the internal states of end-to-end speech llms,” 2026. [Online]. Available: https://arxiv.org/abs/2603.01502 [10] B. Xiang, S. Zhao, T. Guo, and W. Zou, “Understanding the modality gap: An empirical study on the speech-text alignment mechanism of large speech language models,” in EMNLP . As-sociation for Computational Linguistics, 2025, pp. 5187–5202. [11] Y. Gong, H. Luo, A. H. Liu, L. Karlinsky, and J. R. Glass, “Listen, think, and understand,” in ICLR . OpenReview.net, 2024. [12] Y. Fathullah, C. Wu, E. Lakomkin, J. Jia, Y. Shangguan, K. Li, J. Guo, W. Xiong, J. Mahadeokar, O. Kalinli, C. Fuegen, and M. Seltzer, “Prompting large language models with speech recog-nition abilities,” in ICASSP . IEEE, 2024, pp. 13 351–13 355. [13] A. Radford, J. W. Kim, T. Xu, G. Brockman, C. McLeavey, and I. Sutskever, “Robust speech recognition via large-scale weak su-pervision,” in ICML , ser. Proceedings of Machine Learning Re-search, vol. 202. PMLR, 2023, pp. 28 492–28 518. [14] A. D´ efossez, J. Copet, G. Synnaeve, and Y. Adi, “High fidelity neural audio compression,” Trans. Mach. Learn. Res. , vol. 2023, 2023. [15] A. Baevski, Y. Zhou, A. Mohamed, and M. Auli, “wav2vec 2.0: A framework for self-supervised learning of speech representa-tions,” in NeurIPS , 2020. [16] W.-N. Hsu, B. Bolte, Y.-H. H. Tsai, K. Lakhotia, R. Salakhut-dinov, and A. Mohamed, “HuBERT: Self-supervised speech representation learning by masked prediction of hidden units,” 
+
+IEEE/ACM Transactions on Audio, Speech, and Language Pro-cessing , vol. 29, pp. 3451–3460, 2021. [17] S. Communication et al. , “Seamlessm4t-massively multilingual & multimodal machine translation,” CoRR , vol. abs/2308.11596, 2023. [18] J. Hu, D. Zhu, X. Luo, D. Zhang, S. He, Y. Lei, H. Zheng, S. Feng, J. He, Y. Sun, H. Wu, and H. Wang, “CORD: bridging the audio-text reasoning gap via weighted on-policy cross-modal distilla-tion,” CoRR , vol. abs/2601.16547, 2026. [19] C. Wang, H. Lu, X. Zhang, S. Liu, Y. Lu, J. Li, and Z. Wu, “Clos-ing the modality reasoning gap for speech large language models,” 
+
+CoRR , vol. abs/2601.05543, 2026. [20] S. Bubeck, V. Chandrasekaran, R. Eldan, J. Gehrke, E. Horvitz, E. Kamar, P. Lee, Y. T. Lee, Y. Li, S. M. Lundberg, H. Nori, H. Palangi, M. T. Ribeiro, and Y. Zhang, “Sparks of artificial general intelligence: Early experiments with GPT-4,” CoRR , vol. abs/2303.12712, 2023. [21] J. Feng and J. Steinhardt, “How do language models bind entities in context?” in ICLR . OpenReview.net, 2024. [22] N. Kim and S. Schuster, “Entity tracking in language models,” in 
+
+ACL (1) . Association for Computational Linguistics, 2023, pp. 3835–3855. [23] N. F. Liu, K. Lin, J. Hewitt, A. Paranjape, M. Bevilacqua, F. Petroni, and P. Liang, “Lost in the middle: How language mod-els use long contexts,” Trans. Assoc. Comput. Linguistics , vol. 12, pp. 157–173, 2024. [24] D. Campbell, S. Rane, T. Giallanza, N. D. Sabbata, K. Ghods, A. Joshi, A. Ku, S. Frankland, T. Griffiths, J. D. Cohen, and T. W. Webb, “Understanding the limits of vision language models through the lens of the binding problem,” in NeurIPS , 2024. [25] J. Wei, X. Wang, D. Schuurmans, M. Bosma, B. Ichter, F. Xia, E. H. Chi, Q. V. Le, and D. Zhou, “Chain-of-thought prompting elicits reasoning in large language models,” in NeurIPS , 2022. [26] G. Zheng, B. Yang, J. Tang, H. Zhou, and S. Yang, “Ddcot: Duty-distinct chain-of-thought prompting for multimodal reasoning in language models,” in NeurIPS , 2023. [27] T. Kojima, S. S. Gu, M. Reid, Y. Matsuo, and Y. Iwasawa, “Large language models are zero-shot reasoners,” in NeurIPS , 2022. [28] X. Wang, J. Wei, D. Schuurmans, Q. V. Le, E. H. Chi, S. Narang, A. Chowdhery, and D. Zhou, “Self-consistency improves chain of thought reasoning in language models,” in ICLR . OpenRe-view.net, 2023. [29] S. Yao, D. Yu, J. Zhao, I. Shafran, T. Griffiths, Y. Cao, and K. Narasimhan, “Tree of thoughts: Deliberate problem solving with large language models,” in NeurIPS , 2023. [30] Z. Xiong, Y. Cai, Z. Li, J. Yuan, and Y. Wang, “Thinking with sound: Audio chain-of-thought enables multimodal reasoning in large audio-language models,” CoRR , vol. abs/2509.21749, 2025. [31] R. S. Yuen, T. T. Tse, and J. Zhu, “Internalizing ASR with im-plicit chain of thought for efficient speech-to-speech conversa-tional LLM,” CoRR , vol. abs/2409.17353, 2024. [32] M. Suzgun, N. Scales, N. Sch¨ arli, S. Gehrmann, Y. Tay, H. W. Chung, A. Chowdhery, Q. V. Le, E. H. Chi, D. Zhou, and J. Wei, “Challenging big-bench tasks and whether chain-of-thought can solve them,” in ACL (Findings) , ser. Findings of ACL, vol. ACL 2023. Association for Computational Linguistics, 2023, pp. 13 003–13 051. [33] J. Xu, Z. Guo, J. He, H. Hu, T. He, S. Bai, K. Chen, J. Wang, Y. Fan, K. Dang, B. Zhang, X. Wang, Y. Chu, and J. Lin, “Qwen2.5-omni technical report,” CoRR , vol. abs/2503.20215, 2025. [34] A. Abouelenin et al. , “Phi-4-mini technical report: Compact yet powerful multimodal language models via mixture-of-loras,” 
+
+CoRR , vol. abs/2503.01743, 2025. [35] D. Wang, J. Wu, J. Li, D. Yang, X. Chen, T. Zhang, and H. Meng, “MMSU: A massive multi-task spoken language understanding and reasoning benchmark,” CoRR , vol. abs/2506.04779, 2025.
