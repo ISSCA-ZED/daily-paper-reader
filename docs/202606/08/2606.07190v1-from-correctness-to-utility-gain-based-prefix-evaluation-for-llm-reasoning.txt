@@ -1,0 +1,837 @@
+Title: From Correctness to Utility: Gain-Based Prefix Evaluation for LLM Reasoning
+
+URL Source: https://arxiv.org/pdf/2606.07190v1
+
+Published Time: Mon, 08 Jun 2026 00:48:49 GMT
+
+Number of Pages: 20
+
+Markdown Content:
+# From Correctness to Utility: Gain-Based Prefix Evaluation for LLM Reasoning 
+
+Yuhang Zhou 1,2 Yixin Cao 1,2† Guangnan Ye 1,2†
+
+> 1
+
+Fudan University 2Shanghai Innovation Institute 
+
+yuhangzhou22@m.fudan.edu.cn, yxcao@fudan.edu.cn, yegn@fudan.edu.cn 
+
+Abstract 
+
+Reasoning prefixes shape the future trajectory of LLM problem solving, yet existing process reward models usually evaluate them through local step correctness. We argue that correct-ness is a useful but indirect proxy for the ef-fect we ultimately care about: whether a pre-fix increases the probability of successful com-pletion. We define this effect as prefix gain, the solve-rate improvement induced by con-ditioning lightweight student model group on a prefix, and use it to train a Prefix Utility Model (PUM) with a simple pairwise ranking objective. PUM learns outcome-grounded pre-fix utility and can score both complete trajec-tories and partial reasoning prefixes. Across Best-of-N selection, beam search, and rein-forcement learning on mathematical reasoning, PUM provides a strong prefix-level supervi-sion signal, especially when candidate pools are large, search budgets increase, or rule-based rewards are sparse. We release all data, mod-els, and code at https://zhiqix.github.io/ pum-project-page .
+
+1 Introduction 
+
+Reasoning with large language models (LLMs) is a sequential process in which intermediate prefixes shape future continuations (Wei et al., 2022; Wang et al., 2022; Yao et al., 2023). A useful prefix can expose a promising decomposition and move the model toward a more solvable state, whereas a misleading prefix can bias the model toward an unproductive trajectory long before the final answer is produced (Zhou et al., 2022; Liao et al., 2025; Wang et al., 2025). This raises a central question for process-level supervision: what makes a reasoning prefix valuable? 
+
+Prior work has approached prefix evaluation from two directions. PRM-style methods provide dense step-level supervision by judging whether each intermediate step is locally valid or likely to follow a correct solution path (Lightman et al., Step 1 Step 2 Step 3 Step 4  
+
+> Evaluate
+> score = I(step is correct)
+
+I
+
+PRM                                           
+
+> ✓✓×✓
+> ✓
+> sampled continuations sampled continuations
+> ×✓××✓✓✓✓×✓
+> q(x,
+> ∅)q(x,p)
+> sampled continuations sampled continuations
+> ×✓××✓✓✓✓×✓
+> q(x,
+> ∅)q(x,p)
+> Without prefix With prefix p
+> sampled continuations sampled continuations
+> ×✓××✓✓✓✓×✓
+> qi(x,
+> ∅)qi(x,p)
+> Utility( p) = mean (qi(x, p)-qi(x,
+> ∅))
+
+PUM   
+
+> Step 2 Step 4 Step 1 Step 3
+
+Figure 1: Correctness and Utility-based Evaluation. 
+
+2024; Wang et al., 2024; Zhang et al., 2025b). How-ever, local correctness is not equivalent to prefix usefulness: a valid step may still leave the remain-ing trajectory brittle, while an incomplete or non-standard prefix may reveal a key idea that improves downstream solvability (Liao et al., 2025; Wang et al., 2025). Recent rollout-based methods are more future-aware, estimating state values from continuations. Yet these signals are typically tied to a particular continuation policy or trajectory distri-bution, and do not explicitly measure the marginal improvement caused by the prefix itself (Li and Li, 2025; Setlur et al., 2025). In this paper, we formulate prefix evaluation through gain : the marginal improvement in down-stream solve probability induced by a prefix, as shown in Figure 1. Given a problem x and a prefix 
+
+p, we compare the probability of solving the prob-lem after observing p with that of solving it from scratch. This with-prefix versus without-prefix comparison distinguishes gain from standard value-style evaluation: value estimates whether a prefix is 
+
+> arXiv:2606.07190v1 [cs.CL] 5 Jun 2026
+
+likely to lead to success (Li and Li, 2025), whereas gain asks whether the prefix itself improves the chance of success relative to the same problem and solver population. This marginal formulation better separates prefix usefulness from problem difficulty and from a solver’s prior ability. To estimate gain scalably, we use lightweight student models as probes. Each student solves the problem with and without the prefix, and the solve-rate difference yields a gain profile across capability levels. We decompose this profile into a shared intrinsic utility and policy-dependent vari-ation, and use a simple scalarization: normalizing gains and averaging them over a reference popula-tion. Based on this framework, we construct PUM-Math from 20K mathematical reasoning trajecto-ries and 280K outcome-grounded pairwise utility preferences, without manual step-level annotations. We then train a Prefix Utility Model (PUM), an LLM-based scalar evaluator with a value head, us-ing a Bradley-Terry (Bradley and Terry, 1952) loss. We evaluate PUM on mathematical reasoning, where answer verification enables prefix-gain esti-mation. In controlled comparisons, we fix the back-bone, MATH-origin data, and training recipe, and vary only the process-supervision target. Across Best-of-N selection, beam search, and reinforce-ment learning (RL), PUM provides an effective prefix-utility signal, with the largest gains when candidate pools are large, search budgets increase, or rule-based rewards are sparse. Complete re-sponses can be ranked as terminal prefixes, par-tial branches can be scored during search, and nested prefix-utility differences can provide dense RL advantages. Further analyses show that gain-based supervision supports weak-to-strong general-ization, capability-aware aggregation, scaling, and more efficient construction than large-scale step-supervision datasets. Our contributions are summarized as follows: • We formulate prefix evaluation as counterfac-tual gain estimation, measuring how much a prefix improves downstream solve probability. • We construct PUM-Math, a gain-based prefix supervision dataset built from 20K reasoning trajectories and 280K outcome-grounded pair-wise utility preferences. • We train PUM on this data and show that gain-based prefix supervision improves Best-of-N
+
+selection, beam search, and RL. 
+
+2 Related Works 
+
+Process-level supervision has become an impor-tant direction for improving multi-step reasoning. In mathematical reasoning and logical deduction, intermediate prefixes often shape the future tra-jectory: useful prefixes can guide later reason-ing, while misleading ones may cause early lock-in (Zhang et al., 2026; Liao et al., 2025; Wang et al., 2025). Process reward models (PRMs) therefore score intermediate steps to provide denser feedback than final-answer rewards (Lightman et al., 2024; Zhang et al., 2025b). However, most PRMs are trained as local correctness classifiers, which may not directly capture how a prefix changes future solvability (Wang et al., 2024). Recent work has explored more future-aware process evaluation. Process Q-value Models esti-mate intermediate-state values from an MDP per-spective (Li and Li, 2025), while conditional re-ward models connect partial solutions to final out-comes (Zhang et al., 2025a). Besides, PAV rewards step-wise progress using best-of-4 probing from the current policy model (Setlur et al., 2025). These methods move beyond local validity, but mainly focus on absolute state value, outcome-conditioned state quality, or policy-specific progress along a trajectory. PUM instead evaluates arbitrary prefixes through outcome-grounded gain . It measures the marginal contribution of a prefix by comparing downstream solve probability with and without the prefix, sepa-rating prefix usefulness from problem difficulty and solver prior ability. By estimating gain over a pop-ulation of lightweight students, PUM represents prefix utility as a gain profile that captures both transferable intrinsic utility and policy-dependent variation, providing a unified prefix-level signal for selection, search, and credit assignment. 
+
+3 Prefix Utility Model 
+
+We introduce the Prefix Utility Model (PUM), an outcome-grounded evaluator for reasoning prefixes, as shown in Figure 2. We first sample diverse pre-fixes from trajectories, then estimate prefix-induced gains by comparing lightweight students’ solve rates with and without each prefix, convert gain dif-ferences into pairwise preferences, and train PUM with a ranking objective. Problem + Trajectories             
+
+> (a) Vertical Sampling :same trajectory
+> y( 1)
+> y(1)[1 : p1]
+> p₁
+> y(1)[1 : p1]
+> p₂
+> (b) Horizontal Sampling :same token length
+> y(1)
+> y(2)
+> (c) Within -model / Cross -model
+> Model A
+> y(1) A
+> Model B
+> Lightweight students with different capabilities
+> weak strong
+> s1s2s3s4sm
+> Without Ø
+> With p
+> Gain profile over students
+> estimated
+> gain g1
+> s1
+> g2
+> s2
+> g3
+> s3
+> g4
+> s4
+> gm
+> sm
+
+Prefix Sampling › Gain -based Preference Construction › Train PUM 
+
+> y(2) A
+> τ(1) B
+> Eliminate style differences
+> Enhanced generalization
+
+...          
+
+> ...
+> Prefix pᵢ
+> Utility G(x,pᵢ)
+> Prefix p ⱼ
+> Utility G(x,p ⱼ)
+> With prefix Without Ø
+> LLM
+> Backbone
+> Scalar Value Head
+> (MLP)
+> Utility Score
+> Uθ(x, p)
+> Input: Problem x + Prefix p
+> Problem x
+> Let x + y be 10.
+> Find x − y.
+> Prefix p
+> Let x + y be 10.
+> Since x,y > 0,
+> ...
+> Training objective
+> Preferred
+> prefix p -
+> Dispreferred
+> prefix p +Uθ(x,p⁺) > U(x,p⁻)
+> Bradley -Terry loss with tie -aware regularization Prefer piPrefer pi
+
+Figure 2: Prefix Utility Model: prefix sampling, gain-based preference construction, and pairwise utility learning. 
+
+3.1 Prefix-Induced Gain Distribution 
+
+Let x denote a reasoning problem, y a complete reasoning trajectory, and p ⪯ y an arbitrary rea-soning prefix before the final answer. Unlike step-level process supervision, p does not need to align with a manually segmented step boundary. Let 
+
+V (x, y ) ∈ { 0, 1} be an answer verifier that checks whether the final answer in y is correct. For a student model s with policy πs, we define the prefix-conditioned success probability as 
+
+qs(x, p ) = Pr 
+
+c∼πs(·| x,p ) [V (x, p ⊕ c) = 1] , (1) where c is the continuation generated after condi-tioning on prefix p. The corresponding no-prefix baseline is qs(x, ∅), the probability that the same student solves the problem from scratch. We define the gain induced by prefix p for student s as 
+
+gs(x, p ) = qs(x, p ) − qs(x, ∅). (2) A positive gain means that the prefix increases the student’s chance of reaching a correct final answer, while a negative gain means that it makes success-ful continuation less likely. Inspired by Teach2Eval (Zhou et al., 2026), we estimate gs(x, p ) by sampling continuations from a reference group of lightweight student models 
+
+S = {s1, . . . , s M }, which cover different capabil-ity levels. For each prefix, these students produce a set of empirical gains: 
+
+ˆg(x, p ) = [ˆ gs1 (x, p ), ˆgs2 (x, p ), . . . , ˆgsM (x, p )] .
+
+(3) 
+
+3.2 From Gain Profile to Intrinsic Utility 
+
+The gain profile in Eq. (3) contains one gain esti-mate for each lightweight student. Before using this distributional profile as supervision, we first examine what structure it contains. If different stu-dents responded to prefixes in unrelated ways, then compressing their gains into a scalar target would not provide a meaningful learning signal. We conduct a diagnostic study using lightweight student models with different initial solve rates, de-tails are provided in Appendix B. At the position-averaged level, gain curves are highly aligned across students. Prefixes from answer-correct tra-jectories tend to show increasing gain as reasoning progresses, while prefixes from answer-incorrect trajectories remain low or decrease. This suggests that student-measured gains contain a shared com-ponent that reflects the general usefulness of a pre-fix. At the individual-prefix level, however, agree-ment is more moderate, and students with closer baseline solve rates tend to assign more consistent gains. This indicates that the same prefix may af-fect different solvers differently, depending on their capability and reasoning behavior. These observations motivate a two-component view of prefix utility. We define intrinsic utility 
+
+as the transferable contribution of a prefix that is shared across a group of solvers. It reflects whether the prefix provides useful information, a productive reasoning direction, or a helpful decomposition that generally makes the remaining problem easier. And define policy-dependent utility as the solver-specific effect of the same prefix, which depends on a model’s capability, prior knowledge, reasoning style, and sensitivity to format. For example, a prefix may provide large gain to a weaker student by revealing a missing strategy, while bringing little additional benefit to a stronger student that can already solve the problem unaided. Based on this view, we interpret the empirical gain profile as a distribution over solver responses: 
+
+ˆμx,p = 1
+
+M
+
+> M
+
+X
+
+> m=1
+
+δˆgsm (x,p ), (4) where δa denotes a point mass at a. The central ten-dency of this distribution estimates intrinsic utility, while its variation reflects policy-dependent utility. In this work, we adopt the simplest scalar com-pression for training PUM. Since different students have different baseline abilities and gain scales, we normalize gains separately for each student and define 
+
+Gintr (x, p ) = 1
+
+M
+
+> M
+
+X
+
+> m=1
+
+Norm m(ˆ gsm (x, p )) . (5) This scalar target estimates the shared, transfer-able component of prefix utility across the student group. It does not exhaust the full gain profile; rather, it provides a stable supervision target for the main PUM, while capability-aware variants can be obtained by assigning non-uniform weights to different students. 
+
+3.3 Gain-Based Pairwise Preference Construction 
+
+Directly regressing scalar utility is undesirable because gain values are not directly comparable across problems and small differences can be dom-inated by rollout noise. We therefore convert in-trinsic utility targets into within-problem pairwise preferences, so that supervision focuses on relative prefix usefulness under the same problem context. For two prefixes pi and pj from the same prob-lem x, we compare their intrinsic utility estimates and assign a preference label according to an adap-tive margin. The margin accounts for the relia-bility of the utility difference, and pairs with in-consistent student-wise preference directions are filtered out. As a result, a pair is labeled as pi ≻ pj ,
+
+pj ≻ pi, tied, or discarded when the evidence is insufficient. Details of the adaptive thresholding and conflict-aware filtering procedure are provided in Appendix A.4. We construct candidate pairs from both vertical and horizontal comparisons. Vertical pairs com-pare prefixes at different truncation positions along the same trajectory, encouraging PUM to learn how utility evolves with reasoning progress. Horizontal pairs compare length-matched prefixes from dif-ferent trajectories of the same problem, reducing reliance on prefix length and generation style. This construction yields a gain-based preference dataset 
+
+Dpair = {(x, p i, p j , y ij )}, (6) where yij denotes a preference or tie label. The labels are derived from outcome-grounded solve-rate gains rather than manual step-level correctness annotations. 
+
+3.4 Learning PUM by Pairwise Ranking 
+
+PUM is a scalar utility model Uθ(x, p ) that predicts the intrinsic utility of a problem-prefix pair. In our implementation, PUM adds an MLP value head on top of a language model backbone. The input is formatted as the concatenation of the problem and the reasoning prefix, and the hidden state of the last non-padding token is used to produce a scalar utility score. We train PUM with a pairwise Bradley-Terry objective (Bradley and Terry, 1952). Each training example contains two prefixes (pa, p b) from the same problem and a label y ∈ { 1, 0, −1}, where 
+
+1 means pa is preferred, −1 means pb is preferred, and 0 denotes a tie. We compute 
+
+∆θ = Uθ(x, p a) − Uθ(x, p b). (7) The label is mapped to a soft target 
+
+t =
+
+
+
+1.0, y = 1 ,
+
+0.5, y = 0 ,
+
+0.0, y = −1,
+
+(8) and the training loss is 
+
+LPUM = −E [t log σ(∆ θ) + (1 − t) log(1 − σ(∆ θ))] .
+
+(9) Thus, tie pairs are trained as soft preferences with target 0.5, encouraging the model not to assign a strong ordering when the gain evidence is insuffi-cient. 
+
+4 Experiments 
+
+4.1 Experimental Setup PUM training. Following prior process-supervision work, we instantiate PUM on mathematical reasoning, where reliable final-answer verification enables controlled estimation of prefix-induced solve-rate gains. To enable a fair MATH500      
+
+> Qwen2.5 -3B -Instruct
+> Llama3.1 -8B -Instruct
+> GAOKAO
+> Qwen2.5 -3B -Instruct
+> Llama3.1 -8B -Instruct
+> AIME2025
+> Qwen3 -4B -Instruct -2507
+> Qwen2.5 -7B -Instruct Worst -Correct Rank Percentile
+> Best -Incorrect Rank Percentile
+
+Figure 3: Best-of-N selection and ranking robustness. Left: Best-of-N selection accuracy. Right: ranking robustness, where higher worst-correct and lower best-incorrect percentiles indicate better evaluator behavior. 
+
+comparison with MATH-Shepherd (Wang et al., 2024) style process supervision, we construct our training data from the MATH training set. Following the procedure in Section 3.3, we obtain 280k gain-based pairwise data, detailed in Appendix A.3. For PUM, we use Qwen3-4B-Instruct-2507 (Yang et al., 2025) as the backbone, details in Appendix C. 
+
+Baselines and evaluation protocols. We com-pare PUM with several process-level evaluators, including vanilla PRM (Lightman et al., 2024), PQM (Li and Li, 2025) and CRM (Zhang et al., 2025a). Different process evaluators require differ-ent forms of supervision. PRM and CRM rely on step-level correctness annotations, and we therefore use Math-Shepherd (Wang et al., 2024) supervision for these baselines. PQM and PUM are trained on the same prefix trajectory pool, but differ in their supervision targets: PQM learns value-style pro-cess scores, while PUM learns gain-based prefix utility. This setup allows us to compare established evaluator pipelines under their standard supervision regimes, while using the PQM-PUM comparison to isolate the effect of value-based versus gain-based prefix supervision. 
+
+4.2 Best-of-N Selection 
+
+Best-of-N selection evaluates whether an eval-uator can select the most promising trajec-tory from N sampled responses. For PUM, each complete response is treated as a ter-minal prefix and ranked by its predicted utility. We evaluate four policy models, Qwen2.5-3B-Instruct, Qwen2.5-7B-Instruct (Bai et al., 2023), Qwen3-4B-Instruct-2507 (Yang et al., 2025) , and Llama-3.1-8B-Instruct (Tou-vron et al., 2023), on GAOKAO2023 (Liao et al., 2024), MATH500 (Hendrycks et al., 2021), and AIME2025 benchmarks with N ∈{1, 2, 4, 8, 16 , 32 , 64 , 128 }. Detailed scoring def-initions are provided in Appendix D.2. As shown in Figure 3 left, PUM achieves the best or near-best Best-of-N accuracy across policy models and datasets. Its advantage is most visi-ble at larger candidate pools, where the evaluator must identify genuinely correct trajectories among many plausible but incorrect responses. Majority voting often saturates when correct answers do not dominate the sample distribution, and PRM-style baselines may over-score locally plausible reason-ing. By ranking complete responses with outcome-grounded prefix utility, PUM provides a stronger trajectory-level verification signal, especially on MATH500 and GAOKAO2023. Although AIME results are noisier due to higher difficulty and fewer problems, PUM remains competitive and often per-forms best in large-N settings. Beyond top-1 selection accuracy, we further eval-uate evaluator robustness through rank percentiles. A robust evaluator should not only select the cor-rect response at top-1, but also assign consistently high ranks to correct candidates and low ranks to incorrect ones. We therefore measure the worst correct rank percentile and the best incorrect rank percentile. The former should be higher, indicat-ing that even the least-favored correct response remains relatively well ranked; the latter should be lower, indicating that the most-favored incor-rect response is not ranked too highly. As shown in Figure 3 right, PUM achieves the best behav-ior on both metrics, maintaining higher ranks for Table 1: Beam Search accuracy on MATH500 and GAOKAO2023.                                                                                   
+
+> Models Methods MATH500 GAOKAO2023
+> N= 4 N= 8 N= 20 N= 100 N= 4 N= 8 N= 20 N= 100
+> Qwen2.5-3B -Instruct PRM 66.40 68.40 72.80 69.20 58.70 60.26 61.56 42.34 PQM 65.60 66.00 68.20 66.00 56.88 61.30 63.89 65.45 CRM 67.60 68.20 73.80 74.60 57.92 63.38 64.94 66.88 PUM 71.80 71.80 77.60 78.00 61.04 67.01 68.57 71.43
+> Llama3.1-8B -Instruct PRM 43.20 44.00 40.00 23.00 38.96 37.92 41.04 27.01 PQM 42.80 45.00 48.20 53.00 35.06 39.74 45.19 43.90 CRM 50.20 53.20 57.80 65.60 41.30 42.86 47.79 53.25 PUM 57.40 60.00 68.00 73.60 44.94 50.91 55.06 63.90
+
+correct responses while suppressing high-scoring incorrect responses. This indicates that PUM pro-vides a more robust trajectory-level ranking signal than correctness-oriented baselines. 
+
+4.3 Beam Search 
+
+Beam Search experiments use the policy model to iteratively generate multiple candidate continua-tions from reasoning prefixes, while the evaluator scores and prunes beams at each search step. This setting evaluates the evaluator’s ability to guide rea-soning at the prefix level by identifying promising partial trajectories before the final answer is pro-duced. For each question, beam search initiates by sampling N responses. Subsequently, a beam of b candidates with the highest rewards is maintained and expanded during the generation process. Table 1 reports beam-search accuracy on MATH500 and GAOKAO2023. PUM consis-tently achieves the best performance across both datasets, both policy models, and all search bud-gets. The advantage becomes more pronounced as the search budget increases, suggesting that PUM is better at preserving partial reasoning prefixes that remain useful after further expansion. No-tably, several baselines degrade as N increases, indicating that larger search budgets can amplify evaluator misalignment: high-scoring prefixes are not necessarily those that lead to correct final answers. On MATH500, PUM reaches 78 .00% 
+
+with Qwen and 73 .60% with Llama at N = 100 .On GAOKAO2023, PUM similarly achieves the best accuracy, reaching 71 .43% and 63 .90% un-der the two policy models. These results show that gain-based prefix utility provides an effective search-time signal for pruning incomplete reason-ing branches before final answers are produced. 
+
+4.4 Reinforcement Learning 
+
+RL provides a stricter test of process evaluators than inference-time selection, because inaccurate rewards can be directly exploited by the policy. We combine evaluator feedback with rule-based GRPO (Shao et al., 2024) through a two-level credit assignment design. The rule-based reward provides a trajectory-level signal based on final-answer cor-rectness, anchoring optimization to the standard RLVR objective. The evaluator provides a process-level signal inside each rollout. For PUM, this signal is computed from nested prefix-utility differ-ences, measuring whether a newly generated rea-soning segment increases the utility of the current reasoning state. For PRM (Lightman et al., 2024) and PQM (Li and Li, 2025), we construct anal-ogous dense process-level advantages from their step or value scores, with details in Appendix D.4. CRM (Zhang et al., 2025a) is not included in this comparison because it does not naturally provide step-wise scores that can be converted into per-segment advantages under this design. All RL ex-periments are conducted with Qwen2.5-Math-7B as the policy model. Figure 4 and Table 2 summarize the RL re-sults. In the outcome-anchored setting, where rule-based GRPO is used as the final-answer re-ward, PUM+GRPO achieves the best overall perfor-mance, improving the weighted average accuracy from 55 .21% for vanilla GRPO to 58 .09% . Com-pared with PRM- and PQM-based dense rewards, PUM yields a more stable improvement curve, sug-gesting that prefix-utility differences provide more reliable process-level credit assignment. The process-only setting further exposes the ro-bustness of different evaluators. As shown in Fig-ure 4, PRM and PQM training initially improves but later collapses, while PUM remains stable and Table 2: Pass@1 accuracy on mathematical reasoning benchmarks after RL training.                                             
+
+> Setting Method MATH500 AMC23 Minerva Math AIME(24-26) AVG Outcome-Anchored Vanilla GRPO 76.60 52.50 29.04 16.67 55.21 PRM+GRPO 75.40 60.00 25.37 14.44 53.55 PQM+GRPO 71.40 60.00 19.85 10.00 49.22 PUM+GRPO 80.40 70.00 28.68 17.78 58.09
+> Process-Only PRM 69.80 57.50 18.75 10.00 47.89 PQM 70.00 57.50 20.22 13.33 48.78 PUM 80.20 65.00 26.10 20.00 57.21 (a) Outcome -Anchored (b) Process -Only
+
+Figure 4: RL training curves. 
+
+reaches 57 .21% average accuracy. We find that PRM and PQM exhibit stronger length preferences: the policy learns to generate longer responses that receive high process scores, while validation accu-racy drops. This indicates reward hacking, where local process rewards are exploited without improv-ing final-answer correctness. The training dynamics also explain why PUM+GRPO is effective. In early training, rule-based GRPO provides sparse group-level signals because most rollout groups contain few correct answers. At this stage, the average absolute mag-nitude of PUM advantages is about 10 × that of GRPO advantages, supplying dense guidance for cold start. As the policy improves and correct an-swers become more frequent, the GRPO signal strengthens, while PUM continues to provide fine-grained prefix-level credit assignment. This com-plementary behavior allows PUM and GRPO to jointly improve both early learning efficiency and final performance. 
+
+4.5 Further Analysis 
+
+We conduct additional analyses to better under-stand the properties of evaluators trained from pre-fix utility. 
+
+Weak-to-strong generalization. We further eval-uate whether PUM can generalize to a stronger pol-icy model than those used for data construction and PUM backbone. We use Qwen2.5-32B-Instruct as the policy model, which is larger and stronger than the trajectory generators, student models, and PUM backbone. As shown in Figure 5 (a), PUM still improves with larger candidate pools on both GAOKAO and MATH, reaching its best perfor-mance at large N . This suggests that PUM captures an intrinsic prefix utility that transfers beyond the weaker models used to construct its supervision, rather than merely fitting their generation patterns. 
+
+Policy-dependent utility. We also study whether student weighting can adapt PUM to downstream policies of different strengths. We group student models by their initial solve rates and train PUM-Weak with weights [0 .6, 0.3, 0.1] and PUM-Strong with weights [0 .1, 0.3, 0.6] over weak, medium, and strong students. As shown in Figure 5 (b), PUM-Weak performs better on the weaker Llama3.1-8B-Instruct policy, while PUM-Strong performs better on the stronger Qwen2.5-32B-Instruct policy. This suggests that, beyond intrinsic utility, prefix gain also contains a policy-dependent component that can be exploited by capability-aware aggregation. 
+
+Data scaling. We further study how PUM bene-fits from increasing amounts of gain-based supervi-sion. We train PUM with different fractions of the pairwise utility data, including 10% , 20% , 50% ,and 100% , and evaluate Best-of-N selection perfor-mance. As shown in Figure 5 (c), larger training data consistently improves PUM, especially under larger candidate pools where the evaluator must distinguish fine-grained utility differences among responses. The 100% data setting achieves the best overall performance, while the 50% setting already approaches it at large N , suggesting that gain-based supervision is data-efficient but still benefits from additional preference pairs, as even half of the data already recovers most of the full-data performance. 
+
+Backbone scaling. We analyze whether PUM performance is limited by the gain-based data 5.4 ×                
+
+> 21%
+> (c) Data Size Scaling (b) Policy -dependent Utility (d) PUM Backbone Scaling (e) Hard Data RL (a) Weak to Strong
+
+Figure 5: Further analyses on weak-to-strong, policy dependence, scaling, and hard-data RL. Table 3: Supervision construction cost comparison. PUM-Math avoids human step annotation and requires substantially less automatic labeling computation than Math-Shepherd.                         
+
+> Dataset Domain #Traj. Supervision Annotator / Labeler #Calls Rel. Compute
+> PRM800K MATH ∼75K 800K step labels Human annotators –Human labeling Math-Shepherd MATH + GSM8K ∼445K ∼4.0M outcome-derived step labels 7B completer ∼35.6M 18 .5×
+> PUM-Math MATH ∼20K 280K pairwise utilities Avg. 2B students 6.72M 1.0 ×
+
+or by the backbone model capacity. We train PUM with several Qwen-family backbones, includ-ing Qwen2.5-1.5B, Qwen2.5-3B, Qwen2.5-7B and Qwen3-4B, using the same pairwise utility data. As shown in Figure 5 (d), performance improves as the backbone becomes stronger. This scaling trend suggests that our data are not saturated under the current training setup, and that stronger base mod-els can better learn the subtle utility distinctions encoded in prefix-gain supervision. 
+
+Learning from hard data. We further test PUM on hard problems where RLVR signals are ex-tremely sparse. We collect 5.7k problems from DAPO-Math-17K for which the base model fails to produce any correct solution in 16 rollouts. In this setting, native GRPO receives almost no effective group-level advantage, while PUM can still provide dense supervision through utility advantage. As shown in Figure 5 (e), PUM-only train-ing yields much faster improvement than vanilla GRPO. At step 20 , PUM-only achieves around 
+
+21% absolute improvement over GRPO and reaches a performance level that GRPO approaches only after about 5.4× more training steps. This demonstrates that prefix-utility supervision substan-tially improves data efficiency on hard reasoning problems where rule-based rewards are sparse. 
+
+Supervision cost. We further compare the su-pervision construction cost of PUM-Math with representative process-supervision datasets. As shown in Table 3, PUM-Math avoids manual step-level annotation and is built from about 20K tra-jectories, much fewer than the 75K trajectories in PRM800K and the 445K trajectories in Math-Shepherd. Although PUM-Math evaluates multiple prefixes from each trajectory, its construction re-quires about 6.72M student rollouts, obtained from seven prefixes per trajectory and 48 continuations per prefix, using lightweight student models with an average size of 2B parameters. By contrast, Math-Shepherd constructs step-level supervision at a much larger scale: under a simple estimate with 10 reasoning steps per trajectory and N = 8 com-pletions per step, it requires about 35.6M comple-tions generated by a 7B model. We measured the average continuation length for both PUM-Math and Math-Shepherd and estimated labeling cost by parameter-token computation. Under this account-ing, Math-Shepherd requires roughly 18 .5× more labeling computation than PUM-Math, suggesting that PUM’s gains come from more effective super-vision targets rather than greater supervision cost. 
+
+5 Conclusion 
+
+We presented PUM, a gain-based prefix evalua-tor that shifts process evaluation from local cor-rectness to outcome-grounded utility. By estimat-ing solve-rate gains with lightweight student mod-els, PUM learns an intrinsic prefix-utility target from gain-based pairwise preferences. Experi-ments show that this signal improves Best-of-N
+
+selection, beam search, and reinforcement learn-ing by supporting stronger verification, search-time guidance, and dense credit assignment. Further analyses demonstrate transfer to stronger policies, capability-dependent variation, data and backbone scaling, improved hard-data learning, and lower construction cost than large-scale step-supervision datasets. These results suggest that outcome-grounded gain provides an effective and efficient supervision target for prefix evaluation. 6 Limitations 
+
+Our experiments focus on mathematical reasoning, where reliable final-answer verification enables controlled estimation of prefix gain and provides a clean testbed for comparing process-supervision targets. Extending PUM to domains with ambigu-ous, delayed, or human-judged outcomes would require suitable outcome signals or learned veri-fiers. While PUM reduces construction cost compared with prior automated supervision pipelines, its gain estimation still requires substantial computation from student rollouts. In addition, this work adopts a simple scalarization of gain distributions by aver-aging normalized student gains into an intrinsic util-ity target, which enables a clean comparison with PRM-style supervision but does not fully exploit the distributional structure of prefix utility. Future work could explore richer distributional modeling, policy-adaptive utility estimation, and extensions to agentic settings, where intermediate plans, tool-use traces, or workspace states may be evaluated by their contribution to eventual task success. 
+
+References 
+
+Jinze Bai, Shuai Bai, Yunfei Chu, Zeyu Cui, Kai Dang, Xiaodong Deng, Yang Fan, Wenbin Ge, Yu Han, Fei Huang, et al. 2023. Qwen technical report. arXiv preprint arXiv:2309.16609 .Ralph Allan Bradley and Milton E Terry. 1952. Rank analysis of incomplete block designs: I. the method of paired comparisons. Biometrika , 39(3/4):324– 345. Dan Hendrycks, Collin Burns, Saurav Kadavath, Akul Arora, Steven Basart, Eric Tang, Dawn Song, and Ja-cob Steinhardt. 2021. Measuring mathematical prob-lem solving with the math dataset. arXiv preprint arXiv:2103.03874 .Wendi Li and Yixuan Li. 2025. Process reward model with q-value rankings. In International Conference on Learning Representations , volume 2025, pages 14708–14726. Baohao Liao, Xinyi Chen, Sara Rajaee, Yuhui Xu, Chris-tian Herold, Anders Søgaard, Maarten de Rijke, and Christof Monz. 2025. Lost at the beginning of rea-soning. arXiv preprint arXiv:2506.22058 .Minpeng Liao, Chengxi Li, Wei Luo, Wu Jing, and Kai Fan. 2024. Mario: Math reasoning with code inter-preter output-a reproducible pipeline. In Findings of the Association for Computational Linguistics: ACL 2024 , pages 905–924. Hunter Lightman, Vineet Kosaraju, Yuri Burda, Harri-son Edwards, Bowen Baker, Teddy Lee, Jan Leike, John Schulman, Ilya Sutskever, and Karl Cobbe. 2024. Let’s verify step by step. In International Conference on Learning Representations , volume 2024, pages 39578–39601. Amrith Setlur, Chirag Nagpal, Adam Fisch, Xinyang Geng, Jacob Eisenstein, Rishabh Agarwal, Alekh Agarwal, Jonathan Berant, and Aviral Kumar. 2025. Rewarding progress: Scaling automated process veri-fiers for llm reasoning. In International Conference on Learning Representations , volume 2025, pages 60808–60838. Zhihong Shao, Peiyi Wang, Qihao Zhu, Runxin Xu, Junxiao Song, Xiao Bi, Haowei Zhang, Mingchuan Zhang, YK Li, Yang Wu, et al. 2024. Deepseekmath: Pushing the limits of mathematical reasoning in open language models. arXiv preprint arXiv:2402.03300 .Hugo Touvron, Louis Martin, Kevin Stone, Peter Al-bert, Amjad Almahairi, Yasmine Babaei, Nikolay Bashlykov, Soumya Batra, Prajjwal Bhargava, Shruti Bhosale, et al. 2023. Llama 2: Open founda-tion and fine-tuned chat models. arXiv preprint arXiv:2307.09288 .Dingzirui Wang, Xuanliang Zhang, Keyan Xu, Qingfu Zhu, Wanxiang Che, and Yang Deng. 2025. Bounds of chain-of-thought robustness: Reasoning steps, embed norms, and beyond. arXiv preprint arXiv:2509.21284 .Peiyi Wang, Lei Li, Zhihong Shao, Runxin Xu, Damai Dai, Yifei Li, Deli Chen, Yu Wu, and Zhifang Sui. 2024. Math-shepherd: Verify and reinforce llms step-by-step without human annotations. In Proceedings of the 62nd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) ,pages 9426–9439. Xuezhi Wang, Jason Wei, Dale Schuurmans, Quoc Le, Ed Chi, Sharan Narang, Aakanksha Chowdhery, and Denny Zhou. 2022. Self-consistency improves chain of thought reasoning in language models. arXiv preprint arXiv:2203.11171 .Jason Wei, Xuezhi Wang, Dale Schuurmans, Maarten Bosma, Fei Xia, Ed Chi, Quoc V Le, Denny Zhou, et al. 2022. Chain-of-thought prompting elicits rea-soning in large language models. Advances in neural information processing systems , 35:24824–24837. An Yang, Anfeng Li, Baosong Yang, Beichen Zhang, Binyuan Hui, Bo Zheng, Bowen Yu, Chang Gao, Chengen Huang, Chenxu Lv, et al. 2025. Qwen3 technical report. arXiv preprint arXiv:2505.09388 .Shunyu Yao, Dian Yu, Jeffrey Zhao, Izhak Shafran, Tom Griffiths, Yuan Cao, and Karthik Narasimhan. 2023. Tree of thoughts: Deliberate problem solving with large language models. Advances in neural information processing systems , 36:11809–11822. Xuechen Zhang, Zijian Huang, Yingcong Li, Chenshun Ni, Jiasi Chen, and Samet Oymak. 2026. Bread: Branched rollouts from expert anchors bridge sft & rl for reasoning. Advances in Neural Information Processing Systems , 38:96726–96752. Zheng Zhang, Ziwei Shan, Kaitao Song, Yexin Li, and Kan Ren. 2025a. Linking process to outcome: Con-ditional reward modeling for llm reasoning. arXiv preprint arXiv:2509.26578 .Zhenru Zhang, Chujie Zheng, Yangzhen Wu, Beichen Zhang, Runji Lin, Bowen Yu, Dayiheng Liu, Jin-gren Zhou, and Junyang Lin. 2025b. The lessons of developing process reward models in mathematical reasoning. In Findings of the Association for Compu-tational Linguistics: ACL 2025 , pages 10495–10516. Denny Zhou, Nathanael Schärli, Le Hou, Jason Wei, Nathan Scales, Xuezhi Wang, Dale Schuurmans, Claire Cui, Olivier Bousquet, Quoc Le, et al. 2022. Least-to-most prompting enables complex reason-ing in large language models. arXiv preprint arXiv:2205.10625 .Yuhang Zhou, Xutian Chen, Yixin Cao, Yuchen Ni, Yu He, Siyu Tian, Xiang Liu, Yunwen Chen, Guang-nan Ye, Xipeng Qiu, et al. 2026. Teach2eval: An interaction-driven llms evaluation method via teach-ing effectiveness. In The Fourteenth International Conference on Learning Representations .A Prefix Utility Data Construction 
+
+A.1 Trajectory Generation 
+
+To construct a diverse pool of reasoning trajectories, we use seven open models from five organizations as trajectory generators. The models cover different parameter scales, model families, and generation styles, with an average size of approximately 6.7B parameters. This diversity is important for reduc-ing the risk that PUM learns model-specific stylis-tic artifacts rather than prefix utility. In particular, trajectories generated by models from different or-ganizations expose PUM to heterogeneous formats, answer styles, and error patterns, while still keep-ing the overall data construction cost moderate. Table 4 summarizes the trajectory generation models. For all models, we use stochastic decod-ing with temperature 1.0 and top-p = 1 .0. The maximum generation length is set to 4096 tokens for standard instruction models and 8192 tokens for thinking models. For thinking models, we remove the explicit thinking trace and retain only the final answer-facing solution as the trajectory. This nor-malization keeps the trajectory format comparable across generators and prevents PUM from relying on model-specific hidden-thinking markers. The resulting trajectory pool contains 20K solu-tions in total. We deliberately include both smaller and stronger generators: weaker models contribute diverse failure cases and partially useful prefixes, while stronger models provide higher-quality rea-soning trajectories. This mixture enables the sub-sequent prefix sampling procedure to compare pre-fixes across different quality levels, lengths, and reasoning styles, which is essential for constructing robust gain-based pairwise preferences. 
+
+A.2 Prefix Sampling Strategy 
+
+We construct prefix pairs in two stages: trajectory-pair sampling and prefix-pair sampling. The overall design is summarized in Table 5. 
+
+Trajectory-pair sampling. Following prior process-supervision work, we use problems from the MATH(Hendrycks et al., 2021) training set as the base problem pool for trajectory construction. For each problem, we collect multiple reasoning trajectories generated by different models and form trajectory pairs under two settings: within-model and cross-model. Within-model pairs are sampled from the same generator, and we require the two trajectories to have different final-answer correctness, i.e., one correct and one incorrect. Cross-model pairs are sampled from different generators for the same problem, introducing vari-ation in reasoning style and model-specific error patterns. We keep within-model and cross-model pairs balanced with a 1:1 ratio. 
+
+Prefix sampling. Given the sampled trajectory pairs, we construct two types of prefix-level com-parisons. For vertical pairs, we truncate the same trajectory at adjacent relative positions: 
+
+R = {0.1, 0.2, 0.35 , 0.5, 0.7, 0.9}.
+
+The 0.9 position is taken before the final answer, i.e., it keeps most of the reasoning process while removing the answer itself. This prevents PUM from directly inferring correctness from the final answer. For horizontal pairs, we compare prefixes from different trajectories. We first truncate each trajec-tory at the same set of relative positions, then retain a pair only when the two prefixes have similar to-ken lengths: 
+
+|| pi| − | pj || 
+
+max( |pi|, |pj |) ≤ 0.05 .
+
+This length-matching constraint ensures that hor-izontal comparisons focus on reasoning quality rather than prefix length. In practice, we observe that PUM trained with these discrete truncation ratios still generalizes to prefixes truncated at unseen positions, indicating that the model does not simply memorize the pre-defined sampling grid. All retained prefixes are later evaluated through student-model rollouts to estimate prefix-induced gain. Therefore, trajectory correctness is only used to sample informative trajectory pairs; the final preference labels are determined by gain-based util-ity differences rather than by trajectory correctness directly. 
+
+A.3 Estimating Prefix Utility 
+
+We estimate prefix utility by measuring how much a prefix improves the downstream solve rate of lightweight student models. We use six students for gain estimation: Qwen3-1.7B, InternLM2.5-1.8B-Chat, Phi-4-mini, Gemma-E2B, Qwen3-0.6B, and SmolLM3-3B. For each problem-prefix pair, each student samples K = 8 continuations. The no-prefix baseline for the same problem is estimated with the same rollout budget. Table 4: Trajectory generation models used for constructing PUM supervision. We use seven models from five organizations, yielding 20K trajectories in total. Thinking traces are removed for thinking-oriented models, and only the final answer-facing solution is retained as the trajectory.                                              
+
+> Model Size Thinking Organization Max Tokens #Traj. MiniCPM4.1-8B 8B No OpenBMB 4096 3K MiniCPM3-4B 4B No OpenBMB 4096 3K Mimo-7B-RL 7B Yes Xiaomi 8192 2K Hunyuan-1.8B-Instruct 1.8B No Tencent 4096 2K Phi-4 14B No Microsoft 4096 4K Phi-3.5-mini-instruct 4B No Microsoft 4096 4K Gemma-4-E4B 8B Yes Google 8192 2K Total / Avg. 6.7B –5 orgs. –20K
+
+Table 5: Prefix-pair construction strategy. Vertical and horizontal pairs control prefix-level comparison, while within-model and cross-model pairs control trajectory-source variation.           
+
+> Pair Type Definition Purpose Vertical Same trajectory, different truncation positions Learn utility progression Horizontal Same token length, different trajectories Mitigate length shortcut and bias Within-model Prefixes from the same generator Reduce style confound Cross-model Prefixes from different generators Improve style generalization
+
+For continuation generation, we use temperature 
+
+0.7 and top-p = 0 .95 . We set the total context budget to 8192 tokens. Given a prefix p, the max-imum continuation length is set to 8192 − | p|, so that longer prefixes receive shorter continuation budgets while all prefix-conditioned rollouts share the same total token budget. For a student model s, the prefix-conditioned solve rate is estimated as 
+
+ˆqs(x, p ) = 1
+
+K
+
+> K
+
+X
+
+> k=1
+
+I [V (x, p ⊕ ck) = 1] ,
+
+where ck is a sampled continuation and V is the answer verifier. The no-prefix solve rate ˆqs(x, ∅)
+
+is estimated by sampling solutions from the same student without providing prefix p. The empirical prefix gain is then 
+
+ˆgs(x, p ) = ˆ qs(x, p ) − ˆqs(x, ∅).
+
+A positive gain means that the prefix improves the student’s chance of solving the problem, while a negative gain means that the prefix makes the con-tinuation less likely to succeed. Since different students have different baseline abilities and gain scales, we normalize gains sep-arately for each student. Let μs and σs denote the mean and standard deviation of ˆgs(x, p ) over the training prefixes for student s. We compute 
+
+Norm s(ˆ gs(x, p )) = ˆgs(x, p ) − μs
+
+σs + ϵ ,
+
+where ϵ is a small constant for numerical stability. The intrinsic utility target used for the main PUM is the average normalized gain across all stu-dent models: 
+
+Gintr (x, p ) = 1
+
+|S| 
+
+X
+
+> s∈S
+
+Norm s(ˆ gs(x, p )) .
+
+This simple averaging treats the student set as a ref-erence population and captures the shared tendency of whether a prefix improves downstream solving. For the policy-dependent utility analysis in Sec-tion 4.5, we additionally group students into weak, medium, and strong groups according to their no-prefix solve rates on each problem. These groups are used only for studying capability-aware utility aggregation, not for the main PUM training target. In the main experiments, we intentionally adopt the simplest normalized-average utility to isolate the effect of gain-based supervision. More sophisti-cated ways of modeling and exploiting the full gain distribution are left for future work. 
+
+A.4 Pairwise Preference Construction 
+
+After estimating prefix utility, we convert pre-fix scores into pairwise preference labels. We construct candidate pairs from the prefix pool described above, including horizontal and verti-cal comparisons. Horizontal pairs compare pre-fixes from different trajectories of the same prob-lem, while vertical pairs compare adjacent prefixes within the same trajectory. For a candidate pair (pi, p j ) of the same problem 
+
+x, we first compute the utility difference for each student model: 
+
+ds(x, p i, p j ) = us(x, p i) − us(x, p j ),
+
+where us(x, p ) denotes the normalized prefix utility estimated from student s. Since the main PUM target does not use capability-dependent student weighting, every valid student contributes equally. The aggregate pairwise utility difference is 
+
+¯d(x, p i, p j ) = 1
+
+|S ij |
+
+X
+
+> s∈S ij
+
+ds(x, p i, p j ),
+
+where Sij is the set of student models with valid utility estimates for both prefixes. To reduce noisy labels caused by finite rollout variance, we use an adaptive margin rather than a fixed zero threshold. We first estimate a global threshold ϵglobal from the empirical distribution of 
+
+| ¯d| over candidate pairs. In addition, each pair has a resolution floor determined by the number of effective student models: 
+
+ϵfloor = λres · 0.125 
+
+Neff 
+
+,
+
+Here 0.125 = 1 /8 is the minimum accuracy res-olution of a single student, because each prefix-conditioned or no-prefix solve rate is estimated from 8 rollouts. Therefore, a one-sample change in the estimated solve rate changes the accuracy by 
+
+1/8. Dividing by Neff reflects the fact that the final utility difference is averaged over multiple valid students. Since all students are uniformly weighted in our main setting, Neff is equal to the number of valid students. The final margin is 
+
+ϵ = max( ϵglobal , ϵ floor ).
+
+We also compute a sign-conflict rate among stu-dents. Let n+ and n− denote the number of stu-dents assigning positive and negative utility differ-ences, respectively. The conflict rate is 
+
+ρconflict = min( n+, n −)
+
+n+ + n−
+
+.
+
+This quantity measures whether students agree on the preference direction. The label is assigned as follows: 
+
+yij =
+
+
+
+1, ¯d(x, p i, p j ) > ϵ, 
+
+−1, ¯d(x, p i, p j ) < −ϵ, 
+
+0, | ¯d(x, p i, p j )| ≤ ϵ and ρconflict ≤ ρmax ,
+
+uncertain , otherwise .
+
+Here yij = 1 means that pi is preferred over pj ,
+
+yij = −1 means that pj is preferred over pi, and 
+
+yij = 0 denotes a tie. Uncertain pairs are discarded from the main training set unless otherwise speci-fied. The uncertain category is rare in practice: it accounts for 3.7% of candidate pairs in our final construction. Therefore, the filtering step mainly removes high-variance or directionally inconsistent comparisons, rather than substantially reshaping the preference-pair distribution. This procedure keeps only pairwise preferences with sufficient utility separation or reliable agree-ment among students. As a result, PUM is trained on relative utility comparisons rather than raw cor-rectness labels, which reduces sensitivity to prob-lem difficulty and rollout noise. 
+
+B Empirical Study 
+
+Before training PUM, we conduct an empirical study to examine whether student-measured prefix gains contain a stable and learnable utility structure. The study is designed to answer two questions: (i) whether different students agree on the coarse utility trend of reasoning prefixes, and (ii) whether prefix utility also contains capability-dependent variation. 
+
+Setup. We separate trajectories into two groups according to their final-answer correctness: correct trajectories and wrong trajectories. For each tra-jectory, we evaluate prefixes at the same relative truncation ratios used in data construction, i.e., 
+
+{0.1, 0.2, 0.35 , 0.5, 0.7, 0.9}.
+
+For each student model, we compute normalized prefix gain as described in Appendix A.3. We then analyze both the position-level average gain curve and the student-level agreement over individual prefixes. 
+
+Position-level utility trend. Figure 6 shows the normalized gain curves for correct and wrong tra-jectories. On correct trajectories, the average prefix gain increases as the prefix becomes longer. This in-dicates that useful reasoning prefixes progressively make the remaining problem easier for downstream students. In contrast, on wrong trajectories, the gain remains close to zero at early positions and decreases sharply at later positions. This suggests that incorrect reasoning may not be immediately harmful, but becomes increasingly misleading as Figure 6: Gain trends across prefix positions for correct and wrong trajectories. 
+
+> Figure 7: Relationship between student capability gaps and pairwise gain agreement.
+
+the trajectory commits to an erroneous solution path. Importantly, this trend is consistent across most student models. Although different students have different absolute gain scales, their gain curves exhibit similar global patterns: prefixes from cor-rect trajectories tend to become more useful with reasoning progress, while prefixes from wrong tra-jectories tend to become less useful. This supports the existence of a shared intrinsic component of prefix utility. 
+
+Student agreement and capability dependence. 
+
+We further analyze pairwise agreement between student models. For each pair of students, we com-pute the Spearman correlation between their prefix-gain rankings and compare it with their baseline capability gap, measured by the difference in no-prefix solve rates. Figure 7 shows a clear negative relationship: students with similar baseline capabil-ities tend to assign more consistent prefix utilities, while students with larger capability gaps show lower agreement. This observation suggests that prefix utility is not purely universal. A prefix may provide substan-tial help to a weaker student by revealing a missing decomposition or intermediate strategy, while offer-ing little marginal benefit to a stronger student that can already solve the problem without assistance. Conversely, a prefix that is too compressed or skips key steps may be useful for stronger students but less useful for weaker ones. Therefore, the gain profile contains both a shared intrinsic utility com-ponent and a capability-dependent component. 
+
+Implications for PUM. These findings justify the design of our supervision target. The strong position-level alignment motivates the use of an aggregated intrinsic utility label for the main PUM training. At the same time, the capability-dependent variation explains why the full gain dis-tribution is richer than a single scalar. In this paper, we intentionally use the simplest normalized aver-age over students as the main utility target, so that the effect of gain-based supervision can be studied cleanly. We leave more sophisticated distributional or policy-adaptive utility modeling to future work, and provide preliminary capability-aware analysis in Section 4.5. 
+
+C Evaluator Training Details 
+
+Model architecture. For a fair comparison, all learned evaluators, including PRM, PQM, CRM, and PUM, are implemented with the same scalar-scoring architecture. We use Qwen3-4B-Instruct-2507 as the backbone. Given a problem x and a prefix or partial solution p, the input is formatted as problem-prefix concatenation, and the hidden state of the last non-padding token is fed into an MLP value head to produce a scalar score. In the main setting, we train LoRA adapters and the value head while keeping the original backbone parameters frozen. The evaluators differ only in their supervision targets. PRM is trained to predict step-level cor-rectness, PQM is trained with value-based pro-cess supervision, CRM is trained to connect par-tial solutions with final outcomes, and PUM is trained to predict intrinsic prefix utility derived from outcome-grounded gain. 
+
+Training objective. Each training example con-tains two prefixes (pa, p b) from the same problem and a label y ∈ { 1, 0, −1}, where 1 means pa is preferred, −1 means pb is preferred, and 0 denotes a tie. PUM computes 
+
+∆θ = Uθ(x, p a) − Uθ(x, p b).
+
+We map the label to a soft target 
+
+t =
+
+
+
+1.0, y = 1 ,
+
+0.5, y = 0 ,
+
+0.0, y = −1,
+
+and optimize the Bradley-Terry loss 
+
+LPUM = − [t log σ(∆ θ) + (1 − t) log(1 − σ(∆ θ))] .
+
+Tie pairs are therefore trained as soft preferences with target 0.5.
+
+Training configuration. We train PUM with dis-tributed data parallelism on 8 GPUs. The maxi-mum input length is 8192. We use LoRA with rank 64 , α = 128 , and dropout 0.1. The per-device batch size is 8 with gradient accumulation steps of 4, giving an effective batch size of 256. We train for 2 epochs using AdamW with learning rate 
+
+1 × 10 −5, weight decay 0.01 , warmup ratio 0.08 ,bf16 precision, and gradient checkpointing. 
+
+D Experiment Details 
+
+D.1 Datasets and Evaluation Benchmarks 
+
+Table 7 summarizes the datasets used in our experi-ments. We use the MATH training set as the base problem pool for PUM data construction, where                      
+
+> Table 6: Training configuration for PUM.
+> Hyperparameter Value Backbone Qwen3-4B-Instruct-2507 Training mode LoRA + value head Value head MLP Pooling Last non-padding token Max length 8192 LoRA rank 64 LoRA α128 LoRA dropout 0.1 Per-device batch size 8Gradient accumulation 4Effective batch size 256 Epochs 2Learning rate 1×10 −5
+> Weight decay 0.01 Warmup ratio 0.08 Precision bf16 Gradient checkpointing Yes
+
+trajectories and prefixes are generated for gain estimation and pairwise preference construction. For inference-time evaluation, we evaluate Best-of-N selection on MATH500, GAOKAO2023, and AIME2025, and evaluate beam search on MATH500 and GAOKAO2023. These settings test whether PUM can rank complete trajectories and guide partial reasoning prefixes at test time. For reinforcement learning, we use DAPO-Math-17K as the training set for policy optimization. We evaluate the trained policies on a broader collec-tion of mathematical reasoning benchmarks, in-cluding MATH500, AMC23, Minerva Math, and AIME2024/2025/2026. This evaluation suite cov-ers both in-domain mathematical reasoning and more challenging competition-style problems, al-lowing us to measure the generalization of different reward and credit-assignment methods. 
+
+D.2 Best-of-N Experiment 
+
+Best-of-N selection evaluates whether an evaluator can select the best response from a sampled candi-date pool. We use four policy models for response generation: Qwen2.5-3B-Instruct, Qwen2.5-7B-Instruct, Qwen3-4B-Instruct-2507, and Llama-3.1-8B-Instruct. Following the main experiments, we evaluate on MATH500, GAOKAO2023, and AIME2025 with 
+
+N ∈ { 1, 2, 4, 8, 16 , 32 , 64 , 128 }.
+
+For each problem, the policy model samples N
+
+candidate responses with temperature 0.7 and top-
+
+p = 0 .8. We set policy_max_len to 4096 tokens, Table 7: Datasets and benchmarks used in our experiments.              
+
+> Usage Dataset Purpose PUM data construction MATH train Trajectory / prefix construction Best-of-Nevaluation MATH500, GAOKAO2023, AIME2025 Trajectory-level selection Beam search MATH500, GAOKAO2023 Prefix-level search RL training DAPO-Math-17K Policy optimization RL evaluation MATH500, AMC23, Minerva Math, AIME2024/2025/2026 Generalization evaluation
+
+and 8192 for Qwen3-4B-Instruct-2507. All gener-ated responses are verified by the answer verifier, and the selected response is counted as correct if its final answer matches the reference answer. For PUM, each complete response is treated as a terminal prefix and scored by Uθ(x, y ). For PRM, we consider two commonly used step-score ag-gregation strategies: the mean step score and the minimum step score. The mean score reflects the overall quality of the reasoning process, while the minimum score follows a more conservative prin-ciple by penalizing any low-quality intermediate step. In our preliminary experiments, the minimum aggregation gives better Best-of-N performance, so we use it as the default PRM trajectory score: 
+
+SPRM (x, y ) = min  
+
+> t
+
+rt.
+
+For PQM, we also evaluate multiple aggrega-tion strategies, including the final-position score, the mean score over intermediate positions, and the minimum score over intermediate positions. Empirically, the final-position score performs best among these choices, so we use it as the default PQM trajectory score. This is also consistent with the value-model interpretation of PQM, where the score at the final reasoning state summarizes the estimated quality of the completed trajectory. For CRM, we follow the original CRM paper, which reports that using the final-position score yields the best trajectory-level performance. Therefore, for both PQM and CRM, we use the final-position score as the trajectory score: 
+
+SPQM /CRM (x, y ) = sT .
+
+Majority voting selects the most frequent final answer among the N candidates, with ties broken by the earliest occurrence. The final Best-of-N
+
+accuracy is the fraction of problems for which the selected response is correct. 
+
+D.3 Beam Search Experiment 
+
+Beam search evaluates whether an evaluator can guide partial reasoning before the final answer is produced. We conduct beam-search experiments on MATH500 and GAOKAO2023 using Qwen2.5-3B-Instruct and Llama-3.1-8B-Instruct as policy models. For each problem, the policy model gener-ates partial continuations, the evaluator scores the resulting prefixes, and only the top-ranked unfin-ished prefixes are kept for further expansion. We evaluate search budgets 
+
+N ∈ { 4, 8, 20 , 100 }.
+
+For each budget, we initialize the search by sam-pling N candidate continuations. At later stages, we keep a beam of size b and expand each retained prefix with N/b continuations, so that each stage uses the same total expansion budget N . The im-plementation requires N to be divisible by b. We use the following beam presets: 
+
+N = 4 : b ∈ { 4, 2, 1},N = 8 : b ∈ { 8, 4, 2},N = 20 : b ∈ { 20 , 10 , 5},N = 100 : b ∈ { 50 , 25 , 10 }.
+
+Generation is performed with vLLM. We use temperature 0.7 and top-p = 1 .0. The maximum answer length is 4096 tokens. At each search stage, the policy generates at most 256 new tokens. To obtain natural prefix boundaries, generation is per-formed in chunks of 64 tokens and stopped once a natural boundary is detected, such as a sentence boundary, newline, or paragraph break. The maxi-mum number of beam expansion stages is 24. At each stage, every candidate prefix is scored by the evaluator. For PUM, the score is directly computed as 
+
+SPUM (x, p ) = Uθ(x, p ).
+
+For PRM, we use the minimum step score over the current prefix. For PQM and CRM, we use the score at the current prefix end. Candidates are ranked by evaluator score, and the top-b unfinished prefixes are retained for the next expansion stage. A trajectory is considered finished if it contains a complete boxed answer, reaches the maximum answer length, or the generator returns an end-of-sequence signal. After the search terminates, we select the highest-scoring terminal trajectory with a complete boxed answer. If no terminal trajectory contains a boxed answer, we fall back to the highest-scoring termi-nal trajectory among all candidates. The final accu-racy is computed by verifying the selected answer against the reference answer. 
+
+D.4 RL Experiment 
+
+We evaluate process evaluators in reinforcement learning under two settings: evaluator-only and 
+
+outcome-anchored . In both settings, we use Qwen2.5-Math-7B as the policy model. The train-ing data are from DAPO-Math-17K, and validation is conducted on AIME2024/2025/2026, Minerva Math, AMC2023, and MATH500, from difficult to easy. 
+
+Two training settings. In the evaluator-only set-ting, we use the evaluator-derived process advan-tages. This setting tests whether the evaluator it-self can provide a useful optimization signal with-out final-answer RLVR reward. In the outcome-anchored setting, we keep the rule-based GRPO advantage from final-answer correctness and add evaluator-derived dense advantages on top. The outcome-level GRPO advantage is assigned to all response tokens, while the evaluator advantage is assigned to the tokens of the corresponding reason-ing segment. 
+
+Evaluator advantage construction. For PUM, we split each response into at most 8 reasoning segments and compute the process advantage from nested prefix-utility differences: 
+
+APUM  
+
+> t
+
+= Uθ(x, p t) − Uθ(x, p t−1),
+
+where pt denotes the prefix after the t-th segment. We use coefficient 0.5, and do not apply delta nor-malization. For PRM, we directly use the step score shift −0.5 as the dense process advantage. For PQM, we use the value difference between adjacent prefixes: 
+
+APQM  
+
+> t
+
+= Sϕ(x, p t) − Sϕ(x, p t−1).
+
+For the outcome-anchored setting, the final token-level advantage is 
+
+A = AGRPO + 0 .5Aeval ,
+
+while in the evaluator-only setting, we use 
+
+A = 0 .5Aeval .
+
+Training configuration. We use vLLM for roll-out generation with 8 responses per prompt, tem-perature 1.0, top-p = 1 .0, and top-k = −1. The maximum prompt length is 2048 and the maximum response length is 4096. The train batch size is 64 and the validation batch size is 512. During validation, sampling is disabled with temperature 0
+
+and one response per prompt. The actor is trained with FSDP2 and bf16 preci-sion. We use learning rate 1 × 10 −6, weight decay 
+
+0.01 , warmup steps 10 , PPO mini-batch size 192 ,and micro-batch size 8 per GPU. Follow most of the work of GRPO, We use a separate KL loss with coefficient 0.001 and low-variance KL. 
+
+E Case Study of Trajectories Selected by PUM and PRM 
+
+We compare representative trajectories selected by PUM and PRM during beam search. Rather than focusing only on final correctness, we exam-ine whether the selected trajectory provides useful prefix-level progress toward the answer. Overall, PUM-selected trajectories are typi-cally more compact and more likely to produce extraction-ready answers. PRM-selected trajecto-ries often contain locally correct steps, but tend to be more verbose and are more susceptible to repeated explanations, instruction leakage, or in-complete finalization. Case 1: Teacup Counting Problem 
+
+Problem. Margaret has 100 teacups. She has already held 24 tea parties with 2 guests each. At each party, she uses one teacup for each guest and one for herself. How many tea parties with 3 guests should she hold to use the remaining teacups? 
+
+PUM 
+
+Result: Correct Length: 195 tokens 
+
+Raw selected prefix. 
+
+Since 24 tea parties were held, with each us-ing 3 cups, the number of teacups used is 
+
+24 · 3 = 72 .
+
+This leaves 
+
+100 − 72 = 28 
+
+teacups unused. Each tea party with 3 guests will use 
+
+3 + 1 = 4 
+
+teacups. To use all the remaining teacups, the number of tea parties she should host is 
+
+28 ÷ 4 = 7 .
+
+Prefix state. The prefix quickly identifies the two decisive quantities: remaining cups = 28 , cups per future party = 4 .
+
+Issue. The reasoning is compact and directly terminal; almost every displayed computation contributes to the final answer. 
+
+PRM 
+
+Result: Correct Length: 478 tokens 
+
+Raw selected prefix. 
+
+We will analyze the available information and formulate a plan of action to arrive at the solution. First, we know that Margaret has a collection of 100 teacups and she hosts tea parties every Tuesday. At each tea party, she uses one teacup for each invited guest and one for herself. 
+
+· · · 
+
+Thus, if she hosts k tea parties with 3 guests, the total number of teacups she will use will be 4k. Since she has 28 teacups remaining, we need 4k = 28 . This implies that she should host k = 7 tea parties. Hence, the final answer is 7. This implies that she should host 7 tea parties with 3 guests to ensure each of the remaining 28 teacups is used exactly once. Hence, the final answer is 7. 7
+
+The final answer is: 7 ### Instruction: Margaret holds tea parties... 
+
+Prefix state. The trajectory reaches the same correct state, but then repeats the solved conclusion and continues after the answer. 
+
+Issue. The selected prefix is locally correct, but its later tokens have low marginal utility and exhibit instruction leakage. 
+
+Takeaway. Both models find the correct answer, but PUM selects a shorter prefix that reaches the decisive state directly. PRM selects a much longer trajectory that is locally valid but contains redundant post-solution continuation and instruction leakage. Case 2: Dot Product Problem 
+
+Problem. Given two vectors ⃗a = ( −2, 3) ,⃗ b = (1 , 2) ,
+
+compute the dot product ⃗a ·⃗ b.
+
+PUM 
+
+Result: Correct Length: 240 tokens 
+
+Raw selected prefix. 
+
+We are given two vectors ⃗a = ( −2, 3) and ⃗b = (1 , 2) and need to calculate the dot prod-uct. The formula is ⃗a ·⃗ b = ( a1b1) + ( a2b2).
+
+Substituting the given values, ⃗a ·⃗ b = ( −2 · 1) + (3 · 2) .
+
+Finally, 
+
+(−2) + (6) = 4 .
+
+Thus, the dot product is equal to 4. 4
+
+Prefix state. The prefix reduces the task to the decisive arithmetic expression: 
+
+(−2)(1) + (3)(2) = 4 .
+
+Issue. The main reasoning path is concise and complete, though the generated tail contains minor formatting arti-facts. 
+
+PRM 
+
+Result: Correct Length: 478 tokens 
+
+Raw selected prefix. 
+
+We need to recall that the dot product of two vectors is the sum of the products of their respective components. ⃗a ·⃗ b = a1b1 + a2b2.
+
+## Step 1: Identify the components of vec-tors a and b 
+
+We have vector a with components a1 = −2
+
+and a2 = 3 , and vector b with components 
+
+b1 = 1 and b2 = 2 . We need to use these components to compute the dot product. 
+
+· · · 
+
+## Step 5: Write the answer in the required format 
+
+We need to put the answer in a box to com-plete the response as requested. 4
+
+The final answer is: 4 ## Step 1: Identify the components... 
+
+Prefix state. The correct computation is reached, but the trajectory repeatedly restates components, formula use, and answer formatting. 
+
+Issue. The prefix is much longer than necessary for a one-step computation and restarts after finalization. 
+
+Takeaway. For a simple dot product, PUM selects a prefix centered on the decisive computation. PRM favors a locally valid reasoning pattern, but the selected trajectory contains repeated verification and post-answer continuation. Case 3: Tangent Line Problem 
+
+Problem. Find the tangent line to 
+
+y = ex
+
+x + 1 
+
+at the point 
+
+1, e
+
+2
+
+
+
+.
+
+The gold answer is 
+
+y = e
+
+4 x + e
+
+4 .
+
+PUM 
+
+Result: Incorrect Length: 318 tokens 
+
+Raw selected prefix. 
+
+First, let’s find the derivative of the function using the quotient rule: 
+
+y′ = (x + 1) ex − ex
+
+(x + 1) 2 = xe x
+
+(x + 1) 2 .
+
+Second, evaluate the derivative at the point: 
+
+y′(1) = e(1) 22 = e
+
+4 .
+
+The equation of the tangent line is 
+
+y − e
+
+2 = e
+
+4 (x − 1) .
+
+This can be simplified to 
+
+y = e
+
+4 x + 3e
+
+4 .
+
+Thus, the tangent line is 
+
+y = e
+
+4 x + 3e
+
+4 .
+
+Prefix state. The prefix correctly reaches the derivative, the slope, and the point-slope equation. 
+
+Issue. The selected prefix is terminal and compact, but it commits an algebraic slip in the final simplification. 
+
+PRM 
+
+Result: Incorrect Length: 1122 tokens 
+
+Raw selected prefix. 
+
+First, we need to identify the function we’re dealing with, which is given as 
+
+y = ex
+
+x + 1 .
+
+We are tasked with finding the tangent line at 
+
+
+
+1, e
+
+2
+
+
+
+.
+
+This implies we need to determine the slope of the tangent line and then use the point-slope form. 
+
+· · · 
+
+Applying the quotient rule, we get 
+
+f ′(x) = (ex)( x + 1) − (ex)(1) (x + 1) 2 = exx
+
+(x + 1) 2 .
+
+Substituting x = 1 ,
+
+f ′(1) = e
+
+4 .
+
+Using the point-slope form, the equation of the tangent line is 
+
+y − e
+
+2 = e
+
+4 (x − 1) .
+
+To ensure that our final answer is in the exact format requested, let’s put our final equation within the · brackets to obtain the final an-swer. 
+
+Prefix state. The trajectory preserves a correct intermedi-ate equation, but it never produces an extraction-safe final answer. 
+
+Issue. The selected prefix is very long, repeatedly plans the same operation, and stops at meta-level finalization. 
+
+Takeaway. Both trajectories reach a useful intermediate state, but their failure modes differ. PUM produces a concise terminal answer with a final-step algebraic error, whereas PRM keeps locally correct reasoning but over-expands the process and fails to produce a clean boxed answer.

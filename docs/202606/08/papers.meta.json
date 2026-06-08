@@ -1,0 +1,69 @@
+{
+  "label": "2026-06-08",
+  "date": "2026-06-08",
+  "generated_at": "2026-06-08T20:56:55",
+  "count": 4,
+  "papers": [
+    {
+      "paper_id": "202606/08/2606.05859v1-tarpo-token-wise-latent-explicit-reasoning-via-action-routing-policy-optimization",
+      "section": "deep",
+      "title_en": "TARPO: Token-Wise Latent-Explicit Reasoning via Action-Routing Policy Optimization",
+      "authors": "Liting Zhang, Shiwan Zhao, Xuyang Zhao, Zichen Xu, Jianye Wang, Qicheng Li",
+      "date": "2026-06-04",
+      "pdf": "https://arxiv.org/pdf/2606.05859v1",
+      "score": "8.0",
+      "evidence": "基于隐态的逐令牌路由以选择推理模式",
+      "tldr": "潜在推理通过连续表示增强大模型表达能力，但其确定性限制了强化学习策略探索。为此提出TARPO，一个纯强化学习框架，通过轻量级动作头路由器在每个步骤自适应选择离散token生成或连续潜在推理，并利用共享优势信号联合优化骨干与路由器。在Qwen2.5（1.5B-7B）和Llama-3.1-8B上的实验表明，TARPO在多个基准上持续优于现有显式与潜在推理基线，且能学习到自适应的逐词切换行为，训练动力学稳定。",
+      "tags": "query:key-tokens",
+      "abstract_en": "Latent reasoning has emerged as a promising alternative to discrete Chain-of-Thought (CoT) in large language models (LLMs), enabling more expressive reasoning by operating over continuous representations. However, the inherently deterministic nature of continuous representations limits policy exploration in reinforcement learning (RL). To address this, we propose TARPO (Token-Wise Latent-Explicit Reasoning via Action-Routing Policy Optimization), a pure RL framework that adaptively switches between discrete token generation and continuous latent reasoning at each step. TARPO introduces a lightweight action head router that observes the current hidden state and samples a routing decision from a binary mode-selection space, preserving the stochasticity of discrete token sampling from the vocabulary. The LLM backbone and router are jointly optimized end-to-end with a shared group-relative advantage signal. Extensive experiments across Qwen2.5 (from 1.5B to 7B) and Llama-3.1-8B backbones demonstrate that TARPO consistently outperforms existing explicit and latent reasoning RL baselines across diverse benchmarks. Further analysis shows that TARPO learns adaptive token-wise switching behaviors while maintaining stable training dynamics. Our code is available at https://github.com/NKU-LITI/TARPO-master.",
+      "source": "arxiv",
+      "selection_source": "fresh_fetch"
+    },
+    {
+      "paper_id": "202606/08/2606.06635v1-how-language-models-fail-token-level-signatures-of-committed-and-persistent-reasoning-failures",
+      "section": "deep",
+      "title_en": "How Language Models Fail: Token-Level Signatures of Committed and Persistent Reasoning Failures",
+      "authors": "Tanvi Thoria, Kiana Jafari, Marc R. Schlichting, Mykel J. Kochenderfer",
+      "date": "2026-06-04",
+      "pdf": "https://arxiv.org/pdf/2606.06635v1",
+      "score": "8.0",
+      "evidence": "使用token级不确定性信号识别承诺点作为关键token",
+      "tldr": "语言模型在推理过程中常出现失败，但失败的产生机制不同，本研究利用每个token的不确定性信号，将失败划分为两种可区分的模式：承诺性失败和持续性不确定性。承诺性失败的特点是模型在早期就锁定一条错误推理路径，存在一个关键“承诺点”，超出该点后继续生成的token反而会掩盖失败信号，降低检测准确性。相反，持续性不确定性中模型始终摇摆，不确定性在推理过程中逐步累积，因此需要利用完整轨迹才能有效区分成功与失败。我们在23个模型-数据集组合上验证了该分类框架，其中20例符合其可证伪预测，证实了框架的鲁棒性。这一发现不仅揭示了LLM推理失败的可检测性边界，还指导了自一致性策略的优化——在承诺性失败时可选择性跳过自一致性以节省计算，而在持续性不确定性中则需结合不确定性信号。",
+      "tags": "query:key-tokens",
+      "abstract_en": "Failures in language model reasoning emerge through distinct processes that leave identifiable signatures in the reasoning trace. We characterize these failures using token-level uncertainty signals, finding they arise through two empirically distinguishable processes. The first is committed failure, in which a model locks onto an incorrect reasoning path early in its trace. A central diagnostic signature is the commitment point, beyond which considering additional tokens hurt rather than help failure detection. In the second, persistent uncertainty, uncertainty instead accumulates throughout, and the full trace is needed to best distinguish failing from successful completions. These signatures reproduce across 23 model-dataset configurations, with the framework's falsifiable predictions holding in 20 of 23 cases, well above chance across both failure modes. Finally, we demonstrate our failure mode framework has direct implications for self-consistency, identifying when uncertainty signals complement it and when it can be selectively skipped. These results offer a foundation for understanding when LLM reasoning failures become detectable and for adapting detection strategies accordingly.",
+      "source": "arxiv",
+      "selection_source": "fresh_fetch"
+    },
+    {
+      "paper_id": "202606/08/2606.02907v2-linear-probes-detect-task-format-not-reasoning-mode-in-language-model-hidden-states",
+      "section": "quick",
+      "title_en": "Linear Probes Detect Task Format, Not Reasoning Mode in Language Model Hidden States",
+      "authors": "Subramanyam Sahoo, Vinija Jain, Aman Chadha, Divya Chaudhary",
+      "date": "2026-06-01",
+      "pdf": "https://arxiv.org/pdf/2606.02907v2",
+      "score": "7.0",
+      "evidence": "对推理token的隐状态分析揭示格式依赖性",
+      "tldr": "线性探针常被用于声称大语言模型学习不同推理类型的表示。本文在Qwen3-14B上测试演绎、归纳和溯因三类推理任务，发现探针准确率达100%且几何分离良好，但完全由任务格式（如源数据、选项数、响应长度）驱动。去混淆后准确率降至随机，因果引导也无显著关联。结果表明探针检测的是任务格式而非推理计算结构，呼吁机械可解释性中对格式因素进行常规控制。",
+      "tags": "query:key-tokens",
+      "abstract_en": "Linear probing of large language model (LLM) hidden states is widely used to claim that models learn distinct representations for different reasoning types. We test this by probing Qwen3-14B on three benchmarks spanning the classical trichotomy: LogiQA 2.0 (deductive), ARC-Challenge (inductive), and $α$NLI (abductive). At layer 32 of 40, linear probes achieve 100\\% cross-validated accuracy with well-separated geometry (intrinsic dimensionalities: 20.6, 28.5, 33.6; convex hull contamination $\\leq$1.5\\%). However, this separation is entirely driven by format confounds. Residualizing source identity, option count, and response length reduces accuracy to chance. Trace-anchor similarity indicates largely shared reasoning across tasks (42.5\\% agreement vs.\\ 33.3\\% chance), and causal steering with random controls ($n=20$) shows no functional link between geometry and reasoning mode ($p=0.286$). Thus, high probe accuracy reflects task format rather than computational structure, motivating routine format deconfounding in mechanistic interpretability.",
+      "source": "arxiv",
+      "selection_source": "fresh_fetch"
+    },
+    {
+      "paper_id": "202606/08/2606.07190v1-from-correctness-to-utility-gain-based-prefix-evaluation-for-llm-reasoning",
+      "section": "quick",
+      "title_en": "From Correctness to Utility: Gain-Based Prefix Evaluation for LLM Reasoning",
+      "authors": "Yuhang Zhou, Yixin Cao, Guangnan Ye",
+      "date": "2026-06-05",
+      "pdf": "https://arxiv.org/pdf/2606.07190v1",
+      "score": "6.0",
+      "evidence": "通过基于增益的效用评估推理前缀",
+      "tldr": "现有过程奖励模型仅基于局部步骤正确性评估推理前缀，但正确性未必反映对成功完成的贡献。本文提出前缀增益概念，衡量前缀对解答率提升的影响，并训练前缀效用模型（PUM）通过成对排序学习结果导向的前缀效用。在数学推理任务中，PUM在Best-of-N选择、束搜索和强化学习场景下显著优于传统方法，尤其在大候选池和稀疏奖励时效果更突出。",
+      "tags": "query:key-tokens",
+      "abstract_en": "Reasoning prefixes shape the future trajectory of LLM problem solving, yet existing process reward models usually evaluate them through local step correctness. We argue that correctness is a useful but indirect proxy for the effect we ultimately care about: whether a prefix increases the probability of successful completion. We define this effect as prefix gain, the solve-rate improvement induced by conditioning lightweight student model group on a prefix, and use it to train a Prefix Utility Model (PUM) with a simple pairwise ranking objective. PUM learns outcome-grounded prefix utility and can score both complete trajectories and partial reasoning prefixes. Across Best-of-$N$ selection, beam search, and reinforcement learning on mathematical reasoning, PUM provides a strong prefix-level supervision signal, especially when candidate pools are large, search budgets increase, or rule-based rewards are sparse. We release all data, models, and code at https://zhiqix.github.io/pum-project-page.",
+      "source": "arxiv",
+      "selection_source": "fresh_fetch"
+    }
+  ],
+  "errors": []
+}
