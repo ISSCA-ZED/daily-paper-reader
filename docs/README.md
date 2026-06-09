@@ -6,34 +6,32 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-06-08
-- 运行时间：2026-06-08 20:56:47 UTC
+- 最新运行日期：2026-06-09
+- 运行时间：2026-06-09 21:29:36 UTC
 - 运行状态：成功
 - 本次总论文数：4
-- 精读区：2
-- 速读区：2
+- 精读区：3
+- 速读区：1
 
 ### 今日简报（AI）
-今日推送4篇论文，精读2篇重点研究推理优化与失败模式，速读2篇关注模型内部表征与评估方法。  
-最值得关注的两篇精读：基于动作路由策略的Token级推理优化，以及语言模型推理失败的Token级特征分析。  
-建议优先精读这两篇，快速浏览速读论文以拓宽视角，后续可结合自身研究验证其方法可迁移性。
-- 详情：[/202606/08/README](/202606/08/README)
+今日精读3篇，速读1篇，重点探索大模型持续推理、视觉推理跨模态协调及实体追踪机制。最值得看的两项8分研究：将残差流从层扩展到token以构建持久记忆，以及动态跨模态协调提升视觉推理。后续可关注持久记忆与实体追踪的融合，以优化长程推理能力。
+- 详情：[/202606/09/README](/202606/09/README)
 
 ### 精读区论文标签
-1. [TARPO: Token-Wise Latent-Explicit Reasoning via Action-Routing Policy Optimization](/202606/08/2606.05859v1-tarpo-token-wise-latent-explicit-reasoning-via-action-routing-policy-optimization)  
+1. [Why Limit the Residual Stream to Layers and Not Tokens? Persistent Memory for Continuous Latent Reasoning](/202606/09/2606.07720v1-why-limit-the-residual-stream-to-layers-and-not-tokens-persistent-memory-for-continuous-latent-reasoning)  
    标签：评分：8.0/10、query:key-tokens
-   evidence：基于隐态的逐令牌路由以选择推理模式
-2. [How Language Models Fail: Token-Level Signatures of Committed and Persistent Reasoning Failures](/202606/08/2606.06635v1-how-language-models-fail-token-level-signatures-of-committed-and-persistent-reasoning-failures)  
+   evidence：分析了潜在推理中隐藏状态覆盖和关键token丢失问题
+2. [DyCo-RL: Dynamic Cross-Modal Coordination for Visual Reasoning](/202606/09/2606.08035v1-dyco-rl-dynamic-cross-modal-coordination-for-visual-reasoning)  
    标签：评分：8.0/10、query:key-tokens
-   evidence：使用token级不确定性信号识别承诺点作为关键token
+   evidence：token级干预分析跨模态协调
+3. [PAEC: Position-Aware Entropy Calibration for LLM Reasoning in RLVR](/202606/09/2606.08543v1-paec-position-aware-entropy-calibration-for-llm-reasoning-in-rlvr)  
+   标签：评分：8.0/10、query:key-tokens
+   evidence：token级熵校准区分决策相关token
 
 ### 速读区论文标签
-1. [Linear Probes Detect Task Format, Not Reasoning Mode in Language Model Hidden States](/202606/08/2606.02907v2-linear-probes-detect-task-format-not-reasoning-mode-in-language-model-hidden-states)  
+1. [A retrieval conditioned rebinding circuit for dynamic entity tracking in large language models](/202606/09/2606.08644v1-a-retrieval-conditioned-rebinding-circuit-for-dynamic-entity-tracking-in-large-language-models)  
    标签：评分：7.0/10、query:key-tokens
-   evidence：对推理token的隐状态分析揭示格式依赖性
-2. [From Correctness to Utility: Gain-Based Prefix Evaluation for LLM Reasoning](/202606/08/2606.07190v1-from-correctness-to-utility-gain-based-prefix-evaluation-for-llm-reasoning)  
-   标签：评分：6.0/10、query:key-tokens
-   evidence：通过基于增益的效用评估推理前缀
+   evidence：因果干预分析注意力电路实现实体绑定
 
 
 <div class="dpr-home-promo-card">

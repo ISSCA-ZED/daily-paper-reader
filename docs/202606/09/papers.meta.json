@@ -1,0 +1,69 @@
+{
+  "label": "2026-06-09",
+  "date": "2026-06-09",
+  "generated_at": "2026-06-09T21:29:43",
+  "count": 4,
+  "papers": [
+    {
+      "paper_id": "202606/09/2606.07720v1-why-limit-the-residual-stream-to-layers-and-not-tokens-persistent-memory-for-continuous-latent-reasoning",
+      "section": "deep",
+      "title_en": "Why Limit the Residual Stream to Layers and Not Tokens? Persistent Memory for Continuous Latent Reasoning",
+      "authors": "Mujtaba Farhan, Maheep Chaudhary",
+      "date": "2026-06-05",
+      "pdf": "https://arxiv.org/pdf/2606.07720v1",
+      "score": "8.0",
+      "evidence": "分析了潜在推理中隐藏状态覆盖和关键token丢失问题",
+      "tldr": "大语言模型在数学推理等任务中展现出能力，但CoCoNuT范式中存在概念瓶颈：中间隐藏状态被覆盖，导致早期关键事实丢失。本文提出AGCLR，通过门控概念流维持持久残差记忆，以写、读、忘三个门控控制信息流。在GSM8K、HotpotQA和ProsQA上基于GPT-2的评估显示，AGCLR持续优于CoCoNuT和CoT基线，且随课程深度增加效果更显著。该方法直接解决了概念瓶颈，提升了持续潜在推理的性能。",
+      "tags": "query:key-tokens",
+      "abstract_en": "Large language models (LLMs) have demonstrated remarkable reasoning abilities on mathematical and multi-hop planning tasks. The CoCoNuT (Chain of Continuous Thought) paradigm~\\cite{hao2024coconut} extends this by enabling models to reason in latent space, exploring multiple reasoning paths simultaneously rather than committing to a single chain early on. However, we identify a limitation we term the \\textbf{concept bottleneck}. At each reasoning pass, intermediate hidden states are overwritten, causing the model to lose critical facts computed in earlier steps as reasoning depth increases. We observe this empirically. On HotpotQA, vanilla CoCoNuT (10.4\\% EM) fails to improve over the CoT baseline (11.0\\% EM), and performance degrades with curriculum depth on GSM8K. To address this, we propose \\textbf{AGCLR} (Adaptive Gated Continuous Latent Reasoning), which augments CoCoNuT with a \\textit{Gated Concept Stream}. A persistent residual memory maintained across all reasoning passes, controlled by three learned gates: a \\textit{write} gate that commits intermediate facts to memory, a \\textit{read} gate that retrieves relevant prior states, and a \\textit{forget} gate that prunes irrelevant context. Evaluated on GSM8K, HotpotQA, and ProsQA using GPT-2 as our base model, AGCLR achieves consistent improvements across all types of datasets. With the performance gap compounding as curriculum depth increases, directly resolving the concept bottleneck. Code available at https://anonymous.4open.science/r/JJJJ/README.md",
+      "source": "arxiv",
+      "selection_source": "fresh_fetch"
+    },
+    {
+      "paper_id": "202606/09/2606.08035v1-dyco-rl-dynamic-cross-modal-coordination-for-visual-reasoning",
+      "section": "deep",
+      "title_en": "DyCo-RL: Dynamic Cross-Modal Coordination for Visual Reasoning",
+      "authors": "Hangui Lin, Yan Shu, Zhengyang Liang, Chi Liu, Xiangrui Liu, Minghao Qin, Teng Long, Zheng Liu, Nicu Sebe",
+      "date": "2026-06-06",
+      "pdf": "https://arxiv.org/pdf/2606.08035v1",
+      "score": "8.0",
+      "evidence": "token级干预分析跨模态协调",
+      "tldr": "现有强化学习优化主要关注推理结果，忽略了视觉推理中跨模态协调的动态过程。通过分析发现，模型在思维链推理中无法有效交替提取视觉证据与合成文本上下文，导致推理失败。为此提出DyCo-RL，利用Fisher-Rao测地距离度量注意力转移并分配功能角色，再根据对齐度进行优势重加权。在Qwen2.5-VL-3B/7B上，该方法一致提升了四种RLVR算法在七个视觉与数学推理基准上的性能，揭示了跨模态协调优化的关键作用。",
+      "tags": "query:key-tokens",
+      "abstract_en": "Reinforcement Learning with Verifiable Rewards (RLVR) has emerged as a leading paradigm for enhancing visual reasoning in Multimodal Large Language Models (MLLMs). However, existing RLVR methods optimize primarily for the reasoning outcome, fundamentally overlooking the fine-grained cross-modal coordination required during the generation process. Through token-level analyses and controlled interventions, we reveal that during Chain-of-Thought (CoT) reasoning, MLLMs frequently fail to dynamically alternate between extracting visual evidence and synthesizing textual context-a coordination breakdown that is causally linked to reasoning failures. Motivated by these findings, we propose DyCo-RL, which integrates dynamic cross-modal coordination into RLVR optimization. Specifically, DyCo-RL uses the Fisher-Rao geodesic distance to measure within-modality attention shifts, assigning tokens to either visually-oriented or text-oriented functional roles. It then evaluates the alignment between a token's actual attention allocation and its assigned role, leveraging this score for alignment-guided advantage reweighting during policy optimization. Extensive experiments demonstrate that the algorithm-agnostic DyCo-RL, when applied to Qwen2.5-VL-3B/7B, consistently improves four representative RLVR algorithms across seven benchmarks spanning visual-centric and mathematical reasoning.",
+      "source": "arxiv",
+      "selection_source": "fresh_fetch"
+    },
+    {
+      "paper_id": "202606/09/2606.08543v1-paec-position-aware-entropy-calibration-for-llm-reasoning-in-rlvr",
+      "section": "deep",
+      "title_en": "PAEC: Position-Aware Entropy Calibration for LLM Reasoning in RLVR",
+      "authors": "Shumeng Yang, Yisu Liu, Jiayi Zheng, Zhaohui Yang, Linjing Li",
+      "date": "2026-06-07",
+      "pdf": "https://arxiv.org/pdf/2606.08543v1",
+      "score": "8.0",
+      "evidence": "token级熵校准区分决策相关token",
+      "tldr": "在可验证奖励的强化学习（RLVR）中，大模型推理常因策略熵快速坍缩而陷入狭窄推理路径。现有全局熵正则化在长推理轨迹中效率低下，因为许多位置无关决策。本文提出位置感知熵校准（PAEC），通过局部top-p熵和双候选竞争构建软掩码，对决策敏感位置施加锚定下界惩罚以阻止熵坍缩。在五个数学推理基准上，PAEC显著提升多数投票性能，尤其在AIME任务上。结果表明，推理RL的熵管理应聚焦于决策敏感位置的选择性探索分配，而非均匀随机注入。",
+      "tags": "query:key-tokens",
+      "abstract_en": "Reinforcement learning with verifiable rewards (RLVR) improves large language model reasoning but often suffers from rapid policy-entropy collapse, where the policy prematurely concentrates on narrow high-probability reasoning paths. While global entropy regularization can encourage exploration, uniformly increasing entropy across all token positions is inefficient for long reasoning trajectories, where many tokens are not decision-relevant. We propose Position-Aware Entropy Calibration (PAEC), a token-level entropy-management framework that constructs a soft mask from local top-p entropy and top-two candidate competition, and applies an anchor-based lower-bound penalty to prevent selected-position entropy collapse. Experiments on five mathematical reasoning benchmarks show that PAEC improves macro-average majority-vote performance over strong RLVR baselines, with clear gains on AIME-style tasks. Our results suggest that entropy management in reasoning RL should be formulated as selective exploration allocation over decision-sensitive positions rather than uniform randomness injection.",
+      "source": "arxiv",
+      "selection_source": "fresh_fetch"
+    },
+    {
+      "paper_id": "202606/09/2606.08644v1-a-retrieval-conditioned-rebinding-circuit-for-dynamic-entity-tracking-in-large-language-models",
+      "section": "quick",
+      "title_en": "A retrieval conditioned rebinding circuit for dynamic entity tracking in large language models",
+      "authors": "Soyoung Oh, Vera Demberg",
+      "date": "2026-06-07",
+      "pdf": "https://arxiv.org/pdf/2606.08644v1",
+      "score": "7.0",
+      "evidence": "因果干预分析注意力电路实现实体绑定",
+      "tldr": "大型语言模型需要动态跟踪实体-属性绑定以正确理解上下文。本研究通过因果干预分析，发现了一种检索条件重绑定电路，由紧凑的注意力头组成，负责编码和恢复绑定信息。在Gemma和Llama模型中该电路均支持重绑定，但表示方式不同：Gemma的绑定信息体现在查询/键子空间，而Llama主要通过键向量传递。该工作揭示了可解释的上下文相关状态跟踪机制。",
+      "tags": "query:key-tokens",
+      "abstract_en": "To interpret context correctly and retrieve relevant information, large language models must bind entities to their attributes and update these bindings as state changes. We analyze how LLMs implement this binding process in a dynamic state tracking. Using causal interventions, we identify a retrieval conditioned rebinding mechanism, a compact attention head circuit that encodes swap relevant binding information and reinstates it at readout. Across Gemma and Llama models, this circuit supports rebinding behavior, but the representational signature of the mechanism differs across model families. In Gemma models, the binding signature is clearly expressed in the query/key subspaces of the relevant attention heads, whereas in Llama models, the binding information is carried primarily in key vectors. Overall, our results reveal an interpretable mechanism for context dependent state tracking in LLMs.",
+      "source": "arxiv",
+      "selection_source": "fresh_fetch"
+    }
+  ],
+  "errors": []
+}
