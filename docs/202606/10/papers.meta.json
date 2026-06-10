@@ -1,0 +1,54 @@
+{
+  "label": "2026-06-10",
+  "date": "2026-06-10",
+  "generated_at": "2026-06-10T21:57:27",
+  "count": 3,
+  "papers": [
+    {
+      "paper_id": "202606/10/2606.10646v1-how-does-reasoning-flow-tracing-attention-induced-information-flow-for-targeted-rl-in-llms",
+      "section": "deep",
+      "title_en": "How Does Reasoning Flow? Tracing Attention-Induced Information Flow for Targeted RL in LLMs",
+      "authors": "Zhichen Dong, Yang Li, Yuhan Sun, Weixun Wang, Yijia Luo, Zinian Peng, Taiheng Ye, Chao Yang, Wenbo Su, Yu Cheng, Bo Zheng, Junchi Yan",
+      "date": "2026-06-09",
+      "pdf": "https://arxiv.org/pdf/2606.10646v1",
+      "score": "9.0",
+      "evidence": "通过注意力流因果追踪推理token",
+      "tldr": "针对LLM中RL的token级信用分配问题，现有方法忽视全局信息传播结构。FlowTracer通过注意力诱导的有向无环图追踪答案导向的推理流，利用边容量重加权和局部流守恒提取信息流骨干，计算token重要度以塑造精细奖励。在多项推理任务上，该方法一致提升模型性能，揭示了高影响枢纽与聚合检查点的作用。",
+      "tags": "query:key-tokens",
+      "abstract_en": "Token-level credit assignment remains a key obstacle for reinforcement learning (RL) in large language models (LLMs), where RL recipes typically treat all tokens equally, failing to distinguish decisive reasoning steps from routine formatting or fluent filler. Recent attempts leverage model-internal signals to assign finer-grained credit, but these are often point-wise heuristics that ignore the global structure of information propagation. We propose FlowTracer, an RL framework that traces answer-targeted reasoning flow on an attention-induced directed acyclic graph in which nodes correspond to tokens and edge capacities come from aggregated attention weights and derives token credit from this global structure. The edge capacities are reweighted to retain only the influence that can reach the answer region, while enforcing local flow conservation so intermediate tokens neither lose nor gain effective mass due to path length or irrelevant branches. On this graph, FlowTracer extracts an information-flow backbone connecting the question to the answer and scores tokens by flow throughput, revealing high-impact hubs and aggregation checkpoints that mediate long-range dependencies. These derived importances are used to shape token-level rewards, enabling learning signals to focus precisely on the tokens that route information toward (or away from) correct answers and delivering consistent performance gains across a range of reasoning tasks.",
+      "source": "arxiv",
+      "selection_source": "fresh_fetch"
+    },
+    {
+      "paper_id": "202606/10/2606.10307v1-early-token-confidence-predicts-reasoning-quality-in-multi-agent-llm-debate",
+      "section": "deep",
+      "title_en": "Early-Token Confidence Predicts Reasoning Quality in Multi-Agent LLM Debate",
+      "authors": "Ali Keramati, Justin Cheok, Jacob Horne, Mark Warschauer",
+      "date": "2026-06-09",
+      "pdf": "https://arxiv.org/pdf/2606.10307v1",
+      "score": "8.0",
+      "evidence": "早期token置信度作为关键token重要性指标",
+      "tldr": "多智能体LLM系统推理质量评估困难。本研究利用token级log概率作为置信度信号，在辩论式论文评分框架中预测质量。发现前几个生成token的置信度是最强预测因子，优于完整序列统计。该方法为轻量级评估推理可靠性提供了有效信号。",
+      "tags": "query:key-tokens",
+      "abstract_en": "Evaluating reasoning quality in multi-agent LLM systems is challenging, especially for open-ended tasks without reference answers. We investigate whether intrinsic confidence signals, token-level log-probabilities from decoding, can predict reasoning quality as assessed by LLM-as-judge evaluation. Using a debate-based essay scoring framework, we compare confidence proxies against rubric-based judge scores across two ASAP essay sets. We find that early-token confidence, particularly within the first few generated tokens, is consistently the strongest predictor of reasoning quality, outperforming full-sequence statistics. Analysis of log-probability trajectories shows that the opening phase of generation is the most heterogeneous and therefore most informative. We also observe a systematic asymmetry between agent roles, with stronger alignment between confidence and quality for supportive reasoning than for adversarial critique. These results suggest that early decoding dynamics provide a lightweight and effective signal for estimating reasoning reliability in multi-agent LLM systems.",
+      "source": "arxiv",
+      "selection_source": "fresh_fetch"
+    },
+    {
+      "paper_id": "202606/10/2606.08088v1-consteer-rl-steering-reasoning-capabilities-in-large-language-models-via-confidence-aware-reinforcement-learning",
+      "section": "quick",
+      "title_en": "ConSteer-RL: Steering Reasoning Capabilities in Large Language Models via Confidence-Aware Reinforcement Learning",
+      "authors": "Qing Miao, Yiming Zhao, Jing Yang, Chenxi Liu, Yuehai Chen, Yuewen Liu, Shaoyi Du, Badong Chen",
+      "date": "2026-06-06",
+      "pdf": "https://arxiv.org/pdf/2606.08088v1",
+      "score": "7.0",
+      "evidence": "使用token级置信度信号构建置信感知奖励，与token重要性度量相关",
+      "tldr": "基于可验证奖励的强化学习方法虽能增强大语言模型推理，但二值奖励稀疏且忽略模型内在不确定性，导致优化瓶颈。本文提出ConSteer-RL，从模型输出的对数概率提取逐token置信度，聚合为标量置信分，并据此改造GRPO中的奖励：对高置信度但错误的推理施以重罚，对正确且自信的推理给予额外奖励。在多个参数规模的大语言模型上，ConSteer-RL相比强基线GRPO平均提升2.3%至4.0%。该框架简单有效，开辟了利用模型自身置信信号提升强化学习效率的新思路。",
+      "tags": "query:key-tokens",
+      "abstract_en": "Reinforcement Learning from Verifiable Rewards (RLVR) has recently become a key paradigm for improving the reasoning abilities of Large Language Models (LLMs), yet it remains limited by sparse binary rewards and its ignorance of model-internal uncertainty. In this paper, we propose ConSteer-RL, a simple yet effective framework that integrates token-level confidence signals derived from model log-probabilities into RLVR training. Specifically, building upon the Group Relative Policy Optimization (GRPO) framework, we construct a confidence-aware reward by aggregating per-token probabilities into a scalar confidence score and incorporating it into an awareness-based reward shaping mechanism that penalizes overconfident errors while reinforcing correct and confident reasoning. Experimental results demonstrate that ConSteer-RL consistently outperforms strong GRPO baselines, achieving average improvements of 2.3%-4.0% across different model scales.",
+      "source": "arxiv",
+      "selection_source": "fresh_fetch"
+    }
+  ],
+  "errors": []
+}

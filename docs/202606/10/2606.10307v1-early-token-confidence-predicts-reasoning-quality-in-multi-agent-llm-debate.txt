@@ -1,0 +1,336 @@
+Title: Early-Token Confidence Predicts Reasoning Quality in Multi-Agent LLM Debate
+
+URL Source: https://arxiv.org/pdf/2606.10307v1
+
+Published Time: Wed, 10 Jun 2026 00:42:54 GMT
+
+Number of Pages: 15
+
+Markdown Content:
+# Early-Token Confidence Predicts Reasoning Quality in Multi-Agent LLM Debate 
+
+Ali Keramati, Justin Cheok , Jacob Horne and Mark Warschauer 
+
+University of California, Irvine 
+
+{a.kera,jcheok,jhorne1,markw}@uci.edu 
+
+Abstract 
+
+Evaluating reasoning quality in multi-agent LLM systems is challenging, especially for open-ended tasks without reference answers. We investigate whether intrinsic confidence sig-nals, token-level log-probabilities from decod-ing, can predict reasoning quality as assessed by LLM-as-judge evaluation. Using a debate-based essay scoring framework, we compare confidence proxies against rubric-based judge scores across two ASAP essay sets. We find that early-token confidence, particularly within the first few generated tokens, is consistently the strongest predictor of reasoning quality, out-performing full-sequence statistics. Analysis of log-probability trajectories shows that the opening phase of generation is the most hetero-geneous and therefore most informative. We also observe a systematic asymmetry between agent roles, with stronger alignment between confidence and quality for supportive reason-ing than for adversarial critique. These results suggest that early decoding dynamics provide a lightweight and effective signal for estimat-ing reasoning reliability in multi-agent LLM systems. 
+
+1 Introduction 
+
+Recent advances in large language models (LLMs) have enabled the development of multi-agent sys-tems , in which multiple specialized agents collabo-rate to solve complex tasks (Wu et al., 2023). By decomposing problems into role-specific subtasks, such systems have been shown to improve perfor-mance, robustness, and consistency across a range of applications, including reasoning, planning, and automated decision-making (Parmar et al., 2025; Han et al., 2024). Among interaction paradigms, 
+
+debate has emerged as a particularly effective mechanism: by eliciting both supporting and op-posing arguments, it encourages exploration of di-verse reasoning paths and exposes errors that may remain hidden in a single-agent trajectory (Du et al., 2023). Rubric-based scoring provides a concrete and high-impact setting in which these benefits are es-pecially relevant. In this setting, a system assigns scores according to a predefined rubric that spec-ifies evaluation criteria and score ranges (Fallah et al., 2024). A canonical example is automated essay scoring (AES) , where models aim to approx-imate human judgments of student writing qual-ity (Dikli, 2006). Public benchmarks such as the ASAP 1 dataset include prompts that provide trait-level rubric scores (rather than a single holistic score), enabling trait-specific feedback and analy-sis (Crossley et al., 2025). At the same time, recent work has explored using LLMs directly for essay scoring, highlighting both the promise of scalable rubric-based evaluation and the need to better un-derstand the reliability of LLM-driven scoring be-havior (Pack et al., 2024). Multi-agent debate is a natural fit for rubric scoring because it produces inspectable intermedi-ate reasoning artifacts (Keramati and Warschauer, 2025). In these systems, agents adopt complemen-tary roles, generating diverse perspectives on the same input. This structured disagreement can help the system consider alternative interpretations of the rubric and mitigate single-path scoring bias by forcing explicit engagement with counterevidence (Du et al., 2023). However, debate also increases system complexity: multiple agents, multiple mes-sages, and multiple opportunities for subtle proce-dural failures (Wynn et al., 2025). As multi-agent pipelines become more elaborate, it becomes es-sential to add an evaluation layer that measures not only whether a final score matches a reference, but also whether agents’ reasoning is high quality and reliable (Chen et al., 2025). A growing body of work addresses this need 
+
+> 1https://www.kaggle.com/c/asap-aes/data
+> arXiv:2606.10307v1 [cs.CL] 9 Jun 2026
+
+through LLM-as-judge evaluation, where a sepa-rate language model is used to score generated outputs along predefined criteria. This paradigm has become a scalable alternative to human eval-uation, particularly for open-ended tasks where reference answers are unavailable (Zheng et al., 2023). However, LLM-as-judge provides only an 
+
+external signal of quality, and an important open question remains: to what extent do these judg-ments reflect the true reliability of the underlying reasoning process? In particular, can we identify 
+
+intrinsic signals within the generating model that correlate with externally judged reasoning quality? To connect judge-based reasoning evaluation with model-intrinsic signals, we turn to confidence estimation and uncertainty quantification (Kang et al., 2025). Neural probabilities are not automat-ically calibrated, and language model confidence can be misaligned with correctness. Nevertheless, recent research shows that language models can provide meaningful self-evaluations under appro-priate formats and that uncertainty estimation for LLM generation is an active area of study (Mavi et al., 2025). In this work, we operationalize model confidence using token-level log-probabilities pro-duced during decoding. Intuitively, if an agent follows a more coherent and evidentially grounded reasoning path, the model should assign higher probability mass to the tokens it generates along that path, yielding more confident logprob trajecto-ries. 
+
+2 Related Work 
+
+LLM-as-Judge Evaluation. Recent work has es-tablished LLM-as-judge as a practical paradigm for evaluating open-ended generation in settings where reference answers are weak or unavailable. Prior studies show that strong language models can cor-relate well with human judgments on instruction-following and related tasks, making them a scalable alternative to manual evaluation (Chiang and Lee, 2023; Dubois et al., 2025; Zheng et al., 2023; Fu et al., 2024; Liu et al., 2023). Beyond coarse pair-wise or scalar judgments, subsequent work empha-sizes the need for more structured and interpretable evaluation. For example, FLASK introduces fine-grained, rubric-based assessment and demonstrates improved interpretability and reliability compared to skill-agnostic scoring (Ye et al., 2024). Despite these advances, a growing body of meta-evaluation work highlights fundamental limitations of LLM judges. Prior studies document systematic biases such as verbosity and positional bias, limited self-consistency, and sensitivity to prompt design and evaluation protocols (Wang et al., 2024; Zeng et al., 2024; Zheng et al., 2023; Liu et al., 2023). In response, recent approaches propose more elabo-rate judging strategies, including chain-of-thought and decomposition-based evaluation, multi-aspect scoring, reference-based comparisons, and multi-agent or debate-style evaluators such as PRD and ChatEval (Gong and Mao, 2023; Saha et al., 2024; Li et al., 2024; Chan et al., 2023; Jeong et al., 2024). However, evidence on the effectiveness of these methods remains mixed. REIFE shows that gains from evaluation protocols depend strongly on the base model and dataset, underscoring the need for diverse and well-calibrated evaluation setups (Liu et al., 2025). Similarly, Huang et al. demonstrate that fine-tuned judge models (e.g., JudgeLM, Pan-daLM, Auto-J, Prometheus) often fail to general-ize beyond their training domain, behaving more like task-specific classifiers than robust evaluators (Huang et al., 2025). 
+
+Confidence and Uncertainty in LLMs. A paral-lel line of work investigates whether intrinsic confi-dence signals can be used to assess the reliability of LLM outputs. Research in calibration and uncer-tainty quantification shows that neural probabilities are informative but not inherently well calibrated, meaning that high confidence does not always cor-respond to correctness (Desai and Durrett, 2020; Kadavath et al., 2022; Quevedo et al., 2024). Never-theless, token-level probabilities remain one of the most direct signals available during generation, and have been widely used to detect hallucinations, fac-tual inconsistencies, and uncertain outputs through log-probability- and entropy-based features (Liu et al., 2022; Manakul et al., 2023; Mallen et al., 2023). In addition, work on self-evaluation suggests that LLMs can sometimes produce useful confi-dence estimates in natural language, though these verbalized signals may diverge from underlying model uncertainty, particularly in multi-step rea-soning settings (Kadavath et al., 2022; Mavi et al., 2025). Recent surveys therefore advocate for scal-able uncertainty estimation methods that combine intrinsic decoding-time signals with downstream evaluation metrics (Kang et al., 2025). 3 Methodology 
+
+Figure 1 provides an overview of our framework, which builds upon the multi-agent debate archi-tecture introduced in prior work (Keramati and Warschauer, 2025) and extends it with an LLM-as-judge meta-evaluation module for reasoning analysis. In the first stage, an Advocate and a 
+
+Skeptic produce opposing arguments for a given essay–rubric pair while exposing token-level log-probabilities as intrinsic confidence signals. In the second stage, a separate meta-evaluator scores each argument along rubric-based dimensions such as instruction following, justification quality, and evi-dence grounding. This design enables systematic analysis of the relationship between internal con-fidence signals and externally judged reasoning quality. 
+
+3.1 Problem Setting 
+
+Let E denote the set of essays and R the set of rubric traits. Each essay e ∈ E consists of unstruc-tured text together with optional metadata, and each rubric trait r ∈ R specifies a textual description and a scoring range [mr, M r]. For each essay–trait pair (e, r ), the debate system produces a transcript 
+
+τ (e, r ) = ( a, k ),
+
+where a is the Advocate’s argument and k is the Skeptic’s rebuttal. Both arguments are generated by a language model conditioned on the essay, rubric, and conversation history; the model simultaneously produces token-level log-probabilities reflecting its internal confidence over candidate continuations. Given a collection of debate responses {(ai, k i)},each paired with confidence signals ci and meta-evaluation scores qi, our objective is to analyze whether token-level probability signals correlate with the externally judged quality of agent reason-ing, and thus whether intrinsic confidence can serve as an indicator of reasoning reliability in multi-agent LLM systems. 
+
+3.2 Agents and Roles 
+
+The debate framework comprises three specialized agents that interact sequentially for each essay–trait pair. The Advocate initiates the debate by con-structing an argument that highlights the essay’s strengths relative to the rubric trait, drawing ex-clusively on supporting evidence from the essay text without assigning a score. The Skeptic re-sponds by identifying limitations or shortcomings in the essay with respect to the same criterion, producing an evidence-based rebuttal that chal-lenges the Advocate’s claims, again without scor-ing. The Synthesizer-Judge Scorer reads the com-pleted transcript and produces the final trait-level score within the allowed rubric range. Because this agent performs a constrained decision-making task whose output can be evaluated directly against ground-truth scores using accuracy-based metrics, it falls outside the scope of the present study. Our analysis focuses exclusively on the open-ended rea-soning produced by the Advocate and Skeptic. Full system prompts for all three agents are provided in 
+
+Appendix C .
+
+3.3 Confidence Signals from Token Log-Probabilities 
+
+We estimate model confidence using token-level log-probabilities obtained during generation. For a generated response of T tokens, the model pro-duces a log-probability at each decoding step: 
+
+ℓt = log p(tt | t<t , x ),
+
+where x is the prompt context and t<t the preceding tokens. The resulting sequence L = ( ℓ1, . . . , ℓ T )
+
+forms a log-probability trajectory over the full re-sponse. 
+
+3.3.1 Window-Based Segmentation 
+
+Rather than summarizing L with a single statistic, we extract contiguous sub-sequences to examine how confidence evolves across different phases of generation. We use two complementary strategies: 
+
+Fixed-length windows. For window size k:
+
+Wfirst (k) = ( ℓ1, . . . , ℓ k),Wlast (k) = ( ℓT −k+1 , . . . , ℓ T ).
+
+Percentage-based windows. To normalize across responses of varying length, we define windows as a fraction α ∈ (0 , 1] of the total response: 
+
+Wfirst (α) = ( ℓ1, . . . , ℓ ⌊αT ⌋),Wlast (α) = ( ℓT −⌊ αT ⌋+1 , . . . , ℓ T ).
+
+3.3.2 Statistical Aggregation 
+
+For each window W , we compute the following summary statistics: Figure 1: Overview of the proposed multi-agent debate and LLM-as-judge evaluation framework. 
+
+Mean and median. 
+
+μW = 1
+
+|W |
+
+X
+
+> ℓ∈W
+
+ℓ, ˜μW = median( W ).
+
+The mean reflects overall token likelihood; the me-dian provides a robust central-tendency estimate less sensitive to outlier tokens. 
+
+Minimum and maximum. min( W ) and 
+
+max( W ) bound the range of token confidence within the segment. 
+
+Variance, standard deviation, and range. 
+
+σ2 
+
+> W
+
+= 1
+
+|W |
+
+X
+
+> ℓ∈W
+
+(ℓ − μW )2,
+
+range W = max( W ) − min( W ).
+
+These statistics quantify the dispersion and volatility of the generation process within a win-dow. 
+
+Trajectory slope. We fit a linear regression to the log-probability sequence over the window: 
+
+ℓt ≈ a t + b. 
+
+The slope coefficient a captures directional trends: 
+
+a > 0 indicates growing confidence across the seg-ment, while a < 0 indicates declining confidence. 
+
+3.4 LLM-as-Judge Meta-Evaluation 
+
+Because the Advocate and Skeptic generate open-ended argumentative reasoning rather than dis-crete labels, their outputs cannot be evaluated with reference-based metrics such as accuracy or n-gram overlap. We therefore introduce a secondary eval-uation stage in which a separate language model judges the quality of each agent’s reasoning along rubric-based dimensions. 
+
+3.4.1 Prompt Reconstruction 
+
+For each agent response, we reconstruct the com-plete prompt context the agent originally received, consisting of: (i) the agent’s system instructions de-scribing its role and behavioral constraints, (ii) the rubric trait definition, (iii) the essay text, and (iv) the agent’s generated response. Supplying this full context enables the evaluator to assess both role adherence and the appropriateness of the evidence used. 
+
+3.4.2 Evaluation Dimensions 
+
+The meta-evaluator scores each response along three dimensions: 
+
+Instruction Following. Whether the agent main-tained its assigned role throughout and avoided prohibited behaviors. 
+
+Justification Quality. Whether claims are sup-ported by explicit reasoning that coherently links evidence to conclusions. 
+
+Evidence Grounding. Whether the argument ref-erences concrete, specific passages from the essay rather than relying on vague or generic statements. 
+
+3.4.3 Scoring Protocol 
+
+Each dimension is scored on a three-point ordinal scale ( 1 = Low , 2 = Medium , 3 = High ), as-signed independently. The evaluator also raises a critical issue flag when the response contains a severe failure that invalidates the reasoning, includ-ing hallucinated evidence, major internal contra-dictions, role-constraint violations, or incoherent output. We summarize reasoning quality using an aggre-gate score: 
+
+Q1 = sinstruction + sjustification + sevidence .
+
+If a critical failure is detected, the aggregate score is overridden: 
+
+Q =
+
+(
+
+0 if critical issue is present ,Q1 otherwise .
+
+This formulation ensures that responses contain-ing severe reasoning failures are penalized regard-less of their dimension-level scores, yielding a com-posite score in the range [0 , 9] .
+
+4 Experiments 
+
+4.1 Experimental Setup Data. We evaluate our framework on the ASAP 2
+
+dataset, a widely used benchmark of student-written English essays scored by trained human raters against prompt-specific rubrics. Although ASAP comprises eight essay sets, analytic trait-level annotations are available only for Essay Sets 7 and 8; all experiments are therefore conducted on these two sets, which provide multiple indepen-dent human ratings per essay at the trait level. Full dataset statistics, rubric descriptions, and label con-struction details are provided in Appendix A. 
+
+Evaluation Metrics. For ordinal evaluation tar-gets—instruction following, justification quality, evidence grounding, and aggregate score—we re-port Spearman’s ρ and Kendall’s τ to capture rank-order agreement between confidence proxies and LLM-as-judge scores. For the binary critical flag , we report AUROC and point-biserial correla-tion. To keep results interpretable, we report only the best-performing proxy per target–role combina-tion. 
+
+Models. Advocate and Skeptic responses are gen-erated using GPT-4o-mini , and meta-evaluation is performed by GPT-5-mini instance acting as the LLM-as-judge. To reduce run-to-run variance, the meta-evaluator decodes deterministically, while the Advocate and Skeptic use standard sampling. 
+
+> 2https://www.kaggle.com/c/asap-aes/data
+
+Token-level log-probabilities are collected during Advocate and Skeptic decoding to compute the confidence proxies described in Section 3. 
+
+4.2 Cross-Dataset Analysis 
+
+Table 1 summarizes the top-performing confidence features across Essay Sets 7 and 8. While both datasets exhibit a consistent relationship between token-level confidence and judged reasoning qual-ity, the structure of this relationship varies notably across roles and datasets. For the Advocate, the dominant signal shifts from global to local confidence. In Essay Set 7, the strongest predictors are full-response summaries such as full-response median and final-half median ,which consistently lead across all ordinal targets. In contrast, Essay Set 8 shows a clear transition toward early-generation dispersion, with range of first 3 tokens emerging as the top feature across all ordinal targets. This shift suggests that the in-formativeness of confidence signals depends on dataset characteristics, with some settings favoring globally stable confidence while others emphasize variability at the start of generation. In contrast, the Skeptic exhibits a stable pat-tern across both datasets. Early-window disper-sion features—particularly range of first 3 to-kens —consistently dominate all ordinal targets, with only minor variation in secondary features such as slope-based measures. Correlation magni-tudes are uniformly lower than for the Advocate, indicating a weaker alignment between confidence and judged quality for adversarial reasoning. A similar pattern holds for critical failure detec-tion. Advocate failures are best captured by sharp early-token signals, such as max of first 3 tokens 
+
+in Set 7 (AUROC = 0 .849 ) and median of first 5 tokens in Set 8 (AUROC = 0 .759 ), suggesting that severe errors manifest as localized confidence spikes or drops early in generation. Skeptic detec-tion performance is both weaker and more stable across datasets (AUROC ≈ 0.63 ), with early mean-and median-based features performing best. Taken together, three findings are consistent across both essay sets. First, early-generation sig-nals are broadly informative: even when not dom-inant (as in Advocate Set 7), they remain among the top-performing features across nearly all role– target pairs. Second, the opening phase of gen-eration is the most diagnostically useful region, aligning with trajectory analyses that show higher variability in early tokens compared to later seg-Set Role Target Top confidence features (ranked) Best score 7 Advocate Aggregate Full-response median, Final-half median, Full-response mean 0.379 7 Advocate Instruction Full-response median, Final-half median, Full-response mean 0.394 7 Advocate Justification Full-response median, Final-half median, Full-response mean 0.353 7 Advocate Evidence Full-response median, Final-half median, Full-response mean 0.242 7 Advocate Critical Max of first 3 tokens, Max of first 5 tokens, Max of first 10 tokens 0.849 †                                                            
+
+> 7Skeptic Aggregate Range of first 3 tokens, Full-response slope, Slope over first 30 tokens 0.208 7Skeptic Instruction Range of first 3 tokens, Full-response slope, Slope over first 30 tokens 0.163 7Skeptic Justification Range of first 3 tokens, Slope over first 30 tokens, Full-response slope 0.266 7Skeptic Evidence Range of first 3 tokens, Slope over first 30 tokens, Full-response slope 0.114 7Skeptic Critical Mean of first 3 tokens, Min of first 3 tokens, Slope over first 3 tokens 0.638 †
+> 8Advocate Aggregate Range of first 3 tokens, Range of first 5 tokens, Std. dev. of first 3 tokens 0.320 8Advocate Instruction Range of first 3 tokens, Std. dev. of first 3 tokens, Variance of first 3 tokens 0.373 8Advocate Justification Range of first 3 tokens, Range of first 5 tokens, Final-half mean 0.284 8Advocate Evidence Range of first 3 tokens, Range of first 5 tokens, Std. dev. of first 5 tokens 0.336 8Advocate Critical Median of first 5 tokens, Range of first 3 tokens, Std. dev. of first 3 tokens 0.759 †
+> 8Skeptic Aggregate Range of first 3 tokens, Std. dev. of first 3 tokens, Variance of first 3 tokens 0.196 8Skeptic Instruction Range of first 3 tokens, Std. dev. of first 3 tokens, Variance of first 3 tokens 0.176 8Skeptic Justification Range of first 3 tokens, Std. dev. of first 3 tokens, Variance of first 3 tokens 0.231 8Skeptic Evidence Range of first 3 tokens, Std. dev. of first 3 tokens, Variance of first 3 tokens 0.092 8Skeptic Critical Median of first 5 tokens, Mean of first 3 tokens, Std. dev. of first 3 tokens 0.630 †
+
+Table 1: Top-3 confidence features for each role–target pair across Essay Sets 7 and 8. For ordinal targets, the final column reports Spearman correlation; for critical detection, it reports AUROC. Early-k refers to statistics computed over the first k generated tokens, while final-half refers to the last 50% of the response. Full rankings and additional metrics are provided in Appendix B. †AUROC reported for critical detection. 
+
+ments. Third, the Advocate–Skeptic asymmetry is robust: confidence aligns more strongly with supportive reasoning than with adversarial critique, both in ordinal correlations and in critical-failure detection. Full rankings and additional metrics are reported in Appendix B. 
+
+4.3 Trajectory Analysis 
+
+To understand why early-window features consis-tently dominate across both datasets, we analyze token-level log-probability trajectories for Advo-cate and Skeptic responses. Because responses vary in length, each trajectory is normalized to a 0%–100% position scale via interpolation. For each role and dataset, we compute the mean trajec-tory along with 25–75 and 10–90 percentile bands across responses. Figure 2 reveals a consistent structural pattern across both essay sets and roles: responses begin with relatively high confidence, followed by a sharp early decline, a prolonged mid-response plateau, and a modest recovery toward the end. Since log-probabilities closer to zero indicate higher confi-dence, this pattern suggests that initial tokens are easy to predict, uncertainty increases as the model transitions into substantive reasoning, and confi-dence stabilizes once the response structure is es-tablished. A central observation is that variability is con-centrated at the beginning of the response. The per-centile bands are widest in the first few tokens, indi-cating substantial heterogeneity in early-generation behavior: some responses start with stable, high-confidence trajectories, while others exhibit imme-diate volatility. In contrast, the middle and later portions of the response are comparatively flat and tightly clustered. This explains why early-window dispersion features (e.g., range of first 3 tokens )consistently emerge as strong predictors—they cap-ture precisely the region where responses differ most in confidence. Once generation reaches the plateau phase, trajectories become too similar for full-response or late-window features to remain discriminative. The trajectories also reveal a persistent role asymmetry. Skeptic responses exhibit slightly lower average confidence and wider low-confidence tails throughout generation, particularly in the lower percentile bands. This aligns with the weaker correlations observed for Skeptic features and suggests that adversarial reasoning introduces greater variability in generation dynamics. In con-trast, Advocate responses follow more stable tra-jectories, making confidence a more reliable signal of judged quality. Figure 2: Token-level log-probability trajectories for Advocate and Skeptic responses on Essay Sets 7 (left) and 8 (right). Solid lines denote mean trajectories; shaded regions indicate percentile bands (25–75 and 10–90). 
+
+4.4 Failure Analysis LLM-as-Judge Meta-Evaluator. Figure 3shows that the meta-evaluator exhibits strong score concentration across all dimensions, assigning the maximum score (3) in the majority of cases: 76.5% for instruction following, 79.3% for justification quality, and 93.1% for evidence grounding. Despite this overall skew, the three dimensions differ markedly in their ability to discriminate between responses. Evidence grounding is highly saturated and behaves almost as a binary signal, contributing little variation. In contrast, instruction following and justification quality account for most of the observable differences in scores. Among these, justification quality shows the strongest role asymmetry, with a 13% gap in pass rates between the Advocate and Skeptic. Instruc-tion following captures broader procedural failures across both roles, with the Skeptic penalized more heavily (84.2% vs. 93.6%), primarily due to viola-tions of explicit instructions. These patterns reflect fundamentally different failure modes across roles. Advocate failures are primarily associated with justification quality, es-pecially through overstatement. The Advocate fre-quently amplifies weak or incorrect evidence, pre-senting flawed reasoning as strong or mischarac-terizing surface-level features. Importantly, these errors occur along a continuum, ranging from mild exaggeration to clear misrepresentation. In contrast, Skeptic failures are dominated by instruction-following violations. The most com-mon issue arises from engaging with anonymiza-tion placeholders (e.g., @CAPS1 , @NUM2 ) despite ex-plicit instructions to ignore them. Unlike Advocate errors, these failures are largely binary: the Skeptic either adheres to the procedure or violates it. This distinction explains the persistent role asym-metry observed in the correlation analysis. Because Advocate errors vary continuously, they induce a broader distribution of scores, enabling stronger alignment with confidence signals (e.g., ρ = 0 .373 
+
+for instruction following). Skeptic errors, by con-trast, collapse into near binary outcomes, limiting score variability and compressing rank-based cor-relations regardless of the underlying signal. A similar pattern appears in critical failure de-tection. Advocate failures—often driven by hallu-cinated or fabricated evidence—produce sharper confidence anomalies, leading to stronger detec-tion performance (e.g., AUROC ≈ 0.76 ). These errors typically involve claims about nonexistent essay features, introducing low-probability tokens during generation. In contrast, Skeptic failures are predominantly procedural and do not produce com-parable confidence deviations, resulting in weaker detection signals (AUROC ≈ 0.63 ). 
+
+5 Conclusion 
+
+We presented a framework that couples multi-agent debate with LLM-as-judge meta-evaluation to study whether token-level confidence signals can predict the quality of open-ended argumenta-tive reasoning in LLM-based essay scoring. Across both ASAP essay sets, we find that early-window log-probability statistics, particularly dispersion measures over the first few generated tokens, are consistently the strongest predictors of externally Figure 3: Distribution of LLM-as-judge scores across evaluation dimensions. Evidence grounding is highly saturated at the maximum score, while instruction following and justification quality exhibit greater variability. 
+
+judged reasoning quality. This finding is supported both by the correlation analysis and by trajectory-level evidence showing that the opening segment of generation is the most heterogeneous, and there-fore the most informative, region of the response. We also identify a stable Advocate–Skeptic asym-metry: confidence proxies correlate more reliably with Advocate reasoning quality than with Skep-tic reasoning quality, a difference traceable to the distinct failure modes of each role. 
+
+Limitations 
+
+This study is exploratory in scope and several fac-tors limit the generalizability of the findings. Our experiments are conducted on only two ASAP es-say sets and a single model family, although these subsets were selected because they are the only por-tions of the dataset that provide the trait-level anno-tations required for fine-grained reasoning analysis. Despite this narrower setting, we observe consis-tent trajectory-level patterns across both datasets, particularly the predictive value of early-token con-fidence signals. In addition, the reported correlations are moder-ate rather than deterministic, suggesting that token-level confidence should be interpreted as a useful auxiliary signal rather than a standalone measure of reasoning quality. Relatedly, our framework relies on LLM-as-judge evaluation, which may par-tially reflect alignment between models instead of fully objective reasoning assessment. To mitigate this, we use structured rubric-based scoring, de-terministic meta-evaluation, multiple complemen-tary metrics, and detailed trajectory and failure analyses. Nevertheless, future work would benefit from broader cross-domain experiments, human validation studies, stronger statistical testing, and evaluation on additional model families and debate settings. 
+
+Ethical Statement 
+
+This work studies confidence estimation and rea-soning evaluation in multi-agent LLM systems for automated essay scoring. Because educational as-sessment systems may inherit biases present in both datasets and language models, the proposed frame-work should not be viewed as a replacement for human judgment in high-stakes settings. In ad-dition, LLM-as-judge evaluation and token-level confidence estimates are imperfect proxies for rea-soning quality and may reflect model-specific bi-ases or calibration issues. Our goal is therefore not to automate educational decision-making, but to better understand the reliability and interpretability of multi-agent reasoning systems. All experiments were conducted on publicly available benchmark data and commercially available language models. 
+
+Acknowledgments 
+
+This paper is based upon work supported by the National Science Foundation under Grant No. 2315294. 
+
+References    
+
+> Chi-Min Chan, Weize Chen, Yusheng Su, Jianxuan Yu, Wei Xue, Shanghang Zhang, Jie Fu, and Zhiyuan Liu. 2023. Chateval: Towards better llm-based evaluators through multi-agent debate. Preprint ,arXiv:2308.07201. Jiaju Chen, Yuxuan Lu, Xiaojie Wang, Huimin Zeng, Jing Huang, Jiri Gesi, Ying Xu, Bingsheng Yao,
+
+and Dakuo Wang. 2025. Multi-agent-as-judge: Aligning llm-agent-based automated evaluation with multi-dimensional human evaluation. Preprint ,arXiv:2507.21028. Cheng-Han Chiang and Hung-yi Lee. 2023. Can large language models be an alternative to human evalua-tions? In Proceedings of the 61st Annual Meeting of the Association for Computational Linguistics (Vol-ume 1: Long Papers) , pages 15607–15631, Toronto, Canada. Association for Computational Linguistics. Scott A. Crossley, Perpetual Baffour, L. Burleigh, and Jules King. 2025. A large-scale corpus for assessing source-based writing quality: Asap 2.0. Assessing Writing , 65:100954. Shrey Desai and Greg Durrett. 2020. Calibration of pre-trained transformers. In Proceedings of the 2020 Conference on Empirical Methods in Natural Lan-guage Processing (EMNLP) , pages 295–302, Online. Association for Computational Linguistics. Semire Dikli. 2006. An overview of automated scoring of essays. The Journal of Technology, Learning and Assessment , 5(1). Yilun Du, Shuang Li, Antonio Torralba, Joshua B. Tenenbaum, and Igor Mordatch. 2023. Improving factuality and reasoning in language models through multiagent debate. Preprint , arXiv:2305.14325. Yann Dubois, Balázs Galambosi, Percy Liang, and Tat-sunori B. Hashimoto. 2025. Length-controlled al-pacaeval: A simple way to debias automatic evalua-tors. Preprint , arXiv:2404.04475. Avisa Fallah, Ali Keramati, Mohammad Ali Nazari, and Fatemeh Sadat Mirfazeli. 2024. Automating theory of mind assessment with a llama-3-powered chatbot: Enhancing faux pas detection in autism. In 
+
+2024 14th International Conference on Computer and Knowledge Engineering (ICCKE) , pages 365– 372. Jinlan Fu, See-Kiong Ng, Zhengbao Jiang, and Pengfei Liu. 2024. GPTScore: Evaluate as you desire. In 
+
+Proceedings of the 2024 Conference of the North American Chapter of the Association for Computa-tional Linguistics: Human Language Technologies (Volume 1: Long Papers) , pages 6556–6576, Mexico City, Mexico. Association for Computational Lin-guistics. Peiyuan Gong and Jiaxin Mao. 2023. Coascore: Chain-of-aspects prompting for nlg evaluation. Preprint ,arXiv:2312.10355. Shanshan Han, Qifan Zhang, Weizhao Jin, and Zhaozhuo Xu. 2024. Llm multi-agent systems: Challenges and open problems. arXiv preprint arXiv:2402.03578 .Hui Huang, Xingyuan Bu, Hongli Zhou, Yingqi Qu, Jing Liu, Muyun Yang, Bing Xu, and Tiejun Zhao. 2025. An empirical study of LLM-as-a-judge for LLM evaluation: Fine-tuned judge model is not a general substitute for GPT-4. In Findings of the As-sociation for Computational Linguistics: ACL 2025 ,pages 5880–5895, Vienna, Austria. Association for Computational Linguistics. Hawon Jeong, Chaehun Park, Jimin Hong, and Jaegul Choo. 2024. Prepair: Pointwise reasoning enhance pairwise evaluating for robust instruction-following assessments. Saurav Kadavath, Tom Conerly, Amanda Askell, Tom Henighan, Dawn Drain, Ethan Perez, Nicholas Schiefer, Zac Hatfield-Dodds, Nova DasSarma, Eli Tran-Johnson, Scott Johnston, Sheer El-Showk, Andy Jones, Nelson Elhage, Tristan Hume, Anna Chen, Yuntao Bai, Sam Bowman, Stanislav Fort, and 17 others. 2022. Language models (mostly) know what they know. Preprint , arXiv:2207.05221. Zhewei Kang, Xuandong Zhao, and Dawn Song. 2025. Scalable best-of-n selection for large language mod-els via self-certainty. In 2nd AI for Math Workshop @ ICML 2025 .Ali Keramati and Mark Warschauer. 2025. Madest: Multi-agent debate essay scoring triangulation. Ruosen Li, Teerth Patel, and Xinya Du. 2024. Prd: Peer rank and discussion improve large language model based evaluations. Preprint , arXiv:2307.02762. Tianyu Liu, Yizhe Zhang, Chris Brockett, Yi Mao, Zhifang Sui, Weizhu Chen, and Bill Dolan. 2022. A token-level reference-free hallucination detection benchmark for free-form text generation. In Proceed-ings of the 60th Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Pa-pers) , pages 6723–6737, Dublin, Ireland. Association for Computational Linguistics. Yang Liu, Dan Iter, Yichong Xu, Shuohang Wang, Ruochen Xu, and Chenguang Zhu. 2023. G-eval: NLG evaluation using gpt-4 with better human align-ment. In Proceedings of the 2023 Conference on Empirical Methods in Natural Language Processing ,pages 2511–2522, Singapore. Association for Com-putational Linguistics. Yixin Liu, Kejian Shi, Alexander Fabbri, Yilun Zhao, PeiFeng Wang, Chien-Sheng Wu, Shafiq Joty, and Ar-man Cohan. 2025. ReIFE: Re-evaluating instruction-following evaluation. In Proceedings of the 2025 Conference of the Nations of the Americas Chap-ter of the Association for Computational Linguistics: Human Language Technologies (Volume 1: Long Pa-pers) , pages 12247–12287, Albuquerque, New Mex-ico. Association for Computational Linguistics. Alex Mallen, Akari Asai, Victor Zhong, Rajarshi Das, Daniel Khashabi, and Hannaneh Hajishirzi. 2023. When not to trust language models: Investigating effectiveness of parametric and non-parametric mem-ories. In Proceedings of the 61st Annual Meeting of the Association for Computational Linguistics (Vol-ume 1: Long Papers) , pages 9802–9822, Toronto, Canada. Association for Computational Linguistics. Potsawee Manakul, Adian Liusie, and Mark Gales. 2023. SelfCheckGPT: Zero-resource black-box hallucina-tion detection for generative large language models. In Proceedings of the 2023 Conference on Empiri-cal Methods in Natural Language Processing , pages 9004–9017, Singapore. Association for Computa-tional Linguistics. Vaibhav Mavi, Shubh Jaroria, and Weiqi Sun. 2025. Self-evaluating llms for multi-step tasks: Stepwise confidence estimation for failure detection. Preprint ,arXiv:2511.07364. Austin Pack, Alex Barrett, and Juan Escalante. 2024. Large language models and automated essay scoring of english language learner writing: Insights into validity and reliability. Computers and Education: Artificial Intelligence , 6:100234. Mihir Parmar, Xin Liu, Palash Goyal, Yanfei Chen, Long Le, Swaroop Mishra, Hossein Mobahi, Jindong Gu, Zifeng Wang, Hootan Nakhost, Chitta Baral, Chen-Yu Lee, Tomas Pfister, and Hamid Palangi. 2025. Plangen: A multi-agent framework for gener-ating planning and reasoning trajectories for complex problem solving. Preprint , arXiv:2502.16111. Ernesto Quevedo, Jorge Yero, Rachel Koerner, Pablo Rivas, and Tomas Cerny. 2024. Detecting hallucina-tions in large language model generation: A token probability approach. Preprint , arXiv:2405.19648. Swarnadeep Saha, Omer Levy, Asli Celikyilmaz, Mohit Bansal, Jason Weston, and Xian Li. 2024. Branch-solve-merge improves large language model evalu-ation and generation. In Proceedings of the 2024 Conference of the North American Chapter of the Association for Computational Linguistics: Human Language Technologies (Volume 1: Long Papers) ,pages 8352–8370, Mexico City, Mexico. Association for Computational Linguistics. Peiyi Wang, Lei Li, Liang Chen, Zefan Cai, Dawei Zhu, Binghuai Lin, Yunbo Cao, Lingpeng Kong, Qi Liu, Tianyu Liu, and Zhifang Sui. 2024. Large lan-guage models are not fair evaluators. In Proceedings of the 62nd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) ,pages 9440–9450, Bangkok, Thailand. Association for Computational Linguistics. Qingyun Wu, Gagan Bansal, Jieyu Zhang, Yiran Wu, Beibin Li, Erkang Zhu, Li Jiang, Xiaoyun Zhang, Shaokun Zhang, Jiale Liu, Ahmed Hassan Awadallah, Ryen W White, Doug Burger, and Chi Wang. 2023. Autogen: Enabling next-gen llm ap-plications via multi-agent conversation. Preprint ,arXiv:2308.08155. Andrea Wynn, Harsh Satija, and Gillian Hadfield. 2025. Talk isn’t always cheap: Understanding failure modes in multi-agent debate. Preprint , arXiv:2509.05396. Seonghyeon Ye, Doyoung Kim, Sungdong Kim, Hyeon-bin Hwang, Seungone Kim, Yongrae Jo, James Thorne, Juho Kim, and Minjoon Seo. 2024. Flask: Fine-grained language model evaluation based on alignment skill sets. Preprint , arXiv:2307.10928. Zhiyuan Zeng, Jiatong Yu, Tianyu Gao, Yu Meng, Tanya Goyal, and Danqi Chen. 2024. Evaluating large language models at evaluating instruction following. 
+
+Preprint , arXiv:2310.07641. Lianmin Zheng, Wei-Lin Chiang, Ying Sheng, Siyuan Zhuang, Zhanghao Wu, Yonghao Zhuang, Zi Lin, Zhuohan Li, Dacheng Li, Eric P. Xing, Hao Zhang, Joseph E. Gonzalez, and Ion Stoica. 2023. Judging llm-as-a-judge with mt-bench and chatbot arena. In 
+
+Proceedings of the 37th International Conference on Neural Information Processing Systems , NIPS ’23, Red Hook, NY, USA. Curran Associates Inc. 
+
+A Data and Preprocessing 
+
+A.1 Dataset Selection 
+
+We conduct our analysis on the ASAP (Auto-mated Student Assessment Prize) dataset, a stan-dard benchmark for essay scoring. The dataset consists of eight prompt-specific essay sets with varying genres, scoring rubrics, and grade levels. Our study focuses exclusively on Essay Sets 7 and 8 , as these are the only subsets that provide 
+
+trait-level annotations from multiple human raters. This property is essential for our setup, since we evaluate reasoning quality at the level of individ-ual rubric traits rather than holistic scores. The remaining essay sets are not used, as they only pro-vide single aggregated scores and therefore do not support fine-grained evaluation. 
+
+A.2 Relevant Dataset Characteristics 
+
+Table 2 summarizes the key properties of the two essay sets used in our experiments. 
+
+Table 2: Summary of the ASAP subsets used in this work.          
+
+> Set Grade # Essays # Traits
+> 771,569 4810 723 6
+
+These two sets differ in both rubric complex-ity and score ranges, providing a useful testbed for analyzing how confidence signals interact with reasoning quality under different evaluation condi-tions. 
+
+A.3 Prompt Context 
+
+Each essay is written in response to a fixed prompt. For completeness, we include simplified versions of the prompts used in the selected sets: Set 7. Students are asked to write a story about patience, either from personal experience or imagi-nation. 
+
+Set 8. Students are asked to write a true story in which laughter plays an important role. These prompts define the context in which both the debate agents and the evaluator operate. 
+
+A.4 Text Handling 
+
+The ASAP essays are transcriptions of handwritten student responses. We use the text as provided ,without any normalization or correction. In partic-ular, spelling errors, grammatical inconsistencies, and informal structures are preserved. This choice is important because the evaluation criteria (e.g., evidence grounding and justification) depend on the original textual content, and prepro-cessing could alter signals that are relevant to both the agents and the evaluator. 
+
+B Top-3 Confidence Feature Rankings by Dataset 
+
+Tables 3 and 4 report the top three confidence fea-tures for each role–target pair on Essay Sets 7 and 8. For ordinal targets, features are ranked by Spear-man correlation with the LLM-as-judge score, with Kendall’s τ reported as a secondary measure. For critical failure detection, features are ranked by AU-ROC, with point-biserial correlation (PB) included for completeness. To improve interpretability, we present features using descriptive names rather than implementation-specific identifiers. Early-k refers to statistics computed over the first k generated tokens, while final-half refers to the last 50% of the response. Full-response features are computed over the entire generated sequence. 
+
+C Agent Prompt Templates 
+
+This section provides the system instructions used to define the roles of the agents in the debate frame-work. All prompts are implemented as template files and rendered at runtime using a shared context dictionary. The context includes the rubric trait name, the full rubric definition serialized as JSON, the essay text, the essay prompt or question, and the valid scoring range for the trait. In addition, the Synthesizer-Judge receives the debate transcript produced by the Advocate and Skeptic agents. These prompts establish strict role boundaries to ensure that each agent performs a specialized function in the debate process. The prompt configurations were developed through iterative experimentation, including pilot runs and refinements designed to enforce role ad-herence, maintain output consistency, and reduce undesired behaviors such as assigning scores pre-maturely or mixing multiple rubric traits in a single argument. For transparency and reproducibility, we provide the exact system instructions used to define each agent role. 
+
+C.1 Advocate Agent 
+
+The Advocate agent is responsible for presenting arguments that highlight the strengths of the essay with respect to a single rubric trait. The agent receives the essay text and the rubric definition and produces an evidence-based argument explaining how the essay satisfies the expectations of the trait. The Advocate is explicitly instructed to focus only on positive aspects of the essay and to avoid assigning a score or discussing weaknesses. The agent may reference specific passages from the essay to support its claims. 
+
+C.2 Skeptic Agent 
+
+The Skeptic agent provides a counterargument to the Advocate by identifying weaknesses or limita-tions in the essay relative to the same rubric trait. The Skeptic receives both the essay text and the Advocate’s argument and produces a critique that challenges the strengths presented or highlights aspects where the essay fails to meet the rubric expectations. The agent is instructed not to assign a score and to focus exclusively on critical analysis. 
+
+C.3 Synthesizer-Judge Agent 
+
+The Synthesizer-Judge serves as the final decision-maker in the debate process. This agent reads the arguments produced by the Advocate and Skeptic and determines a final score for the rubric trait. The agent synthesizes the competing arguments and evaluates them against the rubric definition before assigning a score within the permitted range. 
+
+C.4 LLM-as-Judge Meta-Evaluator 
+
+The meta-evaluator agent is responsible for assess-ing the quality of each Advocate and Skeptic re-sponse. The agent receives the original system Role Target Feature Spearman Kendall AUROC PB Advocate Aggregate Full-response median 0.379 0.295 – –Advocate Final-half median 0.363 0.281 – –Advocate Full-response mean 0.353 0.273 – –Advocate Evidence Full-response median 0.242 0.196 – –Advocate Final-half median 0.237 0.193 – –Advocate Full-response mean 0.237 0.192 – –Advocate Instruction Full-response median 0.394 0.317 – –Advocate Final-half median 0.383 0.308 – –Advocate Full-response mean 0.379 0.305 – –Advocate Justification Full-response median 0.353 0.284 – –Advocate Final-half median 0.332 0.267 – –Advocate Full-response mean 0.323 0.260 – –Advocate Critical Max of first 3 tokens – – 0.849 0.261 Advocate Max of first 5 tokens – – 0.849 0.261 Advocate Max of first 10 tokens – – 0.830 0.253 Skeptic Aggregate Range of first 3 tokens 0.208 0.166 – –Skeptic Full-response slope 0.125 0.100 – –Skeptic Slope over first 30 tokens 0.121 0.097 – –Skeptic Evidence Range of first 3 tokens 0.114 0.093 – –Skeptic Slope over first 30 tokens 0.067 0.055 – –Skeptic Full-response slope 0.060 0.049 – –Skeptic Instruction Range of first 3 tokens 0.163 0.130 – –Skeptic Full-response slope 0.102 0.081 – –Skeptic Slope over first 30 tokens 0.098 0.078 – –Skeptic Justification Range of first 3 tokens 0.266 0.217 – –Skeptic Slope over first 30 tokens 0.231 0.201 – –Skeptic Full-response slope 0.209 0.179 – –Skeptic Critical Mean of first 3 tokens – – 0.638 0.194 Skeptic Min of first 3 tokens – – 0.635 0.177 Skeptic Slope over first 3 tokens – – 0.634 0.180 
+
+Table 3: Top-3 confidence features for Essay Set 7. 
+
+prompt given to agents, context including the essay text and rubric, and the agent’s response. The meta-evaluator scores each response along three dimensions: instruction following, justifica-tion quality, and evidence grounding, each on a three-point ordinal scale (1 = Low, 2 = Medium, 3 = High). The evaluator also flags a critical issue when the response contains hallucinated evidence, severe deviation or violation of instructions, or in-ternal contradictions. The meta-evaluator is explicitly instructed to evaluate only the agent’s reasoning quality and role adherence. It does not assess the essay itself or judge whether the score being argued is correct. The complete system instructions and output schema are provided in Figures 4- 8. Role Target Feature Spearman Kendall AUROC PB Advocate Aggregate Range of first 3 tokens 0.320 0.248 – –Advocate Range of first 5 tokens 0.274 0.214 – –Advocate Std. dev. of first 3 tokens 0.267 0.205 – –Advocate Evidence Range of first 3 tokens 0.336 0.272 – –Advocate Range of first 5 tokens 0.326 0.263 – –Advocate Std. dev. of first 5 tokens 0.305 0.247 – –Advocate Instruction Range of first 3 tokens 0.373 0.302 – –Advocate Std. dev. of first 3 tokens 0.338 0.274 – –Advocate Variance of first 3 tokens 0.338 0.274 – –Advocate Justification Range of first 3 tokens 0.284 0.228 – –Advocate Range of first 5 tokens 0.284 0.228 – –Advocate Final-half mean 0.273 0.221 – –Advocate Critical Median of first 5 tokens – – 0.759 0.285 Advocate Range of first 3 tokens – – 0.754 -0.287 Advocate Std. dev. of first 3 tokens – – 0.736 -0.286 Skeptic Aggregate Range of first 3 tokens 0.196 0.157 – –Skeptic Std. dev. of first 3 tokens 0.195 0.157 – –Skeptic Variance of first 3 tokens 0.195 0.157 – –Skeptic Evidence Range of first 3 tokens 0.092 0.075 – –Skeptic Std. dev. of first 3 tokens 0.090 0.074 – –Skeptic Variance of first 3 tokens 0.090 0.074 – –Skeptic Instruction Range of first 3 tokens 0.176 0.140 – –Skeptic Std. dev. of first 3 tokens 0.174 0.139 – –Skeptic Variance of first 3 tokens 0.174 0.139 – –Skeptic Justification Range of first 3 tokens 0.231 0.189 – –Skeptic Std. dev. of first 3 tokens 0.230 0.188 – –Skeptic Variance of first 3 tokens 0.230 0.188 – –Skeptic Critical Median of first 5 tokens – – 0.630 0.151 Skeptic Mean of first 3 tokens – – 0.630 0.156 Skeptic Std. dev. of first 3 tokens – – 0.617 -0.138 
+
+Table 4: Top-3 confidence features for Essay Set 8. 
+
+Advocate Agent System Prompt 
+
+You are an Advocate Agent participating in a multi-agent debate system for essay evaluation. Your task is to analyze the essay and highlight strengths that demonstrate how the essay satisfies the rubric expectations for the trait "$TRAIT_NAME". Focus exclusively on positive evidence from the essay. Provide detailed reasoning supported by specific excerpts or paraphrased examples from the essay. Do not assign a score and do not critique weaknesses. Your role is solely to present arguments supporting the essay’s strengths with respect to the specified rubric trait. Anonymization $ANON_CONTEXT 
+
+Figure 4: System instructions for the Advocate agent. 
+
+Skeptic Agent System Prompt 
+
+You are a Skeptic Agent participating in a multi-agent debate system for essay evaluation. Your task is to critically analyze the essay and identify weaknesses related to the rubric trait "$TRAIT_NAME". Provide detailed critiques supported by specific references to the essay text. Focus only on identifying shortcomings or areas where the essay does not fully satisfy the rubric expectations. Do not assign a score and do not discuss strengths. Your role is to challenge the essay’s performance with respect to the specified rubric trait. Anonymization $ANON_CONTEXT 
+
+Figure 5: System instructions for the Skeptic agent. Synthesizer-Judge Agent System Prompt 
+
+You are the Synthesizer-Judge in a multi-agent debate system for essay evaluation. Your task is to read the debate transcript between the Advocate and Skeptic agents regarding the rubric trait "$TRAIT_NAME". Carefully consider the arguments presented by both agents and evaluate them against the rubric expectations. Based on the combined evidence, assign a final integer score between $MIN_POINTS and $MAX_POINTS for the essay on this rubric trait. Anonymization $ANON_CONTEXT 
+
+> Figure 6: System instructions for the Synthesizer-Judge agent.
+
+Meta-Evaluation System Prompt 
+
+You are a meta-evaluator assessing the quality of an AI agent’s response in a multi-agent essay-scoring debate system. Your goal is to evaluate how well the agent performs its role. 
+
+Important: Do NOT evaluate the essay itself. Do NOT judge whether the essay score being argued is correct. Evaluate ONLY the agent’s reasoning quality, role adherence, and use of essay evidence. You will receive: (1) the agent’s system prompt, (2) the task prompt given to the agent, and (3) the agent’s response. Evaluate the response across three dimensions using the full range of the scale: 1= Low , 2 = Medium , 3 = High . Avoid defaulting to the middle score. Evaluate each dimension independently. 
+
+Dimension 1 – Instruction Following. 3: Fully maintains role; completes all task components; no deviations. 2: Generally follows instructions with a minor omission or slight deviation. 1: Major or multiple deviations; neglects important instructions. 
+
+Dimension 2 – Justification Quality. 3: Multiple claims with clear reasoning; claim → expla-nation → implication structure. 2: At least one supported claim; reasoning understandable but shallow or repetitive. 1: Minimal or vague reasoning; assertions without explanation. 
+
+Dimension 3 – Evidence Grounding. 3: Two or more precise references including quotes or detailed paraphrases. 2: One clear identifiable reference; other claims rely on general statements. 1: Evidence vague, indirect, or missing. 
+
+Critical Issues Flag. Set critical_flag = 1 if any of the following occur: hallucinated essay evidence, severe internal contradiction, explicit instruction violation, or nonsensical output. Otherwise critical_flag = 0 .
+
+Output: Return only a JSON object with fields instruction_following ,
+
+justification_quality , evidence_grounding , critical_flag ,
+
+critical_issues_description , and reasoning (2–3 sentences). 
+
+> Figure 7: System instructions for the Meta-Evaluator agent.
+
+Meta-Evaluation Task Prompt 
+
+# Agent Being Evaluated: {AGENT_TYPE} # Agent’s System Prompt (Instructions Given to the Agent) {AGENT_SYSTEM_PROMPT} # Agent’s User Prompt (Task Context Given to the Agent) {AGENT_USER_PROMPT} # Agent’s Actual Response {AGENT_RESPONSE} 
+
+Now evaluate this agent’s response. Use the 3-point scale (1=Low, 2=Medium, 3=High) for each scored dimension and set the critical_flag to 0 or 1. Output ONLY the JSON object.
