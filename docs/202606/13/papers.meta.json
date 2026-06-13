@@ -1,0 +1,54 @@
+{
+  "label": "2026-06-13",
+  "date": "2026-06-13",
+  "generated_at": "2026-06-13T20:51:29",
+  "count": 3,
+  "papers": [
+    {
+      "paper_id": "202606/13/2606.10650v1-dynamic-linear-attention",
+      "section": "deep",
+      "title_en": "Dynamic Linear Attention",
+      "authors": "Xin Wang, Hui Shen, Boyuan Zheng, Xueshen Liu, Minkyoung Cho, Zhongwei Wan, Zesen Zhao, Zhuoqing Mao, Shen Yan, Mi Zhang",
+      "date": "2026-06-09",
+      "pdf": "https://arxiv.org/pdf/2606.10650v1",
+      "score": "8.0",
+      "evidence": "线性注意力中动态变化的token重要性",
+      "tldr": "标准注意力二次复杂度限制大模型长上下文扩展，线性注意力虽降低复杂度，但多状态方法依赖固定合并策略，无法适应token重要性动态变化，导致严重误差累积。本文提出DLA动态记忆建模框架，包含信息感知动态状态合并和容量受限记忆建模，自适应划分边界并控制内存增长。在两种线性注意力模型上预训练，16个数据集评测显示全面超越现有方法。该工作有效解决了线性注意力长序列信息丢失问题，提升了表示能力。",
+      "tags": "query:key-tokens",
+      "abstract_en": "The scalability of Large Language Models (LLMs) to long contexts is fundamentally constrained by the quadratic complexity of standard attention, motivating the adoption of linear attention mechanisms with sub-quadratic cost. To improve representation capacity under long contexts, recent approaches organize memory in a multi-state manner. However, existing multi-state linear attention methods rely on fixed state merging policies that cannot adapt to dynamically varying token importance, irreversibly obscuring critical tokens and causing severe error accumulation over long sequences. To address this limitation, we propose DLA, a dynamic memory modeling framework for multi-state linear attention. DLA introduces (i) Information-Aware Dynamic State Merging, which adaptively determines state boundaries based on token-level information variation, preserving high-resolution representations around semantic transitions while aggressively summarizing stable regions, and (ii) Capacity-Bounded Memory Modeling, which maintains a fixed-size, chronologically ordered state cache by selectively merging adjacent low-information states to control memory growth with minimal information loss. We pre-train DLA on two different linear attention models and evaluate on 16 datasets across three categories. Experimental results demonstrate the superiority of DLA over state-of-the-art.",
+      "source": "arxiv",
+      "selection_source": "fresh_fetch"
+    },
+    {
+      "paper_id": "202606/13/2606.11164v1-reasonalloc-hierarchical-decoding-time-kv-cache-budget-allocation-for-reasoning-models",
+      "section": "quick",
+      "title_en": "ReasonAlloc: Hierarchical Decoding-Time KV Cache Budget Allocation for Reasoning Models",
+      "authors": "Wenhao Liu, Hao Shi, Yunhe Li, Weizhi Fei, Xiangyuan Wang, Mengzhe Ruan, Hanxu Hou, Peisong Wang, Linqi Song, Shuang Qiu",
+      "date": "2026-06-09",
+      "pdf": "https://arxiv.org/pdf/2606.11164v1",
+      "score": "7.0",
+      "evidence": "基于推理链中token重要性的层级KV缓存分配",
+      "tldr": "长链推理导致KV缓存快速膨胀，现有解码时压缩方法采用均匀预算分配，无法适应动态需求。ReasonAlloc通过离线层预分配捕捉架构驱动的“推理波”模式，并在线头级重分配资源至信息密集头部。在数学基准上小预算时显著优于R-KV、SnapKV等基线，最大增益。即插即用，零推理开销。",
+      "tags": "query:key-tokens",
+      "abstract_en": "Long chain-of-thought (CoT) trajectories in large language model (LLM) reasoning cause severe inference bottlenecks due to rapid key-value (KV) cache growth. Current decoding-time compression methods mitigate this issue via token eviction, but typically assume a uniform budget distribution across all layers and heads. In contrast, existing non-uniform budget allocation methods are predominantly designed for the static prompt prefill phase, and they do not capture the stepwise context demands of autoregressive reasoning. To bridge this gap, we propose ReasonAlloc, a training-free framework that recasts decoding-time KV compression as a hierarchical budget allocation problem. ReasonAlloc operates at two complementary levels: an offline layer-wise preallocation strategy captures an architecture-driven demand pattern which we call ``\\textit{Reasoning Wave}'', while an online head-wise strategy reallocates resources during decoding to information-rich heads based on real-time utility. Evaluations on mathematical reasoning benchmarks (MATH-500, AIME~2024) using DeepSeek-R1-Distill-Llama-8B, DeepSeek-R1-Distill-Qwen-14B, and AceReason-14B show that ReasonAlloc outperforms uniform-budget R-KV, SnapKV, and Pyramid-RKV (a baseline enforcing a static, monotonically decreasing layer budget), with the largest gains at small budgets (128-512 tokens). ReasonAlloc is plug-and-play with existing token-eviction policies and introduces negligible inference-time overhead.",
+      "source": "arxiv",
+      "selection_source": "fresh_fetch"
+    },
+    {
+      "paper_id": "202606/13/2606.09916v1-intentkv-cross-turn-intent-aware-kv-cache-pruning-for-agent-inference",
+      "section": "quick",
+      "title_en": "IntentKV: Cross-Turn Intent-Aware KV Cache Pruning for Agent Inference",
+      "authors": "Junjie Li, Jiong Lou, Jie Li",
+      "date": "2026-06-06",
+      "pdf": "https://arxiv.org/pdf/2606.09916v1",
+      "score": "6.0",
+      "evidence": "通过记忆注意力机制进行token重要性评分以实现KV缓存剪枝",
+      "tldr": "多轮LLM agent的KV缓存成为主要瓶颈，因为工具调用和推理轨迹使KV内存和读取带宽剧增。IntentKV通过跨轮意图感知的剪枝方法，在不修改基础模型的前提下，利用会话级QueryMemory和注意力评分保留关键历史token，并采用槽位映射重定向实现与前缀缓存的兼容。在8k KV预算下，Qwen3-8B和Qwen2.5-14B的峰值请求token分别降低23.9%和30.7%，最坏情况下降77.8%，同时几乎不损失精度。该工作显著降低了长序列agent推理的内存和带宽开销。",
+      "tags": "query:key-tokens",
+      "abstract_en": "Multi-turn LLM agents fan short queries into long trajectories of tool calls, search results, and intermediate reasoning. Both KV memory and KV read bandwidth grow by orders of magnitude across a single trajectory, making the key-value (KV) cache, not parameter compute, the dominant serving bottleneck for long-horizon agents. We introduce IntentKV, learned KV pruning that keeps the base LLM frozen. IntentKV maintains a session-level QueryMemory of cross-turn intent, scores live history tokens with a memory-attention rule, and adds a zero-initialized residual head with cross-attention over current-query K-vectors. To stay composable with prefix caches, eviction is a slot-map redirection: dropped positions route to a sentinel dead slot while surviving K/V rows, RoPE phases, and slot identities stay in place. IntentKV matches the no-pruning full-cache baseline with almost no accuracy drop under tight KV budgets: at an 8k KV budget, mean peak request tokens drop 23.9% on Qwen3-8B and 30.7% on Qwen2.5-14B. On the 100 longest BCP queries that all methods complete on Qwen2.5-14B, IntentKV-8k further cuts worst-case peak request tokens from 92.3k to 20.5k, a 77.8% reduction, and worst-case raw KV reads from 411M to 31M, a 92.6% reduction.",
+      "source": "arxiv",
+      "selection_source": "fresh_fetch"
+    }
+  ],
+  "errors": []
+}

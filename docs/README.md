@@ -6,29 +6,33 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-06-12
-- 运行时间：2026-06-12 20:47:15 UTC
+- 最新运行日期：2026-06-13
+- 运行时间：2026-06-13 20:51:21 UTC
 - 运行状态：成功
 - 本次总论文数：3
 - 精读区：1
 - 速读区：2
 
 ### 今日简报（AI）
-今天精读1篇、速读2篇，聚焦LLM推理优化与安全，其中熵引导采样方法值得关注。最值得看的是《Sample Where You Struggle》，它提出通过熵信息指导采样来锐化基础模型的推理能力。建议尝试将熵引导采样思路应用到自己的推理任务中，以提升模型在困难样本上的表现。
-- 详情：[/202606/12/README](/202606/12/README)
+今日日报聚焦动态线性注意力与KV缓存分配优化，精读《Dynamic Linear Attention》获8分。
+
+最值得关注的方向是高效注意力机制及推理模型缓存管理，《ReasonAlloc》的层级缓存预算方法也具参考价值。
+
+建议深入阅读精读文章，并考量KV缓存策略在长上下文或agent推理场景的实际应用。
+- 详情：[/202606/13/README](/202606/13/README)
 
 ### 精读区论文标签
-1. [Sample Where You Struggle: Sharpening Base Model Reasoning via Entropy-Guided Power Sampling](/202606/12/2606.09926v1-sample-where-you-struggle-sharpening-base-model-reasoning-via-entropy-guided-power-sampling)  
+1. [Dynamic Linear Attention](/202606/13/2606.10650v1-dynamic-linear-attention)  
    标签：评分：8.0/10、query:key-tokens
-   evidence：令牌级熵识别高熵决策点作为关键令牌
+   evidence：线性注意力中动态变化的token重要性
 
 ### 速读区论文标签
-1. [RecurGuard: Runtime Monitoring for Reasoning-Token Consumption Attacks](/202606/12/2606.07968v1-recurguard-runtime-monitoring-for-reasoning-token-consumption-attacks)  
+1. [ReasonAlloc: Hierarchical Decoding-Time KV Cache Budget Allocation for Reasoning Models](/202606/13/2606.11164v1-reasonalloc-hierarchical-decoding-time-kv-cache-budget-allocation-for-reasoning-models)  
+   标签：评分：7.0/10、query:key-tokens
+   evidence：基于推理链中token重要性的层级KV缓存分配
+2. [IntentKV: Cross-Turn Intent-Aware KV Cache Pruning for Agent Inference](/202606/13/2606.09916v1-intentkv-cross-turn-intent-aware-kv-cache-pruning-for-agent-inference)  
    标签：评分：6.0/10、query:key-tokens
-   evidence：监控推理token序列以检测攻击，分析token消耗模式
-2. [RKSC: Reasoning-Aware KV Cache Sharing and Confident Early Exit for Multi-Step LLM Inference](/202606/12/2606.09937v1-rksc-reasoning-aware-kv-cache-sharing-and-confident-early-exit-for-multi-step-llm-inference)  
-   标签：评分：6.0/10、query:key-tokens
-   evidence：使用隐藏状态相似度进行KV缓存共享
+   evidence：通过记忆注意力机制进行token重要性评分以实现KV缓存剪枝
 
 
 <div class="dpr-home-promo-card">
