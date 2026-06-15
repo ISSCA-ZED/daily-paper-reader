@@ -6,25 +6,24 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-06-14
-- 运行时间：2026-06-14 20:23:38 UTC
+- 最新运行日期：2026-06-15
+- 运行时间：2026-06-15 21:57:16 UTC
 - 运行状态：成功
-- 本次总论文数：1
-- 精读区：1
+- 本次总论文数：2
+- 精读区：2
 - 速读区：0
 
 ### 今日简报（AI）
-今日精读高分论文《Beyond the Commitment Boundary》，深入探究了大推理模型中“副现象思维链”的本质。
-
-核心发现：模型输出的链式推理未必是真正因果推理，可能只是事后解释的副产品，这对理解AI“思考”过程有颠覆性。
-
-建议关注该论文对“思维链是否真实”的结论，并对比测试自己的模型在复杂推理任务中的表现真伪。
-- 详情：[/202606/14/README](/202606/14/README)
+今日精读两篇9.0分重磅论文，分别揭示语言模型中的“锚定路径”机制与“叠加推理令牌”结构。最值得关注：模型依赖特定神经元锚定知识，以及推理令牌在超位置空间中的协作方式。建议可深入探索这两种机制对提升模型可解释性和推理效率的实际应用。
+- 详情：[/202606/15/README](/202606/15/README)
 
 ### 精读区论文标签
-1. [Beyond the Commitment Boundary: Probing Epiphenomenal Chain-of-Thought in Large Reasoning Models](/202606/14/2606.13603v1-beyond-the-commitment-boundary-probing-epiphenomenal-chain-of-thought-in-large-reasoning-models)  
+1. [Localizing Anchoring Pathways in Language Models](/202606/15/2606.12818v1-localizing-anchoring-pathways-in-language-models)  
    标签：评分：9.0/10、query:key-tokens
-   evidence：通过提前退出分析推理步骤的因果重要性
+   evidence：基于归因的电路定位识别出对锚定敏感的推理token
+2. [SuperThoughts: Reasoning Tokens in Superposition](/202606/15/2606.13862v1-superthoughts-reasoning-tokens-in-superposition)  
+   标签：评分：9.0/10、query:key-tokens
+   evidence：直接压缩推理令牌并分析其重要性
 
 ### 速读区论文标签
 - 本次无速读推荐。
