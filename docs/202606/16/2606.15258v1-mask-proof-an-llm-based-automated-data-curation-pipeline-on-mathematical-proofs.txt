@@ -1,0 +1,753 @@
+Title: Mask-Proof: An LLM-based Automated Data Curation Pipeline on Mathematical Proofs
+
+URL Source: https://arxiv.org/pdf/2606.15258v1
+
+Published Time: Tue, 16 Jun 2026 00:37:31 GMT
+
+Number of Pages: 12
+
+Markdown Content:
+# Mask-Proof: An LLM-based Automated Data Curation Pipeline on Mathematical Proofs 
+
+## Jierui Zhang ∗
+
+2024140911@bupt.cn School of Computer Science Beijing University of Posts and Telecommunications Beijing, China 
+
+## Siyuan Tan ∗
+
+cream_milk@bupt.edu.cn Graduate College for Engineers Beijing University of Posts and Telecommunications Beijing, China 
+
+## Xinhang Li 
+
+24110180028@m.fudan.edu.cn School of Mathematical Sciences Fudan University Shanghai, China 
+
+## Longzhuangzhi Lin 
+
+linlong0591@bupt.edu.cn School of Cyberspace Security Beijing University of Posts and Telecommunications Beijing, China 
+
+## Dailin Li 
+
+ldlbest@mail.dlut.edu.cn School of Computer Science and Technology Dalian University of Technology Dalian, China 
+
+## Chengfeng Gu 
+
+cgfa9563@gmail.com Chu Kochen Honors College Zhejiang University Hangzhou, China 
+
+## Xinping Li 
+
+rccp@tsinghua.edu.cn Department of Psychological and Cognitive Sciences Tsinghua University Beijing, China 
+
+## Yaxian Hao 
+
+haoyaxian@bupt.edu.cn Graduate College for Engineers Beijing University of Posts and Telecommunications Beijing, China 
+
+## Shengjia Liang 
+
+liangshengjia@buaa.edu.cn State Key Laboratory of Virtual Reality Technology and Systems Beihang University Beijing, China 
+
+## Yuxiang Ren †
+
+renyuxiang@nju.edu.cn School of Intelligence Science and Technology Nanjing University Nanjing, China 
+
+## Wenhao Liu †
+
+wenhaoliu@bupt.edu.cn School of Computer Science Beijing University of Posts and Telecommunications Beijing, China 
+
+## Abstract 
+
+Large language models (LLMs) are increasingly capable of math-ematical problem solving and can even assist with research-level proofs, yet we still lack a scalable and reproducible way to measure step-level reasoning in long proofs across diverse sources. This evaluation gap limits trustworthy AI assistance in proof-certified scientific progress. Existing evaluations often emphasize final an-swers or rely on costly expert grading, while end-to-end proof generation remains open-ended and hard to verify automatically. We introduce Mask-Proof , a pipeline that turns real proofs into automatically checkable masked-step tasks. It masks key formula steps, provides the necessary surrounding context, and evaluates model reconstructions with an LLM-based equivalence judge us-ing repeated votes for stability. The resulting Mask-ProofBench  
+
+> ∗Both authors contributed equally to this research.
+> †Corresponding author.
+> This work is licensed under a Creative Commons Attribution 4.0 International License.
+> KDD ’26, Jeju Island, Republic of Korea
+> ©2026 Copyright held by the owner/author(s). ACM ISBN 979-8-4007-2259-2/2026/08 https://doi.org/10.1145/3770855.3818886
+
+contains 292 curated problems across diverse research areas. Ex-periments with 17 models show that reasoning-enhanced models outperform standard models by 12% to 27%. Our evaluator achieves 96.8% agreement with expert annotators, enabling faithful, repro-ducible, and comparable measurement of step-level mathemati-cal reasoning. Benchmark, annotations, and code are available at https://github.com/weating/Mask-Proof. 
+
+## CCS Concepts 
+
+• Computing methodologies → Artificial intelligence ; Natural language processing .
+
+## Keywords 
+
+Mathematical Reasoning, Large Language Models, Benchmark, Proof Evaluation, Automated Curation 
+
+ACM Reference Format: 
+
+Jierui Zhang, Siyuan Tan, Xinhang Li, Longzhuangzhi Lin, Dailin Li, Chengfeng Gu, Xinping Li, Yaxian Hao, Shengjia Liang, Yuxiang Ren, and Wenhao Liu. 2026. Mask-Proof: An LLM-based Automated Data Curation Pipeline on Mathematical Proofs. In Proceedings of the 32nd ACM SIGKDD Confer-ence on Knowledge Discovery and Data Mining V.2 (KDD ’26), August 09–13, 2026, Jeju Island, Republic of Korea. ACM, New York, NY, USA, 12 pages. https://doi.org/10.1145/3770855.3818886  
+
+> arXiv:2606.15258v1 [cs.AI] 13 Jun 2026 KDD ’26, August 09–13, 2026, Jeju Island, Republic of Korea Jierui Zhang et al.
+
+## 1 Introduction 
+
+Large language models (LLMs) are increasingly competent at math-ematical problem solving [ 1] and can even assist with research-level proofs [ 24 , 27 ]. Yet we still lack a scalable and reproducible measurement instrument for step-level reasoning in long-range proof—one that remains faithful to the underlying mathematics across heterogeneous sources such as research papers and com-petition benchmarks [ 18 , 19 , 31 ]. This gap is increasingly visible in recent frontier-system investigations. For instance, Sébastien Bubeck and collaborators at OpenAI report that GPT-5 can some-times make meaningful progress on research-level proof tasks under expert guidance [ 2]. However, such evidence often relies on step-wise expert judgment, which is costly to scale, difficult to reproduce, and hard to compare across domains. 
+
+Why This Matters for AI for Sciences. This measurement gap is not merely a benchmarking nuisance. Mathematics is a founda-tional scientific discipline in which progress is certified by proofs. Accordingly, trustworthy AI assistance in mathematics requires domain-grounded evaluation of reasoning processes, not only final outcomes [ 4, 18 , 28 ]. Mask-Proof contributes proof-centric data and evaluation tools that make step-level reasoning measurable, reproducible, and comparable across real-world proof sources. 
+
+The Measurement Problem in Step-Level Proof Evaluation. Treat-ing step-level evaluation as a scientific measurement reveals three intertwined obstacles: what to measure, what context is required, and how to score correctness. (1) Step selection is non-trivial. Proofs vary widely in style and granularity. Many lines are trivial, purely definitional, or dominated by local surface cues. Masking such steps risks measuring shortcut exploitation rather than genuine inference, undermining construct validity [ 7 , 29 , 34 ]. (2) Dependen-cies are often missing. Research proofs frequently rely on external dependencies—cross-referenced lemmas, macros, or unstated back-ground facts. If these dependencies are not recovered, a masked step may be underdetermined from the provided context, confound-ing reasoning ability with missing information and making fail-ures uninterpretable. (3) Scalable checking is difficult. Even when a ground-truth step is available, correctness checking at scale remains hard: string matching is inadequate, symbolic tools offer no gen-eral guarantees, and expert evaluation does not scale. Automated judging therefore requires explicit mechanisms to control variance and ensure reproducibility [ 12 , 13 , 23 , 33 ]. Taken together, these challenges prevent step-level reasoning in mathematics from being studied as a reproducible scientific phenomenon. 
+
+Mask-Proof: Making Step-Level Reasoning Measurable. We intro-duce Mask-Proof , a pipeline that directly addresses the obstacles above by transforming heterogeneous proofs into verifiable, self-contained, step-level evaluation problems with variance-controlled automatic checking. The core idea is intentionally simple: rather than scoring entire proofs end-to-end, we test whether a model can reconstruct a key formula step whose ground truth is extracted directly from the original proof. Concretely, Mask-Proof (i) uses Codex CLI to agentically select key steps that cannot be solved by local cues alone, (ii) recovers the minimal dependency closure needed to make each masked step self-contained, meaning that no external lemmas, definitions, or macros are further required beyond the provided context, and (iii) checks model outputs using a cali-brated LLM-based equivalence judge, with repeated independent judgments and majority voting to reduce variance. Beyond bench-marking, Mask-Proof serves as a reusable measurement framework, exhibiting effectiveness, reproducibility, and generalization across proof sources. Figure 1 illustrates examples of the resulting masked-step format. In this work, we make three contributions: (1) Mask-Proof , an LLM-based automated curation pipeline that identifies inference-critical formula steps, reconstructs self-contained proof context, and produces verifiable masked-step problems from real-world mathematical proofs. (2) Mask-ProofJudge , an automatic step-level evaluation frame-work calibrated against expert judgments, achieving 96.8% human–judge agreement with variance reduction via re-peated independent judgments and voting. (3) Mask-ProofBench , a benchmark generated by this pipeline that enables scalable and reliable evaluation of step-level reasoning in real-world research-level mathematical proofs. This benchmark contains 292 Mask-Proof problems, all of which were manually audited by human experts in mathe-matics. 
+
+## 2 Related Work 
+
+Answer-based mathematical reasoning benchmarks. Evaluation of LLM mathematical reasoning has historically centered on bench-marks with uniquely verifiable endpoints. GSM8K [ 5] and MATH [ 10 ]established final-answer accuracy as the dominant metric, enabling scalable evaluation and providing limited visibility into reason-ing processes. As performance on these benchmarks saturated, subsequent work increased difficulty through olympiad-level prob-lems [ 6, 9], expert-authored frontier evaluations [ 8], and research-level question-answering [ 30 ]. However, even sophisticated answer-based benchmarks fundamentally evaluate conclusions rather than 
+
+formulas , leaving proof quality unexamined. 
+
+Proof-centric evaluation and formal theorem proving. Proof-centric evaluation shifts focus from answer correctness to formula rigor, making verifiability the core challenge. Formal theorem proving addresses this by delegating correctness to proof assistant kernels: miniF2F [ 32 ] and PutnamBench [ 25 ] benchmark formal proving on competition mathematics. However, the natural-language-to-formal gap introduces semantic errors that are difficult to eliminate; ReForm [ 3] reveals that autoformalization is inherently challenging, with even human experts producing semantic errors in 38.5% of cases. Natural-language proof evaluation is closer to real mathe-matical practice but substantially harder to grade at scale. IMO-ProofBench [ 17 ] introduces rubric-based grading for competition proofs, while STORM-BORN [ 15 ] curates challenging formulas from research papers with human-in-the-loop verification. More recently, IMProofBench [ 20 ] targets research-level proof generation with expert-authored problems, and combines expert grading of full proofs with gradable follow-up subquestions. Yet these evaluations still require substantial human expert annotation and can’t scale to evaluate in-the-wild research-level proofs. Mask-Proof: An LLM-based Automated Data Curation Pipeline on Mathematical Proofs KDD ’26, August 09–13, 2026, Jeju Island, Republic of Korea (I) IMO-ProofBench                                                                                                              
+
+> Problem (PB-Advanced-029, USAMO 2025): Find all positive integers 𝑘
+> such that 1
+> 𝑛 +1
+> Í𝑛 𝑖 =0
+> (𝑛 𝑖
+> )𝑘 is an integer for all 𝑛 ∈Z+.
+> Solution:
+> Answer: all even 𝑘 . Let 𝑆 (𝑛 ):=Í𝑛 𝑖 =0
+> (𝑛 𝑖
+> )𝑘 .
+> Necessity. Choose 𝑛 =2. We need 3|𝑆 (2)=2+2𝑘 , which requires 𝑘 to be even.
+> Sufficiency. From now on treat 𝑘 as fixed and even. Let 𝑝 𝑒 be a prime power fully dividing 𝑛 +1. It suffices to prove 𝑆 (𝑛 )is a multiple of 𝑝 𝑒 .
+> Lemma. Suppose 𝑝 𝑒 fully divides 𝑛 +1. Then
+> (𝑛 𝑖
+> )
+> ≡ ±
+> (𝑛 +1
+> 𝑝 −1
+> ⌊𝑖 /𝑝 ⌋
+> )
+> (mod 𝑝 𝑒 )
+> Proof. Write (𝑛 𝑖
+> )=Î1≤𝑗 ≤𝑖 𝑛 − ( 𝑗 −1)
+> 𝑗 .The fractions for 𝑝 ∤𝑗 are all ±1
+> (mod 𝑝 𝑒 ).So only consider those 𝑗 with 𝑝 |𝑗 ; in that case one obtains the claimed binomial exactly.
+> From the lemma:
+> 𝑆 (𝑛 ) ≡ 𝑝 ·𝑆
+> (𝑛 +1
+> 𝑝 −1
+> )
+> (mod 𝑝 𝑒 )
+> by grouping the 𝑛 +1terms into consecutive ranges of length 𝑝 , and the result follows by induction.
+> Rubric: (Partial)
+> 1. Proved that 𝑘 should be even. 2. Used the induction on 𝑛 +1and considered the equation for 𝑛 +1
+> 𝑝 .3. Stated the identity 𝑛 +1|Í𝑛 𝑖 =0
+> ((− 1)𝑖 (𝑛 𝑖
+> )) 𝑘 without proof.
+> (Almost)
+> 1. Solution is almost complete, but made minor mistakes which are not neg-ligible, such as coming up with a proof that only works for odd primes.
+
+(II) Masked IMO-ProofBench                                                                                    
+
+> Problem: Same as (I) above.
+> Masked Proof:
+> Answer: all even 𝑘 . Let 𝑆 (𝑛 ):=Í𝑛 𝑖 =0
+> (𝑛 𝑖
+> )𝑘 .
+> Necessity. Choose 𝑛 =2. We need 3|𝑆 (2)=2+2𝑘 , which requires 𝑘 to be even.
+> Sufficiency. From now on treat 𝑘 as fixed and even. Let 𝑝 𝑒 be a prime power fully dividing 𝑛 +1. It suffices to prove 𝑆 (𝑛 )is a multiple of 𝑝 𝑒 .
+> Lemma. Suppose 𝑝 𝑒 fully divides 𝑛 +1. Then
+> (𝑛 𝑖
+> )
+> ≡ ±
+> (𝑛 +1
+> 𝑝 −1
+> ⌊𝑖 /𝑝 ⌋
+> )
+> (mod 𝑝 𝑒 )
+> Proof. Write (𝑛 𝑖
+> )=Î1≤𝑗 ≤𝑖 𝑛 − ( 𝑗 −1)
+> 𝑗 .The fractions for 𝑝 ∤𝑗 are all ±1
+> (mod 𝑝 𝑒 ).So only consider those 𝑗 with 𝑝 |𝑗 ; in that case one obtains the claimed binomial exactly.
+> From the lemma: [MASK]
+> by grouping the 𝑛 +1terms into consecutive ranges of length 𝑝 , and the result follows by induction.
+> Masked content: 𝑆 (𝑛 ) ≡ 𝑝 ·𝑆
+> (𝑛 +1
+> 𝑝 −1
+> )
+> (mod 𝑝 𝑒 )
+
+(III) Masked Research Level Proof 
+
+Question Based on Lemma 2.4 from Shankar et al. (2025): Let 𝐾 be a field of characteristic not 2. Let 𝑓 (𝑥, 𝑦 ) ∈ 𝑈 (𝐾 ) be an element with nonzero discrim-inant. Then there exist unique SL 3 (𝐾 )-orbits on Res −1 (𝐾 ) ∩ 𝑊 (𝐾 ) which are distinguished and 
+
+Δ-distinguished. The same result holds when 𝑊 (𝐾 ) is replaced with 𝑊 ∨ (𝐾 ).
+
+Additional information (for self-containedness). The following material from the paper is included so the proof is self-contained. 
+
+- Distinguished and Δ-distinguished orbits: Assume without loss of generality that 𝑎 > 0.We start by defining the notions of distinguished and Δ-distinguished orbits. 
+
+- Definition 2.3 Let 𝐾 be a field of characteristic not 2, and let 𝑓 ∈ 𝑈 (𝐾 ) of nonzero dis-criminant. We say that an SL 3 (𝐾 )-orbit on Res −1 (𝑓 ) ∩ 𝑊 (𝐾 ) is distinguished if it contains a representative (𝐴, 𝐵 ) with 𝑎 11 = 𝑏 11 = 0; and Δ-distinguished if it contains a representative 
+
+(𝐴, 𝐵 ) with 𝑎 11 𝑎 22 − 𝑎 212 = 𝑏 11 𝑏 22 − 𝑏 212 = 0. Here, we denote by 𝑚 𝑖 𝑗 the 𝑖 𝑗 -matrix entry of 
+
+𝑀 ∈ 𝑊 (𝐾 ) if 𝑖 = 𝑗 and twice the 𝑖 𝑗 -matrix entry if 𝑖 ≠ 𝑗 .
+
+Masked Proof: 
+
+Proof. We prove the result for 𝑊 (𝐾 ); the proof for 𝑊 ∨ (𝐾 ) is identical. Denote the coefficients of 𝑓 by 𝑎 , 𝑏 , 𝑐 , and 𝑑 , and assume (by replacing 𝑓 with a GL 2 (𝐾 )-translate, if necessary) that 
+
+𝑎𝑑 ≠ 0.First, it is easy to check that there exists a distinguished orbit (resp. a Δ-distinguished orbit) in 
+
+𝑊 (𝐾 ). The distinguished orbit is represented by the following pair: 
+
+(𝐴, 𝐵 ) = ©«©«
+
+0 0 12
+
+0 −𝑎 0 
+
+> 12
+
+0 −𝑐 
+
+ª®®¬
+
+, ©«
+
+0 12 0 
+
+> 12
+
+𝑏 00 0 𝑑 
+
+ª®®¬ª®®¬
+
+.
+
+The Δ-distinguished orbit with resolvent 𝑓 is represented by the following pair: 
+
+[MASK] 
+
+It only remains to prove uniqueness. For the distinguished case, let. . . (Too long to display, Full example is in Appendix E) □
+
+Masked content: 
+
+(𝐴, 𝐵 ) = ©«©«
+
+−𝑎 0 00 0 12
+
+0 12
+
+> 𝑏
+> 4𝑎𝑑
+
+ª®®¬
+
+, ©«
+
+0 0 12
+
+0 𝑑 0 
+
+> 12
+
+0 −𝑐 
+
+> 4𝑎𝑑
+
+ª®®¬ª®®¬
+
+. (1) 
+
+Example LLM Response (DeepSeek-V3.2-Thinking): 
+
+(𝐴, 𝐵 ) = ©«©«
+
+−𝑎 0 00 0 12
+
+0 12
+
+> 𝑏
+> 4𝑎𝑑
+
+ª®¬
+
+, ©«
+
+0 0 12
+
+0 −𝑑 0 
+
+> 12
+
+0 𝑐 
+
+> 4𝑎𝑑
+
+ª®¬ª®¬
+
+. (2) 
+
+Figure 1: (I) IMO-ProofBench [ 17 ] represents competition-level proof problems paired with full solutions and rubric-style evaluation. (II) After Mask-Proof processing, the same proof data are converted into a verifiable masked format, where key formula/derivation steps are hidden as targets for automatic evaluation. (III) Mask-ProofBench extends this masked, verifiable format to research-level proofs with substantially longer derivations, masking rigorous intermediate steps rather than final numerical results or highly templated fragments. See Appendix E for complete details. 
+
+Verifiers and scalable checking. To reduce reliance on expert grad-ing, an important line of work trains verifiers that score reasoning processes. Process reward models [ 14 , 16 ] provide step-level feed-back, while diagnostic studies reveal that LLMs struggle to locate reasoning errors but can correct them given error locations [ 26 ]. Self-correction approaches have shown limited success: Huang et al. [ 11 ] demonstrate that LLMs cannot reliably self-correct rea-soning without external feedback. More recent generator–verifier frameworks, such as DeepSeekMath-V2 [ 22 ], scale verification through meta-verification and self-training, though their evalua-tion remains centered on competition-style problems. High-profile KDD ’26, August 09–13, 2026, Jeju Island, Republic of Korea Jierui Zhang et al. 
+
+demonstrations of AI-assisted mathematics [ 2 ] still emphasize ex-pert oversight rather than fully automatic evaluation. Collectively, prior work highlights a persistent capability–verifiability tension: as evaluations approach research-level proofs, obtaining low-cost, scalable, and reproducible verification becomes substantially harder. 
+
+## 3 Methodology 
+
+In this section, we describe the overall pipeline, Mask-Proof, in-cluding automated paper collection and proof quality control, auto-mated proof data curation and evaluation. This LLM-based pipeline is explicitly designed to be contamination-resistant by collecting and curating recent arXiv submissions, reproducible by using pow-erful Codex CLI, and broadly generalizable by adding different sources of proof data, while ensuring that the resulting masked proof data supports fully automated verification and maintains rig-orous guarantees of correctness and verifiability. An overview of the pipeline is shown in Figure 2. 
+
+## 3.1 Paper Collection and Proof Extraction 
+
+To ensure the quality of the collected arXiv papers, proofs, and the resulting masked proof data, we curate a corpus of real-world, research-level mathematical papers under the following criteria. First, we restrict our corpus to arXiv submissions between August and October 2025, so as to minimize potential contamination from pretraining data and reduce the risk of data leakage in large lan-guage models. Second, we collect papers across a broad range of mathematical fields to mitigate domain bias; the distribution of the major subject categories is summarized in Table 4. We mine these research-level papers together with their full LaTeX sources to enable precise proof extraction and dependency resolution. To ensure that the resulting evaluation instances require nontrivial reasoning, we further filter out trivial proofs, includ-ing very short arguments, purely definitional proofs, and pattern-completable formulas, as such instances either do not involve sub-stantive inference or are prone to context leakage. 
+
+Human verification of benchmark quality. Before downstream evaluation, all 292 final Mask-ProofBench instances were manu-ally audited by domain experts in mathematics. The audit assessed the mathematical correctness of the masked ground-truth step within the original proof, the sufficiency of the recovered context for solving the masked step without external documents, the com-pleteness of the selected mask as a formula-level reasoning step rather than a syntactic fragment, and screened each instance for ob-vious shortcut cues, malformed LaTeX, or unresolved paper-specific notation. Instances that failed these checks were discarded; the ex-pert verification annotations will be released with the benchmark. 
+
+## 3.2 Automated Proof Data Curation 
+
+Self-contained Recovery. Formally, we define a proof to be self-contained if the pipeline can recover a sufficient dependency closure such that each masked step is solvable from the extracted theorem statement and the reconstructed proof context alone, with no re-liance on external documents. Concretely, the pipeline provides Codex CLI with (a) the proof snippet and (b) its source LaTeX data, and instructs it to resolve 
+
+explicit dependencies by traversing internal cross-references with explicit labels (e.g., \ref , \eqref ), locating the correspond-ing labeled targets in the source, appending the extracted content to the problem context, and expanding user-defined macros that carry essential semantics into standard LaTeX. In contrast, implicit dependencies are not directly anchored by labels (e.g., symbols whose closed-form definitions appear elsewhere); these are recov-ered by searching the source LaTeX for their defining statements and attaching the extracted content as Additional Information. All relevant prompts are released with the code. Cases dominated by external dependencies (e.g., citations to external conclusions) are discarded. 
+
+Agentic Masking for Proof. For each self-contained proof, we con-struct masked steps by replacing exactly one contiguous reasoning step with [MASK] . Each masked step contains only pure mathe-matical expressions (no natural-language text). From each source proof, Mask-Proof generates up to three such masked steps, each corresponding to an independent and well-defined inference. We defined a series of rubrics (see Appendix A) to guide the selection of masked positions. These rubrics instruct Codex CLI to agentically mask key inference-critical steps, ensuring that the resulting tasks necessarily require non-trivial mathematical reasoning rather than shallow pattern matching. 
+
+Faithful Mask Application. A practical failure mode of directly applying LLM-based masking is unintended proof rewriting, which can subtly alter semantics. To preserve faithfulness to the origi-nal proof, our pipeline decouples (i) selecting mask steps from (ii) applying the mask . We use Codex CLI to perform these two steps automatically under strict constraints, ensuring that only the target step is masked while the remaining proof text remains unchanged. 
+
+## 3.3 Automated Proof Data Evaluation 
+
+As illustrated in Figure 2, our automated proof-data curation pipeline converts each evaluation unit into a masked key formula step within a well-defined, self-contained proof context. Compared to evaluating full proofs or sub-proofs, focusing on such mask instances substantially reduces ambiguity and leads to more consistent automated judgments. Nevertheless, exact string matching remains inadequate for math-ematical proofs due to extensive notational diversity and equiva-lent reformulations. To address this limitation, we introduce Mask-ProofJudge, an LLM-based evaluation framework where GPT-OSS-120B (High) serves as the backbone to assess semantic equivalence between model outputs and the ground-truth masked content. To further reduce evaluation variance arising from generation stochasticity, we sample four solutions per problem and aggregate multiple independent judgments via majority voting, reporting the resulting average accuracy. In practice, the LLM judge achieves a 96.8% agreement rate with human expert annotations, indicating that the proposed evalua-tion protocol provides a reliable and high-confidence approach for expert-level assessment. 
+
+## 3.4 Case Study 
+
+To explicitly demonstrate the workflow described in Sections 3.2 and 3.3, we trace the processing of Lemma 2.4 from Shankar et Mask-Proof: An LLM-based Automated Data Curation Pipeline on Mathematical Proofs KDD ’26, August 09–13, 2026, Jeju Island, Republic of Korea Self-Contained 
+
+> Question
+> Self-contained Recovery
+
+Paper Collection 
+
+> Proof
+> Codex CLI
+> Agentic Masking for Proof
+
+Mask-Proof Bench  and Evaluation  
+
+> Proof Candidates
+> Codex CLI
+> Prompt
+> Mask-Proof data
+> Mask Step Selection &
+> Insertion
+> Proof
+> Question
+> (Not Self-Contained)
+> Raw LaTeX Source
+> Prompt
+
+Automated Data Curation  
+
+> Info for Self-contained :
+> External Lemma 1:
+> User Defined Marcos:
+> Question:
+> Benchmark Mask-Proof
+> Judge
+> Proof :
+> [MASK] -- Key Formula
+> Masked Content :
+> Key Formula
+> Trivial Steps
+> Filtered Proof
+
+Figure 2: Mask-Proof Pipeline. Starting from raw arXiv LaTeX sources, our pipeline extracts complete proofs, repairs them into self-contained contexts, and agentically masks a key formula step to produce Mask-ProofBench. 
+
+al. [ 21 ]. This example, which corresponds to the case illustrated in Figure 1, shows how each stage of our pipeline transforms a raw arXiv fragment into a rigorous evaluation instance. 
+
+Stage 1: Self-contained Recovery. In this case, the raw ex-traction of Lemma 2.4 requires constructing a matrix representa-tion for the " Δ-distinguished orbit." However, the critical definition of " Δ-distinguished" is located in Definition 2.3 , outside the local context [ 21 ]. As defined in our curation protocol, this constitutes an "unresolved external dependency." Our pipeline’s dependency agent successfully identified this gap. Instead of discarding the proof, it traced the term back to Definition 2.3 , and appended it to the problem context. This step ensured the instance satisfied the self-contained criterion. 
+
+Stage 2: Agentic Mask Selection. Following the recovery, the Mask Selection Agent scanned the proof to identify a non-trivial reasoning step based on the rubrics in Appendix A. The agent re-jected steps involving simple algebraic rearrangements (violating the "non-trivial" rubric) and selected the specific matrix construc-tion step. This selection was strategic: correctly masking this matrix forces the model to synthesize the recovered global definition with local variables 𝑎, 𝑏, 𝑐, 𝑑 . It ensures the task tests reasoning necessity rather than pattern matching or context copying. 
+
+Stage 3: Automated Evaluation. Finally, we evaluated the re-sponse from DeepSeek-V3.2-Thinking using Mask-ProofJudge. The model’s output visually resembled the ground truth but inverted the sign of the (2, 2) entry from 𝑑 to −𝑑 . Under the defining convention 
+
+Res (𝐴, 𝐵 ) = 4 det (𝑥𝐴 − 𝑦𝐵 ), the ground-truth representative yields 
+
+𝑓 (𝑥, 𝑦 ). The model response changes the signs of the 𝐵 22 and 𝐵 33 
+
+entries, yielding 𝑓 (𝑥, −𝑦 ) instead of 𝑓 (𝑥, 𝑦 ). Thus the response does not lie in the required fiber Res −1 (𝑓 ), so the error is mathematical. 
+
+## 4 Experiments 
+
+In this section, we evaluate Mask-Proof to ascertain its effective-ness in automated constructing masked problem following four questions: RQ1: How effective is Mask-Proof as an automated data curation pipeline? RQ2: How reproducible is the automated Mask-Proof pipeline? RQ3: Is our automated evaluation framework con-sistent with human experts in masked-step evaluation? RQ4: Can the Mask-Proof pipeline generalize to other data sources? 
+
+## 4.1 Experimental Setup 
+
+Dataset. To comprehensively evaluate the effectiveness of the Mask-Proof pipeline, we curate two datasets: 
+
+• Mask-ProofBench , constructed using the pipeline described in Section 3.2. We collected 403 arXiv papers from August to October 2025, extracted 835 theorem–proof blocks, and retained 292 final masked instances. 
+
+• To evaluate the cross-dataset generalization of the automated pipeline, we additionally construct a comparison dataset by applying Mask-Proof to all 30 PB-Advanced proofs from IMO-ProofBench [ 17 ]. This comparison dataset consists of 35 mask instances. 
+
+Evaluation Metrics. We evaluate the Mask-Proof pipeline and the curated dataset using three complementary metrics: Avg@4, Spearman’s rank correlation coefficient, and BLEU. Avg@4 mea-sures the average correctness of an LLM over four independent attempts on each masked proof step. Spearman’s rank correlation coefficient assesses the transferability of Mask-Proof by quantify-ing the consistency of model rankings of IMO-ProofBench under masked evaluation. BLEU evaluates n-gram overlap to measure surface-level linguistic consistency, and is used to assess the repro-ducibility of self-contained proof recovery. Together, these metrics characterize the effectiveness, transferability, and reproducibility of the Mask-Proof pipeline. 
+
+Evaluated Models. To conduct a comprehensive evaluation, we categorize state-of-the-art LLMs into two groups based on their reasoning capability. KDD ’26, August 09–13, 2026, Jeju Island, Republic of Korea Jierui Zhang et al. GPT-5.2(High) 
+
+> Gemini-3-Flash-preview
+> GPT-5.2(Low)
+> Grok-4.1-reasoning
+> DeepSeek-V3.2-Thinking
+> GPT-OSS-120B(High)
+> Kimi-K2-Thinking
+> DeepSeek-R1(0528)
+> GPT-OSS-120B(Medium)
+> Qwen3-30B-A3B-Thinking(2507)
+> Kimi-K2(0905)
+> DeepSeek-V3.2
+> DeepSeek-V3(0324)
+> GPT-OSS-120B(Low)
+> Grok-4.1
+> Qwen3-30B-A3B(2507)
+> Qwen3-14B
+
+0
+
+10 
+
+20 
+
+30 
+
+40 
+
+50 
+
+60 
+
+70 
+
+80            
+
+> Avg@4 (%)
+> 63.3 59.3
+> 52.6 50.9 49.2
+> 43.7 43.1 39.6
+> 35.3 33.9 30.6 29.0 27.1 26.9 24.2
+> 17.7
+> 8.1
+> Closed Source Models
+> Open Source Models
+> Reasoning-enhanced Models
+> Standard Models
+
+Figure 3: Avg@4 leaderboard on Mask-ProofBench. All 17 evaluated models are ranked by Avg@4 accuracy. Reasoning-enhanced models demonstrate a substantial performance advantage over standard models at comparable parameter scales. 
+
+• Standard models: General-purpose models that generate answers directly without explicit deliberation (e.g., DeepSeek-V3.2, Grok-4.1, Qwen3-14B), serving as baselines to quantify the benefit of test-time reasoning. 
+
+• Reasoning-enhanced models: Models enhanced for multi-step thinking (e.g., DeepSeek-R1, Grok-4.1-reasoning, Gemini-3-Flash-preview), which produce internal chains of thought before outputting the final answer. 
+
+## 4.2 Effectiveness of the Automated Mask-Proof Pipeline (RQ1) 
+
+4.2.1 Main Results on Mask-ProofBench. We evaluate 17 models on 
+
+Mask-ProofBench , including both reasoning and non-reasoning categories. Figure ?? presents the full leaderboard. 
+
+Reasoning Capability Creates a Qualitative Boundary. The re-sults indicate that Mask-ProofBench clearly separates reasoning-enhanced models from standard models. A performance bound-ary emerges at approximately 32%: eight out of nine reasoning-enhanced models (except GPT-OSS-120B under low reasoning ef-fort) exceed this threshold, whereas all six standard models fall below it. To further quantify this effect, we conduct paired com-parisons within the same model families. For example, Grok-4.1-reasoning outperforms Grok-4.1 by 26.7%, demonstrating that the benchmark reliably and effectively captures improvements attrib-utable to enhanced reasoning capability. 
+
+Highly discriminative, not saturated, and extensible. The leader-board exhibits a wide performance range, from a lower bound of 8.1% (Qwen3-14B) to an upper bound of 63.3% (GPT-5.2 High) in Avg@4, indicating strong discriminative power. Notably, these re-sults are obtained under a single-mask setting with our pipeline, where only one formula-level step is masked per proof. This design DeepSeek-V3.2-Thinking     
+
+> DeepSeek-R1
+> (0528)
+> Qwen3-30B-A3B-Thinking
+> (2507)
+> DeepSeek-V3.2
+> Qwen3-30B-A3B-Instruct
+> (2507)
+> Qwen3-14B
+> 0
+> 20
+> 40
+> 60
+> 80
+> Avg@4 (%)
+> 49.2
+> 39.6 33.9 29.0
+> 17.7
+> 8.1
+> 74.0 71.0 65.7
+> 74.4
+> 57.5
+> 50.6
+> Agentic Mask(Our)
+> Random Mask
+
+Figure 4: Leaderboard distortion from random masking. Avg@4 performance under random and strategic masking for representative models. Random masking substantially inflates scores—especially for standard models—while agen-tic masking consistently lowers performance and restores meaningful separation, demonstrating the necessity of anti-hack filtering for a discriminative benchmark. 
+
+leaves substantial headroom for increasing benchmark difficulty, for example by masking multiple interdependent steps or requiring multi-step reconstruction as model capabilities advance. 
+
+No Anomalous Reversals. As a sanity check, we verify that the ranking contains no major surprises: smaller models do not outper-form larger ones, and models known to struggle with mathematics do not unexpectedly excel. This coherence indicates that the bench-mark measures a stable capability rather than task-specific artifacts. 
+
+4.2.2 Ablation Study: Effectiveness of the Self-Contained Module. 
+
+The Mask-Proof pipeline intentionally resolves cross-references and expands user-defined macros. Manual inspection of all 292 Mask-Proof: An LLM-based Automated Data Curation Pipeline on Mathematical Proofs KDD ’26, August 09–13, 2026, Jeju Island, Republic of Korea Grok-4.1-reasoning  
+
+> DeepSeek-V3.2-Thinking
+> Grok-4.1
+> 0
+> 10
+> 20
+> 30
+> 40
+> 50
+> 60
+> 70
+> 80
+> Avg@4 (%)  50.9 49.2
+> 24.2
+> 27.8
+> 35.0
+> 13.0
+> with Self-contained
+> without Self-contained
+
+Figure 5: Self-containedness ablation. Removing dependency resolution causes 11%–23% performance degradation, con-firming that context completeness is essential for valid eval-uation. 
+
+masked instances in Mask-ProofBench confirms that 291 out of 292 are fully self-contained after this preprocessing. To verify that our self-contained recovery agent effectively ad-dresses the context incompleteness problem, we compare the per-formance of three models (Grok-4.1-reasoning, DeepSeek-V3.2-Thinking, and Grok-4.1) on a non–self-contained variant of Mask-ProofBench. Figure 5 shows consistent performance degradation under the non–self-contained variant of the benchmark. Model performance drops by 11% to 23%, with reasoning-enhanced mod-els exhibiting larger declines, indicating that model performance strongly depends on access to the resolved proof context. Notably, models still achieve moderate accuracy (13%–35%) without context resolution, suggesting that context incompleteness does not affect all masked instances. This is because even in non–self-contained proofs, not every masked step requires the missing original proof context for correct reconstruction. However, the non-negligible per-formance loss confirms that the self-containedness of research-level mathematical proofs affects a substantial portion of the benchmark, and that our dependency resolution effectively mitigates this issue. 
+
+4.2.3 Ablation Study: Effectiveness of Our Agentic-Masking. A valid instance of mask-in-the-context problem must resist shortcut solu-tions. If models can achieve high scores by exploiting superficial cues (e.g. positional patterns, local context copying), the evaluation fails to measure genuine reasoning. We validate our mask instances by comparing against random step selection. 
+
+Agentic Masking Enables Reliable Model Differentiation. To evalu-ate the effectiveness of our agentic masking strategy, we introduce a random-masking baseline. The only difference between random masking baseline and Mask-ProofBench is that the former selects mask steps uniformly at random, without any position-selection preferences. By comparing LLM performance on Mask-ProofBench and this baseline, we show that our mask selection approach leads to more reliable differentiation of models based on their reasoning capability. Figure 4 shows that random masking substantially inflates Avg@4 across models. For instance, DeepSeek-V3.2 rises from 29.0% to 74.4% (+45.4%), and Qwen3-14B from 8.1% to 50.6% (+42.5%). Cru-cially, the score inflation caused by random masking is highly asymmetric. standard models gain disproportionately more, lead-ing to a strong compression of the reasoning advantage observed under agentic masking. In the DeepSeek family, agentic mask-ing yields a clear performance separation, with DeepSeek-V3.2-Thinking achieving 49.2% and DeepSeek-V3.2 achieving 29.0%. Un-der random masking, both models reach nearly identical perfor-mance levels (74.0% vs. 74.4%), eliminating the gap observed under agentic masking. This suggests that a large fraction of randomly masked steps can be completed without true multi-step reason-ing, relying instead on superficial pattern cues. Furthermore, ran-dom masking leads to unstable and misleading model rankings, where weaker standard models can match or even surpass stronger reasoning-enhanced models, contradicting the expected ranking based on model scale and reasoning capability. 
+
+Truncate ablation. To address concerns that later proof lines may reveal the masked step, we conduct a separate leakage audit on a fixed diagnostic subset. For each example, we construct a truncated variant by removing the suffix context after the mask, while retain-ing one complete following mathematical expression to preserve local proof coherence. On this leakage-audit subset, Qwen3-30B-A3B-Instruct changes from 23.79% to 23.14% Avg@4, and Qwen3-30B-A3B-Thinking changes from 24.35% to 20.79% Avg@4. The performance does not collapse under suffix truncation, suggesting that suffix context is not the dominant source of model performance. We interpret this result conservatively: the audit mitigates, but does not eliminate, the possibility of residual leakage in individual cases. 
+
+Expert validation of mask selection. To validate that selected masks correspond to meaningful inference-critical steps, we col-lected 63 domain-expert annotations across eight mathematical areas. Experts assessed formula-level completeness, global reason-ing dependency, reasoning necessity, and resistance to shortcut completion. The mean rubric scores were consistently high across algebraic geometry, algebraic topology, PDE/analysis, classical anal-ysis and ODEs, combinatorics, differential geometry, numerical analysis, and optimization/control, supporting that the selected masks are generally valid reasoning targets rather than superficial infilling tasks. The detailed breakdown is provided in Appendix B. 
+
+Shortcutability and difficulty analysis. To clarify which masked steps are genuinely challenging versus easily predictable, and to characterize the benchmark’s effective difficulty distribution, we conducted two analyses. First, we masked every candidate position in 30 expert-selected representative proofs and analyzed the short-cut rate of each step type by monitoring LLMs’ solving processes alongside small-model performance. Figure 6(a) reports these rates: as hypothesized, algebraic manipulations are significantly more shortcut-prone than lemma/theorem applications (77.9% vs. 52.9%), and bookkeeping/closure reaches 90.0%. This asymmetry explains why random masking disproportionately inflates standard-model scores in Figure 4. Second, we evaluated three representative models (GPT-5.2 High, Gemini-3-Flash-preview, and Grok-4.1-reasoning) on Mask-ProofBench and report the mean Avg@4 averaged across the three models. Figure 6(b) and (c) show that structural transfor-mations and lemma/theorem applications are the hardest step types (mean Avg@4 of 36.2% and 37.0%), and case analysis/reduction is the hardest proof family (24.3%), compared to direct proof at 58.1%. KDD ’26, August 09–13, 2026, Jeju Island, Republic of Korea Jierui Zhang et al. 0 20 40 60 80 100                 
+
+> Shortcut rate (%)
+> Lemma/theorem
+> application
+> Structural
+> transformation
+> Algebraic
+> manipulation
+> Definition
+> unfolding
+> Estimate/
+> bounding
+> Construction/
+> contradiction
+> Bookkeeping/
+> closure
+> 52.9
+> 73.9
+> 77.9
+> 78.9
+> 84.5
+> 87.5
+> 90.0
+> 010 20 30 40 50 60 70 80
+> Mean Avg@4 (%)
+> Structural
+> transform.
+> Lemma/theorem
+> application
+> Construction/
+> contradiction
+> Estimate/
+> bounding
+> Algebraic
+> manipulation
+> Bookkeeping/
+> closure
+> 36.2
+> 37.0
+> 43.8
+> 46.5
+> 56.2
+> 64.6
+> (b) Difficulty by step type
+> 010 20 30 40 50 60 70 80
+> Mean Avg@4 (%)
+> Case analysis/
+> reduction
+> Induction/
+> iteration
+> Probabilistic/
+> counting
+> Contradiction/
+> counterexample
+> Constructive/
+> variational
+> Direct proof
+> 24.3
+> 43.3
+> 43.8
+> 52.8
+> 55.7
+> 58.1
+> (c) Difficulty by proof family (a) Shortcutability by candidate step type
+
+Figure 6: Shortcutability and difficulty breakdowns. (a) Shortcut rates across step types, measured on 30 expert-selected proofs; higher values indicate more shortcut-solvable candidates. (b), (c) Mean Avg@4 on Mask-ProofBench by step type and proof family; lower values indicate harder reconstruction. Table 1: Source-level breakdown of our Mask-Proof (Avg@4, %) compared with the official expert evaluation (% of total points) on IMO-ProofBench-Advanced. 
+
+Model Mask-Proof (this work): Avg@4 (%) Expert (official): score (%) 
+
+Adv Novel IMO2024 USAMO2025 Adv Novel IMO2024 USAMO2025 Number of Problems 35 22 8 5 30 18 6 6o3 52.9 44.3 53.1 90.0 20.5 15.1 4.8 52.4 
+
+Gemini 2.5 Pro 58.6 55.7 46.9 90.0 17.6 15.9 7.1 33.3 Grok 4.1 Reasoning 50.0 43.2 53.1 75.0 18.6 19.8 16.7 16.7 o4-mini 42.1 33.0 46.9 75.0 11.4 8.7 7.1 23.8 Kimi-K2 30.7 23.9 25.0 70.0 7.1 4.0 2.4 21.4 Qwen3-235B 34.3 34.1 31.2 40.0 5.2 7.1 0.0 4.8 DeepSeek V3 32.9 30.7 25.0 55.0 4.3 6.3 2.4 0.0 Spearman 𝜌 (Expert vs. Mask) 0.79 0.86 0.73 0.89 –
+
+## 4.3 Reproducibility of the Mask-Proof Pipeline (RQ2) 
+
+4.3.1 Self-Contained Recovery Reproducibility. To evaluate the re-producibility of our self-contained module, we run the pipeline twice independently on 20 sampled proofs from Mask-ProofBench. Three of these proofs are intrinsically self-contained and require no additional context. 
+
+Explicit dependencies. For references with explicit labels (via 
+
+\ref , \eqref ), we directly compare the resolved label sets. The two runs achieve 97.2% recall: out of 36 unique labels across both runs, 35 appear in both. The single discrepancy is an optional theorem reference included by one run but not the other. The high BLEU scores indicate that independently recovered Additional Informa-tion blocks are nearly identical across runs, suggesting that the implicit dependency resolution process is stable rather than sensi-tive to stochastic variation. Implicit dependencies. For implicit dependencies—such as symbols with closed-form definitions else-where—no ground-truth labels exist for direct comparison. We use textual similarity as a proxy: if two runs resolve the same implicit dependencies, they should produce similar Additional Information blocks. The symmetric BLEU-4 achieves a mean of 0.900 and median of 0.974, with all 20 proofs exceeding the 0.3 threshold. 
+
+4.3.2 Mask Selection Reproducibility. To evaluate the reproducibil-ity of mask selection, we run the agentic masking module twice independently on the same 20 proofs used in Section 4.3.1. Both runs produce 28 masks in total. We measure reproducibility by checking how many masks from the first run appear in the second. After normalizing each masked formula—stripping outer math delimiters (e.g., $...$ , \[...\] ) and whitespace—we check for exact matches within the same proof: 19 out of 28 masks (67.9%) are reproduced. We manually annotate all 9 non-reproduced masks into three categories: 
+
+• Semantically proximate (6/9): The two runs select differ-ent points along the same formula chain, e.g., an intermediate equation vs. the final result. 
+
+• Same proof, different sub-step (1/9): Both masks address related reasoning but test different skills, e.g., an error bound vs. the parameter choice that optimizes it. 
+
+• Genuinely different (2/9): The masks target unrelated mathematical content. Mask-Proof: An LLM-based Automated Data Curation Pipeline on Mathematical Proofs KDD ’26, August 09–13, 2026, Jeju Island, Republic of Korea 
+
+Counting semantically proximate cases as successful reproduction, the consistency rate rises from 67.9% to 89.3%. Only 2 out of 28 masks (7.1%) target genuinely different content. Taken together, these results answer RQ2 by showing that the Mask-Proof pipeline is reproducible at both the self-contained re-covery and mask selection stages. Independent runs produce highly consistent self-contained contexts and largely overlapping masks, with most discrepancies reflecting minor semantic variations rather than genuinely different problem constructions. For released runs, we record the Codex CLI version, model setting, prompt, input hash, and deterministic post-processing scripts so that LLM-assisted stages can be rerun and audited even though they are not bitwise deterministic. 
+
+## 4.4 Consistency Between Human Experts and Mask-ProofJudge (RQ3) 
+
+Since our benchmark masks pure LaTeX mathematical formulas— where a single ground truth may have multiple semantically equiv-alent representations (e.g., notation variants, unsimplified terms)— we validate that Mask-ProofJudge can reliably assess equivalence. We constructed a validation set of 1273 samples randomly drawn from actual responses of four different models(Gemini-3-Flash-preview, DeepSeek-V3.2-Thinking, Kimi-K2, and Grok-4.1), con-taining a balanced mix of correct answers and plausible but incor-rect formulas. Two domain experts independently labeled the set by checking mathematical equivalence against the ground truth. Comparing Mask-ProofJudge’s majority-vote verdicts to expert consensus, GPT-OSS-120B(High) achieves 96.8% accuracy , indicat-ing that it reliably distinguishes benign notational variation from substantive mathematical errors. 
+
+## 4.5 Cross-Dataset Generalization Ability (RQ4) 
+
+To evaluate whether the Mask-Proof pipeline generalizes beyond our curated benchmark, we apply it to an external dataset with existing expert evaluations, enabling direct comparison between our automated mask-based scoring and human expert judgments. We apply the Mask-Proof pipeline to all 30 PB-Advanced proofs from IMO-ProofBench [ 17 ], producing 35 masks across three sources: Novel (22), IMO2024 (8), and USAMO2025 (5). We evaluate seven models using both our mask-based Avg@4 metric and the official expert scores. Table 1 presents the source-level breakdown and ranking consistency measured by Spearman’s 𝜌 .The mask-based evaluation achieves Spearman 𝜌 = 0.79 overall, reaching 0.89 on USAMO2025 and 0.86 on Novel. This correlation is obtained entirely automatically—no human grading, no problem-specific rubrics, and no per-task scoring guidelines—whereas IMO-ProofBench [ 17 ] expert evaluation requires domain experts to de-sign rubrics and manually grade every response. Moreover, Mask-ProofJudge uses GPT-OSS-120B High as an open-source judge, rather than relying on frontier proprietary models or per-response human grading. Despite this modest resource requirement, the resulting model rankings closely track expert consensus, demon-strating that Mask-Proof’s discriminative power comes primarily from agentic masking of key formula steps rather than expensive evaluation infrastructure. The moderate correlation on IMO2024 ( 𝜌 = 0.73 ) reflects a gran-ularity mismatch: expert evaluations consider holistic proof struc-ture and award partial credit for incomplete solutions, while mask-based evaluation targets localized step-level reasoning. These two paradigms are complementary—Mask-Proof excels at scalable, re-producible assessment of specific reasoning steps, while expert eval-uation captures broader proof quality dimensions. Overall, Mask-Proof generalizes effectively to external proof sources and produces model rankings consistent with expert consensus, positioning it as a practical, scalable alternative for evaluating LLMs on research-level mathematical reasoning. 
+
+## 5 Conclusion 
+
+In this work, we presented Mask-Proof , an automatic pipeline for generating refreshable masked proof tasks and evaluating large language models on mathematical proofs. Mask-Proof generated 
+
+Mask-ProofBench , a curated benchmark of 292 masked proof-step instances spanning 35 mathematical fields. Extensive exper-iments show that Mask-Proof can remove shortcut-solvable in-stances, and evaluations of Mask-ProofBench and Masked IMO-ProofBench reveal its effectiveness, reproducibility, and generaliza-tion across diverse proof sources. 
+
+## 6 Limitations and Ethical Considerations 
+
+Limitations. Mask-Proof currently relies on raw LaTeX sources; extending coverage to PDFs, scanned documents, and web-native mathematical text would require reliable mathematical OCR or multimodal parsing. The LLM-assisted components for dependency recovery and mask selection have been validated through repro-ducibility analyses and expert review, though the process is not bitwise deterministic, and our leakage and shortcutability analyses mitigate but do not eliminate the possibility of residual cues. The LLM-based judge (96.8% expert agreement) may also inherit biases from its underlying model. 
+
+Ethical Considerations. All source papers are drawn from arXiv under licenses permitting redistribution for research; we release only extracted proof fragments with attribution. To mitigate benchmark contamination, we restrict our corpus to the most recent three months of submissions and recommend periodic refresh. This work involves no human subjects. 
+
+## Acknowledgments 
+
+We thank the anonymous reviewers for their constructive feedback. This work was supported by the “111 Center” (No. B26023). 
+
+## References     
+
+> [1] Mislav Balunović, Jasper Dekoninck, Ivo Petrov, Nikola Jovanović, and Martin Vechev. 2026. MathArena: Evaluating LLMs on Uncontaminated Math Competi-tions. arXiv:2505.23281 [cs.AI] https://arxiv.org/abs/2505.23281 [2] Sébastien Bubeck, Christian Coester, Ronen Eldan, Timothy Gowers, Yin Tat Lee, Alexandru Lupsasca, Mehtaab Sawhney, Robert Scherrer, Mark Sellke, Brian K. Spears, Derya Unutmaz, Kevin Weil, Steven Yin, and Nikita Zhivotovskiy. 2025. Early science acceleration experiments with GPT-5. arXiv:2511.16072 [cs.CL] https://arxiv.org/abs/2511.16072 [3] Guoxin Chen, Jing Wu, Xinjie Chen, Wayne Xin Zhao, Ruihua Song, Chengxi Li, Kai Fan, Dayiheng Liu, and Minpeng Liao. 2026. ReForm: Reflective Aut-oformalization with Prospective Bounded Sequence Optimization. In Interna-tional Conference on Learning Representations . https://openreview.net/forum?id= KfxRzCmRSX
+
+KDD ’26, August 09–13, 2026, Jeju Island, Republic of Korea Jierui Zhang et al. 
+
+[4] Wenhu Chen, Xueguang Ma, Xinyi Wang, and William W. Cohen. 2022. Program of Thoughts Prompting: Disentangling Computation from Reasoning for Numer-ical Reasoning Tasks. arXiv:2211.12588 [cs.CL] https://arxiv.org/abs/2211.12588 [5] Karl Cobbe, Vineet Kosaraju, Mohammad Bavarian, Mark Chen, Heewoo Jun, Lukasz Kaiser, Matthias Plappert, Jerry Tworek, Jacob Hilton, Reiichiro Nakano, Christopher Hesse, and John Schulman. 2021. Training Verifiers to Solve Math Word Problems. arXiv:2110.14168 [cs.LG] https://arxiv.org/abs/2110.14168 [6] Bofei Gao, Feifan Song, Zhe Yang, Zefan Cai, Yibo Miao, Qingxiu Dong, Lei Li, Chenghao Ma, Liang Chen, Runxin Xu, Zhengyang Tang, Benyou Wang, Daoguang Zan, Shanghaoran Quan, Ge Zhang, Lei Sha, Yichang Zhang, Xu-ancheng Ren, Tianyu Liu, and Baobao Chang. 2025. Omni-MATH: A Universal Olympiad Level Mathematic Benchmark for Large Language Models. In Interna-tional Conference on Learning Representations . https://openreview.net/forum?id= yaqPf0KAlN [7] Robert Geirhos, Jörn-Henrik Jacobsen, Claudio Michaelis, Richard Zemel, Wieland Brendel, Matthias Bethge, and Felix A. Wichmann. 2020. Shortcut learning in deep neural networks. Nature Machine Intelligence 2, 11 (2020), 665– 673. doi:10.1038/s42256-020-00257-z [8] Elliot Glazer, Ege Erdil, Tamay Besiroglu, Diego Chicharro, Evan Chen, Alex Gunning, Caroline Falkman Olsson, Jean-Stanislas Denain, Anson Ho, Emily de Oliveira Santos, Olli Järviniemi, Matthew Barnett, Robert Sandler, Matej Vrzala, Jaime Sevilla, Qiuyu Ren, Elizabeth Pratt, Lionel Levine, Grant Barkley, Natalie Stewart, Bogdan Grechuk, Tetiana Grechuk, Shreepranav Varma Enugandla, and Mark Wildon. 2024. FrontierMath: A Benchmark for Evaluating Advanced Mathematical Reasoning in AI. arXiv:2411.04872 [cs.AI] https://arxiv.org/abs/ 2411.04872 [9] Chaoqun He, Renjie Luo, Yuzhuo Bai, Shengding Hu, Zhen Thai, Junhao Shen, Jinyi Hu, Xu Han, Yujie Huang, Yuxiang Zhang, Jie Liu, Lei Qi, Zhiyuan Liu, and Maosong Sun. 2024. OlympiadBench: A Challenging Benchmark for Promoting AGI with Olympiad-Level Bilingual Multimodal Scientific Problems. In Proceed-ings of the 62nd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) . 3828–3850. doi:10.18653/v1/2024.acl-long.211 [10] Dan Hendrycks, Collin Burns, Saurav Kadavath, Akul Arora, Steven Basart, Eric Tang, Dawn Song, and Jacob Steinhardt. 2021. Measuring Mathematical Problem Solving With the MATH Dataset. In Proceedings of the Neural Information Processing Systems Track on Datasets and Benchmarks . https://arxiv.org/abs/2103. 03874 [11] Jie Huang, Xinyun Chen, Swaroop Mishra, Huaixiu Steven Zheng, Adams Wei Yu, Xinying Song, and Denny Zhou. 2024. Large Language Models Cannot Self-Correct Reasoning Yet. In International Conference on Learning Representations .https://openreview.net/forum?id=IkmD3fKBPQ [12] Pei Ke, Bosi Wen, Andrew Feng, Xiao Liu, Xuanyu Lei, Jiale Cheng, Shengyuan Wang, Aohan Zeng, Yuxiao Dong, Hongning Wang, Jie Tang, and Minlie Huang. 2024. CritiqueLLM: Towards an Informative Critique Generation Model for Evaluation of Large Language Model Generation. In Proceedings of the 62nd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) . 13034–13054. doi:10.18653/v1/2024.acl-long.704 [13] Seungone Kim, Jamin Shin, Yejin Cho, Joel Jang, Shayne Longpre, Hwaran Lee, Sangdoo Yun, Seongjin Shin, Sungdong Kim, James Thorne, and Min-joon Seo. 2024. Prometheus: Inducing Fine-Grained Evaluation Capability in Language Models. In International Conference on Learning Representations .https://openreview.net/forum?id=8euJaTveKw [14] Hunter Lightman, Vineet Kosaraju, Yuri Burda, Harrison Edwards, Bowen Baker, Teddy Lee, Jan Leike, John Schulman, Ilya Sutskever, and Karl Cobbe. 2024. Let’s Verify Step by Step. In International Conference on Learning Representations .https://openreview.net/forum?id=v8L0pN6EOi [15] Wenhao Liu, Zhenyi Lu, Xinyu Hu, Jerry Zhang, Dailin Li, Jiacheng Cen, Huilin Cao, Haiteng Wang, Yuhan Li, Xie Kun, Dandan Li, Pei Zhang, Chengbo Zhang, Yuxiang Ren, Xiaohong Huang, and Yan Ma. 2025. STORM-BORN: A Challenging Mathematical Derivations Dataset Curated via a Human-in-the-Loop Multi-Agent Framework. In Findings of the Association for Computational Linguistics: ACL 2025 . 23938–23958. doi:10.18653/v1/2025.findings-acl.1227 [16] Liangchen Luo, Yinxiao Liu, Rosanne Liu, Samrat Phatale, Meiqi Guo, Harsh Lara, Yunxuan Li, Lei Shu, Yun Zhu, Lei Meng, Jiao Sun, and Abhinav Rastogi. 2024. Improve Mathematical Reasoning in Language Models by Automated Process Supervision. arXiv:2406.06592 [cs.CL] https://arxiv.org/abs/2406.06592 [17] Thang Luong, Dawsen Hwang, Hoang H. Nguyen, Golnaz Ghiasi, Yuri Chervonyi, Insuk Seo, Junsu Kim, Garrett Bingham, Jonathan Lee, Swaroop Mishra, Alex Zhai, Huiyi Hu, Henryk Michalewski, Jimin Kim, Jeonghyun Ahn, Junhwi Bae, Xingyou Song, Trieu Hoang Trinh, Quoc V. Le, and Junehyuk Jung. 2025. Towards Robust Mathematical Reasoning. In Proceedings of the 2025 Conference on Empirical Methods in Natural Language Processing . 35418–35442. doi:10.18653/v1/2025. emnlp-main.1794 [18] Wenjie Ma, Andrei Cojocaru, Neel Kolhe, Bradley Louie, Robin Said Sharif, Haihan Zhang, Vincent Zhuang, Matei Zaharia, and Sewon Min. 2025. Reliable Fine-Grained Evaluation of Natural Language Math Proofs. arXiv:2510.13888 [cs.CL] https://arxiv.org/abs/2510.13888 [19] Shrey Pandit, Austin Xu, Xuan-Phi Nguyen, Yifei Ming, Caiming Xiong, and Shafiq Joty. 2025. Hard2Verify: A Step-Level Verification Benchmark for Open-Ended Frontier Math. arXiv:2510.13744 [cs.AI] https://arxiv.org/abs/2510.13744 [20] Johannes Schmitt, Gergely Bérczi, Jasper Dekoninck, Jeremy Feusi, Tim Gehrunger, Raphael Appenzeller, Jim Bryan, Niklas Canova, Timo de Wolff, Fil-ippo Gaia, Michel van Garrel, Baran Hashemi, David Holmes, Aitor Iribar Lopez, Victor Jaeck, Martina Jørgensen, Steven Kelk, Stefan Kuhlmann, Adam Kurpisz, Chiara Meroni, Ingmar Metzler, Martin Möller, Samuel Muñoz-Echániz, Robert Nowak, Georg Oberdieck, Daniel Platt, Dylan Possamaï, Gabriel Ribeiro, Raúl Sánchez Galán, Zheming Sun, Josef Teichmann, Richard P. Thomas, and Charles Vial. 2025. IMProofBench: Benchmarking AI on Research-Level Mathematical Proof Generation. arXiv:2509.26076 [cs.CL] https://arxiv.org/abs/2509.26076 [21] Arul Shankar, Artane Siad, and Ashvin A. Swaminathan. 2025. Counting in-tegral points on symmetric varieties with applications to arithmetic statis-tics. Proceedings of the London Mathematical Society 130, 4 (2025), e70039. doi:10.1112/plms.70039 [22] Zhihong Shao, Yuxiang Luo, Chengda Lu, Z. Z. Ren, Jiewen Hu, Tian Ye, Zhibin Gou, Shirong Ma, and Xiaokang Zhang. 2025. DeepSeekMath-V2: Towards Self-Verifiable Mathematical Reasoning. arXiv:2511.22570 [cs.AI] https://arxiv.org/ abs/2511.22570 [23] Aman Singh Thakur, Kartik Choudhary, Venkat Srinik Ramayapally, Sankaran Vaidyanathan, and Dieuwke Hupkes. 2025. Judging the Judges: Evaluating Alignment and Vulnerabilities in LLMs-as-Judges. arXiv:2406.12624 [cs.CL] https://arxiv.org/abs/2406.12624 [24] Trieu H. Trinh, Yuhuai Wu, Quoc V. Le, He He, and Thang Luong. 2024. Solving olympiad geometry without human demonstrations. Nature 625, 7995 (2024), 476–482. doi:10.1038/s41586-023-06747-5 [25] George Tsoukalas, Jasper Lee, John Jennings, Jimmy Xin, Michelle Ding, Michael Jennings, Amitayush Thakur, and Swarat Chaudhuri. 2024. PutnamBench: Eval-uating Neural Theorem-Provers on the Putnam Mathematical Competition. In 
+
+NeurIPS 2024 Track on Datasets and Benchmarks . https://openreview.net/forum? id=ChKCF75Ocd [26] Gladys Tyen, Hassan Mansoor, Victor Carbune, Peter Chen, and Tony Mak. 2024. LLMs cannot find reasoning errors, but can correct them given the error location. In Findings of the Association for Computational Linguistics: ACL 2024 .13894–13908. doi:10.18653/v1/2024.findings-acl.826 [27] Jason Wei, Xuezhi Wang, Dale Schuurmans, Maarten Bosma, brian ichter, Fei Xia, Ed Chi, Quoc V Le, and Denny Zhou. 2022. Chain-of-Thought Prompting Elicits Reasoning in Large Language Models. In Advances in Neural Information Process-ing Systems , Vol. 35. 24824–24837. https://papers.nips.cc/paper_files/paper/2022/ hash/9d5609613524ecf4f15af0f7b31abca4-Abstract-Conference.html [28] Bo Yang, Qingping Yang, Yingwei Ma, and Runtao Liu. 2025. UTMath: Math Evalu-ation with Unit Test via Reasoning-to-Coding Thoughts. arXiv:2411.07240 [cs.CL] https://arxiv.org/abs/2411.07240 [29] Longhui Yu, Weisen Jiang, Han Shi, Jincheng Yu, Zhengying Liu, Yu Zhang, James T. Kwok, Zhenguo Li, Adrian Weller, and Weiyang Liu. 2023. Meta-Math: Bootstrap Your Own Mathematical Questions for Large Language Models. arXiv:2309.12284 [cs.CL] https://arxiv.org/abs/2309.12284 [30] Jie Zhang, Cezara Petrui, Kristina Nikolić, and Florian Tramèr. 2025. Real-Math: A Continuous Benchmark for Evaluating Language Models on Research-Level Mathematics. In NeurIPS 2025 Track on Datasets and Benchmarks . https: //openreview.net/forum?id=RBssYVpQEr [31] Chujie Zheng, Zhenru Zhang, Beichen Zhang, Runji Lin, Keming Lu, Bowen Yu, Dayiheng Liu, Jingren Zhou, and Junyang Lin. 2025. ProcessBench: Identifying Process Errors in Mathematical Reasoning. In Proceedings of the 63rd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) .1009–1024. doi:10.18653/v1/2025.acl-long.50 [32] Kunhao Zheng, Jesse Michael Han, and Stanislas Polu. 2022. miniF2F: a cross-system benchmark for formal Olympiad-level mathematics. In International Conference on Learning Representations . https://openreview.net/forum?id= 9ZPegFuFTFv [33] Lianmin Zheng, Wei-Lin Chiang, Ying Sheng, Siyuan Zhuang, Zhanghao Wu, Yonghao Zhuang, Zi Lin, Zhuohan Li, Dacheng Li, Eric P. Xing, Hao Zhang, Joseph E. Gonzalez, and Ion Stoica. 2023. Judging LLM-as-a-Judge with MT-Bench and Chatbot Arena. In Advances in Neural Information Processing Sys-tems , Vol. 36. 46595–46623. https://papers.nips.cc/paper_files/paper/2023/hash/ 91f18a1287b398d378ef22505bf41832-Abstract-Datasets_and_Benchmarks.html [34] Kaijie Zhu, Jiaao Chen, Jindong Wang, Neil Zhenqiang Gong, Diyi Yang, and Xing Xie. 2024. DyVal: Dynamic Evaluation of Large Language Models for Reasoning Tasks. In International Conference on Learning Representations . https: //openreview.net/forum?id=gjfOL9z5Xr Mask-Proof: An LLM-based Automated Data Curation Pipeline on Mathematical Proofs KDD ’26, August 09–13, 2026, Jeju Island, Republic of Korea 
+
+## A Mask Rubrics. 
+
+Our mask rubrics are as follows: 
+
+• Formula-level completeness. Each mask must correspond to a complete mathematical expression or formula , rather than a fragment of an equation or a syntactic sub-component. Partial masking of symbols, coefficients, or operators is disallowed. 
+
+• Global reasoning dependency. A valid mask should not be solvable by inspecting only its immediate local context. Correct recovery must require integrating information from the theorem statement, earlier definitions or lemmas, and the global logical structure of the proof. 
+
+• Reasoning density and necessity. Masked steps should represent logically critical steps (e.g., non-trivial formulas, structural identities, or key transformations) whose absence would break the proof. Trivial algebraic rearrangements or routine substitutions are excluded. 
+
+• Non-templated and non-heuristic. Masks must not be recoverable via pattern matching, standard proof templates, symmetry guessing, backward inference from later lines, or memorized formula instantiation. Any mask that can be solved without genuine mathematical reasoning is considered invalid. 
+
+• Quality-controlled multiplicity. For each proof, we allow between 0 and 3 masks, determined by the proof’s conceptual depth, technical sophistication, and reasoning density. Proofs that are low-quality, overly short, informal, or mathematically trivial may yield zero masks. 
+
+## B Additional Validation Details 
+
+Expert validation of mask positions. Table 2 summarizes the 63 domain-expert annotations used to validate whether agentically selected masks are meaningful reasoning targets rather than superficial completion tasks. 
+
+Table 2: Expert validation of mask positions across mathematical areas.                            
+
+> Area #Ann. Mean Score High Quality Algebraic Geometry 98.22 9/9 Algebraic Topology 78.29 7/7 PDE / Analysis 87.50 6/8 Classical Analysis and ODEs 10 8.00 9/10 Combinatorics 87.00 6/8 Differential Geometry 88.00 6/8 Numerical Analysis 78.86 7/7 Optimization and Control 67.67 5/6
+
+Truncation leakage audit. Table 3 reports the suffix-truncation audit used to test whether later proof context is the dominant source of model performance. These results should be read as evidence that the risk is mitigated, not as a proof that leakage is impossible. 
+
+Table 3: Suffix-truncation leakage audit on the leakage-audit split.       
+
+> Model Original Avg@4 Truncated Avg@4 Qwen3-30B-A3B-Instruct 23.79 23.14 Qwen3-30B-A3B-Thinking 24.35 20.79
+
+## C Data format of Mask-Proof Samples. 
+
+Data format. We serialize the processed samples in jsonl . Each record contains a unique identifier and the paired question/solution: 
+
+{"index": 6, "arxiv_id": "...", "proof_index": 8, "problem": <<PROBLEM TO PROVE>>, "reference_solution": <<PROOF>>, "mask_text": <<PROOF CONTAINS 1 MASK>>, "mask_content": <<ORIGINAL TEXT IN THE MASK>> }
+
+Here mask_text is the masked prompt (typically formula-only masks), and mask_content is the corresponding ground-truth proof fragment. KDD ’26, August 09–13, 2026, Jeju Island, Republic of Korea Jierui Zhang et al. 
+
+## D Data Distribution 
+
+Table 4: Percentage distribution of the top arXiv subject categories of papers used in Mask-ProofBench. 
+
+Category Percentage Category Percentage PDE / Analysis 26.47% Combinatorics 2.94% Mathematical Physics 5.88% Numerical Analysis 2.94% Number Theory 5.15% Optimization and Control 2.94% Differential Geometry 5.15% Operator Algebras 2.94% Functional Analysis 4.41% Algebraic Geometry 2.21% Representation Theory 4.41% Algebraic Topology 2.21% Probability 3.68% Statistics Theory 2.21% Classical Analysis and ODEs 2.94% Others 23.52% 
+
+## E Case Study 
+
+Masked Proof: 
+
+Proof. We prove the result for 𝑊 (𝐾 ); the proof for 𝑊 ∨ (𝐾 ) is identical. Denote the coefficients of 𝑓 by 𝑎, 𝑏, 𝑐, and 𝑑 , and assume (by replacing 𝑓 with a GL 2 (𝐾 )-translate, if necessary) that 𝑎𝑑 ≠ 0. First, it is easy to check that there exists a distinguished orbit (resp. a 
+
+Δ-distinguished orbit) in 𝑊 (𝐾 ). The distinguished orbit is represented by the following pair: 
+
+(𝐴, 𝐵 ) = ©«©«
+
+0 0 12
+
+0 −𝑎 0 
+
+> 12
+
+0 −𝑐 
+
+ª®¬
+
+, ©«
+
+0 12 0 
+
+> 12
+
+𝑏 00 0 𝑑 
+
+ª®¬ª®¬
+
+.
+
+The Δ-distinguished orbit with resolvent 𝑓 is represented by the following pair: 
+
+(𝐴, 𝐵 ) = ©«©«
+
+−𝑎 0 00 0 1/20 1/2 𝑏 /4𝑎𝑑 
+
+ª®¬
+
+, ©«
+
+0 0 1/20 𝑑 01/2 0 −𝑐 /4𝑎𝑑 
+
+ª®¬ª®¬
+
+. (1) It only remains to prove uniqueness. For the distinguished case, let 𝐿 be the étale cubic extension of 𝐾 corresponding to 𝑓 under the Delone–Faddeev bijection. SL 3 (𝐾 )-orbits on 𝑊 (𝐾 ) ∩ Res −1 (𝑓 ) correspond bijectively to étale quartic extensions of 𝐾 with resolvent 𝑓 by Bhargava’s parametrization. An orbit is distinguished if and only if it corresponds to 𝐿 ⊕ 𝐾 , and so there is a unique distinguished orbit. We give a much more hands-on proof of uniqueness of the Δ-distinguished orbit. Let (𝐴, 𝐵 ) (with coefficients 𝑎 𝑖 𝑗 and 𝑏 𝑖 𝑗 ) be an element in a Δ-distinguished orbit with Res (𝐴, 𝐵 ) = 𝑓 . By the definition of being Δ-distinguished, there exists a P1 
+
+> 𝐾
+
+⊂ P2 
+
+> 𝐾
+
+such that the restriction of 𝐴 and 𝐵 to this P1 
+
+> 𝐾
+
+give reducible binary quadratic forms. (Note that neither of these binary forms can be 0, otherwise we would have 
+
+Δ(𝐴, 𝐵 ) = 0.) By replacing (𝐴, 𝐵 ) with an SL 3 (𝐾 )-translate, we may assume that P1 
+
+> 𝐾
+
+is the subspace (∗ , ∗, 0), and we may hence assume that 
+
+𝑎 12 = 𝑎 22 = 𝑏 11 = 𝑏 12 = 0. Since 𝑎 11 and 𝑏 22 are nonzero, we may use another SL 3 (𝐾 )-transformation to further assume that 𝑎 13 = 𝑏 23 = 0.Then we have 
+
+𝑎 /4 = det (𝐴 ) = −𝑎 11 𝑎 223 and − 𝑑 /4 = det (𝐵 ) = −𝑏 22 𝑏 213 .
+
+Thus, with another SL 3 (𝐾 )-transformation, we can ensure that 𝑎 11 = −𝑎 , 𝑏 22 = 𝑑 , and 𝑎 23 = 𝑏 13 = 12 . Finally, the coefficients 𝑎 33 and 𝑏 33 are uniquely determined by the values of 𝑏 and 𝑐 . The lemma follows. □
