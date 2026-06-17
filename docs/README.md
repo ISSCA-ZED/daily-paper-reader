@@ -6,41 +6,37 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-06-16
-- 运行时间：2026-06-16 21:54:04 UTC
+- 最新运行日期：2026-06-17
+- 运行时间：2026-06-17 22:08:00 UTC
 - 运行状态：成功
-- 本次总论文数：7
-- 精读区：3
-- 速读区：4
+- 本次总论文数：5
+- 精读区：2
+- 速读区：3
 
 ### 今日简报（AI）
-今日推荐7篇高效推理与数据处理论文，其中《Exploring Extrinsic and Intrinsic Properties for Effective Reasoning with Code Interpreter》以9分高居精读榜首。值得关注的两大方向：一是代码解释器如何结合内外属性增强推理能力，二是基于LLM的数学证明自动化数据清洗流程。普通读者可优先精读这两篇9分与8分论文，速读部分重点关注长文本推理中的自适应截断与注意力机制优化。
-- 详情：[/202606/16/README](/202606/16/README)
+今日聚焦大模型推理两大高分之作：SuCo自适应推理与代码推理生命周期。  
+精读推荐《SuCo》的充分性引导连续推理策略与《From Brewing to Resolution》对代码推理内部阶段的追踪。  
+建议进一步关注推理链的可复用性及模式匹配机制，以深入理解模型行为。
+- 详情：[/202606/17/README](/202606/17/README)
 
 ### 精读区论文标签
-1. [Exploring Extrinsic and Intrinsic Properties for Effective Reasoning with Code Interpreter](/202606/16/2606.16934v1-exploring-extrinsic-and-intrinsic-properties-for-effective-reasoning-with-code-interpreter)  
+1. [SuCo: Sufficiency-guided Continuous Adaptive Reasoning](/202606/17/2606.17687v1-suco-sufficiency-guided-continuous-adaptive-reasoning)  
+   标签：评分：10.0/10、query:key-tokens
+   evidence：定义最小充分思维链为推理序列中能得出正确答案的最短前缀
+2. [From Brewing to Resolution: Tracing the Internal Lifecycle of Code Reasoning in LLMs](/202606/17/2606.17648v1-from-brewing-to-resolution-tracing-the-internal-lifecycle-of-code-reasoning-in-llms)  
    标签：评分：9.0/10、query:key-tokens
-   evidence：研究代码推理中关键token作为外部属性
-2. [Mask-Proof: An LLM-based Automated Data Curation Pipeline on Mathematical Proofs](/202606/16/2606.15258v1-mask-proof-an-llm-based-automated-data-curation-pipeline-on-mathematical-proofs)  
-   标签：评分：8.0/10、query:key-tokens
-   evidence：在证明中遮蔽关键公式步骤以评估逐步推理，直接识别推理序列中的关键token/步骤
-3. [ReQAT: Achieving Full-Precision Reasoning Accuracy with 4-bit Floating-Point Quantization-Aware Training](/202606/16/2606.15682v1-reqat-achieving-full-precision-reasoning-accuracy-with-4-bit-floating-point-quantization-aware-training)  
-   标签：评分：8.0/10、query:key-tokens
-   evidence：发现量化误差集中在推理轨迹中的低熵token（如数字和运算符），涉及关键token重要性
+   evidence：层线性探测和CSD追踪推理内部生命周期
 
 ### 速读区论文标签
-1. [Adaptive Nucleus Truncation for Long-Form Reasoning](/202606/16/2606.13982v1-adaptive-nucleus-truncation-for-long-form-reasoning)  
+1. [Reasoning as Pattern Matching: Shared Mechanisms in Human and LLM Everyday Reasoning](/202606/17/2606.13607v1-reasoning-as-pattern-matching-shared-mechanisms-in-human-and-llm-everyday-reasoning)  
    标签：评分：7.0/10、query:key-tokens
-   evidence：自适应截断方法关注token重要性
-2. [Stop When Further Reasoning Won't Help: Attention-State Adaptive Generation in Reasoning Models](/202606/16/2606.15070v1-stop-when-further-reasoning-wont-help-attention-state-adaptive-generation-in-reasoning-models)  
+   evidence：识别驱动LLM响应的注意力头，揭示模式匹配机制，与推理关键token的隐藏状态分析相关
+2. [Learning to Refine Hidden States for Reliable LLM Reasoning](/202606/17/2606.17524v1-learning-to-refine-hidden-states-for-reliable-llm-reasoning)  
+   标签：评分：7.0/10、query:key-tokens
+   evidence：面向推理稳定性的隐藏状态精炼
+3. [From Reasoning Traces to Reusable Modules: Understanding Compositional Generalization in Language Model Reasoning](/202606/17/2606.18089v1-from-reasoning-traces-to-reusable-modules-understanding-compositional-generalization-in-language-model-reasoning)  
    标签：评分：6.0/10、query:key-tokens
-   evidence：通过注意力状态分析检测推理状态，间接涉及关键token
-3. [Stepwise Token Selection for Efficient Multimodal Large Language Models](/202606/16/2606.16067v1-stepwise-token-selection-for-efficient-multimodal-large-language-models)  
-   标签：评分：6.0/10、query:key-tokens
-   evidence：提出基于重要性的指针式选择机制，迭代选择信息性token，可迁移至token重要性度量
-4. [Context-Aware RL for Agentic and Multimodal LLMs](/202606/16/2606.17053v1-context-aware-rl-for-agentic-and-multimodal-llms)  
-   标签：评分：6.0/10、query:key-tokens
-   evidence：训练模型识别上下文中的决定性证据token
+   evidence：将推理轨迹建模为对应原子模块的离散潜在选择变量级联，与推理序列中关键token识别相关
 
 
 <div class="dpr-home-promo-card">
