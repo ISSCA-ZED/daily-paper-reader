@@ -1,0 +1,39 @@
+{
+  "label": "2026-06-19",
+  "date": "2026-06-19",
+  "generated_at": "2026-06-19T21:04:30",
+  "count": 2,
+  "papers": [
+    {
+      "paper_id": "202606/19/2606.19771v1-beyond-entropy-learning-from-token-level-distributional-deviations-for-llm-reasoning",
+      "section": "quick",
+      "title_en": "Beyond Entropy: Learning from Token-Level Distributional Deviations for LLM Reasoning",
+      "authors": "Xuanzhi Feng, Zhengyang Li, Zeyu Liu, Haoxi Li, Yuming Jiang, Bing Guo, Jingcai Guo, Jie Zhang, Song Guo",
+      "date": "2026-06-18",
+      "pdf": "https://arxiv.org/pdf/2606.19771v1",
+      "score": "7.0",
+      "evidence": "token级分布偏差在LLM推理中的应用",
+      "tldr": "针对RLVR训练中熵崩溃与熵爆炸的两难问题，提出独立组合令牌框架，通过令牌logits分布的JS散度识别关键分支点。理论证明选择性更新这些令牌能同时降低香农熵和控制二阶Rényi熵，避免过度探索或收敛。在Qwen2.5模型上仅更新10%令牌，平均pass@4提升4.58%，最高达14.9%。",
+      "tags": "query:key-tokens",
+      "abstract_en": "Reinforcement Learning with Verifiable Rewards (RLVR) has significantly advanced Large Language Model (LLM) reasoning; however, it faces a fundamental optimization instability: uniform token updates precipitate entropy collapse, leading to premature convergence to suboptimal strategies, whereas excessive Shannon Entropy maximization can cause entropy explosion, driving blind exploration toward incoherent reasoning chains. To resolve this dichotomy, we introduce the Independent Combinatorial Tokens (ICT) framework, which shifts the optimization focus from scalar uncertainty to the distributional properties of token logits. By leveraging the Jensen-Shannon (JS) divergence between token logits distributions, ICT identifies tokens with distinctive distributional patterns as critical branching points for guiding effective exploration in LLM reasoning. Our theoretical analysis, grounded in both Shannon and second-order Rényi entropy, proves that selectively updating on these tokens regulates policy concentration: it reduces the overall distribution uncertainty measured by Shannon entropy, while controlling probability concentration captured by second-order Rényi entropy. This dual effect prevents over-concentrated token generation from weakening exploration and effectively stabilizes the training landscape. Empirical results demonstrate that updating only the top 10% of unique tokens on Qwen2.5 (0.5B/1.5B/7B) models yields an average pass@4 improvement of 4.58%, with a maximum gain of 14.9%, over GRPO, 20-Entropy, and STAPO baselines across seven benchmarks spanning math, commonsense, and Olympiad-level problems.",
+      "source": "arxiv",
+      "selection_source": "fresh_fetch"
+    },
+    {
+      "paper_id": "202606/19/2606.19919v1-adapt-token-level-decoupling-for-efficient-large-reasoning-models",
+      "section": "quick",
+      "title_en": "ADaPT: Token-Level Decoupling for Efficient Large Reasoning Models",
+      "authors": "Tingyun Li, Zishang Jiang, Jinyi Han, Xinyi Wang, Sihang Jiang, Han Xia, Zhaoqian Dai, Shuguang Ma, Fei Yu, Jiaqing Liang, Yanghua Xiao",
+      "date": "2026-06-18",
+      "pdf": "https://arxiv.org/pdf/2606.19919v1",
+      "score": "7.0",
+      "evidence": "令牌级模式选择区分关键推理步骤，涉及令牌重要性",
+      "tldr": "大型推理模型依赖长思维链实现高性能，但均匀推理导致高计算成本。ADaPT提出token级双过程框架，通过模式选择token解耦效率与正确性，仅对模式选择token施加效率奖励，避免惩罚正确长推理。训练后单个模型可在推理时通过调整模式选择token的概率连续控制效率-性能权衡，显著降低推理成本并保持强性能，为高效推理模型提供新范式。",
+      "tags": "query:key-tokens",
+      "abstract_en": "Large reasoning models rely on long chain-of-thought to achieve strong performance, but applying such reasoning uniformly incurs high computational cost. Existing efficiency-oriented methods attempt to shorten or mix reasoning strategies, yet often degrade reasoning capability. We identify the root cause as sequence-level coupling between efficiency incentives and correctness optimization, which implicitly penalizes long but correct reasoning trajectories. To address this issue, we propose Adaptive Dual-Process Thinking (ADaPT), a token-level dual-process framework that explicitly decouples efficiency and correctness signals during training. ADaPT introduces a mode-selection token to control fast and slow reasoning, applying efficiency-related rewards exclusively to this token to avoid penalizing correct long reasoning while encouraging efficiency when appropriate. Moreover, ADaPT enables precise and continuous control over the efficiency-performance trade-off at inference time: by adjusting the generation probability of the mode-selection token, a single trained model can smoothly move along the efficiency-performance Pareto frontier. Extensive experiments demonstrate that ADaPT significantly reduces inference cost while maintaining strong reasoning performance across multiple benchmarks.",
+      "source": "arxiv",
+      "selection_source": "fresh_fetch"
+    }
+  ],
+  "errors": []
+}

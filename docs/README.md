@@ -6,27 +6,29 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-06-18
-- 运行时间：2026-06-18 22:02:48 UTC
+- 最新运行日期：2026-06-19
+- 运行时间：2026-06-19 21:04:22 UTC
 - 运行状态：成功
 - 本次总论文数：2
 - 精读区：0
 - 速读区：2
 
 ### 今日简报（AI）
-今日速读2篇论文，聚焦LLM推理机制与安全性。值得关注《Reasoning as Pattern Matching》揭示人机日常推理的模式匹配共性，以及《Decoding Hidden Deception》提出欺骗性推理的激活解释方法。建议先看第一篇理解基础机制，再看第二篇了解安全审计工具。
-- 详情：[/202606/18/README](/202606/18/README)
+今日精读聚焦两篇LLM推理研究，均从token级分布偏差与解耦入手探索效率提升。  
+两篇论文均提出通过细粒度处理token层次的可控性，有望优化复杂推理任务的性能与计算成本。  
+建议普通读者关注“token级分布解耦”思路，这可能是未来大模型减少冗余推理、提升实用性的关键方向。
+- 详情：[/202606/19/README](/202606/19/README)
 
 ### 精读区论文标签
 - 本次无精读推荐。
 
 ### 速读区论文标签
-1. [Reasoning as Pattern Matching: Shared Mechanisms in Human and LLM Everyday Reasoning](/202606/18/2606.13607v2-reasoning-as-pattern-matching-shared-mechanisms-in-human-and-llm-everyday-reasoning)  
+1. [Beyond Entropy: Learning from Token-Level Distributional Deviations for LLM Reasoning](/202606/19/2606.19771v1-beyond-entropy-learning-from-token-level-distributional-deviations-for-llm-reasoning)  
    标签：评分：7.0/10、query:key-tokens
-   evidence：注意力头分析揭示推理模式
-2. [Decoding Hidden Deception in Reasoning LLMs: Activation Explainers for Deception Auditing](/202606/18/2606.17478v1-decoding-hidden-deception-in-reasoning-llms-activation-explainers-for-deception-auditing)  
-   标签：评分：6.0/10、query:key-tokens
-   evidence：推理LLM的隐藏状态分析
+   evidence：token级分布偏差在LLM推理中的应用
+2. [ADaPT: Token-Level Decoupling for Efficient Large Reasoning Models](/202606/19/2606.19919v1-adapt-token-level-decoupling-for-efficient-large-reasoning-models)  
+   标签：评分：7.0/10、query:key-tokens
+   evidence：令牌级模式选择区分关键推理步骤，涉及令牌重要性
 
 
 <div class="dpr-home-promo-card">
