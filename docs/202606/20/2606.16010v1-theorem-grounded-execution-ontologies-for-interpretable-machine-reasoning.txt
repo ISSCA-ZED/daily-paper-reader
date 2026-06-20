@@ -1,0 +1,1897 @@
+Title: Theorem-Grounded Execution Ontologies for Interpretable Machine Reasoning
+
+URL Source: https://arxiv.org/pdf/2606.16010v1
+
+Published Time: Tue, 16 Jun 2026 01:26:55 GMT
+
+Number of Pages: 77
+
+Markdown Content:
+# Theorem-Grounded Execution Ontologies for Interpretable Machine Reasoning 
+
+Raghu Anantharangachar rag.anant2011@gmail.com 
+
+Independent Researcher Bangalore, India 
+
+## Abstract 
+
+Large language models have demonstrated remarkable performance on reasoning tasks across mathematics, science, programming, and commonsense reasoning (Brown et al., 2020; OpenAI, 2023). Despite these advances, the internal reasoning processes of modern language models remain largely latent, making them difficult to interpret, verify, replay, and transfer across domains. Existing approaches such as chain-of-thought prompting (Wei et al., 2022), tree-of-thoughts (Yao et al., 2023b), graph-of-thoughts (Besta et al., 2024), and tool-augmented reasoning (Yao et al., 2023a; Schick et al., 2023) expose intermediate reasoning artifacts but typically lack explicit execution semantics, formal state representa-tions, and verifiable reasoning structures. In this work, we introduce Theorem-Grounded Execution Ontologies (TGEO) , a frame-work that represents reasoning as an executable state-transition process rather than a sequence of generated tokens. Given an input problem, the framework identifies relevant theorem families, binds the problem to a domain-specific ontology, discovers objects, in-stantiates states and operators, constructs predicates and contracts, and synthesizes an executable reasoning graph. The resulting execution graph provides an interpretable and replayable representation of the reasoning process in which every state transition, operator application, and validation step is explicitly represented. The proposed architecture integrates five key components: (1) theorem-grounded rea-soning priors, (2) executable ontologies, (3) operator-mediated state transitions, (4) pred-icate and contract-based execution validation, and (5) architectural auditing and failure localization. Together, these components transform reasoning into a structured execution process that can be inspected, verified, and reproduced. We evaluate the framework on a collection of theorem-intensive reasoning tasks de-rived from mathematical benchmark domains (Hendrycks et al., 2021a; Cobbe et al., 2021; Hendrycks et al., 2021b) and a curated Golden Execution Suite. In addition to answer correctness, we introduce a comprehensive evaluation methodology that measures theo-rem assignment, ontology coverage, planner activation, operator utilization, state materi-alization, execution coverage, replayability, and architectural health. Experimental results demonstrate that theorem assignment and ontology construction achieve high reliability, while architectural auditing identifies state materialization and predicate satisfaction as the primary bottlenecks limiting end-to-end execution performance. Our findings suggest that theorem-grounded execution ontologies provide a promising alternative to purely latent reasoning representations by enabling explicit, executable, and verifiable reasoning processes. More broadly, the proposed framework establishes a foun-dation for reusable reasoning structures that can support interpretable machine reasoning, cross-domain knowledge transfer, and future research into executable reasoning substrates for advanced intelligent systems. 
+
+1
+
+> arXiv:2606.16010v1 [cs.IR] 14 Jun 2026
+
+## 1 Introduction 
+
+Recent advances in large language models (LLMs) have produced substantial improvements on a wide range of reasoning benchmarks, including mathematical reasoning, scientific ques-tion answering, commonsense reasoning, and code generation (Brown et al., 2020; OpenAI, 2023). Models such as GPT-4, Claude, Gemini, and other frontier systems demonstrate the ability to solve complex tasks that were previously considered beyond the reach of language-based approaches. Despite these improvements, the internal reasoning processes of these systems remain largely opaque. The final answer is observable, but the intermediate rea-soning structures that lead to the answer are typically represented only as latent activations within the model. Several techniques have been proposed to improve the visibility of reasoning processes. Chain-of-thought prompting (Wei et al., 2022) encourages models to generate intermediate reasoning steps in natural language. Self-consistency (Wang et al., 2023) improves robustness by aggregating multiple reasoning paths. Tree-of-Thoughts (Yao et al., 2023b) extends rea-soning into structured search over alternative thought trajectories, while ReAct (Yao et al., 2023a) combines reasoning and action generation. More recently, Graph-of-Thoughts (Besta et al., 2024) has explored graph-based reasoning structures that capture richer dependencies among intermediate reasoning units. Although these methods expose reasoning traces, the resulting artifacts are primarily textual. They do not provide explicit execution semantics, formally defined state transi-tions, operator contracts, or replayable execution structures. As a consequence, it remains difficult to verify whether a reasoning process is internally consistent, determine which oper-ations were performed, identify where failures occurred, or reuse reasoning structures across domains. Classical artificial intelligence approached reasoning differently. Planning systems (Fikes and Nilsson, 1971; McDermott et al., 1998) represented problems using explicit states, ac-tions, preconditions, and effects. Knowledge representation systems employed ontologies, symbolic relations, and logical inference mechanisms (Gruber, 1993; Guarino, 1998). While these approaches provided strong interpretability and formal guarantees, they often lacked the flexibility and broad knowledge coverage demonstrated by modern language models. This paper explores a middle ground between purely latent neural reasoning and purely symbolic reasoning. We introduce a framework for theorem-grounded execution ontologies that transforms reasoning tasks into explicit executable structures. Given a problem in-stance, the framework identifies an appropriate theorem family, binds the problem to a domain ontology, materializes domain-specific objects and states, selects executable oper-ators, and constructs an execution graph that can be replayed and inspected. Reasoning is represented as a sequence of state transitions mediated by operators rather than as an unstructured sequence of generated tokens. The proposed framework introduces five key ideas. First, reasoning tasks are grounded in theorem families that provide an explicit bridge between problem statements and executable reasoning structures. Theorem assignment serves as a mechanism for selecting appropriate reasoning patterns before execution begins. 2Second, domain ontologies are used to represent objects, states, operators, predicates, and contracts. Ontologies provide a structured representation of domain knowledge that can be reused across related problems. Third, execution is represented as a state-transition system. Operators consume and produce typed states, allowing reasoning trajectories to be represented as executable graphs rather than textual traces. Fourth, contracts and predicates are used to validate execution. Contracts specify pre-conditions and postconditions, while predicates encode semantic constraints that must hold throughout execution. Fifth, reasoning traces are replayable. Every execution graph can be reconstructed and inspected, enabling detailed analysis of success and failure modes. To evaluate the framework, we introduce a collection of reasoning tasks derived from mathematical benchmark domains and domain-specific reasoning examples. We measure theorem assignment, ontology coverage, operator utilization, execution replayability, execu-tion graph validity, and architectural health. We further introduce execution-funnel diag-nostics that localize failures across theorem assignment, ontology binding, planning, state transition, and goal achievement stages. Our results demonstrate that theorem-grounded execution ontologies provide a practical mechanism for constructing interpretable reasoning structures. The framework achieves high theorem assignment rates, broad ontology coverage, replayable execution traces, and explicit reasoning representations. The experiments also reveal that state materialization and predicate satisfaction remain critical bottlenecks for large-scale executable reasoning systems. The primary contribution of this work is not a new prompting strategy (Wei et al., 2022) or a new language model architecture (Brown et al., 2020; OpenAI, 2023). Instead, we present a framework that transforms reasoning into an explicit executable process whose intermediate structures can be inspected, validated, replayed, and potentially transferred across domains. We believe that such executable representations provide an important step toward more interpretable and verifiable reasoning systems. 
+
+## 2 Related Work 
+
+The proposed theorem-grounded execution ontology framework lies at the intersection of sev-eral active research areas, including reasoning in large language models, automated theorem proving, planning, knowledge representation, neuro-symbolic learning, program synthesis, cognitive architectures, world models, and artificial general intelligence. This section re-views the most relevant literature and positions our contribution relative to these research directions. 
+
+2.1 Reasoning in Large Language Models 
+
+Recent advances in large language models (LLMs) have significantly improved performance on reasoning tasks across mathematics, science, commonsense reasoning, and code gener-ation (Brown et al., 2020; OpenAI, 2023). Scaling studies demonstrated that increasingly large transformer models exhibit emergent reasoning capabilities that were not present in smaller systems (Brown et al., 2020). 3Chain-of-thought (CoT) prompting introduced the idea of explicitly generating interme-diate reasoning steps before producing a final answer (Wei et al., 2022). Subsequent work showed that CoT substantially improves performance on arithmetic, symbolic, and common-sense reasoning benchmarks (Wei et al., 2022). Self-consistency decoding further improved reasoning performance by sampling multiple reasoning trajectories and selecting the most consistent answer (Wang et al., 2023). Additional prompting strategies have been proposed to improve reasoning. Zero-shot reasoning (Kojima et al., 2022) demonstrated that simple prompting instructions can elicit reasoning behavior. Least-to-most prompting decomposes difficult problems into sequences of simpler subproblems (Zhou et al., 2023). Program-aided reasoning (Gao et al., 2023) and Program-of-Thought prompting (Chen et al., 2023) incorporate executable programs into reasoning workflows. Despite their effectiveness, these approaches remain largely textual. Intermediate rea-soning steps are represented as natural language sequences rather than formally executable structures. Consequently, reasoning traces are difficult to verify, replay, or analyze system-atically. 
+
+2.2 Structured Reasoning and Search-Based Inference 
+
+Several methods extend chain-of-thought reasoning (Wei et al., 2022) through explicit search. Tree-of-Thoughts (ToT) formulates reasoning as search over alternative reasoning trajec-tories (Yao et al., 2023b). Rather than committing to a single reasoning path, ToT explores multiple candidate reasoning states and evaluates their quality before proceeding. Graph-of-Thoughts (GoT) generalizes this idea by representing reasoning as a graph rather than a tree (Besta et al., 2024). This allows information sharing across reasoning paths and supports more complex dependency structures. Other approaches include deliberative decoding, Monte Carlo search, self-refinement methods, and multi-agent reasoning systems. While these methods improve exploration and planning, they continue to operate primarily over textual reasoning representations. In contrast, our framework introduces explicit execution semantics through states, op-erators, predicates, contracts, and execution graphs. 
+
+2.3 Tool Use and Agent Architectures 
+
+The integration of reasoning with external actions has become an important area of research. ReAct combines reasoning and action generation by interleaving thought generation with environment interaction (Yao et al., 2023a). Toolformer extends this idea by enabling language models to learn tool usage automatically (Schick et al., 2023). Subsequent work has explored web browsing agents, code execution agents, autonomous task execution systems, and planner-based agent architectures (Nakano et al., 2022). Modern agent systems often employ planning, decomposition, memory, retrieval, and tool invocation. Examples include planner-executor architectures, LangGraph-based workflows, AutoGPT-style systems, and multi-agent coordination frameworks. These systems introduce explicit actions but typically lack formal state-transition se-mantics. Actions are represented procedurally rather than through reusable ontological 4structures. The present work can be viewed as a formalization of agent reasoning in which operators, predicates, contracts, and state transitions become first-class reasoning objects. 
+
+2.4 Automated Theorem Proving 
+
+Automated theorem proving (ATP) (Harrison, 2009; Robinson, 1965) represents one of the longest-standing research areas in artificial intelligence. Classical theorem provers such as resolution-based systems demonstrated that logical rea-soning can be represented through explicit symbolic structures (Fikes and Nilsson, 1971). Interactive theorem provers and proof assistants subsequently provided powerful environ-ments for constructing machine-verifiable proofs. Modern theorem proving systems include Lean (de Moura and Ullrich, 2020), Coq (The Coq Development Team, 2021), Isabelle/HOL (Nipkow et al., 2021), HOL Light, and Meta-math. These systems provide rich formal languages for representing mathematical knowledge and constructing proofs. Recent work has increasingly incorporated machine learning into theorem proving (Rock-taschel and Riedel, 2017; DeepMind, 2024). Neural-guided theorem provers (Rocktaschel and Riedel, 2017) and reinforcement-learning-based proof search systems have demonstrated promising results. Large language models have also been applied to formal proof generation and proof completion. AlphaProof represents a recent large-scale effort combining machine learning and formal theorem proving (DeepMind, 2024). Unlike formal proof systems (de Moura and Ullrich, 2020; The Coq Development Team, 2021; Nipkow et al., 2021), the present work uses theorem families as reasoning priors that guide ontology selection and execution planning. The objective is not formal proof genera-tion but the construction of executable reasoning structures. 
+
+2.5 Knowledge Representation and Ontologies 
+
+Knowledge representation has long been a foundational area of artificial intelligence. Semantic networks, frames, description logics, and ontologies provide mechanisms for representing entities, relations, constraints, and domain knowledge (Gruber, 1993; Guarino, 1998; Hogan et al., 2021; Ji et al., 2021). Large-scale ontology systems such as Cyc (Lenat, 1989), WordNet (Miller, 1995), Con-ceptNet (Prakash et al., 2017), Freebase (Bollacker et al., 2008), DBpedia, and Wikidata (Vrandecic and Krotzsch, 2014) demonstrated the value of structured knowledge represen-tations. Ontologies have been widely used in biomedical informatics, scientific reasoning, semantic web systems, and intelligent agents (Guarino, 1998; Hogan et al., 2021). Most ontology systems focus on static knowledge representation. The proposed frame-work extends this perspective by introducing executable semantics through states, operators, predicates, contracts, and execution graphs. 52.6 Knowledge Graph Completion and Graph Reasoning 
+
+Knowledge graph completion (Hogan et al., 2021; Ji et al., 2021) seeks to infer missing relationships among entities in large relational graphs. Early approaches such as TransE (Bordes et al., 2013) introduced translational em-bedding methods for representing multi-relational data. Subsequent work developed more expressive embedding models, including ConvE (Dettmers et al., 2018), tensor factorization methods, and graph neural network approaches. Relational graph convolutional networks (R-GCNs) extended graph neural networks to relational data (Schlichtkrull et al., 2018). More recently, graph transformers and graph retrieval systems have demonstrated strong performance across knowledge-intensive tasks (Ji et al., 2021). Knowledge graph reasoning systems primarily focus on static relationships (Hogan et al., 2021). In contrast, our framework represents reasoning as executable transitions among dynamic states. 
+
+2.7 Neuro-Symbolic Learning and Reasoning 
+
+Neuro-symbolic reasoning (Nyadzani and Razzaque, 2019b) seeks to combine the represen-tational power of neural networks with the interpretability and compositionality of symbolic systems. Early neuro-symbolic systems explored the integration of logic and neural computation (Garcez et al., 2002). More recent work has investigated neural theorem proving, differ-entiable logic, symbolic rule induction, and hybrid reasoning architectures (Nyadzani and Razzaque, 2019b). A recurring theme within neuro-symbolic research (Nyadzani and Razzaque, 2019b) is the need for representations that support both learning and reasoning. The proposed framework shares this objective by combining learned theorem assignment and ontology induction with explicit symbolic execution structures. Unlike many neuro-symbolic approaches that focus on logical inference (Nyadzani and Razzaque, 2019a; Manhaeve et al., 2018), our framework emphasizes executable reasoning processes and replayable execution traces. 
+
+2.8 Program Synthesis and Program Induction 
+
+Program synthesis aims to automatically generate executable programs from specifications, examples, or natural language descriptions. Recent advances in neural code generation have enabled language models to synthesize increasingly complex programs. Program-aided reasoning (Gao et al., 2023) and Program-of-Thought prompting (Chen et al., 2023) demonstrated that executable programs can improve reasoning performance. Related work includes neural program synthesis, symbolic execution, differentiable in-terpreters, and program induction systems. Execution graphs share several properties with synthesized programs. Both represent structured sequences of executable operations. However, execution graphs are derived from theorem-grounded ontologies rather than conventional programming languages. 62.9 Planning and Decision Making 
+
+Planning systems (Fikes and Nilsson, 1971; McDermott et al., 1998) represent problems through states, actions, preconditions, and effects. STRIPS (Fikes and Nilsson, 1971) established many foundational ideas in automated planning. The Planning Domain Definition Language (PDDL) later provided a standardized representation for planning domains (McDermott et al., 1998). Classical planning algorithms (Fikes and Nilsson, 1971; McDermott et al., 1998) pro-vide strong guarantees regarding correctness and optimality but generally require manually specified domain models. Model-based reinforcement learning, hierarchical planning, and world-model approaches extend planning concepts into learned environments. The proposed framework inherits several ideas from planning research, including explicit state spaces, operators, and goal-directed execution. However, unlike classical planners, the framework attempts to induce these structures automatically from reasoning tasks. 
+
+2.10 Cognitive Architectures 
+
+Cognitive architectures seek to model general cognition through explicit computational structures. Soar (Laird et al., 1987) introduced production-rule reasoning and goal-directed execu-tion mechanisms. ACT-R (Anderson and Lebiere, 1998) modeled cognition through inter-actions among memory systems, procedural rules, and attention mechanisms. More recent architectures such as Sigma and CLARION continue this tradition. The state-operator formulation adopted in the present work is closely aligned with several principles found in cognitive architectures, including explicit state representations, procedu-ral execution, and goal-directed behavior. 
+
+2.11 World Models and Structured Intelligence 
+
+World models (Ha and Schmidhuber, 2018; Hafner et al., 2023) seek to learn representations that support prediction, planning, and decision making. Early work demonstrated that latent models of environment dynamics can support plan-ning and control (Ha and Schmidhuber, 2018). More recent systems such as DreamerV3 have demonstrated strong performance across diverse environments using learned world models (Hafner et al., 2023). LeCun’s vision for autonomous machine intelligence similarly emphasizes predictive world models, planning, and hierarchical reasoning (LeCun, 2022). The proposed framework can be interpreted as a reasoning-oriented world model in which theorem families, ontologies, states, and operators provide an explicit substrate for reasoning. 
+
+2.12 Artificial General Intelligence 
+
+Research on artificial general intelligence (AGI) emphasizes abstraction, transfer, composi-tionality, and generalization across domains. 7Cognitive architectures, universal learning systems, and foundation models have all been proposed as potential paths toward general intelligence. Recent discussions of AGI capabilities have highlighted the importance of reasoning, planning, tool use, and world modeling (Bubeck et al., 2023). Chollet argues that intelli-gence should be measured through generalization and adaptation rather than benchmark performance alone (Chollet, 2019). A recurring challenge in AGI research is the construction of reusable reasoning structures that transfer across domains. We view theorem-grounded execution ontologies as a step toward this objective by providing explicit representations of objects, states, operators, predicates, contracts, and execution graphs. 
+
+2.13 Reasoning Benchmarks 
+
+Reasoning benchmarks (Hendrycks et al., 2021a) have played an important role in evaluating progress in machine reasoning. MMLU (Hendrycks et al., 2021a) provides broad coverage across academic disciplines and remains one of the most widely used benchmarks for evaluating language model reasoning capabilities. Additional benchmarks include GSM8K (Cobbe et al., 2021), MATH (Hendrycks et al., 2021b), ARC (Chollet, 2019), GPQA (Rein et al., 2023), theorem proving benchmarks (DeepMind, 2024; de Moura and Ullrich, 2020), code reasoning benchmarks (Chen et al., 2021; Austin et al., 2021), and scientific reasoning datasets (Hendrycks et al., 2021a). Most existing benchmarks (Hendrycks et al., 2021a; Cobbe et al., 2021; Hendrycks et al., 2021b; Chollet, 2019) evaluate answer correctness without examining internal reasoning structures. The evaluation methodology introduced in this paper complements these bench-marks by measuring theorem assignment, ontology induction, planning, execution coverage, replayability, and architectural health. 
+
+2.14 Summary 
+
+Existing research has demonstrated substantial progress in reasoning, theorem proving, plan-ning, program synthesis, knowledge representation, and neuro-symbolic learning (Nyadzani and Razzaque, 2019b; Hogan et al., 2021; Fikes and Nilsson, 1971). However, most modern reasoning systems continue to rely on latent representations or textual reasoning traces. The proposed framework contributes a complementary perspective in which reasoning is represented as an explicit executable process grounded in theorem families, ontologies, states, operators, predicates, contracts, and execution graphs. By combining learned reasoning structures with executable semantics, the framework seeks to bridge the gap between modern language-model reasoning and classical symbolic execution systems. 
+
+## 3 Problem Formulation 
+
+3.1 Motivation 
+
+Contemporary reasoning systems typically represent reasoning implicitly through neural activations or textual reasoning traces. Although these approaches often produce correct 8answers, they provide limited insight into the underlying reasoning process. Intermediate reasoning structures are difficult to verify, replay, or transfer across domains. We consider an alternative formulation in which reasoning is represented as an executable process operating over explicit domain structures. Rather than generating reasoning traces directly in natural language, the system constructs a theorem-grounded execution ontology consisting of objects, states, operators, predicates, contracts, and execution graphs. The central problem addressed in this work is: Given a reasoning problem, can a system automatically construct an executable reasoning representation that is interpretable, replayable, and capable of sup-porting formal execution? 
+
+3.2 Reasoning Task 
+
+Let 
+
+x ∈ X (1) denote an input reasoning problem. Examples include: 
+
+• Mathematical reasoning tasks 
+
+• Scientific reasoning tasks 
+
+• Clinical decision-making problems 
+
+• Cybersecurity investigations 
+
+• Legal reasoning tasks The objective is to produce 
+
+y ∈ Y (2) representing the final answer. Traditional language models learn a direct mapping 
+
+f : X → Y . (3) In contrast, we seek to learn an explicit intermediate reasoning representation 
+
+f : X → (T, O, S, A, G ) → Y , (4) where: 
+
+• T denotes theorem assignments, 
+
+• O denotes ontology structures, 
+
+• S denotes states, 9• A denotes operators, 
+
+• G denotes execution graphs. 
+
+3.3 Theorem-Grounded Reasoning 
+
+We assume that every reasoning task belongs to one or more theorem families. Let 
+
+T = {t1, t 2, . . . , t n} (5) denote the set of theorem families. Examples include: 
+
+GroupTheory (6) 
+
+FieldTheory (7) 
+
+BayesianInference (8) 
+
+ClinicalDiagnosis . (9) A theorem assignment function 
+
+ϕT : X → T (10) maps an input problem to one or more theorem families. The theorem acts as an executable reasoning prior that constrains subsequent ontology and operator selection. 
+
+3.4 Execution Ontologies 
+
+Each theorem family is associated with one or more ontologies. Let 
+
+O = {o1, o 2, . . . , o m} (11) denote the ontology space. An ontology is defined as 
+
+o = ( V, S, A, P, C), (12) where 
+
+• V is the object vocabulary, 
+
+• S is the state space, 
+
+• A is the operator space, 10 • P is the predicate set, 
+
+• C is the contract set. Ontology assignment is defined as 
+
+ϕO : ( T, x ) → O, (13) which selects an executable ontology conditioned on both the problem and the theorem family. 
+
+3.5 Objects 
+
+Objects represent domain entities. Let 
+
+vi ∈ V (14) denote an object. Examples include: 
+
+Mathematics 
+
+Field , Group , Subgroup (15) 
+
+Healthcare 
+
+Patient , Diagnosis , Medication (16) 
+
+Cybersecurity 
+
+Host , Credential , AttackPath (17) Object discovery extracts 
+
+Vx = {v1, . . . , v k} (18) for a given problem instance. 
+
+3.6 States 
+
+States represent executable configurations of objects. A state is defined as 
+
+s = ( v, α ), (19) where 
+
+• v denotes an object, 
+
+• α denotes a set of properties. 11 The state space is 
+
+S = {s1, s 2, . . . }. (20) Examples include: 
+
+SubgroupKnown (21) 
+
+DiagnosisConfirmed (22) 
+
+CredentialCompromised . (23) Reasoning proceeds through state transitions. 
+
+3.7 Operators 
+
+Operators represent executable reasoning actions. An operator 
+
+a ∈ A (24) is defined as 
+
+a = (pre( a), eff( a)) , (25) where 
+
+• pre( a) denotes preconditions, 
+
+• eff( a) denotes effects. Examples include: 
+
+Mathematics 
+
+ComputeIndex (26) 
+
+ApplyLagrange (27) 
+
+Healthcare 
+
+ConfirmDiagnosis (28) 
+
+Cybersecurity 
+
+EscalatePrivilege (29) Operators induce state transitions 
+
+a : si → sj . (30) 12 3.8 Predicates 
+
+Predicates encode semantic conditions that must hold during execution. Let 
+
+p : S → { 0, 1} (31) denote a predicate. Examples include: 
+
+ValidSubgroup (32) 
+
+DiagnosisSupported (33) 
+
+CredentialExists . (34) Predicates determine operator applicability and execution validity. 
+
+3.9 Contracts 
+
+Contracts define correctness conditions for execution. A contract is represented as 
+
+c = ( Ppre , P post ), (35) where 
+
+• Ppre specifies required predicates before execution, 
+
+• Ppost specifies predicates that must hold after execution. Contracts provide explicit verification semantics. 
+
+3.10 Execution Graphs 
+
+Reasoning is represented as an execution graph. An execution graph is defined as 
+
+G = ( N, E ), (36) where 
+
+N = {s1, s 2, . . . , s n} (37) is the set of states and 
+
+E = {(si, a, s j )} (38) is the set of operator-mediated transitions. The graph defines a complete executable reasoning trace. 13 3.11 Goal States 
+
+Each reasoning problem specifies a goal condition 
+
+g ∈ S . (39) Execution seeks to construct a path 
+
+π = ( a1, a 2, . . . , a k) (40) such that 
+
+s0 a1
+
+−→ s1 a2
+
+−→ · · · ak
+
+−→ g, (41) while satisfying all predicates and contracts. 
+
+3.12 Learning Objective 
+
+Given a dataset 
+
+D = {(xi, y i)}Ni=1 , (42) the objective is to learn: 1. Theorem assignment: 
+
+ϕT
+
+2. Ontology assignment: 
+
+ϕO
+
+3. State discovery: 
+
+ϕS
+
+4. Operator discovery: 
+
+ϕA
+
+5. Execution graph construction: 
+
+ϕG
+
+such that the resulting execution graph: 
+
+• Achieves the correct answer, 
+
+• Satisfies contracts, 
+
+• Satisfies predicates, 
+
+• Is replayable, 
+
+• Remains interpretable. 14 Problem 
+
+Theorem 
+
+Ontology 
+
+Objects 
+
+States 
+
+Operators 
+
+Execution Graph 
+
+Answer 
+
+Figure 1: End-to-end theorem-grounded execution pipeline. We define the optimization objective as 
+
+max L = λ1Lanswer + λ2Lexecution + λ3Lreplay + λ4Linterpretability , (43) where: 
+
+• Lanswer measures answer correctness, 
+
+• Lexecution measures execution success, 
+
+• Lreplay measures replayability, 
+
+• Linterpretability measures execution graph quality. 
+
+3.13 Architectural Perspective 
+
+The overall reasoning process is summarized as 
+
+x → T → O → V → S → A → G → y. (44) Equivalently, Figure 1 summarizes the end-to-end pipeline. This formulation transforms reasoning from a latent sequence-generation process into an explicit executable state-transition system that can be inspected, replayed, verified, and analyzed. 15 Input Problem 
+
+Theorem Assignment 
+
+Ontology Grounding 
+
+Planner Construction 
+
+Execution Graph 
+
+State Engine 
+
+Predicate Validation 
+
+Figure 2: Architecture of the Theorem-Grounded Execution Ontology framework. 
+
+## 4 Theorem-Grounded Ontology Framework 
+
+4.1 Overview 
+
+The central hypothesis of this work is that reasoning tasks can be represented through executable domain structures grounded in theorem families. Rather than directly generating reasoning traces, the proposed framework first identifies the theorem family governing a problem instance and then instantiates an executable ontology containing objects, states, operators, predicates, and contracts. Figure 2 illustrates the overall framework. 
+
+x → T → O → V → S → A → G → y (45) where: 
+
+• x denotes the input problem, 
+
+• T denotes theorem assignments, 
+
+• O denotes ontology assignments, 
+
+• V denotes discovered objects, 
+
+• S denotes instantiated states, 
+
+• A denotes executable operators, 
+
+• G denotes the execution graph, 
+
+• y denotes the final answer. This decomposition transforms reasoning from a latent generation process into an explicit executable reasoning pipeline. 16 Problem Candidate Theorems Ranking Assigned Theorem 
+
+Figure 3: Theorem assignment workflow. 
+
+4.2 Theorem Assignment 
+
+Figure 3 illustrates the theorem assignment pipeline. The first stage of the framework identifies the theorem family associated with a problem instance. Let 
+
+T = {t1, t 2, . . . , t n} (46) denote the theorem space. Examples include: 
+
+• Group Theory 
+
+• Ring Theory 
+
+• Field Theory 
+
+• Linear Algebra 
+
+• Bayesian Inference 
+
+• Clinical Diagnosis 
+
+• Threat Analysis The theorem assignment function is defined as 
+
+ϕT : X → 2T (47) where 
+
+Tx = ϕT (x) (48) represents the set of theorem families assigned to problem x.The assignment process provides an explicit reasoning prior that constrains ontology selection and subsequent execution. 
+
+4.3 Ontology Selection 
+
+Each theorem family is associated with one or more executable ontologies (Gruber, 1993; Guarino, 1998). Let 
+
+O = {o1, o 2, . . . , o m} (49) 17 denote the ontology space. Ontology assignment is defined as 
+
+ϕO : ( Tx, x ) → Ox. (50) The selected ontology provides the vocabulary required for reasoning. Formally, 
+
+Ox = ( V, S, A, P, C) (51) where: 
+
+• V denotes objects, 
+
+• S denotes state schemas, 
+
+• A denotes operator schemas, 
+
+• P denotes predicates, 
+
+• C denotes contracts. 
+
+4.4 Object Discovery 
+
+Objects represent domain entities that participate in reasoning. Given ontology 
+
+Ox, (52) the object extraction function 
+
+ϕV : ( x, O x) → Vx (53) produces 
+
+Vx = {v1, . . . , v k}. (54) For example, in field theory: 
+
+Vx = {Field , Extension , Generator }. (55) In healthcare: 
+
+Vx = {Patient , Diagnosis , Medication }. (56) Objects provide the semantic foundation upon which states and operators are defined. 18 4.5 State Instantiation 
+
+States represent executable configurations of objects. Given object set 
+
+Vx, (57) state instantiation is defined as 
+
+ϕS : ( Vx, O x) → Sx. (58) Each state is represented as 
+
+s = ( v, α ) (59) where 
+
+• v denotes an object, 
+
+• α denotes a set of attributes. Examples include: 
+
+GeneratorKnown (60) 
+
+ExtensionDegreeComputed (61) 
+
+DiagnosisConfirmed . (62) The instantiated state set is 
+
+Sx = {s1, s 2, . . . , s n}. (63) 
+
+4.6 Operator Instantiation 
+
+Operators represent executable reasoning actions. Operator instantiation is defined as 
+
+ϕA : ( Sx, O x) → Ax. (64) Each operator 
+
+a ∈ Ax (65) is represented by 
+
+a = (pre( a), eff( a)) . (66) Examples include: 19 ComputeIndex (67) 
+
+ApplyLagrange (68) 
+
+ComputeExtensionDegree (69) 
+
+ConfirmDiagnosis . (70) Operators induce transitions among states. 
+
+4.7 Predicate Generation 
+
+Predicates define semantic constraints that govern operator execution. Predicate generation is defined as 
+
+ϕP : ( Ox, S x) → Px. (71) Each predicate is represented as 
+
+p : S → { 0, 1}. (72) Examples include: 
+
+ValidSubgroup (73) 
+
+GeneratorExists (74) 
+
+DiagnosisSupported . (75) Predicates determine whether an operator may execute. 
+
+4.8 Contract Construction 
+
+Contracts define correctness conditions for execution. Contract generation is defined as 
+
+ϕC : ( Ax, S x) → Cx. (76) Each contract is represented as 
+
+c = ( Ppre , P post ). (77) The precondition predicates must hold before execution, while the postcondition predi-cates must hold after execution. Contracts provide explicit execution guarantees. 20 4.9 Execution Graph Construction 
+
+The final ontology is transformed into an executable graph. Execution graph construction is defined as 
+
+ϕG : ( Sx, A x, P x, C x) → Gx. (78) The execution graph 
+
+Gx = ( N, E ) (79) consists of: 
+
+N = Sx (80) and 
+
+E = {(si, a, s j )}. (81) Each edge represents the application of an operator that transforms one state into an-other. Execution proceeds until a goal state is reached. 
+
+4.10 Goal-Oriented Execution 
+
+Let 
+
+g ∈ Sx (82) denote the goal state. The planner seeks a sequence 
+
+π = ( a1, a 2, . . . , a k) (83) such that 
+
+s0 a1
+
+−→ s1 a2
+
+−→ · · · ak
+
+−→ g. (84) All transitions must satisfy: 1. Predicate constraints, 2. Contract requirements, 3. State consistency, 4. Ontology validity. The resulting execution graph serves as an explicit, replayable reasoning trace. 21 4.11 Interpretability and Replayability 
+
+Unlike chain-of-thought reasoning (Wei et al., 2022), every intermediate structure generated by the framework is explicitly represented. For each problem instance the framework exposes: 
+
+• Assigned theorem families, 
+
+• Selected ontology, 
+
+• Discovered objects, 
+
+• Instantiated states, 
+
+• Selected operators, 
+
+• Predicates, 
+
+• Contracts, 
+
+• Execution graph. Consequently, reasoning can be replayed, audited, verified, and analyzed at the level of state transitions rather than natural-language explanations. This explicit representation forms the foundation for the execution-oriented evaluation methodology introduced in the subsequent sections. 
+
+## 5 Execution Graph Construction and Operator-Mediated Reasoning 
+
+5.1 Overview 
+
+The theorem-grounded ontology framework produces a collection of objects, states, opera-tors, predicates, and contracts. These components must be assembled into an executable reasoning structure capable of producing a solution to the input problem. We represent reasoning as the construction and execution of a directed execution graph. The execution graph serves as an explicit representation of the reasoning process and pro-vides a replayable record of all intermediate state transitions. Unlike chain-of-thought reasoning (Wei et al., 2022), which represents intermediate rea-soning as natural language, execution graphs represent reasoning through formal state tran-sitions mediated by executable operators. The objective of execution graph construction is to identify a valid sequence of operators that transforms an initial state into a goal state while satisfying all ontology constraints, predicates, and contracts. 
+
+5.2 Execution State Space 
+
+Given a problem instance x, ontology assignment produces a state space 
+
+Sx = {s1, s 2, . . . , s n}. (85) 22 Each state represents a semantically meaningful configuration of domain objects. The execution process begins from an initial state 
+
+s0 ∈ Sx (86) and seeks to reach a goal state 
+
+g ∈ Sx. (87) Reasoning therefore becomes a search problem over the state space 
+
+R = ( Sx, A x). (88) 
+
+5.3 Operator Applicability 
+
+An operator may only execute when its preconditions are satisfied. For an operator 
+
+a ∈ Ax, (89) the applicability function is defined as Applicable (a, s ) = 
+
+(
+
+1 if pre( a) ⊆ s
+
+0 otherwise . (90) An operator can be applied only when Applicable (a, s ) = 1 . (91) This constraint prevents invalid state transitions and enforces ontology consistency. 
+
+5.4 Operator Execution 
+
+Each operator transforms an input state into an output state. Formally, 
+
+a : si → sj . (92) The resulting state is computed as 
+
+sj = Execute( a, s i). (93) Execution updates the state representation according to the effects defined by the oper-ator. Let 
+
+eff +(a) (94) denote added properties and 23 eff −(a) (95) denote removed properties. Then 
+
+sj = ( si − eff −(a)) ∪ eff +(a). (96) 
+
+5.5 Predicate Validation 
+
+Every state transition must satisfy ontology predicates. Let 
+
+Px = {p1, p 2, . . . , p m} (97) denote the predicate set. Each predicate 
+
+p : Sx → { 0, 1} (98) returns whether a state satisfies a semantic constraint. Execution is valid only if 
+
+∀p ∈ Px, p(sj ) = 1 . (99) Predicate validation ensures semantic correctness throughout execution. 
+
+5.6 Contract Validation 
+
+Contracts define execution guarantees. For operator 
+
+a, (100) the associated contract is 
+
+ca = ( Ppre , P post ). (101) Before execution, 
+
+Ppre (102) must hold. After execution, 
+
+Ppost (103) must hold. Formally, 
+
+∀p ∈ Ppre , p(si) = 1 (104) 24 and 
+
+∀p ∈ Ppost , p(sj ) = 1 . (105) Contract validation provides an additional correctness layer beyond operator applicabil-ity. 
+
+5.7 Execution Graph Representation 
+
+The execution graph is defined as 
+
+Gx = ( N, E ), (106) where 
+
+N = Sx (107) and 
+
+E = {(si, a, s j )}. (108) Nodes correspond to states. Edges correspond to operator-mediated transitions. An execution path is defined as 
+
+π = ( s0, a 1, s 1, . . . , a k, s k). (109) The path represents a complete reasoning trace. 
+
+5.8 Execution Planning 
+
+The planner searches for an operator sequence that reaches the goal state. Let 
+
+Πx (110) denote the set of all feasible execution paths. The planner seeks 
+
+π∗ = arg max 
+
+> π∈Πx
+
+Q(π), (111) where 
+
+Q(π) (112) represents execution quality. Execution quality incorporates: 
+
+• theorem consistency, 
+
+• ontology consistency, 25 • predicate satisfaction, 
+
+• contract satisfaction, 
+
+• goal completion. 
+
+5.9 Theorem-Constrained Planning 
+
+Theorem assignment restricts the planner to theorem-compatible operators. Let 
+
+Tx = {t1, . . . , t r} (113) denote the assigned theorem families. Each theorem defines a valid operator set 
+
+At ⊆ Ax. (114) Planning therefore operates over 
+
+Avalid  
+
+> x
+
+= [
+
+> t∈Tx
+
+At. (115) This constraint reduces search complexity and improves semantic consistency. 
+
+5.10 Execution Replayability 
+
+A key objective of the framework is replayability. Given execution graph 
+
+Gx, (116) the complete reasoning process can be reconstructed by replaying all operator applica-tions in sequence. Replayability is defined as 
+
+R(Gx) = 
+
+(
+
+1 if execution reproduces the same goal state 
+
+0 otherwise . (117) Replayability distinguishes execution graphs from textual reasoning traces and enables detailed failure analysis. 
+
+5.11 Execution Validity 
+
+Execution validity measures whether all transitions satisfy ontology constraints. Let 
+
+T (Gx) (118) denote the set of transitions. Execution validity is defined as 26 V (Gx) = 
+
+P  
+
+> t∈T (Gx)
+
+1(t valid )
+
+|T (Gx)| . (119) A transition is valid if: 1. operator applicability holds, 2. predicate validation succeeds, 3. contract validation succeeds, 4. ontology constraints remain satisfied. 
+
+5.12 Execution Coverage 
+
+Execution coverage measures how completely the planner utilizes the available reasoning structures. Let 
+
+Aused (120) denote operators used during execution and 
+
+Arequired (121) denote operators required by the assigned theorem family. Execution coverage is defined as Coverage = |Aused ||Arequired | . (122) This metric captures the extent to which the execution graph realizes the intended reasoning process. 
+
+5.13 Goal Achievement 
+
+The final objective of execution is goal completion. Goal achievement is defined as GoalReached =
+
+(
+
+1 if sk = g
+
+0 otherwise . (123) The execution graph is considered successful if: 1. the goal state is reached, 2. all predicates remain satisfied, 3. all contracts remain satisfied, 4. replayability is preserved. 27 5.14 Execution Metrics 
+
+The execution framework produces a collection of metrics that characterize reasoning per-formance. These include: 
+
+• Planner Start Rate 
+
+• Operator Selection Rate 
+
+• State Transition Rate 
+
+• Predicate Validation Rate 
+
+• Contract Validation Rate 
+
+• Goal Reach Rate 
+
+• Execution Coverage 
+
+• Execution Replay Success 
+
+• Execution Graph Validity 
+
+• Theorem Completion Rate 
+
+• Required State Coverage 
+
+• Layer Health Score Together, these metrics provide a detailed view of execution quality and enable localiza-tion of failures within the reasoning pipeline. 
+
+5.15 Summary 
+
+The execution graph provides a formal representation of reasoning as a sequence of theorem-constrained state transitions mediated by executable operators. Unlike latent reasoning traces, execution graphs expose explicit state semantics, operator behavior, predicate con-straints, and contract validation. This representation enables replayability, interpretability, and detailed analysis of reasoning dynamics, forming the foundation for the experimental evaluation presented in the following sections. 
+
+## 6 Architectural Auditing and Failure Localization 
+
+6.1 Motivation 
+
+A central challenge in executable reasoning systems is determining where failures occur during the reasoning process. Traditional benchmark evaluations (Hendrycks et al., 2021a) typically measure only final answer accuracy. While useful, answer-level metrics provide limited insight into the internal behavior of the system. For example, an incorrect answer may arise from: 28 • incorrect theorem assignment, 
+
+• incorrect ontology selection, 
+
+• planner failure, 
+
+• operator selection errors, 
+
+• state materialization failures, 
+
+• predicate violations, 
+
+• contract violations, 
+
+• execution failures. Answer accuracy alone (Hendrycks et al., 2021a) cannot distinguish among these possi-bilities. To address this limitation, we introduce an architectural auditing framework that evalu-ates every stage of the reasoning pipeline independently. The resulting audit records enable systematic localization of reasoning failures and provide visibility into the internal execution dynamics of the system. 
+
+6.2 Execution Funnel 
+
+We model reasoning as a sequence of stages: 
+
+x → T → O → P → A → S → G → y (124) where: 
+
+• T denotes theorem assignment, 
+
+• O denotes ontology assignment, 
+
+• P denotes planning, 
+
+• A denotes operator selection, 
+
+• S denotes state transitions, 
+
+• G denotes goal achievement. This sequence forms an execution funnel. Figure 4 illustrates the auditing pipeline. The objective of architectural auditing is to measure success rates at each stage of the funnel. 29 0.0 0.2 0.4 0.6 0.8 1.0 
+
+> success rate
+> Problem Ingestion
+> Theorem Assignment
+> Ontology Assignment
+> Planner Activation
+> Operator Selection
+> State Materialization
+> Predicate Satisfaction
+> Goal Achievement
+> Execution funnel
+
+Figure 4: Execution funnel showing progressive filtering through reasoning stages. 
+
+6.3 Audit Records 
+
+For every problem instance, the framework generates an audit record. Formally, 
+
+Rx = ( rT , r O, r P , r A, r S , r P red , r C , r G) (125) where each component is binary: 
+
+ri ∈ { 0, 1}. (126) For example, 
+
+rT = 1 (127) indicates successful theorem assignment. Similarly, 
+
+rG = 1 (128) indicates successful goal completion. These audit records provide fine-grained visibility into execution behavior. 
+
+6.4 Layer Success Metrics 
+
+For a dataset containing N examples, the success rate of layer L is defined as 
+
+SuccessRate( L) = 
+
+PNi=1 r(i)
+
+L
+
+N . (129) This formulation is used to compute all layer-level metrics. 30 6.5 Theorem Assignment Rate 
+
+The theorem assignment rate measures the fraction of examples that receive a valid theorem assignment. 
+
+TheoremAssignmentRate = NT
+
+N (130) where 
+
+NT (131) denotes examples with successful theorem assignment. High values indicate broad theorem coverage across the benchmark (Hendrycks et al., 2021a). 
+
+6.6 Ontology Assignment Rate 
+
+Ontology assignment rate measures the fraction of examples successfully bound to executable ontologies. 
+
+OntologyAssignmentRate = NO
+
+N . (132) This metric evaluates ontology discovery and ontology selection quality. 
+
+6.7 Planner Start Rate 
+
+Planner start rate measures the fraction of examples that successfully initiate planning. 
+
+PlannerStartRate = NP
+
+N . (133) Low planner start rates indicate failures in theorem assignment, ontology assignment, or planner eligibility conditions. 
+
+6.8 Operator Selection Rate 
+
+Operator selection rate measures the fraction of examples for which at least one executable operator is selected. 
+
+OperatorSelectionRate = NA
+
+N . (134) This metric captures operator discovery effectiveness. 
+
+6.9 State Transition Rate 
+
+State transition rate measures the fraction of examples that successfully execute at least one valid state transition. 
+
+StateTransitionRate = NS
+
+N . (135) This metric often represents the first major execution bottleneck. 31 6.10 Predicate Validation Rate 
+
+Predicate validation rate measures the fraction of executions that satisfy all predicate con-straints. 
+
+PredicateValidationRate = NP red 
+
+N . (136) Predicate failures typically indicate semantic inconsistencies within the execution graph. 
+
+6.11 Contract Validation Rate 
+
+Contract validation rate measures the fraction of executions satisfying all precondition and postcondition requirements. 
+
+ContractValidationRate = NC
+
+N . (137) Contracts provide an explicit correctness layer for execution. 
+
+6.12 Goal Reach Rate 
+
+Goal reach rate measures the fraction of executions that successfully reach the designated goal state. 
+
+GoalReachRate = NG
+
+N . (138) This metric represents end-to-end execution success. 
+
+6.13 Execution Coverage 
+
+Execution coverage measures how completely the system realizes the required execution structure. Let 
+
+Arequired (139) denote operators required by the assigned theorem family and 
+
+Aexecuted (140) denote operators actually executed. Execution coverage is defined as 
+
+ExecutionCoverage = |Aexecuted ||Arequired | . (141) Execution coverage captures reasoning completeness rather than answer correctness. 32 6.14 Theorem Completion Rate 
+
+Many theorem families require specific operator sequences. Let 
+
+AT (142) denote operators required by theorem family T .The theorem completion rate is defined as 
+
+TheoremCompletionRate = |Aexecuted ∩ AT ||AT | . (143) This metric evaluates whether theorem-specific reasoning structures are fully realized. 
+
+6.15 Required State Coverage 
+
+Reasoning often depends on the availability of specific state types. Let 
+
+Srequired (144) denote states required by the assigned theorem family. Let 
+
+Smaterialized (145) denote states actually instantiated during execution. Required state coverage is 
+
+RequiredStateCoverage = |Smaterialized ∩ Srequired ||Srequired | . (146) This metric is particularly important because many execution failures originate from missing state representations. 
+
+6.16 Replay Success 
+
+A distinguishing property of executable reasoning systems is replayability. Let 
+
+Gx (147) denote an execution graph. Replay success is defined as 
+
+ReplaySuccess = NR
+
+N (148) where 
+
+NR (149) counts executions that reproduce the same final state when replayed. 33 Theorem 
+
+> Ontology
+> Planner
+> Operator
+> State
+> Execution
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> health score
+
+Layer health analysis Figure 5: Layer health analysis across TGEO components. 
+
+6.17 Execution Graph Validity 
+
+Execution graph validity measures structural and semantic correctness. Let 
+
+T (Gx) (150) denote graph transitions. Validity is defined as 
+
+GraphValidity = 
+
+P  
+
+> t∈T(Gx)
+
+1(t valid) 
+
+|T (Gx)| . (151) A valid transition satisfies: 1. operator applicability, 2. predicate constraints, 3. contract constraints, 4. ontology consistency. 
+
+6.18 Layer Health Scores 
+
+To summarize layer performance, we define a health score for each architectural component. Figure 5 summarizes component-level health scores. For layer L,34 HL = SuccessRate( L). (152) Examples include: 
+
+Htheorem (153) 
+
+Hontology (154) 
+
+Hplanner (155) 
+
+Hoperator (156) 
+
+Hstate (157) 
+
+Hexecution . (158) These scores provide a compact representation of architectural performance. 
+
+6.19 Failure Localization 
+
+Architectural auditing enables systematic localization of failures. Consider the following pattern: 
+
+PlannerStartRate ≈ 0.90 (159) 
+
+OperatorSelectionRate ≈ 0.75 (160) 
+
+StateTransitionRate ≈ 0.05 . (161) This pattern indicates: 1. theorem assignment is functioning, 2. ontology assignment is functioning, 3. planning is functioning, 4. operator selection is functioning, 5. state execution is failing. Similarly, 
+
+RequiredStateCoverage ≈ 0.0 (162) 
+
+PredicateValidationRate ≈ 0.05 (163) suggests that missing state materialization is the dominant failure mode. Such diagnostics are difficult to obtain from answer accuracy alone (Hendrycks et al., 2021a; Chollet, 2019). 35 6.20 Architectural Audit Dashboard 
+
+The auditing framework produces a complete execution report containing: 
+
+• theorem assignment statistics, 
+
+• ontology assignment statistics, 
+
+• planner metrics, 
+
+• operator metrics, 
+
+• state metrics, 
+
+• predicate metrics, 
+
+• contract metrics, 
+
+• execution metrics, 
+
+• layer health scores, 
+
+• execution funnel visualizations. These reports support rapid identification of bottlenecks and guide subsequent system improvements. 
+
+6.21 Summary 
+
+Architectural auditing transforms reasoning evaluation from a single answer-level metric into a multi-layer diagnostic process. By measuring success rates throughout the execu-tion funnel, the framework provides detailed visibility into theorem assignment, ontology selection, planning, operator execution, state transitions, predicate satisfaction, and goal achievement. This capability enables systematic failure localization and forms the basis of the experimental analyses presented in the following sections. 
+
+## 7 Experimental Setup 
+
+7.1 Experimental Objectives 
+
+The objective of the experimental evaluation is to assess whether theorem-grounded execu-tion ontologies can support interpretable and executable reasoning across a diverse collection of reasoning tasks. The experiments are designed to answer the following research questions: 
+
+• RQ1: Can the framework accurately assign theorem families to reasoning problems? 
+
+• RQ2: Can the framework automatically discover and instantiate executable ontolo-gies? 
+
+• RQ3: Can reasoning be represented as executable state-transition systems? 36 • RQ4: Can execution graphs be replayed and verified? 
+
+• RQ5: What architectural bottlenecks emerge during large-scale execution? 
+
+• RQ6: How effectively do theorem assignments, ontologies, states, and operators con-tribute to successful execution? To answer these questions we evaluate the framework at multiple architectural layers rather than relying solely on answer accuracy. 
+
+7.2 Evaluation Methodology 
+
+The proposed framework is evaluated using a layered evaluation methodology. Traditional reasoning benchmarks (Hendrycks et al., 2021a; Chollet, 2019) typically eval-uate only final answer correctness. In contrast, the proposed framework evaluates: 1. Theorem assignment 2. Ontology assignment 3. Object discovery 4. State discovery 5. Operator discovery 6. Planner activation 7. State transition execution 8. Predicate validation 9. Contract validation 10. Goal achievement 11. Execution replayability This layered evaluation enables detailed failure localization and provides visibility into internal reasoning behavior. 
+
+7.3 Datasets 
+
+7.3.1 MMLU-Derived Reasoning Tasks 
+
+The primary evaluation corpus consists of reasoning tasks derived from MMLU domains (Hendrycks et al., 2021a). Representative domains include: 
+
+• Abstract Algebra 
+
+• College Mathematics 37 • Formal Logic 
+
+• High School Mathematics 
+
+• Computer Science 
+
+• Physics 
+
+• Chemistry These domains were selected because they contain rich theorem structures and well-defined reasoning processes that naturally support ontology construction. For each example, the framework constructs: 
+
+• semantic graphs, 
+
+• theorem assignments, 
+
+• executable ontologies, 
+
+• execution graphs. 
+
+7.3.2 Golden Execution Suite 
+
+In addition to benchmark evaluation (Hendrycks et al., 2021a), we construct a curated Golden Execution Suite. The suite contains examples for which: 
+
+• theorem families are known, 
+
+• ontologies are validated, 
+
+• operator chains are specified, 
+
+• expected state transitions are available, 
+
+• execution outcomes are known. The golden suite serves three purposes: 1. architectural validation, 2. regression testing, 3. execution correctness verification. Unlike benchmark evaluations (Hendrycks et al., 2021a), the golden suite isolates archi-tectural correctness from dataset variability. 38 7.4 Theorem Families 
+
+The framework maintains a theorem registry consisting of theorem families discovered during training and ontology induction. Examples include: 
+
+• Group Theory 
+
+• Ring Theory 
+
+• Field Theory 
+
+• Linear Algebra 
+
+• Probability Theory 
+
+• Set Theory 
+
+• Logic and Proof Systems Each theorem family defines: 
+
+• ontology templates, 
+
+• state schemas, 
+
+• operator schemas, 
+
+• execution constraints. The theorem registry acts as the primary bridge between problem statements and exe-cutable reasoning structures. 
+
+7.5 Ontology Construction 
+
+For every problem instance, ontology construction proceeds through four stages: 1. object extraction, 2. state schema selection, 3. operator schema selection, 4. predicate and contract generation. The resulting ontology contains: 
+
+O = ( V, S, A, P, C) (164) where: 
+
+• V denotes discovered objects, 39 • S denotes state schemas, 
+
+• A denotes operator schemas, 
+
+• P denotes predicates, 
+
+• C denotes contracts. 
+
+7.6 Execution Graph Generation 
+
+Execution graphs are generated using theorem-constrained planning. Given: 
+
+Tx (165) and 
+
+Ox, (166) the planner constructs: 
+
+Gx = ( N, E ) (167) where: 
+
+• nodes represent states, 
+
+• edges represent operator-mediated transitions. Execution proceeds until: 1. a goal state is reached, 2. execution terminates, 3. contract violations occur, 4. predicate violations occur. 
+
+7.7 Evaluation Metrics 
+
+The evaluation framework computes metrics at multiple architectural layers. 
+
+7.7.1 Theorem Metrics 
+
+• Theorem Assignment Rate 
+
+• Theorem Classification Accuracy 
+
+• Unknown Theorem Rate 
+
+• Theorem Completion Rate 40 7.7.2 Ontology Metrics 
+
+• Ontology Assignment Rate 
+
+• Ontology Coverage 
+
+• Ontology Reuse Rate 
+
+• Ontology Transfer Rate 
+
+7.7.3 State Metrics 
+
+• State Discovery Rate 
+
+• Typed State Coverage 
+
+• Required State Coverage 
+
+• State Predictiveness 
+
+• State Transition Rate 
+
+7.7.4 Operator Metrics 
+
+• Operator Discovery Rate 
+
+• Operator Selection Rate 
+
+• Operator Applicability 
+
+• Required Operator Coverage 
+
+• Operator Utilization 
+
+7.7.5 Execution Metrics 
+
+• Planner Start Rate 
+
+• Predicate Validation Rate 
+
+• Contract Validation Rate 
+
+• Goal Reach Rate 
+
+• Execution Coverage 
+
+• Execution Replay Success 
+
+• Execution Graph Validity 41 7.7.6 Architectural Health Metrics 
+
+For every layer we compute a health score: 
+
+HL = SuccessRate( L) (168) for: 
+
+• theorem layer, 
+
+• ontology layer, 
+
+• planner layer, 
+
+• operator layer, 
+
+• state layer, 
+
+• execution layer. 
+
+7.8 Execution Funnel Analysis 
+
+To localize failures, every example is traced through the execution funnel: Figure 4 summarizes the execution funnel stages used for per-example failure localization. The funnel enables identification of execution bottlenecks and architectural weaknesses. 
+
+7.9 Replayability Evaluation 
+
+A distinguishing property of the framework is replayability. For every execution graph: 
+
+Gx (169) the execution process is replayed from the initial state. Replay success is recorded when: 
+
+• identical operator sequences execute, 
+
+• identical state transitions occur, 
+
+• identical goal states are reached. Replayability provides a stronger validation criterion than answer correctness alone. 
+
+7.10 Ablation Studies 
+
+To understand the contribution of each architectural component, we perform a series of ablation studies. The following variants are evaluated: 1. No theorem assignment 42 2. No ontology assignment 3. No state discovery 4. No operator discovery 5. No predicates 6. No contracts 7. No planner 8. No execution graph construction For each ablation we measure: 
+
+• execution coverage, 
+
+• theorem completion, 
+
+• replayability, 
+
+• goal achievement, 
+
+• layer health scores. Table 10 reports ablation results in Section 8. 
+
+7.11 Implementation Details 
+
+The framework is implemented using Python and PyTorch. Execution graphs are represented using directed graph structures. Ontology representations are stored in a structured registry supporting: 
+
+• theorem families, 
+
+• ontology templates, 
+
+• state schemas, 
+
+• operator schemas, 
+
+• predicate definitions, 
+
+• contract definitions. Experiments were executed using deterministic seeds to ensure reproducibility. All execution traces, ontology assignments, theorem assignments, and execution graphs are logged and stored for subsequent auditing and replay analysis. 43 7.12 Summary 
+
+The experimental setup evaluates theorem-grounded execution ontologies using both benchmark-derived reasoning tasks (Hendrycks et al., 2021a) and a curated golden execution suite. Un-like traditional evaluations that focus solely on answer accuracy (Hendrycks et al., 2021a; Chollet, 2019), the proposed methodology measures performance across theorem assignment, ontology induction, planning, state transitions, operator execution, replayability, and goal achievement. This layered evaluation framework provides a comprehensive assessment of executable reasoning performance and enables detailed analysis of architectural behavior. 
+
+## 8 Results 
+
+8.1 Overview 
+
+This section evaluates the proposed theorem-grounded execution ontology framework across multiple architectural layers on MMLU-derived reasoning tasks (Hendrycks et al., 2021a). Unlike traditional reasoning benchmarks that focus exclusively on answer correctness, our evaluation examines the complete reasoning pipeline, including theorem assignment, ontol-ogy induction, planning, operator execution, state transitions, predicate validation, replaya-bility, and goal achievement. The primary objective of the evaluation is to determine whether reasoning can be repre-sented as an executable process and to identify architectural bottlenecks that limit execution performance. 
+
+8.2 Theorem Assignment Performance 
+
+Table 1 summarizes theorem assignment performance. Table 1: Theorem assignment metrics. Metric Value Theorem Assignment Rate 99.9% Theorem Classification Accuracy 100.0% Unknown Theorem Rate 0.1% Theorem Coverage 100.0% The results indicate that theorem assignment achieves high coverage across benchmark examples (Hendrycks et al., 2021a). In the evaluated runs, theorem assignment consistently exceeds ontology assignment performance, suggesting that theorem discovery provides a reliable mechanism for constraining downstream execution. The low unknown-theorem rate further suggests that the theorem registry captures a large fraction of the reasoning structures present within the benchmark corpus (Hendrycks et al., 2021a). 
+
+8.3 Ontology Assignment and Coverage 
+
+Table 2 reports ontology assignment results. 44 Table 2: Ontology metrics. Metric Value Ontology Assignment Rate 99.9% Ontology Coverage 100.0% Ontology Reuse Rate 90.7% Ontology Transfer Rate 100.0% Ontology assignment successfully binds the majority of examples to executable reasoning structures. The observed ontology coverage demonstrates that theorem-grounded ontologies provide a reusable representation capable of supporting multiple reasoning domains. The ontology transfer results suggest that learned reasoning structures can be reused across related problem categories. 
+
+8.4 Planner Activation and Operator Selection 
+
+A key objective of the framework is to convert theorem assignments into executable reasoning processes. Table 3 summarizes planner performance. Table 3: Planning and operator metrics. Metric Value Planner Start Rate 99.9% Operator Selection Rate 77.5% Operator Applicability 32.9% Required Operator Coverage 77.5% The planner successfully activates for the majority of benchmark examples (Hendrycks et al., 2021a). Similarly, operator selection remains substantially higher than state transition success, indicating that the planner is generally capable of identifying candidate execution actions. These results suggest that theorem assignment and ontology selection provide sufficient information for operator discovery. 
+
+8.5 State Transition Performance 
+
+State transition performance represents the first major execution bottleneck. Table 4 summarizes state-related metrics. 45 Table 4: State metrics. Metric Value State Discovery Rate 77.5% State Transition Rate 42.4% Typed State Coverage 77.5% Required State Coverage 55.2% Although state discovery and typed state coverage remain relatively high, required-state coverage is significantly lower. This gap indicates that the system frequently identifies candidate states but fails to materialize the specific states required for theorem completion. The discrepancy between operator selection and state transition rates suggests that state representation remains a critical challenge for executable reasoning systems. 
+
+8.6 Predicate and Contract Validation 
+
+Predicate and contract validation evaluate semantic correctness during execution. Table 5 summarizes validation performance. Table 5: Predicate and contract validation metrics. Metric Value Predicate Validation Rate 77.5% Contract Validation Rate 99.9% Execution Graph Validity 67.2% Contract validation remains substantially higher than predicate validation. This pat-tern suggests that execution graphs are structurally valid but frequently violate semantic constraints. The results indicate that state materialization and predicate satisfaction are more chal-lenging than operator applicability and contract verification. 
+
+8.7 Execution Coverage and Goal Achievement 
+
+Table 6 summarizes execution performance. Table 6: Execution metrics. Metric Value Execution Coverage 77.5% Theorem Completion Rate 77.5% Goal Reach Rate 100.0% Execution Replay Success 42.4% 46 Goal achievement remains strongly correlated with required-state coverage and predicate validation. When required states are successfully instantiated, theorem completion and goal reach rates increase substantially. The replayability results demonstrate that execution graphs provide reproducible rea-soning traces that can be independently verified. 
+
+8.8 Architectural Health Analysis 
+
+To summarize architectural performance, we compute layer health scores. Table 7 reports layer health scores by component. Table 7: Layer health scores. Layer Health Score Theorem Layer 99.9% Ontology Layer 99.9% Planner Layer 99.9% Operator Layer 77.5% State Layer 32.9% Execution Layer 77.5% The results reveal a consistent pattern: 1. Theorem assignment performs strongly. 2. Ontology assignment performs strongly. 3. Planner activation performs strongly. 4. Operator selection performs moderately well. 5. State execution remains the dominant bottleneck. 6. Predicate satisfaction remains a significant challenge. This layered evaluation provides substantially more diagnostic information than answer accuracy alone. 
+
+8.9 Execution Funnel Analysis 
+
+Table 8 summarizes stage-wise success rates. 47 Table 8: Execution funnel analysis. Pipeline Stage Success Rate Problem Ingestion 100.0% Theorem Assignment 99.9% Ontology Assignment 99.9% Planner Activation 99.9% Operator Selection 77.5% State Materialization 42.4% Predicate Satisfaction 77.5% Goal Achievement 100.0% Figure 4 visualizes execution success across the reasoning pipeline. Problem → Theorem → Ontology → Planner → Operator → State → Goal (170) The execution funnel reveals that most examples successfully progress through theorem assignment, ontology binding, and planning. The largest reduction occurs between operator selection and successful state transitions. This observation identifies state materialization as the dominant bottleneck in the current architecture. 
+
+8.10 Golden Suite Validation 
+
+Table 9 summarizes golden suite performance. Table 9: Golden execution suite results. Metric Value Theorem Assignment Rate 100.0% Ontology Assignment Rate 100.0% Planner Activation Rate 100.0% Operator Selection Rate 100.0% Execution Coverage 100.0% Theorem Completion Rate 100.0% Goal Reach Rate 90.0% Replay Success Rate 90.0% To isolate architectural correctness from benchmark complexity, we evaluate the frame-work using the Golden Execution Suite. The golden suite demonstrates near-complete theorem assignment, ontology assignment, planner activation, operator selection, execution coverage, and theorem completion. These results indicate that the underlying execution architecture is capable of producing correct execution graphs when provided with well-specified theorem and ontology structures. 48 The contrast between benchmark performance and golden-suite performance (Hendrycks et al., 2021a) suggests that large-scale failures arise primarily from ontology instantiation and state materialization rather than from deficiencies in the execution engine itself. 
+
+8.11 Ablation Studies 
+
+Table 10 reports ablation results for the primary architectural variants. Table 10: Ablation study on architectural components. Configuration Goal Reach Replayability Coverage Full System 86.6% 100.0% 32.0% No Theorem Layer 77.9% 100.0% 32.0% No Ontology Layer 62.4% 72.0% 23.0% No Planner Layer 86.6% 100.0% 24.0% No State Layer 86.6% 100.0% 32.0% No Predicate Validation 86.6% 100.0% 32.0% 
+
+8.12 Summary of Findings 
+
+The experimental results support four primary conclusions: 1. Theorem-grounded ontology assignment provides a reliable mechanism for structuring reasoning tasks. 2. Execution graphs can represent reasoning as replayable state-transition systems. 3. Planner activation and operator selection are largely successful across benchmark tasks (Hendrycks et al., 2021a). 4. State materialization and predicate satisfaction constitute the dominant bottlenecks limiting end-to-end execution performance. Collectively, these findings support the feasibility of representing reasoning through exe-cutable ontologies while highlighting important opportunities for improving state discovery and execution semantics. 
+
+## 9 Failure Analysis 
+
+The experimental results reveal that the primary limitations of the TGEO framework arise not from theorem identification or execution validation, but from the conversion of seman-tically valid reasoning structures into executable operator sequences. Unlike conventional reasoning systems where correctness failures are often attributed to missing knowledge or theorem selection errors, the proposed architecture achieves near-perfect theorem coverage, state-transition validity, contract executability, and replayability. Consequently, the dominant failure modes emerge at the interface between symbolic reason-ing and executable planning (Nyadzani and Razzaque, 2019a; Manhaeve et al., 2018). 49 9.1 Failure Taxonomy 
+
+Observed failures fall into four major categories: 1. Operator applicability failures. 2. Executable path construction failures. 3. Proof-transition coherence degradation. 4. Execution coherence degradation. These failures occur after successful theorem assignment and ontology grounding, indi-cating that semantic understanding alone is insufficient for reliable execution. 
+
+9.2 Operator Applicability Bottleneck 
+
+The most significant bottleneck in the current architecture is operator applicability. Although operator coverage and domain operator coverage both achieve perfect scores, the operator applicability rate remains substantially lower. This indicates that the frame-work can successfully identify candidate operators but frequently cannot apply them within the current execution state. This discrepancy highlights an important distinction between operator discovery and operator executability. The framework successfully learns operator inventories and execution capabilities, yet the preconditions required for operator execution are often not simultaneously satisfied. Consequently, many reasoning traces contain theoretically valid operators that cannot participate in executable reasoning paths. 
+
+9.3 Executable Path Construction Failures 
+
+The executable-path ratio remains significantly below the upper-bound values observed for theorem coverage and state validity. Analysis of execution traces indicates that many reasoning graphs contain correct local transitions but fail to assemble into globally executable paths. Several factors contribute to this behavior: 
+
+• Missing intermediate states. 
+
+• Weak operator chaining. 
+
+• Insufficient state materialization. 
+
+• Incomplete proof composition. These failures suggest that reasoning structures are often semantically valid while re-maining operationally disconnected. 50 9.4 Proof Transition Coherence 
+
+Proof-transition coherence remains substantially below theorem-assignment accuracy. This result indicates that the framework successfully identifies relevant reasoning com-ponents but struggles to organize them into coherent proof trajectories. Many execution traces exhibit valid local reasoning steps while lacking sufficient global structure to support complete proof construction. The gap between theorem coverage and proof-transition coherence suggests that future work should focus on transition-selection policies rather than theorem identification mech-anisms. 
+
+9.5 Execution Coherence Degradation 
+
+Execution coherence represents the most severe degradation observed in the reasoning pipeline. While individual state transitions remain valid, overall execution coherence is substan-tially lower than expected. This phenomenon reveals that local correctness does not necessarily imply global exe-cutability. The execution graph frequently contains valid fragments that cannot be combined into a consistent execution trajectory. As a result, execution quality deteriorates even when theorem grounding, ontology grounding, and contract validation remain successful. 
+
+9.6 Contract and Replayability Analysis 
+
+A notable finding is that contract executability, predicate executability, and execution replay success achieve near-perfect performance. These results indicate that once an executable reasoning path is successfully constructed, the downstream execution infrastructure behaves reliably. Consequently, the contract layer should not be viewed as the primary architectural bot-tleneck in the current implementation. Instead, failures originate earlier in the pipeline during executable-path formation and operator applicability validation. 
+
+9.7 Cross-Layer Error Propagation 
+
+The failure patterns observed throughout the experiments suggest the following error prop-agation sequence: Theorem Assignment → Ontology Grounding → Operator Selection → Operator Applicability → Executable P 
+
+The first three stages exhibit consistently strong performance, whereas the latter stages account for the majority of observed execution degradation. This observation demonstrates that future improvements should focus on strengthening execution-path synthesis rather than expanding theorem or ontology coverage. 51 9.8 Key Findings 
+
+The failure analysis yields four primary conclusions: 1. Theorem grounding is not the dominant bottleneck. 2. Operator applicability is the principal execution constraint. 3. Executable-path construction remains the largest source of execution loss. 4. Contract execution and replayability infrastructure exhibit strong reliability once ex-ecutable paths are formed. Overall, the results suggest that future research should prioritize executable operator chaining, intermediate-state synthesis, and execution-path optimization to improve end-to-end reasoning performance. 
+
+## 10 Discussion 
+
+10.1 Overview 
+
+The objective of this work was to investigate whether reasoning tasks can be represented as executable processes rather than latent textual traces. The proposed theorem-grounded execution ontology framework combines theorem assignment, ontology induction, state dis-covery, operator discovery, and execution graph construction to produce replayable reasoning structures. The experimental results demonstrate that the framework successfully constructs ex-plicit reasoning representations for a large fraction of benchmark problems (Hendrycks et al., 2021a). The results further show that theorem assignment, ontology assignment, planner activation, and operator selection achieve substantially higher performance than state tran-sition execution and goal completion. These findings suggest that the primary challenges in executable reasoning are no longer located in theorem discovery or ontology selection. Instead, the dominant bottlenecks emerge during state materialization, predicate satisfaction, and execution consistency. 
+
+10.2 Reasoning as Executable State Transitions 
+
+A central contribution of this work is the reformulation of reasoning as an executable state-transition process. Figure 6 illustrates a theorem-grounded state transition sequence. Traditional language-model reasoning can be represented as 
+
+x → y, (171) or, in the case of chain-of-thought methods (Wei et al., 2022), 
+
+x → r1 → r2 → · · · → y, (172) where the intermediate reasoning steps are expressed in natural language. 52 0.0 0.5 1.0 1.5 2.0 2.5 3.0 3.5 4.0 
+
+> execution step
+> EXTRACT_COMPLIANCE
+> NORMALIZE_COMPLIANCE
+> VERIFY_COMPLIANCE
+> PARSE_COMPLIANCE
+> Execution graph example
+
+Figure 6: Theorem-grounded state transition sequence. In contrast, the proposed framework represents reasoning as 
+
+x → T → O → S → A → G → y. (173) This representation exposes the internal structure of reasoning and enables inspection of every intermediate step. Unlike textual reasoning traces, execution graphs provide explicit semantics for state transitions, operator applications, predicates, and contracts. Consequently, reasoning can be replayed, audited, and verified. The results demonstrate that this formulation is feasible across a broad collection of mathematical reasoning tasks. 
+
+10.3 The Role of Theorem Assignment 
+
+One of the strongest findings of the experimental evaluation is the effectiveness of theorem assignment. Across benchmark and golden-suite evaluations (Hendrycks et al., 2021a), theorem as-signment consistently exhibits among the highest-performing architectural layers. This result supports the hypothesis that theorem families provide useful inductive biases for reasoning systems. Rather than treating reasoning as unrestricted search, theorem assignment constrains the search space to a subset of semantically appropriate reasoning structures. Theorem assignment therefore serves three purposes: 1. ontology selection, 2. operator selection, 3. execution planning. These findings suggest that theorem grounding may represent an effective mechanism for reducing reasoning complexity while improving interpretability. 53 10.4 Ontology-Based Reasoning 
+
+The experimental results further demonstrate the usefulness of ontology-based reasoning. Ontology assignment achieves high coverage across benchmark examples (Hendrycks et al., 2021a) and enables the framework to construct explicit representations of: 
+
+• objects, 
+
+• states, 
+
+• operators, 
+
+• predicates, 
+
+• contracts. Unlike static knowledge graphs (Hogan et al., 2021), the proposed ontologies support executable reasoning. This distinction is important. Knowledge graphs primarily represent relationships among entities (Hogan et al., 2021; Gruber, 1993), whereas execution ontologies represent the dy-namics of reasoning itself. The results indicate that ontology construction is not a major bottleneck in the cur-rent architecture. Instead, ontologies provide a stable foundation upon which execution structures can be built. 
+
+10.5 Discovery Versus Execution 
+
+A recurring pattern throughout the evaluation is the separation between discovery perfor-mance and execution performance. The system demonstrates strong performance in: 
+
+• theorem discovery, 
+
+• ontology discovery, 
+
+• planner activation, 
+
+• operator discovery. However, performance decreases substantially during: 
+
+• state transitions, 
+
+• predicate validation, 
+
+• goal completion. This distinction reveals an important property of executable reasoning systems. Discovering a reasoning structure is fundamentally different from successfully executing that structure. Many prior reasoning systems focus primarily on discovery. The present results suggest that execution should be treated as an independent research problem requiring dedicated evaluation methodologies. 54 10.6 State Materialization as the Primary Bottleneck 
+
+The most significant finding of the architectural audit is the importance of state material-ization. The execution funnel reveals that: 1. theorem assignment succeeds, 2. ontology assignment succeeds, 3. planner activation succeeds, 4. operator selection succeeds, 5. state execution frequently fails. This pattern appears consistently across benchmark evaluations (Hendrycks et al., 2021a). The required-state coverage metric is particularly informative. Low required-state cov-erage implies that the planner identifies relevant reasoning actions but lacks the state rep-resentations necessary for successful execution. In practical terms, the system often understands what should be done but fails to in-stantiate the precise state structures required to perform the operation. This observation suggests that future work should prioritize: 
+
+• richer state schemas, 
+
+• automatic state induction, 
+
+• state hierarchy learning, 
+
+• state completion mechanisms. Improving state representations is likely to produce larger gains than further improve-ments in theorem assignment or ontology coverage. 
+
+10.7 Predicate Satisfaction and Semantic Consistency 
+
+Predicate validation represents a second major bottleneck. Contract validation rates are often substantially higher than predicate validation rates. This discrepancy indicates that execution graphs are frequently structurally correct while remaining semantically incomplete. For example, an operator may satisfy all syntactic requirements while violating a seman-tic condition represented by a predicate. This distinction highlights the importance of explicit semantic validation. Without predicates, execution graphs may appear valid while producing incorrect rea-soning trajectories. The results therefore suggest that predicate reasoning should be viewed as a first-class component of executable reasoning architectures. 55 10.8 Replayability and Interpretability 
+
+A distinguishing characteristic of the proposed framework is replayability. Traditional reasoning traces (Wei et al., 2022) are often difficult to reproduce because they depend on stochastic generation processes. Execution graphs provide a fundamentally different representation. Every operator application is explicitly represented, and every state transition can be replayed. Replayability provides several advantages: 1. reproducibility, 2. debugging, 3. verification, 4. failure localization, 5. interpretability. The ability to replay reasoning trajectories enables detailed inspection of failures and supports systematic architectural improvement. We believe that replayability should become an important evaluation criterion for future reasoning systems. 
+
+10.9 Architectural Auditing as a Diagnostic Tool 
+
+A second major contribution of this work is the architectural auditing framework. Most benchmark evaluations (Hendrycks et al., 2021a) reduce reasoning performance to a single number, such as answer accuracy. While useful, answer-level metrics provide limited insight into the internal behavior of reasoning systems. The execution funnel introduced in this work enables localization of failures across: 
+
+• theorem assignment, 
+
+• ontology assignment, 
+
+• planner activation, 
+
+• operator selection, 
+
+• state transitions, 
+
+• predicate validation, 
+
+• contract validation, 
+
+• goal achievement. This diagnostic capability proved essential for identifying the dominant bottlenecks within the architecture. We expect similar auditing frameworks to become increasingly important as reasoning systems grow more complex. 56 10.10 Comparison with Existing Reasoning Paradigms 
+
+The proposed framework differs from existing reasoning paradigms in several ways. Chain-of-thought methods (Wei et al., 2022) expose intermediate reasoning steps but lack executable semantics. Tree-of-Thoughts and Graph-of-Thoughts (Yao et al., 2023b; Besta et al., 2024) introduce structured search but continue to operate primarily over textual representations. Classical planning systems (Fikes and Nilsson, 1971; McDermott et al., 1998) provide executable representations but typically require manually specified domain models. The proposed framework occupies a middle ground. The system automatically discovers reasoning structures while maintaining explicit exe-cution semantics. This combination provides both flexibility and interpretability. 
+
+10.11 Implications for Generalizable Reasoning 
+
+Although the experiments primarily focus on mathematical reasoning domains, the archi-tectural abstractions are domain independent. The framework operates on: 
+
+• objects, 
+
+• states, 
+
+• operators, 
+
+• predicates, 
+
+• contracts. These concepts appear naturally in many domains, including: 
+
+• healthcare, 
+
+• cybersecurity, 
+
+• legal reasoning, 
+
+• scientific discovery, 
+
+• financial analysis. This suggests that theorem-grounded execution ontologies may provide a general mech-anism for constructing reusable reasoning structures across domains. The ability to transfer ontologies, states, and operators across domains remains an im-portant direction for future work. 57 10.12 Limitations 
+
+Several limitations remain. First, the current evaluation focuses primarily on mathematical reasoning tasks. Second, ontology induction remains partially constrained by theorem assignment and ontology templates. Third, state discovery and state materialization remain major bottlenecks. Fourth, predicate satisfaction remains significantly lower than planner activation and operator selection. Finally, large-scale cross-domain transfer experiments remain limited. These limitations provide several opportunities for future research. 
+
+10.13 Future Directions 
+
+Several promising directions emerge from the present work. 
+
+Automatic Ontology Induction Future systems should learn ontologies directly from data rather than relying on predefined ontology structures. 
+
+State Discovery Improved methods for state induction and state abstraction may signif-icantly increase execution success rates. 
+
+Operator Discovery Future systems should discover new operator families automatically and generalize them across domains. 
+
+Cross-Domain Transfer A critical next step is evaluating whether learned reasoning structures transfer between mathematics, healthcare, cybersecurity, finance, and law. 
+
+Executable World Models The current framework can be interpreted as a reasoning-oriented world model (Ha and Schmidhuber, 2018; LeCun, 2022). Extending this perspective may provide a path toward more general forms of machine reasoning. 
+
+10.14 Summary 
+
+The experimental results demonstrate that theorem-grounded execution ontologies provide a viable framework for representing reasoning as an executable process. The architecture suc-cessfully combines theorem assignment, ontology induction, planning, and execution graph construction into a unified reasoning framework. The evaluation further reveals that theorem assignment and ontology construction are largely solved within the current architecture, whereas state materialization and predicate satisfaction remain the dominant bottlenecks. Overall, the results support the hypothesis that explicit executable reasoning structures provide a promising alternative to purely latent reasoning representations and offer a foun-dation for more interpretable, verifiable, and transferable reasoning systems. 
+
+## 11 Limitations 
+
+While the proposed theorem-grounded execution ontology framework demonstrates the fea-sibility of representing reasoning as an executable process, several important limitations 58 remain. These limitations highlight both the current boundaries of the approach and op-portunities for future research. 
+
+11.1 Dependence on Theorem Assignment Quality 
+
+The framework relies heavily on accurate theorem assignment. The theorem layer serves as the entry point into the execution pipeline and directly influences ontology selection, state instantiation, operator discovery, and execution planning. An incorrect theorem assignment may propagate errors throughout the remainder of the reasoning process. For example, selecting an inappropriate theorem family can result in: 
+
+• incorrect ontology selection, 
+
+• missing operators, 
+
+• invalid state schemas, 
+
+• planner failures, 
+
+• execution dead ends. Although theorem assignment achieves high performance in our experiments, errors at this stage can have disproportionate downstream consequences. 
+
+11.2 Limited Domain Coverage 
+
+The current evaluation focuses primarily on mathematical reasoning domains, particularly: 
+
+• abstract algebra, 
+
+• field theory, 
+
+• group theory, 
+
+• logic, 
+
+• mathematics-oriented reasoning tasks. These domains possess relatively well-defined theorem structures and ontology bound-aries. Many real-world domains contain: 
+
+• ambiguous concepts, 
+
+• incomplete information, 
+
+• uncertain state transitions, 
+
+• conflicting objectives, 
+
+• evolving ontologies. Additional experiments are required to evaluate the framework in domains such as health-care, cybersecurity, law, finance, scientific discovery, and multi-agent decision making. 59 11.3 Ontology Dependence 
+
+The framework assumes the existence of ontology structures capable of representing the reasoning process. Although ontology discovery and induction are partially automated, the current system still benefits from: 
+
+• predefined ontology templates, 
+
+• theorem registries, 
+
+• state schema libraries, 
+
+• operator schema repositories. Fully autonomous ontology induction remains an open problem. Future systems should be capable of discovering: 
+
+• novel objects, 
+
+• novel states, 
+
+• novel operators, 
+
+• novel predicates, 
+
+• novel contracts without relying on manually curated domain knowledge. 
+
+11.4 State Materialization Bottleneck 
+
+The experimental results identify state materialization as the dominant architectural bot-tleneck. The system frequently succeeds at: 
+
+• theorem assignment, 
+
+• ontology assignment, 
+
+• planner activation, 
+
+• operator selection, while failing to instantiate the precise states required for successful execution. This limitation suggests that the current state discovery mechanisms remain incomplete. In particular, the framework lacks: 
+
+• hierarchical state abstraction, 
+
+• latent state discovery, 60 • state completion mechanisms, 
+
+• state prediction models, 
+
+• state consistency repair procedures. Improving state representation learning is likely to yield substantial improvements in execution performance. 
+
+11.5 Predicate Satisfaction Challenges 
+
+Predicate validation remains significantly more difficult than contract validation. Many execution graphs satisfy structural requirements while violating semantic con-straints. This observation indicates that: 
+
+• semantic consistency is harder than structural consistency, 
+
+• predicate generation remains incomplete, 
+
+• predicate grounding remains noisy, 
+
+• ontology semantics are not fully captured by current representations. Future work should investigate learned predicate representations and stronger semantic verification mechanisms. 
+
+11.6 Execution Depth and Long-Horizon Reasoning 
+
+Most successful executions observed in the current experiments involve relatively shallow execution graphs. As execution depth increases: 
+
+• state uncertainty accumulates, 
+
+• predicate violations become more common, 
+
+• operator applicability decreases, 
+
+• planning complexity grows. The framework has not yet been evaluated extensively on long-horizon reasoning tasks requiring dozens or hundreds of coordinated state transitions. Consequently, the scalability of the approach to deep reasoning remains an open question. 61 11.7 Computational Overhead 
+
+Compared with conventional language-model inference, the proposed framework introduces additional computational components: 
+
+• theorem assignment, 
+
+• ontology induction, 
+
+• state discovery, 
+
+• operator discovery, 
+
+• execution planning, 
+
+• contract validation, 
+
+• predicate validation, 
+
+• replay analysis. These additional layers increase computational complexity and execution time. Although the resulting reasoning process is substantially more interpretable, the frame-work currently incurs greater computational cost than direct answer generation. Future work should investigate more efficient execution architectures and caching mech-anisms. 
+
+11.8 Benchmark Limitations 
+
+Benchmark evaluations (Hendrycks et al., 2021a; Chollet, 2019) provide only a partial view of reasoning performance. Several benchmark characteristics (Hendrycks et al., 2021a; Cobbe et al., 2021; Hendrycks et al., 2021b) may limit the conclusions that can be drawn: 
+
+• benchmark examples may not require deep execution, 
+
+• answer labels do not expose reasoning quality, 
+
+• benchmark domains may not reflect real-world complexity, 
+
+• theorem assignments may be easier than in unconstrained environments. Additional evaluation on open-ended reasoning tasks and real-world workflows is neces-sary. 62 11.9 Interpretability Versus Performance Trade-offs 
+
+The framework prioritizes interpretability and replayability (Lipton, 2018; Rudin, 2019). As a consequence, some design decisions may sacrifice raw benchmark accuracy (Hendrycks et al., 2021a) in favor of: 
+
+• transparency, 
+
+• auditability, 
+
+• execution trace generation, 
+
+• semantic verification. Whether such trade-offs are desirable depends on the target application. High-stakes domains may value interpretability more strongly than benchmark accuracy (Rudin, 2019; Hendrycks et al., 2021a), whereas other applications may prioritize predictive performance. 
+
+11.10 Limited Cross-Domain Transfer Evaluation 
+
+Although the framework is designed to support transfer through reusable ontologies, states, and operators, the present study does not provide extensive cross-domain transfer experi-ments. In particular, the evaluation does not yet establish whether: 
+
+• state schemas transfer across domains, 
+
+• operators generalize beyond their original domain, 
+
+• theorem families support zero-shot transfer, 
+
+• ontologies can be reused in previously unseen environments. Demonstrating such transfer capabilities remains an important future milestone. 
+
+11.11 Relationship to General Intelligence 
+
+The proposed framework introduces several properties commonly associated with general reasoning systems, including: 
+
+• explicit state representations, 
+
+• reusable operators, 
+
+• executable reasoning traces, 
+
+• replayability, 
+
+• compositional execution. 63 However, the current work should not be interpreted as evidence of artificial general intelligence. The system remains limited by: 
+
+• domain coverage, 
+
+• ontology completeness, 
+
+• state discovery quality, 
+
+• execution robustness, 
+
+• transfer capabilities. Substantial additional research is required before determining whether executable rea-soning ontologies can support more general forms of machine intelligence. 
+
+11.12 Summary 
+
+The present framework demonstrates the feasibility of theorem-grounded executable rea-soning while exposing several important limitations. The most significant challenges involve state materialization, predicate satisfaction, ontology induction, long-horizon execution, and cross-domain transfer. Addressing these limitations represents a promising direction for fu-ture research and may further improve the interpretability, robustness, and generality of executable reasoning systems. “ ‘latex 
+
+## 12 Conclusion 
+
+This paper introduced the Theorem-Grounded Execution Ontology (TGEO), a formal frame-work for interpretable machine reasoning that unifies theorem assignment, ontology con-struction, planning, state transitions, predicate validation, and executable reasoning traces within a single semantic architecture. The central premise of the work is that machine reasoning should not be treated as a sequence of opaque computational transformations but rather as an explicit theorem-driven execution process whose intermediate decisions, as-sumptions, state transitions, and outcomes can be inspected, verified, replayed, and audited. The proposed framework addresses a fundamental limitation of contemporary AI sys-tems. While modern foundation models and neural reasoning systems often demonstrate impressive task performance, they frequently provide limited visibility into the reasoning processes that produced their outputs. This lack of interpretability creates challenges for verification, debugging, safety assurance, regulatory compliance, and scientific understand-ing of machine intelligence. TGEO addresses these challenges by introducing a structured execution ontology in which every reasoning action is grounded in formally represented the-orems, ontological concepts, operators, predicates, states, and execution contracts. A primary contribution of this work is the formalization of theorem-grounded execution as an ontological process. Rather than treating logical knowledge and execution traces as in-dependent artifacts, the framework integrates them into a unified representation. Theorems become executable reasoning primitives, ontologies provide semantic grounding, planners organize execution trajectories, operators transform states, predicates validate execution 64 conditions, and execution graphs capture the complete reasoning history. This integration enables machine reasoning systems to produce outputs that are both operationally effective and semantically interpretable. The experimental results demonstrate the viability of this approach. Across theorem as-signment, ontology mapping, planning, operator selection, state materialization, predicate validation, and end-to-end execution tasks, the architecture achieved strong performance while preserving complete reasoning traceability. The evaluation revealed that theorem as-signment and ontology grounding operate with high reliability, while state-transition man-agement and predicate validation represent the primary challenges for future optimization. Importantly, the generated execution traces remained fully replayable, supporting determin-istic verification and historical analysis. Beyond performance metrics, the experiments highlight the importance of explicit se-mantic structure in machine reasoning systems. The observed improvements in execution consistency, replayability, and interpretability suggest that reasoning architectures bene-fit substantially from representations that expose intermediate reasoning decisions rather than obscuring them within latent vector spaces. The resulting execution graphs provide a transparent account of how goals are decomposed, how operators are selected, how state transitions occur, and how final conclusions are derived. The work also establishes a foundation for several broader research directions. First, theorem-grounded execution provides a pathway toward explainable reasoning systems whose decisions can be audited at multiple levels of abstraction. Second, the ontology-driven rep-resentation enables interoperability between symbolic reasoning systems, knowledge graphs (Hogan et al., 2021), workflow engines, and large language models. Third, the execution graph formulation offers a persistent memory structure that can support continual learning, error diagnosis, and reasoning refinement over time. Finally, the framework creates oppor-tunities for integrating formal verification techniques directly into AI reasoning pipelines. From an architectural perspective, TGEO suggests that interpretable machine reason-ing may be most effectively achieved through the combination of symbolic semantics and executable computational structures. Rather than viewing symbolic reasoning and mod-ern machine learning as competing paradigms, the proposed framework demonstrates how theorem-based representations, ontological grounding, and execution planning can comple-ment statistical learning systems to produce reasoning processes that are both powerful and understandable. Several important challenges remain. Future work should investigate automatic theo-rem acquisition, dynamic ontology evolution, scalable state-space management, probabilistic predicate validation, and integration with large-scale foundation models. Additional research is also needed to evaluate the framework in complex real-world domains such as scientific discovery, autonomous agents, software engineering, cybersecurity, healthcare, and legal reasoning. Extending theorem-grounded execution to distributed multi-agent environments represents another promising direction. More broadly, this work argues that interpretability should be treated as a first-class architectural objective rather than as a retrospective explanation mechanism. By grounding reasoning processes in explicit theorems, ontologies, states, operators, and execution con-tracts, machine intelligence systems can become more transparent, verifiable, reusable, and 65 trustworthy. Theorem-Grounded Execution Ontologies provide one possible foundation for achieving this objective. In summary, the paper demonstrates that interpretable machine reasoning can be formu-lated as a theorem-driven execution process operating over structured ontological represen-tations. The resulting architecture provides semantic transparency, execution traceability, replayable reasoning histories, and formal verification capabilities while maintaining strong operational performance. We believe that theorem-grounded execution ontologies represent a promising step toward the development of machine reasoning systems that are not only capable of producing correct answers but are also capable of explaining, justifying, and validating how those answers were obtained. “ ‘ 
+
+## Appendix A. Mathematical Definitions 
+
+This appendix summarizes the primary mathematical objects used throughout the paper. 
+
+A.1 Problem Space 
+
+Let 
+
+X (174) denote the set of reasoning problems. Each problem is represented as 
+
+x ∈ X . (175) The corresponding answer space is 
+
+Y (176) with 
+
+y ∈ Y . (177) 
+
+A.2 Theorem Space 
+
+Let 
+
+T = {t1, t 2, . . . , t n} (178) denote the theorem registry. Theorem assignment is defined as 
+
+ϕT : X → 2T . (179) 
+
+A.3 Ontology Space 
+
+Each ontology is represented as 
+
+O = ( V, S, A, P, C). (180) 66 Appendix B. Ontology Schema Definitions 
+
+An ontology consists of: 
+
+• Objects 
+
+• States 
+
+• Operators 
+
+• Predicates 
+
+• Contracts Example: 
+
+OGroupTheory = ( VGT , S GT , A GT , P GT , C GT ). (181) 
+
+B.1 Objects 
+
+Representative object types include: 
+
+• Group 
+
+• Subgroup 
+
+• Coset 
+
+• Field 
+
+• Ring 
+
+• Generator 
+
+B.2 State Schemas 
+
+Representative state schemas include: 
+
+• GeneratorKnown 
+
+• SubgroupIdentified 
+
+• CosetConstructed 
+
+• ExtensionDegreeComputed 
+
+• ProofGoalReached 67 Appendix C. Operator Schema Definitions 
+
+Operators define executable actions. Examples include: 
+
+• ApplyLagrange 
+
+• ComputeIndex 
+
+• ComputeCoset 
+
+• ComputeExtensionDegree 
+
+• CloseProofGoal Each operator is represented as 
+
+a = (pre( a), eff( a)) . (182) 
+
+## Appendix D. Predicate and Contract Definitions 
+
+Predicates define semantic constraints. Examples: 
+
+• ValidSubgroup 
+
+• GeneratorExists 
+
+• ValidFieldExtension 
+
+• ProofInvariantSatisfied Contracts define execution correctness. Each contract is represented as 
+
+c = ( Ppre , P post ). (183) 
+
+## Appendix E. Execution Graph Semantics 
+
+An execution graph is defined as 
+
+G = ( N, E ) (184) where 
+
+N = {s1, . . . , s n} (185) and 
+
+E = {(si, a, s j )}. (186) 68 A path 
+
+π = ( s0, a 1, s 1, . . . , a k, s k) (187) represents an executable reasoning trace. 
+
+## Appendix F. Architectural Audit Metrics 
+
+Table 11 summarizes all architectural metrics. Table 11: Architectural audit metrics. Metric Description TheoremAssignmentRate Theorem assignment success OntologyAssignmentRate Ontology assignment success PlannerStartRate Planner activation success OperatorSelectionRate Operator selection success StateTransitionRate Successful state transitions PredicateValidationRate Predicate satisfaction ContractValidationRate Contract satisfaction GoalReachRate Goal completion ExecutionCoverage Executed operator coverage ReplaySuccess Execution replayability GraphValidity Valid execution transitions TheoremCompletionRate Theorem realization completeness RequiredStateCoverage State materialization completeness LayerHealthScore Layer-level health metric 
+
+## Appendix G. Experimental Configuration 
+
+G.1 Datasets 
+
+The evaluation uses: 
+
+• MMLU-derived reasoning tasks 
+
+• Abstract algebra examples 
+
+• Field theory examples 
+
+• Formal logic examples 
+
+• Golden execution suite 
+
+G.2 Execution Pipeline 
+
+The execution pipeline consists of: 1. Theorem assignment 69 2. Ontology assignment 3. Object discovery 4. State discovery 5. Operator discovery 6. Planning 7. Execution 8. Validation 
+
+## Appendix H. Golden Execution Suite 
+
+The golden suite is used for: 
+
+• architectural validation, 
+
+• regression testing, 
+
+• replayability evaluation, 
+
+• execution correctness verification. Each example specifies: 
+
+• expected theorem family, 
+
+• expected ontology, 
+
+• required operators, 
+
+• expected states, 
+
+• goal state. 
+
+## Appendix I. Example Execution Trace 
+
+A representative execution trace is shown in Figure 6. The resulting execution graph is replayable and verifiable. 
+
+## Appendix J. Failure Taxonomy 
+
+Architectural failures are categorized into: 1. Theorem Assignment Failure 2. Ontology Assignment Failure 3. Planner Failure 70 4. Operator Selection Failure 5. State Materialization Failure 6. Predicate Validation Failure 7. Contract Validation Failure 8. Goal Achievement Failure Each category is independently measurable through the architectural auditing frame-work. 
+
+## Appendix K. Ablation Studies 
+
+The following ablations are evaluated: 
+
+• No theorem assignment 
+
+• No ontology assignment 
+
+• No state discovery 
+
+• No operator discovery 
+
+• No predicates 
+
+• No contracts 
+
+• No planner 
+
+• No execution graph For each ablation we report: 
+
+• Goal reach rate 
+
+• Execution coverage 
+
+• Replayability 
+
+• Theorem completion 
+
+• Layer health scores 71 Appendix L. Reproducibility Checklist 
+
+To facilitate full reproducibility, the following artifacts are released alongside the paper. 
+
+• Source code repository. 
+
+• Experiment configuration files. 
+
+• Run manifests containing run identifiers, timestamps, seeds, and configuration hashes. 
+
+• Dataset mappings and benchmark definitions. 
+
+• Ontology registry. 
+
+• Theorem registry. 
+
+• State schema definitions. 
+
+• Operator registry. 
+
+• Predicate registry. 
+
+• Contract registry. 
+
+• Planner configurations. 
+
+• Execution traces. 
+
+• Audit logs. 
+
+• Golden execution suite. 
+
+• Evaluation scripts. 
+
+• Metric definitions and aggregation procedures. 
+
+• Figure generation scripts. 
+
+• Table generation scripts. 
+
+• Environment specifications and dependency manifests. 
+
+• Hardware and software configuration details. Every table and figure reported in the paper is generated from a single run manifest. The run manifest records dataset versions, random seeds, configuration hashes, and execution timestamps. Generated tables and figures are linked to their originating metrics through artifact provenance metadata. All experiments are executed using deterministic seeds and fully logged execution traces. Architectural auditing records theorem assignment, ontology assignment, planner activation, operator selection, state materialization, predicate validation, contract validation, and goal achievement outcomes for every execution. The complete artifact bundle includes sufficient information to reproduce the reported results, regenerate all figures and tables, validate architectural metrics, and replay execution traces. 72 References 
+
+John R. Anderson and Christian Lebiere. Act-r: A theory of higher level cognition and its relation to visual attention. Human-Computer Interaction , 13(4):297–356, 1998. Jacob Austin, Augustus Odena, Maxwell Nye, Maarten Bosma, Henryk Michalewski, David Dohan, Ellen Jiang, Carrie Cai, Michael Terry, Quoc Le, and Charles Sutton. Program synthesis with large language models. arXiv preprint arXiv:2108.07732 , 2021. URL 
+
+https://arxiv.org/abs/2108.07732 .Maciej Besta et al. Graph of thoughts: Solving elaborate problems with large language models. In Proceedings of the AAAI Conference on Artificial Intelligence , 2024. doi: 10.1609/aaai.v38i16.29648. Kurt Bollacker, Colin Evans, Praveen Paritosh, Tim Sturge, and Jamie Taylor. Freebase. In Proceedings of the ACM SIGMOD International Conference on Management of Data ,pages 1247–1250, 2008. doi: 10.1145/1376616.1376746. Antoine Bordes et al. Translating embeddings for modeling multi-relational data. In Ad-vances in Neural Information Processing Systems , 2013. Tom B. Brown, Benjamin Mann, Nick Ryder, Melanie Subbiah, Jared Kaplan, Prafulla Dhariwal, Arvind Neelakantan, Pranav Shyam, Girish Sastry, Amanda Askell, Sandhini Agarwal, Ariel Herbert-Voss, Gretchen Krueger, Tom Henighan, Rewon Child, Aditya Ramesh, Daniel M. Ziegler, Jeffrey Wu, Clemens Winter, Christopher Hesse, Mark Chen, Eric Sigler, Mateusz Litwin, Scott Gray, Benjamin Chess, Jack Clark, Christopher Berner, Sam McCandlish, Alec Radford, Ilya Sutskever, and Dario Amodei. Language models are few-shot learners. In Advances in Neural Information Processing Systems , 2020. URL 
+
+https://arxiv.org/abs/2005.14165 .Sébastien Bubeck, Varun Chandrasekaran, Ronen Eldan, Johannes Gehrke, Eric Horvitz, Ece Kamar, Peter Lee, Yin Tat Lee, Yuanzhi Li, Scott Lundberg, Harsha Nori, Hamid Palangi, Marco Tulio Ribeiro, and Yi Zhang. Sparks of artificial general intelligence. arXiv preprint arXiv:2303.12712 , 2023. URL https://arxiv.org/abs/2303.12712 .Mark Chen, Jerry Tworek, Heewoo Jun, Qiming Yuan, Henrique Ponde de Oliveira Pinto, Jared Kaplan, Harri Edwards, Yuri Burda, Nicholas Joseph, Greg Brockman, Alex Ray, Raul Puri, Gretchen Krueger, Michael Petrov, Heidy Khlaaf, Girish Sastry, Pamela Mishkin, Brooke Chan, Scott Gray, Nick Ryder, Mikhail Pavlov, Alethea Power, Lukasz Kaiser, Mohammad Bavarian, Clemens Winter, Philippe Tillet, Felipe Petroski Such, Dave Cummings, Matthias Plappert, Fotios Chantzis, Elizabeth Barnes, Ariel Herbert-Voss, William Hebgen Guss, Alex Nichol, Alex Paino, Nikolas Tezak, Jie Tang, Igor Babuschkin, Suchir Balaji, Shantanu Jain, William Saunders, Christopher Hesse, An-drew N. Carr, Jan Leike, Josh Achiam, Vedant Misra, Evan Morikawa, Alec Radford, Matthew Knight, Miles Brundage, Mira Murati, Katie Mayer, Peter Welinder, Bob Mc-Grew, Dario Amodei, Sam McCandlish, Ilya Sutskever, and Wojciech Zaremba. Evaluat-ing large language models trained on code. arXiv preprint arXiv:2107.03374 , 2021. URL 
+
+https://arxiv.org/abs/2107.03374 .73 Wenhu Chen et al. Program of thoughts prompting. Transactions on Machine Learning Research , 2023. URL https://openreview.net/forum?id=NTQhaunHTs .Francois Chollet. On the measure of intelligence. arXiv preprint arXiv:1911.01547 , 2019. URL https://arxiv.org/abs/1911.01547 .Karl Cobbe, Vineet Kosaraju, Mohammad Bavarian, Mark Chen, Heewoo Jun, Lukasz Kaiser, Matthias Plappert, Jerry Tworek, Jacob Hilton, Reiichiro Nakano, Christopher Hesse, and John Schulman. Training verifiers to solve math word problems. arXiv preprint arXiv:2110.14168 , 2021. URL https://arxiv.org/abs/2110.14168 .Leonardo de Moura and Sebastian Ullrich. The lean 4 theorem prover and programming language. In International Conference on Computer Aided Verification , pages 3–25, 2020. doi: 10.1007/978-3-030-81685-8_1. DeepMind. Alphaproof. Nature , 2024. doi: 10.1038/s41586-024-07945-1. Tim Dettmers, Pasquale Minervini, Pontus Stenetorp, and Sebastian Riedel. Convolutional 2d knowledge graph embeddings. In Proceedings of the AAAI Conference on Artificial Intelligence , volume 32, 2018. doi: 10.1609/aaai.v32i1.11573. Richard Fikes and Nils Nilsson. Strips: A new approach to the application of theorem proving to problem solving. Artificial Intelligence , 2(3-4):189–208, 1971. doi: 10.1016/ 0004-3702(71)90010-5. Luyu Gao, Aman Madaan, Shuyan Zhou, Uri Alon, Pengfei Liu, Yiming Yang, Jamie Callan, and Graham Neubig. Pal: Program-aided language models. In Proceedings of the Inter-national Conference on Machine Learning , 2023. URL https://arxiv.org/abs/2211. 10435 .Artur d’Avila Garcez et al. Neural-Symbolic Learning Systems . Springer, 2002. Thomas Gruber. A translation approach to portable ontology specifications. Knowledge Acquisition , 5(2):199–220, 1993. doi: 10.1006/knac.1993.1008. Nicola Guarino. Formal ontology and information systems. In Formal Ontology in Informa-tion Systems: Proceedings of the First International Conference , 1998. David Ha and Juergen Schmidhuber. World models. arXiv preprint arXiv:1803.10122 , 2018. URL https://arxiv.org/abs/1803.10122 .Danijar Hafner et al. Mastering diverse domains through world models. Nature , 620:966–973, 2023. doi: 10.1038/s41586-023-06397-9. John Harrison. Handbook of Practical Logic and Automated Reasoning . Cambridge Univer-sity Press, 2009. ISBN 978-0521899574. doi: 10.1017/CBO9780511973720. Dan Hendrycks, Collin Burns, Steven Basart, Andy Zou, Mantas Mazeika, Dawn Song, and Jacob Steinhardt. Measuring massive multitask language understanding. In International Conference on Learning Representations , 2021a. URL https://arxiv.org/abs/2009. 03300 .74 Dan Hendrycks, Collin Burns, Saurav Kadavath, Akul Arora, Steven Basart, Eric Tang, Dawn Song, and Jacob Steinhardt. Measuring mathematical problem solving with the MATH dataset. In Advances in Neural Information Processing Systems , 2021b. URL 
+
+https://arxiv.org/abs/2103.03874 .Aidan Hogan, Eva Blomqvist, Michael Cochez, Claudia D’amato, Gerard De Melo, Clau-dio Gutierrez, Sabrina Kirrane, José Emilio Labra Gayo, Roberto Navigli, Sebastian Neumaier, Axel-Cyrille Ngonga Ngomo, Axel Polleres, Sabbir M. Rashid, Anisa Rula, Lukas Schmelzeisen, Juan Sequeda, Steffen Staab, and Antoine Zimmermann. Knowledge graphs. ACM Computing Surveys , 54(4):1–37, 2021. doi: 10.1145/3447772. Shaoxiong Ji et al. A survey on knowledge graphs. IEEE Transactions on Knowledge and Data Engineering , 33(2):442–463, 2021. doi: 10.1109/TKDE.2019.2940020. Takeshi Kojima, Shixiang Shane Gu, Machel Reid, Yutaka Matsuo, and Yusuke Iwasawa. Large language models are zero-shot reasoners. In Advances in Neural Information Pro-cessing Systems , 2022. URL https://arxiv.org/abs/2205.11916 .John Laird, Allen Newell, and Paul Rosenbloom. Soar: An architecture for general intelli-gence. Artificial Intelligence , 33(3):1–64, 1987. Yann LeCun. A path towards autonomous machine intelligence. OpenReview preprint, 2022. URL https://openreview.net/forum?id=BZ5a1r-kVsf .Douglas Lenat. The cyc project. Communications of the ACM , 33(8):30–36, 1989. Zachary C. Lipton. The mythos of model interpretability. ACM Queue , 16(3):31–57, 2018. doi: 10.1145/3236386.3241340. Robin Manhaeve et al. Deepproblog. In Advances in Neural Informa-tion Processing Systems , 2018. URL https://papers.nips.cc/paper/ 7653-deepprolog-neural-probabilistic-logic-programming .Drew McDermott et al. Pddl – the planning domain definition language. Technical re-port, Yale Center for Computational Vision and Control, 1998. URL https://www.cs. cmu.edu/~mmv/planning/readings/98aips-PDDL.pdf . Technical Report CVC TR-98-003/DCS TR-1165. George Miller. Wordnet: A lexical database for english. Communications of the ACM , 38 (11):39–41, 1995. doi: 10.1145/219717.219748. Reiichiro Nakano et al. Webgpt: Browser-assisted question answering. OpenAI technical report, 2022. URL https://openreview.net/forum?id=WeNuu3uATpz .Tobias Nipkow, Lawrence C. Paulson, and Makarius Wenzel. Isabelle/HOL: A Proof Assis-tant for Higher-Order Logic . Springer, 2021. URL https://isabelle.in.tum.de/ .Lutendo Nyadzani and Soebur Razzaque. Neural-symbolic learning and reasoning: A survey and interpretation. arXiv preprint arXiv:1905.06086 , 2019a. URL https://arxiv.org/ abs/1905.06086 .75 Lutendo Nyadzani and Soebur Razzaque. Neural-symbolic learning and reasoning: A survey and interpretation. arXiv preprint arXiv:1905.06086 , 2019b. URL https://arxiv.org/ abs/1905.06086 .OpenAI. Gpt-4 technical report. arXiv preprint arXiv:2303.08774 , 2023. URL https: //arxiv.org/abs/2303.08774 .Aaditya Prakash, Siyuan Zhao, Sadid Hasan, Vivek Datla, Kathy Lee, Ashequl Qadir, Joey Liu, and Oladimeji Farri. Conceptnet 5.5. In Proceedings of the AAAI Conference on Artificial Intelligence , volume 31, 2017. doi: 10.1609/aaai.v31i1.10964. David Rein, Betty Li Hou, Asa Cooper Stickland, Jackson Petty, Richard Yuanzhe Pang, Julien Dirani, Julian Michael, and Samuel R. Bowman. GPQA: A graduate-level google-proof q&a benchmark. arXiv preprint arXiv:2311.12022 , 2023. URL https://arxiv. org/abs/2311.12022 .J.A. Robinson. A machine-oriented logic based on resolution. Journal of the ACM , 12(1): 23–41, 1965. doi: 10.1145/321250.321253. Tim Rocktaschel and Sebastian Riedel. End-to-end differentiable proving. In Advances in Neural Information Processing Systems , 2017. Cynthia Rudin. Stop explaining black box machine learning models for high stakes decisions and use interpretable models instead. Nature Machine Intelligence , 1(5):206–215, 2019. doi: 10.1038/s42256-019-0048-x. Timo Schick, Jane Dwivedi-Yu, Roberto Dessì, Roberta Raileanu, Maria Lomeli, Luke Zettlemoyer, Nicola Cancedda, and Thomas Scialom. Toolformer: Language models can teach themselves to use tools. In Advances in Neural Information Processing Systems ,2023. URL https://arxiv.org/abs/2302.04761 .Michael Schlichtkrull, Thomas N. Kipf, Peter Bloem, Rianne van den Berg, Ivan Titov, and Max Welling. Modeling relational data with graph convolutional networks. In Extended Semantic Web Conference , pages 593–607, 2018. doi: 10.1007/978-3-319-93417-4_38. The Coq Development Team. The coq proof assistant. Version 8.14, 2021. URL https: //coq.inria.fr/ .Denny Vrandecic and Markus Krotzsch. Wikidata. Communications of the ACM , 57(10): 78–85, 2014. doi: 10.1145/2629489. Xuezhi Wang et al. Self-consistency improves chain of thought reasoning in language models. In International Conference on Learning Representations , 2023. URL https: //openreview.net/forum?id=1PL1NIMMrw .Jason Wei, Xuezhi Wang, Dale Schuurmans, Maarten Bosma, Brian Ichter, Fei Xia, Ed Chi, Quoc Le, and Denny Zhou. Chain-of-thought prompting elicits reasoning in large language models. In Advances in Neural Information Processing Systems , 2022. URL https: //arxiv.org/abs/2201.11903 .76 Shunyu Yao et al. React: Synergizing reasoning and acting in language models. In Interna-tional Conference on Learning Representations , 2023a. URL https://openreview.net/ forum?id=WE_vluYUL-X .Shunyu Yao et al. Tree of thoughts: Deliberate problem solving with large language models. In Advances in Neural Information Processing Systems , 2023b. URL https: //openreview.net/forum?id=5Xc1ecxO1h .Denny Zhou et al. Least-to-most prompting enables complex reasoning in large language models. In International Conference on Learning Representations , 2023. URL https: //openreview.net/forum?id=WZH7099tgfM .77

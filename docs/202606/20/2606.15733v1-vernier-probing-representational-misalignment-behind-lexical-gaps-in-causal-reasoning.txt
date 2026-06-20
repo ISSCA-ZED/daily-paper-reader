@@ -1,0 +1,883 @@
+Title: Vernier: Probing Representational Misalignment Behind Lexical Gaps in Causal Reasoning
+
+URL Source: https://arxiv.org/pdf/2606.15733v1
+
+Published Time: Tue, 16 Jun 2026 01:10:00 GMT
+
+Number of Pages: 26
+
+Markdown Content:
+# VERNIER : P ROBING REPRESENTATIONAL MISALIGN -
+
+# MENT BEHIND LEXICAL GAPS IN CAUSAL REASONING 
+
+Zhenyu Yu 
+
+College of Computer Science and Artificial Intelligence Fudan University 
+
+yuzhenyuyxl@foxmail.com 
+
+## ABSTRACT 
+
+Instruction-tuned language models can answer the same causal-reasoning question differently after its English variable names are replaced by type-preserving place-holders, although the structural causal model and the gold answer are unchanged. We ask whether this lexical gap reflects information loss in the placeholder view or a misaligned read-out from a representation that still carries answer-relevant con-tent. Vernier uses a paired-view weight update as an instrument and then inspects the mechanism left after the gap closes. In the working regimes, the evidence favours representational misalignment. A variable-name probe becomes more accurate on the placeholder view, and activation patching on Qwen-7B, Qwen-14B, and Llama-3.1-8B shows that the decision-token representation can transfer an-swer identity between views. The update that realigns the views is counterfactual augmentation over original and placeholder prompts, while the answer-subspace KL mainly sharpens intermediate answer-belief agreement. Success is bounded by model family, scale, and task. CRASS transfer is reliable across Qwen scales and Llama, e-CARE remains weak, and preliminary non-causal rename tasks show a similar qualitative pattern. 
+
+## 1 INTRODUCTION 
+
+Instruction-tuned language models can give different answers to the same causal-reasoning question when its variable names change. Replacing surface forms such as smoking , husband , and alarm clock 
+
+with typed placeholders X1, X 2, X 3 in a structurally identical prompt produces a different answer distribution, even though the structural causal model, the joint distribution, the query, and the gold answer are all preserved. Yu and Zhou (2026) report this lexical gap across model families and find that direct prompting, chain-of-thought prompting, and scaffolded prompting leave it visible. Related 2025–2026 evaluations report similar brittleness under meaning-preserving rewrites, context shifts, and anti-semantic controls in causal or mathematical reasoning settings (Hao et al., 2025; Lee et al., 2025; Wang et al., 2026; Li et al., 2026). The failure is therefore not just that the model needs a better prompt. The scientific question is what kind of failure the lexical gap is. One possibility is an information deficit: after the names are removed, the placeholder view no longer contains the story-level content needed to answer. Another is representational misalignment: the content is still present, but the post-trained model reads it out differently from the two lexical forms. This distinction mirrors a broader line of work on spurious-signal reliance and prompt sensitivity in language models (McCoy et al., 2019; Webson and Pavlick, 2022; Sclar et al., 2024). These accounts matter because they imply different fixes. If the placeholder view loses information, then a successful update may simply teach the model to ignore or overwrite missing content. If the view is misaligned, a successful update should make the same item-level content more accessible from both forms. We study this question by using a targeted weight update as an instrument. The update is not proposed as a new general-purpose fine-tuning recipe. It is a controlled way to ask what changes when the gap closes. Our method, Vernier, trains a LoRA adapter on paired lexical views (Hu et al., 2022). Both views receive answer supervision, and an answer-subspace symmetric KL term encourages their answer distributions to agree, following the general consistency-training principle while changing 1
+
+> arXiv:2606.15733v1 [cs.CL] 14 Jun 2026
+
+the view-construction mechanism (Xie et al., 2020; Liang et al., 2021). The ablations below show that the paired lexical views, rather than generic consistency, are the main source of behavioural closure. The KL term is used to make the answer-belief alignment explicit and measurable. Recent benchmark work also motivates this design by showing that prompt-side variation alone does not reliably yield stable reasoning behavior (Sclar et al., 2024; Chi et al., 2024). The answer-subspace restriction matches the evaluation metric, which depends only on a small answer set rather than the full vocabulary. The rest of the paper is organised around falsification tests for the competing explanations. If closure removes information, story-level lexical content should become less recoverable from the perturbed view. If generic consistency is enough, then dropout consistency without the lexical perturbation should help. If the two views differ by a global direction, then a map fitted once from paired hidden states should close the gap at inference. If the update merely damages capability, downstream evaluations should reveal that. We therefore combine behavioural evaluation with probes and logit-lens diagnostics (Belrose et al., 2023), activation patching (Zhang and Nanda, 2024), steering tests (Turner et al., 2023; Zou et al., 2023), capability checks (Hendrycks et al., 2021), and model-family stress tests. This structure is intended to identify what the update repairs, beyond whether it improves a benchmark number. 
+
+Contributions. 
+
+• We turn a lexical robustness failure into a falsifiable mechanism question. The paper separates an information-deficit account from a representational-misalignment account using paired-view training, probes, logit-lens diagnostics, activation patching, and inference-time steering tests. The evidence is organised so that each diagnostic can rule out a specific weaker explanation rather than merely add another benchmark number. • We introduce Vernier as a controlled realignment instrument. Vernier trains on original and structure-preserving perturbed views with answer supervision on both and an answer-subspace consistency penalty. The paired-view augmentation is the behavioural engine, while the answer-subspace KL provides a belief-level alignment diagnostic. The method is deliberately narrow: it targets the answer set used by the causal-QA evaluation and is used to ask what changes when a lexical gap closes. • We map the boundary conditions of the effect. The experiments cover multiple model families, a within-family Qwen scale sweep, out-of-distribution causal benchmarks, capabil-ity checks, placeholder-scheme stress tests, non-causal rename tasks, and failed global-map interventions. This lets us state where the update works and where it fails, transfers weakly, or cannot be reproduced by a single inference-time direction. 
+
+## 2 RELATED WORK 
+
+2.1 LEXICAL ROBUSTNESS AND CAUSAL REASONING IN LLM S
+
+Yu and Zhou (2026) introduce the structure-preserving lexical perturbation T (·) we adopt on CLadder (Jin et al., 2023), CRASS (Frohberg and Binder, 2022), and e-CARE (Du et al., 2022): content words that name variables are replaced by typed placeholders while the causal graph, query type, answer set, and gold answer are held fixed. The perturbation is designed to expose whether a model’s causal answer depends on semantically rich surface names rather than on the structural causal query. This surface dependence is part of a broader robustness pattern. Chi et al. (2024) argue that current LLMs perform mostly shallow causal reasoning rather than genuine structural inference, Hao et al. (2025) show that renaming variables degrades mathematical reasoning by several points, and Lee et al. (2025) find that causal predictions fail to track changing context. These works motivate asking not only whether a gap exists, but what internal failure it reflects. For the causal-QA case we ask whether the gap is information loss or representational misalignment, and we answer it mechanistically rather than only measuring it. The structural causal model framework of Pearl (2009); Pearl and Mackenzie (2018) formalises the observational, interventional, and counterfactual queries the three benchmarks operationalise. Adjacent work shows that LLMs exploit surface features in ways that interact with task-relevant signal. McCoy et al. (2019) demonstrate syntactic-heuristic reliance on NLI. Webson and Pavlick (2022) show that prompt-based zero-shot models can ignore instruction semantics while remaining sensitive to surface choices. Sclar et al. (2024) quantify sensitivity to prompt formatting. 2Min et al. (2022) find that label correctness in in-context demonstrations matters less than label distribution. Chain-of-thought prompting (Wei et al., 2022b; Kojima et al., 2022) and self-consistency (Wang et al., 2023) are natural prompt-side interventions. Because they do not modify the model’s read-out from the two lexical views, they motivate our weight-update approach rather than replacing it. 2.2 INVARIANCE , CONSISTENCY TRAINING , AND COUNTERFACTUAL AUGMENTATION 
+
+Vernier belongs to the broad family of methods that build a known invariance into a model. Where group-equivariant networks (Cohen and Welling, 2016) hard-wire invariance to a symmetry group into the architecture, and consistency-regularised semi-supervised learning (Xie et al., 2020) softens a known data augmentation into a penalty, Vernier treats the structure-preserving perturbation T of Yu and Zhou (2026) as the task symmetry and penalises violations of it as a soft constraint on the answer distribution. The perturbation is a genuine invariance of the task by construction, which is what separates this setting from the more common one where the augmentation is only approximately label-preserving. Within consistency training, R-Drop (Liang et al., 2021) adds a symmetric KL between two dropout-sampled forward passes of one input and SimCSE (Gao et al., 2021) contrasts two dropout-sampled views of one sentence, both treating the two views as stochastic copies of a single input. Vernier differs in two ways. The two views are produced by the lexical edit rather than by dropout sampling, which makes the consistency target a property of the data distribution and not of the network’s internal noise, and the KL is restricted to the answer-token subspace rather than the full vocabulary. The first difference is essential because the R-Drop baseline widens the gap without T . Kaushik et al. (2020) train classifiers on human-rewritten counterfactual pairs to improve robustness to spurious correlations. Our β = 0 ablation is the closest analogue without the KL term and closes most of the in-distribution gap but only part of the out-of-distribution gap. 2.3 MECHANISTIC INTERPRETABILITY OF HIDDEN REPRESENTATIONS 
+
+Our mechanism analysis uses a logit-lens-style diagnostic: intermediate hidden states are projected through the unembedding matrix and compared on the answer-token subspace. The tuned-lens variant (Belrose et al., 2023) learns a small per-layer adapter for a related latent-prediction analysis. The transformer-circuits framework of Elhage et al. (2021) provides the conceptual vocabulary for the per-layer analysis. Meng et al. (2022) locate factual associations to mid-layer MLP modules, and Geva et al. (2023) dissect per-layer dynamics of factual recall. Our linear-probe analysis uses a single multinomial classifier per layer to test layerwise recoverability of the variable-name family from the hidden state, complementary to the causal-mediation techniques of these prior works. A related line controls model behaviour by adding a single direction to the residual stream, with activation addition (Turner et al., 2023) and representation engineering (Zou et al., 2023) steering attributes such as sentiment, truthfulness, and refusal. We use the same construction as a test and find the causal-reasoning lexical gap does not admit such a direction, unlike those attributes, while non-causal variants are partly steerable. Instruction tuning by reinforcement learning from human feedback (Ouyang et al., 2022) and by multitask prompted training (Sanh et al., 2022; Wei et al., 2022a) are the post-training stages that produce the lexical sensitivity we close. We use LoRA (Hu et al., 2022) for parameter-efficient fine-tuning, AdamW (Loshchilov and Hutter, 2019) optimisation, and QLoRA (Dettmers et al., 2023) for the 14B and larger models. 
+
+## 3 METHOD : V ERNIER 
+
+The method has three parts (see Figure 1). The lexical perturbation is formalised as a structure-preserving transformation that should leave the answer distribution invariant. Vernier then trains on paired lexical views with a task loss on both views and a consistency loss on the answer-token subspace. The answer-subspace loss is in turn connected to the identifiability constraint, including the margin condition needed to translate distributional agreement into arg-max agreement. We use the update as an instrument rather than as the whole argument: the method is designed to create a controlled before/after comparison whose hidden-state consequences can then be inspected. 3LEXICAL PERTURBATION T VERNIER OBJECTIVE        
+
+> Original Prompt
+> q(Lexical Anchors)
+> Perturbed Prompt
+> T(q)(Placeholders)
+> Base LM
+> + LoRA Adapter
+> Base LM
+> + LoRA Adapter
+> SHARED WEIGHTS
+> Answer Distribution
+> pY
+> 0
+> Answer Distribution
+> pY
+> 1
+> Ltask (p0, y ⋆)
+> Ltask (p1, y ⋆)
+> Symmetric KL Divergence
+> Lcons (pY
+> 0, p Y
+> 1)Gold Answer y⋆
+
+Figure 1: Vernier training schematic. The original prompt q and its structure-preserving perturbation 
+
+T (q) are forwarded through the same LoRA-adapted model. The loss combines per-view answer supervision with an answer-subspace symmetric KL term. Table 1: A worked CLadder example. Gold answer y⋆ = no , Pearl rung observational. Underlined surface forms in q are mapped by T to placeholders. Numeric quantities, query, and answer are unchanged. 
+
+Original prompt q Perturbed prompt T (q)
+
+The overall probability of alarm set by husband is 77%. For husbands that don’t set the alarm , the probability of ringing alarm is 26%. For husbands that set the alarm , the probability of ringing alarm is 76%. Is ringing alarm less likely than silent alarm overall? Answer (yes or no): The overall probability of X3 set by X2 is 77%. For 
+
+X2 that don’t set the X3, the probability of ringing 
+
+X3 is 26%. For X2 that set the X3, the probability of ringing X3 is 76%. Is ringing X3 less likely than silent X3 overall? Answer (yes or no): 
+
+3.1 LEXICAL PERTURBATION AND GAP 
+
+A causal-QA item is (q, y ⋆, M ), where q is the prompt, y⋆ ∈ Y is the gold answer, and M is the structural causal model. The lexical perturbation T replaces each SCM variable name and its variants with a typed placeholder X1, X 2, . . . , applied consistently throughout the item. A worked instance is provided in Table 1. It preserves M , the query, and y⋆, so an SCM-grounded reasoner should satisfy 
+
+R(· | q) = R(· | T (q)) . We score a model by the signed lexical gap 
+
+∆( θ; D) = E(q,y ⋆)∼D [1{ˆyθ (q) = y⋆} − 1{ˆyθ (T (q)) = y⋆}], (1) where predictions use the answer-token distribution at the first generation position. The perturbation is deliberately conservative. It does not paraphrase the story, change numbers, alter the causal graph, or change the requested answer type. It only removes the English variable names that can act as lexical anchors. This matters for interpretation: a remaining gap cannot be attributed to a changed SCM or a changed label, while a closed gap cannot by itself prove deeper causal understanding. The method therefore asks a narrower question: given two views that should be equivalent for the task, can a small weight update make the model read out the same answer-relevant information from both? 3.2 VERNIER OBJECTIVE 
+
+Vernier trains a LoRA adapter on paired views (P0, P 1) = ( q, T (q)) . The original view P0 keeps the lexical anchors seen by the base model, while the perturbed view P1 removes them while preserving the structural causal problem. Training on both views prevents the update from solving the task by specialising only to one surface form. The task loss makes each view answerable on its own, while 4Algorithm 1 Vernier training (one outer step). 
+
+Require: base LM fθ with frozen weights, LoRA adapter ϕ, answer-token id set Y, batch 
+
+{(qi, T (qi), y ⋆i )}Bi=1 . 
+
+> 1:
+
+P0, P 1 ← tokenised original and perturbed prompts.  
+
+> 2:
+
+z(v) ← fθ+ϕ(Pv ) for v ∈ { 0, 1} at the first generation position.  
+
+> 3:
+
+p(v) ← softmax( z(v) 
+
+> ·,Y
+
+). 
+
+> 4:
+
+Ltask ← − B−1 P
+
+> i
+
+[log p(0) 
+
+> i,y ⋆i
+
++ log p(1) 
+
+> i,y ⋆i
+
+]. 
+
+> 5:
+
+Lcons ← (2 B)−1 P
+
+> i
+
+[KL( p(0)  
+
+> i
+
+∥p(1)  
+
+> i
+
+) + KL( p(1)  
+
+> i
+
+∥p(0)  
+
+> i
+
+)] . 
+
+> 6:
+
+Update only ϕ with AdamW on αLtask + βLcons .the consistency term penalises disagreement between the two answer distributions: 
+
+L = α[Ltask (P0) + Ltask (P1)] + β Lcons (P0, P 1), Lcons = 12 KL( pY 
+
+> P0
+
+∥pY 
+
+> P1
+
+) + 12 KL( pY 
+
+> P1
+
+∥pY 
+
+> P0
+
+).
+
+(2) Here pY 
+
+> P0
+
+and pY 
+
+> P1
+
+are the softmax distributions after restricting the next-token logits to the finite answer set Y. For binary yes/no CLadder items, Y contains the answer tokens for yes and no , and for multiple-choice CRASS and e-CARE items it contains the option tokens. We use α = β = 1 . The loss is applied at the first generation position, and only LoRA parameters are updated. One training step is given in Algorithm 1. The answer-subspace restriction is a design choice, not a computational shortcut. A full-vocabulary KL would require two prompts with different surface forms to agree on every next-token continuation, including continuations that restate the variable names. That target is stronger than the task invariance and can penalise harmless lexical differences. By contrast, the answer-subspace KL matches the evaluation interface: if two views encode the same causal problem, the distribution over admissible answers should agree even if the unrestricted language-model distribution does not. 3.3 DISTINGUISHING MISALIGNMENT FROM INFORMATION LOSS 
+
+Vernier is useful because the two explanations introduced above predict different after-effects. Under a simple information-deficit account, the perturbed prompt lacks answer-relevant story content. A successful update could still close the gap, but it would have to do so by adding a shortcut, memorising an answer pattern, suppressing lexical information, or regressing the original view. Under a representational-misalignment account, the perturbed view still carries item-level content, but the post-trained read-out fails to use it in the same way as the original view. A successful update should then make the two views more similar at the decision interface while preserving, or increasing, recoverability of the story-level lexical family from the perturbed representation. This is why the method is paired with mechanism tests rather than evaluated only by accuracy. The primary behavioural signature is not merely a smaller gap, but a smaller gap with P1 improving and 
+
+P0 not collapsing. The mechanism signature is stronger: cosine and logit-lens agreement should improve at the decision token, a probe trained on P0 should transfer better to P1, and activation patching should show that the decision-token representation can carry answer identity across views. These are not assumptions of the method. They are the falsification tests that follow from using the method as an instrument. 3.4 ANSWER -SUBSPACE CONSISTENCY 
+
+The answer-subspace KL is an empirical plugin estimate of the identifiability violation on Y. Let 
+
+DSKL be the symmetric KL and let 
+
+G(θ; D) = Eq∼D [DSKL (pθ (· | q)Y ∥pθ (· | T (q)) Y )] . (3) The batch mean of Lcons is an unbiased estimate of G. Since symmetric KL is positive definite on the finite simplex, G = 0 iff the two answer-token distributions agree almost everywhere. Distributional agreement then implies equal arg-max predictions, but away from zero this only controls prediction flips under a margin condition. If pθ (· | q)Y has top-two margin at least γ, then a flip requires total 5variation at least γ/ 2, and Pinsker plus Jensen gives 
+
+Pr[ˆ yθ (q)̸ = ˆ yθ (T (q))] ≤
+
+p2G(θ; D)
+
+γ . (4) We do not treat this bound as the load-bearing argument because near-tied answer distributions can violate the margin condition. Instead, the load-bearing evidence is behavioural closure together with the mechanism tests, which distinguish genuine P1 improvement from degenerate closure through P0
+
+regression (see Section 4.4). The task loss prevents the trivial constant-output solution that would satisfy the consistency term with zero useful accuracy. 3.5 IDENTIFICATION LIMITS 
+
+The method does not prove that the model has learned a human-interpretable causal algorithm. It only tests whether the lexical gap is removable by a small paired-view update and what kind of internal change accompanies that removal. Several outcomes would falsify the misalignment reading, including closure driven by P0 regression, lower probe transfer from P1, no movement in decision-token agreement, or a generic consistency baseline such as R-Drop producing the same effect without ever seeing T (q). These tests are summarised in Table A24. We observe some of these failure signatures on Phi-3 and Gemma, which is why the later claims are scoped by model family and capacity. Conversely, when Vernier closes the gap with P1 improvement and the mechanism diagnostics move in the predicted direction, the result supports a narrower conclusion. In that regime, the answer-relevant content was not simply erased by replacing names with placeholders. 
+
+## 4 EXPERIMENTS 
+
+4.1 EXPERIMENTAL SETUP 
+
+Datasets. CLadder (Jin et al., 2023) is our in-distribution benchmark. We use items 0 through 1499 of the commonsensical split for training and a disjoint slice of items 1500 through 1699 ( n = 200 )as the held-out evaluation set. CRASS (Frohberg and Binder, 2022) and e-CARE (Du et al., 2022) are out-of-distribution. No item from either is seen during training. We use 200-item samples from each. For general-capability evaluation we sample 200 items each from MMLU (Hendrycks et al., 2021), HellaSwag, and GSM8K under a fixed seed. CLadder also contains a nonsensical subset with fictional-concept variable names, used for the falsifiability test. To probe whether the account may extend beyond causal reasoning, we add two non-causal BBH tasks (Suzgun et al., 2023), logical deduction and reasoning about colored objects, with object names renamed to typed placeholders. 
+
+Baselines. We compare Vernier ( β = 1 , answer-subspace KL) against five baselines on Qwen2.5-7B at step 500. Base. The pretrained instruction-tuned model with no fine-tuning. P0-only SFT. 
+
+Supervised fine-tuning on the original prompt alone, with no perturbed view. R-Drop (Liang et al., 2021). Symmetric KL between two dropout-sampled forward passes of P0, with no perturbation 
+
+T . Twin task (β = 0 ). Both views routed through the task loss, with no consistency term. Full-vocabulary KL (β = 1 ). The same training as Vernier but with the KL computed over the full vocabulary rather than the answer subspace. 
+
+Metrics. For each item we score (q, T (q)) by taking the softmax over the answer-token subset at the first generation position. The primary metric is the signed lexical gap P0 − P1 in percentage points, reported alongside P0 and P1 accuracy so that closure driven by P1 improvement can be distinguished from closure driven by P0 regression. A gap at or near zero is the goal. A negative gap is an inversion in which P1 exceeds P0, which we report as such rather than as a larger success. For OOD benchmarks we also give the relative gap reduction ∆gap = ( gap V ernier − gap base )/gap base 
+
+as a convenience, but we caution that this ratio is unstable when the base gap is small and can exceed 100 percent when the gap crosses zero, so we anchor all claims on the signed gap in percentage points rather than on this ratio. On general-capability benchmarks we report top-1 accuracy. 
+
+Implementation. We attach a LoRA (Hu et al., 2022) adapter of rank r = 16 to the query, key, value, and output projections of every attention layer, with LoRA alpha 32 and dropout 0.05. We 6Table 2: In-distribution (CLadder) and out-of-distribution (CRASS, e-CARE) held-out results, 
+
+n = 200 each, grouped by dataset. Adapters are trained only on CLadder. The gap is P0 − P1 in percentage points and ∆gap is the relative gap reduction versus base (OOD only; in-distribution base gaps are too small for a stable ratio). All ± are 1 s.d.: for the Vernier rows of Qwen-7B, Qwen-14B, and Llama-3.1-8B ( †) this is the std across three rounds; for every other cell (all base rows and the single-seed Vernier rows of Phi-3, Qwen-32B, and Mistral-7B) it is the paired bootstrap standard error over the 200 items. Within each dataset block, bold marks the best and underline the second best per column ( P0/P1 higher is better; Gap closest to 0 is better; ∆gap more negative is better). Qwen-32B uses QLoRA; Mistral-7B ( ‡) is reported under the default and rescued recipes. 
+
+Base Vernier Data Model P0 P1 Gap P0 P1 Gap Rel. gap 
+
+> CLadder (ID)
+
+Phi-3-mini (3.8B) 0.585 ±0.035 0.540 ±0.035 +4.5 ±2.3 0.550 ±0.035 0.550 ±0.035 0.0 ±2.1 —Qwen2.5-7B † 0.625 ±0.034 0.545 ±0.035 +8.0 ±2.6 0.868 ±0.003 0.893 ±0.010 -2.5 ±0.9 —Qwen2.5-14B † 0.615 ±0.035 0.580 ±0.035 +3.5 ±2.7 0.955 ±0.029 0.950 ±0.013 +0.5 ±1.4 —Qwen2.5-32B (QLoRA) 0.565 ±0.035 0.585 ±0.035 -2.0 ±2.1 0.970 ±0.012 0.965 ±0.013 0.5 ±1.3 —Llama-3.1-8B † 0.540 ±0.035 0.515 ±0.035 +2.5 ±3.6 0.945 ±0.005 0.948 ±0.008 -0.3 ±1.0 —Mistral-7B ‡ (lr=1e-4) 0.610 ±0.034 0.565 ±0.035 +4.5 ±3.9 0.980 ±0.010 0.995 ±0.005 -1.5 ±1.1 —Mistral-7B ‡ (lr=5e-6, s150) 0.610 ±0.034 0.565 ±0.035 +4.5 ±3.9 0.605 ±0.035 0.600 ±0.035 +0.5 ±3.1 —CRASS (OOD)  Phi-3-mini (3.8B) 0.845 ±0.026 0.545 ±0.035 +30.0 ±3.9 0.840 ±0.026 0.550 ±0.035 +29.0 ±3.9 -3% Qwen2.5-7B † 0.845 ±0.026 0.505 ±0.035 +34.0 ±3.9 0.870 ±0.013 0.622 ±0.012 +24.8 ±0.3 -27% Qwen2.5-14B † 0.895 ±0.022 0.625 ±0.034 +27.0 ±3.5 0.918 ±0.008 0.722 ±0.013 +19.7 ±0.8 -27% Qwen2.5-32B (QLoRA) 0.910 ±0.020 0.635 ±0.034 +27.5 ±3.6 0.950 ±0.015 0.725 ±0.031 +22.5 ±3.3 -18% Llama-3.1-8B † 0.850 ±0.025 0.445 ±0.035 +40.5 ±3.8 0.872 ±0.008 0.558 ±0.035 +31.3 ±3.1 -23% Mistral-7B ‡ (lr=1e-4) 0.795 ±0.028 0.415 ±0.035 +38.0 ±3.9 0.710 ±0.032 0.500 ±0.036 +21.0 ±3.4 -45% 
+
+Mistral-7B ‡ (lr=5e-6, s150) 0.795 ±0.028 0.415 ±0.035 +38.0 ±3.9 0.735 ±0.031 0.365 ±0.034 +37.0 ±3.8 -3% e-CARE (OOD)  Phi-3-mini (3.8B) 0.795 ±0.029 0.590 ±0.035 +20.5 ±3.9 0.785 ±0.029 0.600 ±0.035 +18.5 ±3.9 -10% Qwen2.5-7B † 0.815 ±0.028 0.585 ±0.035 +23.0 ±3.8 0.810 ±0.010 0.622 ±0.012 +18.8 ±1.5 -18% Qwen2.5-14B † 0.820 ±0.027 0.605 ±0.035 +21.5 ±3.7 0.823 ±0.002 0.610 ±0.004 +21.3 ±0.5 -1% Qwen2.5-32B (QLoRA) 0.820 ±0.027 0.625 ±0.034 +19.5 ±3.8 0.815 ±0.028 0.595 ±0.035 +22.0 ±3.9 +13% Llama-3.1-8B † 0.790 ±0.029 0.550 ±0.035 +24.0 ±4.5 0.793 ±0.005 0.615 ±0.004 +17.8 ±0.6 -26% 
+
+Mistral-7B ‡ (lr=1e-4) 0.790 ±0.029 0.555 ±0.035 +23.5 ±4.1 0.775 ±0.030 0.580 ±0.035 +19.5 ±4.2 -17% Mistral-7B ‡ (lr=5e-6, s150) 0.790 ±0.029 0.555 ±0.035 +23.5 ±4.1 0.770 ±0.030 0.565 ±0.035 +20.5 ±3.6 -13% 
+
+train with AdamW (Loshchilov and Hutter, 2019) at learning rate 1 × 10 −4, weight decay 0, batch size 4 pairs per micro-step, gradient accumulation 4, linear warmup over 50 steps, cosine decay thereafter, and a total budget of 500 steps. We evaluate nine instruction-tuned models spanning five families, namely Phi-3-mini-4k-instruct (3.8B) (Abdin et al., 2024), Qwen2.5 at 1.5B, 3B, 7B, 14B, and 32B (Qwen Team, Alibaba Group, 2024), Llama-3.1-8B-Instruct (Llama Team, AI @ Meta, 2024), Mistral-7B-Instruct-v0.3 (Jiang et al., 2023), and Gemma-2-2B-it (Gemma Team, 2024). The 1.5B to 8B models train in BF16 on a single 24 GB GPU. The 14B and 32B models use QLoRA (Dettmers et al., 2023) on a 40 GB GPU, the 32B with batch size 2 and gradient accumulation 8. Phi-3 trains at learning rate 5 × 10 −6 with early stopping at step 70, since the canonical learning rate drives its adapter to a degenerate constant-output minimum by step 50. On Mistral-7B the canonical learning rate produces an aggressive in-distribution closure with substantial downstream-capability degradation. We rescue it with the Phi-3 protocol (lr= 5×10 −6, early stopping at step 150) and report both rows in the main tables. The hyperparameter trade-off is analysed with the failure modes. The full recipe-and-selection audit gives the metric used to pick each rescued checkpoint (see Section C). 4.2 COMPARISON 
+
+In-distribution gap closure is reported in Table 2. Vernier drives the gap to at or near zero on all six models in the table. On Qwen-7B, Qwen-14B, and Llama-3.1-8B both P0 and P1 rise by 24 to 44 pp from base, so the closure is driven by joint accuracy gains rather than by a regression on P0.Mistral-7B shows the same joint gains under the default learning rate but at a steep capability cost, so we report its rescued low-rate row as the operating point. On Phi-3 the closure has the opposite signature, with P0 falling by 3.5 pp and P1 rising by only 1.0 pp. This model-specific failure is analysed with the mechanism and scale diagnostics. The Qwen2.5-32B base model already has a negative gap of −2.0 pp on this slice, so the gap-closure metric is not directly comparable, but both 7Table 3: Out-of-distribution results on CRASS and e-CARE ( n = 200 each), grouped by dataset, with adapters trained only on CLadder. ∆gap is the relative gap reduction versus base. All ± are 
+
+1 s.d.: for the Vernier rows of Qwen-7B, Qwen-14B, and Llama-3.1-8B ( †) it is the std over three rounds; for every other cell (all base rows and the single-seed Vernier rows of Phi-3, Qwen-32B, and Mistral-7B) it is the paired bootstrap standard error over the 200 items. Within each dataset block, 
+
+bold marks the best and underline the second best per column ( P0/P1 higher is better; Gap closest to 
+
+0 is better; ∆gap more negative is better). Qwen-32B uses QLoRA; Mistral-7B ( ‡) is reported under the default and rescued recipes.                                                                                                                
+
+> Base Vernier Data Model P0P1Gap P0P1Gap Rel. gap
+> CRASS
+> Phi-3-mini (3.8B) 0.845 ±0.026 0.545 ±0.035 +30.0 ±3.9 0.840 ±0.026 0.550 ±0.035 +29.0 ±3.9 -3% Qwen2.5-7B †0.845 ±0.026 0.505 ±0.035 +34.0 ±3.9 0.870 ±0.013 0.622 ±0.012 +24.8 ±0.3 -27% Qwen2.5-14B †0.895 ±0.022 0.625 ±0.034 +27.0 ±3.5 0.918 ±0.008 0.722 ±0.013 +19.7 ±0.8 -27% Qwen2.5-32B (QLoRA) 0.910 ±0.020 0.635 ±0.034 +27.5 ±3.6 0.950 ±0.015 0.725 ±0.031 +22.5 ±3.3 -18% Llama-3.1-8B †0.850 ±0.025 0.445 ±0.035 +40.5 ±3.8 0.872 ±0.008 0.558 ±0.035 +31.3 ±3.1 -23% Mistral-7B ‡(lr=1e-4) 0.795 ±0.028 0.415 ±0.035 +38.0 ±3.9 0.710 ±0.032 0.500 ±0.036 +21.0 ±3.4 -45%
+> Mistral-7B ‡(lr=5e-6, s150) 0.795 ±0.028 0.415 ±0.035 +38.0 ±3.9 0.735 ±0.031 0.365 ±0.034 +37.0 ±3.8 -3% e-CARE Phi-3-mini (3.8B) 0.795 ±0.029 0.590 ±0.035 +20.5 ±3.9 0.785 ±0.029 0.600 ±0.035 +18.5 ±3.9 -10% Qwen2.5-7B †0.815 ±0.028 0.585 ±0.035 +23.0 ±3.8 0.810 ±0.010 0.622 ±0.012 +18.8 ±1.5 -18% Qwen2.5-14B †0.820 ±0.027 0.605 ±0.035 +21.5 ±3.7 0.823 ±0.002 0.610 ±0.004 +21.3 ±0.5 -1% Qwen2.5-32B (QLoRA) 0.820 ±0.027 0.625 ±0.034 +19.5 ±3.8 0.815 ±0.028 0.595 ±0.035 +22.0 ±3.9 +13% Llama-3.1-8B †0.790 ±0.029 0.550 ±0.035 +24.0 ±4.5 0.793 ±0.005 0.615 ±0.004 +17.8 ±0.6 -26%
+> Mistral-7B ‡(lr=1e-4) 0.790 ±0.029 0.555 ±0.035 +23.5 ±4.1 0.775 ±0.030 0.580 ±0.035 +19.5 ±4.2 -17% Mistral-7B ‡(lr=5e-6, s150) 0.790 ±0.029 0.555 ±0.035 +23.5 ±4.1 0.770 ±0.030 0.565 ±0.035 +20.5 ±3.6 -13%
+
+P0 and P1 rise by roughly 40 pp after Vernier. The in-distribution base gaps are small on larger held-out CLadder slices, and their paired confidence intervals cross zero for the base models (see Table A17). We therefore treat in-distribution closure as a sanity check and rest the behavioural case on the out-of-distribution transfer below. Zero-shot transfer to CRASS and e-CARE is reported in Table 3. The adapter trained only on CLadder reduces the CRASS gap by 18 to 27 percent across the three Qwen scales, with the Qwen-7B value averaged over three seeds. The larger-OOD check strengthens this CRASS result rather than weakening it (see Table A16). On all 274 prepared CRASS items, the gap falls from 35.0 to 23.7 pp on Qwen-7B and from 27.4 to 16.8 pp on Qwen-14B. The e-CARE picture on Qwen is weaker and non-monotonic in scale. At n = 200 , Qwen-7B reduces e-CARE by 18 percent, Qwen-14B is within sampling noise ( −2 percent), and Qwen-32B widens the e-CARE gap by 2.5 pp despite closing CLadder and CRASS. At n = 1000 , the e-CARE reduction remains small, from 20.7 to 18.7 pp on Qwen-7B and from 23.2 to 22.4 pp on Qwen-14B (see Table A16). Llama-3.1-8B reduces the CRASS gap by 23 percent and the e-CARE gap by 26 percent as a three-seed mean. The rescued Mistral-7B (lr= 5 × 10 −6, step 150) shows a 13 percent e-CARE reduction but only 3 percent on CRASS. Phi-3 transfer falls within noise on both benchmarks, the same null we see on its mechanism diagnostics. 4.3 ABLATION STUDY 
+
+The ingredients are separated in Table A1 on Qwen-7B using five single-seed reference configurations at step 500. The headline three-seed numbers remain in Tables 2 and 3. P0-only SFT widens the in-distribution gap from 8.0 to 9.5 pp. Training only on the original view reinforces the lexical anchors. R-Drop widens the gap further to 18.5 pp, with P0 rising to 0.965 and P1 staying at 0.780. Dropout consistency makes the model more confident under its own noise, but it never trains on the perturbed view. The perturbation T , not generic consistency, is what matters. The twin-view task row ( β = 0 ) is counterfactual data augmentation in the sense of Kaushik et al. (2020). Both views enter the task loss, with no KL term. This row drops the in-distribution gap to 1.0 pp and gives 21 percent CRASS and 13 percent e-CARE reductions. The answer-subspace KL adds little behaviourally. On the larger CRASS evaluation ( n = 274 ), augmentation alone reduces the Qwen-7B gap from 34.3 to 18.2 pp, while the full Vernier loss reaches 23.4 pp. The same larger-CRASS comparison on Qwen-14B gives nearly identical reductions for twin task and Vernier (see Table A2). 80.0 0.2 0.4 0.6 0.8 1.0                  
+
+> Normalised layer depth
+> 0.95
+> 0.96
+> 0.97
+> 0.98
+> 0.99
+> 1.00
+> cos( hlast
+> ℓ (P0),  hlast
+> ℓ (P1))
+> Phi-3-mini (3.8B) (base)
+> Phi-3-mini (3.8B) (Vernier)
+> Qwen2.5-7B (base)
+> Qwen2.5-7B (Vernier)
+> Qwen2.5-14B (base)
+> Qwen2.5-14B (Vernier)
+> Qwen2.5-32B (base)
+> Qwen2.5-32B (Vernier) 0.0 0.2 0.4 0.6 0.8 1.0
+> Normalised layer depth
+> 0.00
+> 0.05
+> 0.10
+> 0.15
+> 0.20
+> 0.25
+> ⟨| pθ(y|P0) −  pθ(y|P1)|⟩
+> Phi-3-mini (3.8B) (base)
+> Phi-3-mini (3.8B) (Vernier)
+> Qwen2.5-7B (base)
+> Qwen2.5-7B (Vernier)
+> Qwen2.5-14B (base)
+> Qwen2.5-14B (Vernier)
+> Qwen2.5-32B (base)
+> Qwen2.5-32B (Vernier) 0.0 0.2 0.4 0.6 0.8 1.0
+> Normalised layer depth
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Probe accuracy
+> chance (0.23)
+> (a) Within distribution: probe on P0
+> 0.0 0.2 0.4 0.6 0.8 1.0
+> Normalised layer depth
+> (b) Transfer: probe on P1
+> Phi-3-mini (3.8B) (base)
+> Phi-3-mini (3.8B) (Vernier)
+> Qwen2.5-7B (base)
+> Qwen2.5-7B (Vernier)
+> Qwen2.5-14B (base)
+> Qwen2.5-14B (Vernier)
+> Qwen2.5-32B (base)
+> Qwen2.5-32B (Vernier)
+
+Figure 2: Layer-wise mechanism diagnostics on held-out CLadder. (a) Last-token hidden-state cosine, (b) answer-token logit-lens disagreement, (c) and (d) variable-name probe accuracy. Dashed curves are base models, and solid curves are Vernier adapters. Full-vocabulary KL trades the other way, improving CRASS but nearly losing e-CARE. The KL term’s clearest contribution is mechanistic. It sharpens logit-lens agreement between the two views beyond augmentation alone, without changing accuracy, probe transfer, or cosine geometry. We treat it as a belief-level refinement, not as the source of closure. 4.4 MECHANISM ANALYSIS 
+
+Two layer-wise measurements at the decision token are plotted for Phi-3 and the three Qwen scales (see Figure 2). The cosine similarity between the hidden states of P0 and P1 measures whether the representation the model uses to predict depends on the surface form. The absolute logit-lens disagreement measures whether the model’s intermediate belief about the answer depends on it. On all three Qwen scales Vernier raises the cosine and lowers the disagreement, with the effect concentrated in the upper third of the network. On Phi-3 neither measurement moves. The final-layer summaries across models are reported in Table A3. The logit-lens reduction factor is 5.5 on Qwen-7B, 5.0 on Qwen-14B, and 3.1 on Qwen-32B, with the smaller 32B ratio explained by the lower base disagreement on Qwen-32B leaving less room to shrink. As a methodological control, we also computed the cosine pooled over all sequence positions rather than at the last non-pad token. The pooled signal moves by only 0.006 at the final layer on Qwen-7B against a 0.032 shift in the last-token cosine. Pooling washes out the effect because T edits only a small number of variable-name tokens. The cosine result has a possible confound: Vernier might make the perturbed view content-free rather than aligned. We test that with a layer-wise linear probe (see Figure 2 and table A3). At each layer, we train multinomial logistic regression to predict the variable-name family (12 classes: the 11 most frequent surface forms plus an “other” bucket) from the final prompt-token state of P0, then evaluate the same probe on P1. If the update removed story content from P1, transfer accuracy should fall toward chance. It rises instead. Final-layer transfer goes from 0.615 to 0.655 on Phi-3, 0.480 to 0.695 on Qwen-7B, 0.590 to 0.680 on Qwen-14B, and 0.585 to 0.705 on Qwen-32B. The adapted model recovers more of the same story-level information from the perturbed lexical form. 
+
+The alignment comes from paired views, while the KL sharpens beliefs. To attribute the alignment correctly we run the same diagnostics on the augmentation baseline ( β = 0 , no KL), reported in Table A4. On Qwen-7B augmentation alone raises the probe transfer to 0.690, against 0.695 for the full Vernier loss, and the final-layer cosine is the same under augmentation and the full loss. On Qwen-14B augmentation gives a probe transfer of 0.730, above Vernier’s 0.680. The representational alignment is produced by training on both views, not by the consistency term alone. The one diagnostic on which the KL moves the needle further is the logit-lens disagreement, which augmentation brings from 0.155 to 0.074 and the KL halves again to 0.028 on Qwen-7B. The KL therefore refines the agreement of the intermediate answer beliefs without changing the recoverability of story content. 
+
+A causal test by activation patching. The cosine, logit-lens, and probe diagnostics are correlational. To test whether the decision-token representation participates causally in the answer difference between the two views, we run an activation-patching experiment (Zhang and Nanda, 2024) on Qwen-7B, Qwen-14B, and Llama-3.1-8B (see Figure 3). For each item we cache the P0 hidden state at the decision token at a chosen decoder depth, overwrite the corresponding P1 hidden state with it, and let the patched activation propagate to the answer. On the base Qwen models the patch transfers P0’s answer to P1. Patching Qwen-7B at depth 0.8 raises P1 accuracy from 0.535 to 0.605, 9close to P0’s 0.615, and makes the patched P1 prediction agree with P0 on 97 percent of items. The same depth-0.8 peak replicates on Qwen-14B, where the patch raises P1 accuracy from 0.610 to 0.645 and the patched prediction agrees with P0 on 99.5 percent of items, against weaker effects at depth 0.6. Llama-3.1-8B has a smaller base gap on this CLadder slice, so the patch gives little accuracy lift, but it still makes patched P1 agree with clean P0 on 98 to 100 percent of items. A larger 500-item depth-0.8 check gives the same agreement pattern, with bootstrap 95% confidence intervals of 0.954–0.984 for Qwen-7B, 0.986–1.000 for Qwen-14B, and 0.962–0.988 for Llama-3.1-8B. Thus the patching result has two parts: accuracy recovery when the clean P0 answer is more accurate, and answer-identity transfer even when the clean gap is small. Donor controls on Qwen-7B show that this is not an arbitrary high-layer-vector effect: a different-prediction donor drives patched P1 toward the donor answer and lowers accuracy (see Figure A2). The controls also pin down the baseline against which the 97 percent agreement should be read. A random donor, which injects an unrelated item’s 
+
+P0 state, still leaves patched P1 agreeing with the clean P0 prediction on only 0.685 of items, so the matched patch is a 0.285 lift over this uninformative-injection floor rather than a restatement of how often the two clean views already agree. The decision-token representation is therefore a causal control point for answer identity across two model families, with the accuracy benefit determined by whether P0 is the better view on that slice. On the Vernier-adapted models the two views already agree, so the same patch is close to a no-op, consistent with the alignment having already been learned. 0.6 0.8 1.0      
+
+> Patch depth (fraction of decoder)
+> 0.6
+> 0.7
+> 0.8
+> 0.9
+> 1.0
+> Patched  P1 agrees with clean  P0
+> random-donor floor
+> (a) Answer-identity transfer
+> Qwen2.5-7B
+> Qwen2.5-14B
+> Llama-3.1-8B
+> Qwen-7B Qwen-14B Llama-8B
+> 0.45
+> 0.50
+> 0.55
+> 0.60
+> 0.65
+> 0.70
+> Accuracy
+> (b) Accuracy recovery (depth 0.8)
+> P1clean
+> P1patched (0.8)
+> P0(target)
+
+Figure 3: Causal activation patching on base Qwen2.5-7B, Qwen2.5-14B, and Llama-3.1-8B (held-out CLadder, n =200 ). The P0 decision-token hidden state is copied into the corresponding P1 state at the listed decoder depth. (a) Fraction of items on which the patched P1 prediction agrees with the clean P0 prediction, peaking at depth 0.8; the dashed line is the random-donor floor (0.685) from Figure A2. (b) Accuracy recovery at depth 0.8, where the patched P1 moves from its clean value toward the P0 target. On the Vernier-adapted models the two views already agree, so the same patch is close to a no-op. The full per-depth and Vernier-adapted numbers are tabulated in Table A7. 
+
+The misalignment is item-conditional, not a global direction. 
+
+Patching uses the per-item P0 repre-sentation, which carries that item’s content. This raises the question of whether the P0 − P1 difference is instead a single direction, or a low-rank map, that could be estimated once and applied at inference with no fine-tuning. We test this directly. At the causal layer we fit an affine map 
+
+T (h) = h + Ckh + b from P1 to P0
+
+decision-token states on 500 CLadder items, with b the mean difference and 
+
+Ck a rank-k least-squares correction, and apply it to the P1 decision token at inference over a rank sweep (see Table A5). The result is uniformly negative on Qwen-1.5B, 3B, 7B, 14B, and Phi-3. The mean-difference vector ( k = 0 ) leaves the gap and P1
+
+accuracy unchanged, and any k ≥ 4
+
+lowers P1 accuracy rather than raising it. On Qwen-7B the held-out CLadder P1 accuracy drops from 0.54 to 0.48 and the gap widens from 8.0 to 13.5 pp, and the CRASS and e-CARE gaps do not move. The failure is not specific to one layer or to a linear map. Sweeping the intervention over four decoder depths and replacing the affine map with a one-hidden-layer MLP fit on the same representations also fails to close the gap on Qwen-7B and Qwen-14B. The best case over this exhaustive sweep still leaves residual gaps of 5.0 pp on Qwen-7B CLadder, 31.0 pp on Qwen-7B CRASS, 4.5 pp on Qwen-14B CLadder, and 26.0 pp on Qwen-14B CRASS (see Table A6). Several deeper configurations degrade P1 further, for example a mid-depth MLP that drives the Qwen-14B CRASS gap from 27.5 to 59.0 pp. There is no consistent lexical-gap direction in the maps we tested. This sets the lexical gap apart from behavioural attributes such as sentiment, refusal, or truthfulness that prior work removes or controls with a single steering direction (Turner et al., 2023; Zou et al., 2023). The decision-token difference appears dominated by item-specific content, so although the per-item representation controls answer identity, the tested global maps do not realign the views. This suggests that closure needs a weight update that relearns the read-out from each lexical form rather than an inference-time edit. The two views are not offset by a fixed transformation in our tests. They are read out by a function that the fine-tune repairs. This resistance is specific to the causal benchmarks. On the non-causal tasks a nonlinear map does partially realign the views. 10 4.5 SENSITIVITY , ROBUSTNESS , AND CAPABILITY 
+
+The auxiliary checks support the same scoped conclusion. The β sweep is stable around β ∈ [0 .5, 1] ,with over-regularisation visible at β = 5 , and other hyperparameter sweeps leave the qualitative result unchanged (see Figure A1 and table A11). Placeholder-scheme stress tests show that the learned invariance is not fully scheme-independent. Qwen-7B remains closed across held-out schemes, but Qwen-14B is brittle on VAR A, VAR B (see Table A12). Larger-n, paired, and stratified CLadder checks show that the in-distribution base gap is modest but the paired reduction remains positive on average (see Tables A14, A15, A17 and A18). Larger-OOD checks show a strong CRASS reduction on Qwen-7B and Qwen-14B but only a small e-CARE reduction (see Table A16). The sampled capability checks do not detect broad damage on the Qwen and Phi rows, but they are too small to certify capability preservation. Mistral is the clear failure case (see Figures A3 and A5). Joint training on CLadder/CRASS/e-CARE trades a little CLadder closure for a much smaller CRASS gap (see Table A13). A lexical-overlap audit finds no 8-gram or 13-gram overlap between the CLadder training prompts and the sampled MMLU, HellaSwag, or GSM8K capability items (see Table A10), so the sampled capability changes are unlikely to be explained by verbatim train-test contamination. These checks narrow the claim rather than broaden it. The recipe is useful in a working regime, not a universally safe fine-tune. 4.6 WHEN THE METHOD WORKS : CAPACITY AND BASE -MODEL IDENTITY 
+
+To turn the question of when Vernier works into a measured one, we add three sub-4B models and run the full diagnostic suite on each (see Table A19 and fig. A1). Two are from the Qwen family (Qwen2.5-1.5B and Qwen2.5-3B), so comparing them against the larger Qwen models isolates capacity with architecture and pretraining held fixed. The third is Gemma-2-2B, a second small family. 
+
+A within-family capacity threshold. Inside the Qwen family the success boundary lies between 1.5B and 3B by our joint criterion: the gap should close without P0 regression, probe transfer should rise, and logit-lens disagreement should fall. Both endpoints are measured over three seeds, so the boundary is not an artefact of a single run. Qwen-1.5B fails this joint criterion on all three seeds: after training the gap is +3 .5 ± 0.8 pp, probe transfer drops by 0.09, and logit-lens disagreement barely moves. Qwen-3B succeeds on all three seeds by the same diagnostics: P0 and P1 both rise to 0.88 with the gap at +0 .5 ± 0.7 pp, the probe transfer rises by 0.29, the largest gain of any model, and the logit-lens disagreement halves. The two endpoints separate cleanly on the mechanism diagnostics and the per-seed spread (std under 1 pp on the gap) is far smaller than the gap between them. Since Qwen-1.5B and Qwen-3B share architecture and training family, this isolates capacity from base-model identity more cleanly than a cross-family comparison would. 
+
+But scale is necessary only within a family, not sufficient across families. The threshold is not a parameter-count rule. Phi-3-mini has 3.8B parameters and fails, while Qwen-3B is smaller and succeeds. Model family, pretraining, and instruction tuning also matter. Mistral-7B makes the same point at a larger scale because it needs a lower learning rate than the other 7B-class models. Gemma-2-2B is useful for a different reason. Its in-distribution gap closes with both views rising, but its logit-lens disagreement widens and probe transfer moves only 0.07. Gemma appears to fit the shared answer key without producing the representational alignment seen in the working models. Across the nine models, Vernier needs both enough representational headroom and a base model whose post-training leaves that headroom usable. 
+
+The working regime (7B to 32B) is not Qwen-specific. Qwen-7B, Qwen-14B, and Llama-3.1-8B agree across the behavioural diagnostics, and the closure reproduces across three seeds. Qwen-32B is harder to compare because its base in-distribution gap is already near zero, but the mechanism still moves: last-token cosine rises by 0.032, logit-lens disagreement drops 3.1-fold, and variable-name probe transfer rises by 0.12. e-CARE is the main exception. Its gap is within noise on Qwen-14B and reverses by 2.5 pp on Qwen-32B. We ran the same cosine diagnostic on e-CARE and found that Vernier still moves the two final-layer decision-token states closer together on all three Qwen scales (see Table A20). The remaining e-CARE gap is plausibly downstream of this structural alignment, rather than simply a failure to align the final-layer representations. 11 4.7 PRELIMINARY NON -CAUSAL RENAME CHECKS 
+
+The account so far comes from causal question answering. We also run a preliminary check on two non-causal BBH tasks with object names replaced by typed placeholders: logical deduction and reasoning about colored objects (see Table A21). The logical deduction rows use 100 held-out items, while the colored-objects rows use a smaller 20-item diagnostic slice. Both have a base rename gap, 9.0 pp on Qwen-7B logical deduction and 20.0 to 45.0 pp on colored objects. Counterfactual augmentation closes or reduces the gap with both views rising rather than P0 collapsing. On colored objects the Qwen-7B gap goes from 20.0 to −5.0 pp as P0 and P1 rise from 0.500 and 0.300 to 0.800 and 0.850, and the Qwen-14B gap halves from 45.0 to 20.0 pp with both views rising. Activation patching reproduces the causal-sufficiency pattern on the tested non-causal cells. Patching the P0
+
+decision-token state into P1 raises logical deduction Qwen-7B P1 accuracy from 0.63 to 0.77 with 89 percent agreement to P0, and raises colored-objects Qwen-14B P1 accuracy from 0.25 to 0.75 with full agreement. On colored objects the Qwen-7B patch is present but peaks at a deeper layer rather than 0.8. These results suggest that the rename gap, closure by augmentation, and decision-token control-point pattern can extend beyond causal QA, but they should not be read as a full non-causal benchmark evaluation. Steerability does differ by task. No inference-time map closes the gap on the causal benchmarks (Section 4.4), but on both non-causal tasks a nonlinear map at the causal layer partially realigns the views. On Qwen-7B logical deduction, it reduces the gap from 9.0 to 1.0 pp and raises P1 from 0.64 to 0.73. We tested whether the effective rank of the misalignment predicts this across five tasks and two model scales (see Figure A4). It does not: CLadder has a lower effective rank than the steerable non-causal tasks but remains unsteerable, while colored objects has the highest effective ranks and is steerable on both Qwen scales. The source of this task dependence remains open. 
+
+## 5 DISCUSSION 
+
+Alignment, not removal. The mechanism result is easy to misread. Higher cosine and lower logit-lens disagreement might look like removal of lexical-anchor information from the perturbed view. The probe says otherwise. After Vernier, the variable-name family is more recoverable from P1 than before training, the opposite of what a simple information-removal account predicts. Activation patching turns this from a correlation into an intervention: overwriting the P1 decision-token representation with the P0 representation transfers P0’s answer identity to P1 on 97 percent of Qwen-7B base-model items, 99.5 percent on Qwen-14B, and at least 98 percent on Llama-3.1-8B. The representation Vernier aligns is not a decorative diagnostic. It is a causal control point for the answer. 
+
+What the consistency term buys. Section 4.3 and Section 4.4 leave a fairly simple decomposition. The paired lexical views are the behavioural engine. They close 87.5 percent of the in-distribution gap, give the CRASS transfer that survives at larger n, and produce the same probe-transfer gain as the full loss (see Table A4). The answer-subspace KL mostly sharpens intermediate answer beliefs. It halves the logit-lens disagreement beyond augmentation, but it does not improve the larger-n
+
+CRASS number and does not change the probe or cosine results. We keep the KL for its identifiability interpretation and belief-level effect, not because it drives the closure. R-Drop provides the negative control: consistency without the structure-preserving perturbation widens the gap. 
+
+Failure modes and limitations. The failures are informative. Phi-3 closes the in-distribution gap by 
+
+P0 regression rather than P1 improvement, and an MLP-targeted LoRA ablation reproduces the same shortcut (see Section D). Mistral-7B needs a lower learning rate and still trades OOD transfer against capability (see Figures A3 and A5). The largest model here is 32B under QLoRA, most held-out and capability cells use n = 200 , the colored-objects non-causal check uses only n = 20 , and the capacity threshold is clean only within Qwen. The capability table should be read as a screen for large degradation rather than as a standard full-benchmark evaluation. The mechanism claim is also bounded: the evidence argues against simple information erasure and against a fixed inference-time steering direction, but it does not prove that downstream computation is unchanged after Vernier. A learned read-out or decision-boundary recalibration conditioned on the item representation remains compatible with our misalignment account. 12 6 CONCLUSION 
+
+In the regimes tested here, the lexical gap is better explained by representational misalignment than by simple information loss. Vernier uses paired-view counterfactual augmentation to realign original and placeholder views, while the answer-subspace KL mainly refines answer-belief agreement. Probe transfer and activation patching show that the perturbed view retains recoverable story-level information and that the decision-token representation can carry answer identity across views. Fixed inference-time maps do not close the causal benchmarks, which suggests that the read-out repair is item-conditional and weight-mediated. The strongest transfer is on CRASS. e-CARE remains weak and task-dependent. The capacity and family sweep further bounds the claim. Qwen succeeds at 3B but not 1.5B, Phi-3 and Gemma expose failure modes, and Mistral requires a lower-rate recipe. Preliminary non-causal checks suggest that similar rename gaps can occur beyond causal QA, but a full account of those settings remains open. 
+
+## REFERENCES 
+
+Marah Abdin, Jyoti Aneja, Hany Awadalla, et al. Phi-3 technical report: A highly capable language model locally on your phone, 2024. arXiv:2404.14219. Nora Belrose, Igor Ostrovsky, Lev McKinney, Zach Furman, Logan Smith, Danny Halawi, Stella Biderman, and Jacob Steinhardt. Eliciting latent predictions from transformers with the tuned lens, 2023. arXiv:2303.08112. Haoang Chi, He Li, Wenjing Yang, Feng Liu, Long Lan, Xiaoguang Ren, Tongliang Liu, and Bo Han. Unveiling causal reasoning in large language models: Reality or mirage? In Advances in Neural Information Processing Systems , 2024. Taco Cohen and Max Welling. Group equivariant convolutional networks. In International Conference on Machine Learning (ICML) , 2016. Tim Dettmers, Artidoro Pagnoni, Ari Holtzman, and Luke Zettlemoyer. QLoRA: Efficient finetuning of quantized LLMs. In Advances in Neural Information Processing Systems , 2023. Li Du, Xiao Ding, Kai Xiong, Ting Liu, and Bing Qin. e-CARE: a new dataset for exploring explainable causal reasoning. In Proceedings of the 60th Annual Meeting of the Association for Computational Linguistics (ACL) , 2022. Nelson Elhage, Neel Nanda, Catherine Olsson, Tom Henighan, Nicholas Joseph, Ben Mann, Amanda Askell, Yuntao Bai, Anna Chen, Tom Conerly, et al. A mathematical framework for transformer circuits, 2021. Transformer Circuits Thread. J ¨orn Frohberg and Frank Binder. CRASS: A novel data set and benchmark to test counterfactual reasoning of large language models. In Proceedings of the 13th Language Resources and Evaluation Conference (LREC) , 2022. Tianyu Gao, Xingcheng Yao, and Danqi Chen. SimCSE: Simple contrastive learning of sentence embeddings. In Proceedings of the 2021 Conference on Empirical Methods in Natural Language Processing (EMNLP) , 2021. Gemma Team. Gemma 2: Improving open language models at a practical size, 2024. arXiv:2408.00118. Mor Geva, Jasmijn Bastings, Katja Filippova, and Amir Globerson. Dissecting recall of factual associations in auto-regressive language models. In Proceedings of the 2023 Conference on Empirical Methods in Natural Language Processing (EMNLP) , 2023. Yuren Hao, Xiang Wan, and ChengXiang Zhai. An investigation of robustness of LLMs in math-ematical reasoning: Benchmarking with mathematically-equivalent transformation of advanced mathematical problems, 2025. arXiv:2508.08833. Dan Hendrycks, Collin Burns, Steven Basart, Andy Zou, Mantas Mazeika, Dawn Song, and Jacob Steinhardt. Measuring massive multitask language understanding. In International Conference on Learning Representations (ICLR) , 2021. 13 Edward J. Hu, Yelong Shen, Phillip Wallis, Zeyuan Allen-Zhu, Yuanzhi Li, Shean Wang, Lu Wang, and Weizhu Chen. LoRA: Low-rank adaptation of large language models. In International Conference on Learning Representations (ICLR) , 2022. Albert Q. Jiang, Alexandre Sablayrolles, Arthur Mensch, et al. Mistral 7B, 2023. arXiv:2310.06825. Zhijing Jin, Yuen Chen, Felix Leeb, Luigi Gresele, Ojasv Kamal, Zhiheng Lyu, Kevin Blin, Fer-nando Gonzalez Adauto, Max Kleiman-Weiner, Mrinmaya Sachan, and Bernhard Sch ¨olkopf. CLadder: Assessing causal reasoning in language models. In Advances in Neural Information Processing Systems , 2023. Divyansh Kaushik, Eduard Hovy, and Zachary C. Lipton. Learning the difference that makes a difference with counterfactually-augmented data. In International Conference on Learning Representations , 2020. Takeshi Kojima, Shixiang Shane Gu, Machel Reid, Yutaka Matsuo, and Yusuke Iwasawa. Large language models are zero-shot reasoners. In Advances in Neural Information Processing Systems ,2022. Donggyu Lee, Hyeok Yun, Meeyoung Cha, Sungwon Park, Sangyoon Park, and Jihee Kim. Econ-Causal: A context-aware economic reasoning benchmark for large language models, 2025. arXiv:2510.07231. Pengfeng Li, Chen Huang, Chaoqun Hao, Hongyao Chen, Xiao-Yong Wei, Wenqiang Lei, and See-Kiong Ng. Meter: Evaluating multi-level contextual causal reasoning in large language models, 2026. URL https://arxiv.org/abs/2604.11502 .Xiaobo Liang, Lijun Wu, Juntao Li, Yue Wang, Qi Meng, Tao Qin, Wei Chen, Min Zhang, and Tie-Yan Liu. R-drop: Regularized dropout for neural networks. In Advances in Neural Information Processing Systems , 2021. Llama Team, AI @ Meta. The llama 3 herd of models, 2024. arXiv:2407.21783. Ilya Loshchilov and Frank Hutter. Decoupled weight decay regularization. In International Confer-ence on Learning Representations (ICLR) , 2019. Tom McCoy, Ellie Pavlick, and Tal Linzen. Right for the wrong reasons: Diagnosing syntactic heuristics in natural language inference. In Proceedings of the 57th Annual Meeting of the Association for Computational Linguistics (ACL) , 2019. Kevin Meng, David Bau, Alex Andonian, and Yonatan Belinkov. Locating and editing factual associations in GPT. In Advances in Neural Information Processing Systems , 2022. Sewon Min, Xinxi Lyu, Ari Holtzman, Mikel Artetxe, Mike Lewis, Hannaneh Hajishirzi, and Luke Zettlemoyer. Rethinking the role of demonstrations: What makes in-context learning work? In 
+
+Proceedings of the 2022 Conference on Empirical Methods in Natural Language Processing (EMNLP) , 2022. Long Ouyang, Jeffrey Wu, Xu Jiang, Diogo Almeida, Carroll L Wainwright, Pamela Mishkin, Chong Zhang, Sandhini Agarwal, Katarina Slama, Alex Ray, et al. Training language models to follow instructions with human feedback. In Advances in Neural Information Processing Systems , 2022. Judea Pearl. Causality: Models, Reasoning, and Inference . Cambridge University Press, 2nd edition, 2009. Judea Pearl and Dana Mackenzie. The Book of Why: The New Science of Cause and Effect . Basic Books, 2018. Qwen Team, Alibaba Group. Qwen2.5 technical report, 2024. arXiv:2412.15115. Victor Sanh, Albert Webson, Colin Raffel, Stephen H Bach, Lintang Sutawika, Zaid Alyafeai, Antoine Chaffin, Arnaud Stiegler, Teven Le Scao, Arun Raja, et al. Multitask prompted training enables zero-shot task generalization. In International Conference on Learning Representations , 2022. 14 Melanie Sclar, Yejin Choi, Yulia Tsvetkov, and Alane Suhr. Quantifying language models’ sensitivity to spurious features in prompt design or: How i learned to start worrying about prompt formatting. In International Conference on Learning Representations , 2024. Mirac Suzgun, Nathan Scales, Nathanael Sch¨ arli, Sebastian Gehrmann, Yi Tay, Hyung Won Chung, Aakanksha Chowdhery, Quoc V. Le, Ed H. Chi, Denny Zhou, and Jason Wei. Challenging BIG-bench tasks and whether chain-of-thought can solve them. In Findings of the Association for Computational Linguistics: ACL 2023 , 2023. Alexander Matt Turner, Lisa Thiergart, Gavin Leech, David Udell, Ulisse Mini, and Monte MacDiarmid. Activation addition: Steering language models without optimization, 2023. arXiv:2308.10248. Xuezhi Wang, Jason Wei, Dale Schuurmans, Quoc Le, Ed Chi, Sharan Narang, Aakanksha Chowdh-ery, and Denny Zhou. Self-consistency improves chain of thought reasoning in language models. In International Conference on Learning Representations , 2023. Yuzhe Wang, Yaochen Zhu, and Jundong Li. Causalflip: A benchmark for llm causal judgment beyond semantic matching, 2026. URL https://arxiv.org/abs/2602.20094 .Albert Webson and Ellie Pavlick. Do prompt-based models really understand the meaning of their prompts? In Proceedings of the 2022 Conference of the North American Chapter of the Association for Computational Linguistics (NAACL) , 2022. Jason Wei, Maarten Bosma, Vincent Y Zhao, Kelvin Guu, Adams Wei Yu, Brian Lester, Nan Du, Andrew M Dai, and Quoc V Le. Finetuned language models are zero-shot learners. In International Conference on Learning Representations , 2022a. Jason Wei, Xuezhi Wang, Dale Schuurmans, Maarten Bosma, Brian Ichter, Fei Xia, Ed Chi, Quoc V Le, and Denny Zhou. Chain-of-thought prompting elicits reasoning in large language models. In 
+
+Advances in Neural Information Processing Systems , 2022b. Qizhe Xie, Zihang Dai, Eduard Hovy, Thang Luong, and Quoc Le. Unsupervised data augmentation for consistency training. In Advances in Neural Information Processing Systems (NeurIPS) , 2020. Zhenyu Yu and Shuigeng Zhou. Caliper: Probing lexical anchors versus causal structure in LLMs, 2026. URL https://arxiv.org/abs/2606.04915 .Fred Zhang and Neel Nanda. Towards best practices of activation patching in language models: Metrics and methods. In International Conference on Learning Representations (ICLR) , 2024. Andy Zou, Long Phan, Sarah Chen, James Campbell, Phillip Guo, Richard Ren, et al. Representation engineering: A top-down approach to AI transparency, 2023. arXiv:2310.01405. 
+
+## A ADDITIONAL DIAGNOSTIC FIGURES 
+
+The consistency-weight sweep and the scale summary for the logit-lens reduction diagnostic are reported in Figure A1. The stable region around β ∈ [0 .5, 1] supports the default choice in the main text, while the degradation at β = 5 marks the point where the consistency penalty starts to dominate task supervision. The scale panel is kept in the appendix because the model-by-model interpretation is already reported in the main text. 15 0 0.5 1 2 5
+
+β weight 
+
+0
+
+5
+
+> CLadder gap (pp)
+
+(a) In-distribution gap 
+
+> CLadder gap
+> base
+
+0 0.5 1 2 5
+
+β weight 
+
+20 
+
+25 
+
+30 
+
+> OOD gap (pp)
+
+(b) OOD transfer 
+
+> CRASS
+> e-CARE
+
+1.5 3 7 14 32 
+
+Model size (B, log) 
+
+0
+
+2
+
+4
+
+6
+
+> Lens reduction
+> 1.5B
+> 3B
+> 7B
+> 14B
+> 32B
+> Phi-3-mini
+> (3.8B)
+> Gemma-2-2B
+> no effect
+> Qwen2.5 family
+> Phi-3-mini (3.8B)
+> Gemma-2-2B
+
+Figure A1: Additional diagnostics. The left panel gives the Qwen2.5-7B sweep of the consistency-loss weight β. The right panel gives logit-lens reduction by scale. 
+
+## B ADDITIONAL RESULTS TABLES AND FIGURES 
+
+Table A1: Loss-component ablation on Qwen2.5-7B (held-out CLadder n = 200 , CRASS n = 200 ,e-CARE n = 200 ), all at step 500 with seed 42. Best results in each column are in bold.                                                      
+
+> In-distribution (CLadder) Out-of-distribution Variant P0P1Gap CRASS Gap e-CARE Gap Mean ∆OOD
+> Base (no fine-tuning) 0.625 0.545 +8 .0+34 .0+23 .0—
+> P0-only SFT 0.850 0.755 +9 .5+28 .0 ( -18%) +23 .5 ( -0%) −9%
+> R-Drop (Liang et al., 2021) (no T)0.965 0.780 +18 .5+25 .5 ( -25%) +22 .0 ( -4%) −15%
+> Twin task ( β= 0 , no KL) 0.885 0.875 +1 .0 ( -87 .5%) +27 .0 ( -21%) +20 .0 ( -13%) −17%
+> Full-vocab KL ( β= 1 )0.930 0.925 +0 .5 ( -94%) +21 .5(-37 %) +21 .5 ( -7%) −22%
+> Vernier (β= 1 , answer-subspace KL) 0.870 0.890 −2.0(-125 %) +25 .0 ( -26%) +17 .5(-24 %) −25 %
+
+Table A2: Counterfactual augmentation versus the full answer-subspace KL loss on CRASS. Both adapters are trained only on CLadder. The 274-item rows use all prepared CRASS items. 
+
+Model n Setting P0 P1 Gap ∆ gap 
+
+Qwen2.5-7B 200 Base 0.845 0.505 +34 .0 –Twin task 0.890 0.650 +24 .0 −29% 
+
+Vernier 0.880 0.635 +24 .5 −28% 
+
+Qwen2.5-7B 274 Base 0.839 0.496 +34 .3 –Twin task 0.891 0.708 +18 .2 −47 %
+
+Vernier 0.872 0.639 +23 .4 −32% 
+
+Qwen2.5-14B 200 Base 0.880 0.610 +27 .0 –Twin task 0.915 0.715 +20 .0 −26% 
+
+Vernier 0.920 0.720 +20 .0 −26% 
+
+Qwen2.5-14B 274 Base 0.894 0.617 +27 .7 –Twin task 0.920 0.745 +17 .5 −37% 
+
+Vernier 0.923 0.759 +16 .4 −41 %
+
+16 Table A3: Final-layer mechanism diagnostics across models, base versus Vernier. Cosine is last-token hidden-state cosine cos( hL(P0), h L(P1)) at final layer L. Logit-lens disagreement is ⟨| pθ (y |
+
+P0) − pθ (y | P1)|⟩ . Probe transfer is linear-probe accuracy on final-layer P1 hidden states.                                                
+
+> Hidden cosine Logit-lens gap Probe transfer Model Base Vernier ∆Base Vernier Ratio Base Vernier ∆
+> Phi-3-mini (3.8B) 0.990 0.990 0.000 0.044 0.044 1.0×0.615 0.655 +0 .040
+> Qwen2.5-7B 0.963 0.995 +0.032 0.155 0.028 5.5×0.480 0.695 +0.215
+> Qwen2.5-14B 0.979 0.995 +0 .016 0.173 0.035 5.0×0.590 0.680 +0 .090
+> Qwen2.5-32B 0.960 0.992 +0 .032 0.136 0.044 3.1×0.585 0.705 +0 .120
+
+Table A4: Mechanism diagnostics for augmentation without KL and full Vernier (held-out CLadder, 
+
+n = 200 ). Augment is the β = 0 twin-task adapter. Probe transfer is final-layer variable-name probe accuracy on P1 hidden states, and logit-lens gap is final-layer answer-token disagreement. 
+
+Model Diagnostic Base Augment ( β=0 ) Vernier ( β=1 )
+
+Qwen2.5-7B Probe transfer ( ↑) 0.480 0.690 0.695 Logit-lens gap ( ↓) 0.155 0.074 0.028 
+
+Qwen2.5-14B Probe transfer ( ↑) 0.590 0.730 0.680 
+
+Table A5: Training-free linear realignment at inference. An affine map T (h) = h + Ckh + b is fit from P1 to P0 decision-token states at depth 0.8 on 500 CLadder items and applied to the P1 decision token on the base model. Rank 8 is shown as representative. 
+
+CLadder gap CLadder P1 CRASS gap Model clean aligned clean aligned clean aligned Qwen2.5-1.5B −10 .5 −9.0 0.53 0.52 +21 .5 +22 .5
+
+Qwen2.5-3B −1.5 −0.5 0.53 0.52 +32 .0 +32 .0
+
+Qwen2.5-7B +8 .0 +13 .5 0.54 0.48 +33 .5 +34 .0
+
+Qwen2.5-14B +4 .5 +16 .5 0.60 0.48 +27 .5 +26 .5
+
+Phi-3-mini +3 .0 +9 .5 0.56 0.48 +28 .5 +23 .5
+
+Table A6: Best result from exhaustive inference-time steering on causal QA. Each row selects the smallest residual gap over four decoder depths and both linear and MLP maps fitted from P1 to P0
+
+decision-token states. 
+
+Model Benchmark Best map clean gap aligned gap P1 P1 aligned 
+
+Qwen2.5-7B CLadder MLP@0.8 +8 .0 +5 .0 0.535 0.565 Qwen2.5-7B CRASS linear@0.4 +33 .5 +31 .0 0.510 0.535 Qwen2.5-14B CLadder MLP@0.6 +4 .5 +4 .5 0.605 0.605 Qwen2.5-14B CRASS linear@0.6 +27 .5 +26 .0 0.605 0.620 
+
+17 Table A7: Causal activation patching on Qwen2.5-7B, Qwen2.5-14B, and Llama-3.1-8B (held-out CLadder, n = 200 ). The P0 decision-token hidden state at the listed decoder depth is copied into the corresponding P1 state. “ P1 patched” is post-patch P1 accuracy, and “flip-to-P0” is agreement with the clean P0 prediction. 
+
+Model Setting Depth P0 P1 clean P1 patched flip-to-P0
+
+Qwen2.5-7B Base 0.6 0.615 0.535 0.540 0.845 0.8 0.615 0.535 0.605 0.970 
+
+1.0 0.615 0.535 0.590 0.635 Vernier 0.6 0.870 0.890 0.890 0.920 0.8 0.870 0.890 0.870 1.000 1.0 0.870 0.890 0.865 0.985 Qwen2.5-14B Base 0.6 0.650 0.610 0.625 0.905 0.8 0.650 0.610 0.645 0.995 
+
+1.0 0.650 0.610 0.645 0.905 Vernier 0.6 0.910 0.935 0.935 0.955 0.8 0.910 0.935 0.915 0.995 1.0 0.910 0.935 0.885 0.925 Llama-3.1-8B Base 0.6 0.540 0.525 0.530 0.980 0.8 0.540 0.525 0.530 0.980 1.0 0.540 0.525 0.540 1.000 Vernier 0.6 0.945 0.960 0.945 1.000 0.8 0.945 0.960 0.945 1.000 1.0 0.945 0.960 0.945 0.980 matched same   
+
+> pred.
+> random different
+> pred.
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Patched  P1 agrees with clean  P0
+> 0.97 0.96
+> 0.69
+> 0.17
+
+(a) Answer-identity transfer     
+
+> matched same
+> pred.
+> random different
+> pred.
+> 0.35
+> 0.40
+> 0.45
+> 0.50
+> 0.55
+> 0.60
+> 0.65
+> Patched  P1 accuracy
+> P1clean (0.535)
+> P0(0.615)
+
+(b) Accuracy effect 
+
+Figure A2: Activation-patching donor controls on base Qwen2.5-7B (held-out CLadder, n = 200 ,depth 0.8). “Matched” copies the same item’s P0 hidden state, and the controls copy another item’s 
+
+P0 state. (a) Agreement of the patched P1 prediction with the clean P0 prediction. (b) Patched P1
+
+accuracy, with the clean-P1 (0.535) and P0 (0.615) references. The matched and same-prediction donors transfer answer identity, the random donor sits at an uninformative 0.685 floor, and a different-prediction donor drives P1 toward the wrong answer. The exact values are in Table A8. 18 Table A9: General-capability evaluation on MMLU (Hendrycks et al., 2021), HellaSwag, and GSM8K (n = 200 items each under a fixed seed). Qwen2.5-32B is evaluated with QLoRA. The two Mistral-7B rows compare the default and rescued training recipes. 
+
+MMLU HellaSwag GSM8K Model Base Vernier ∆ Base Vernier ∆ Base Vernier ∆
+
+Phi-3-mini (3.8B) 0.655 0.655 0.0 0.795 0.805 +1 .0 0.815 0.805 −1.0
+
+Qwen2.5-7B 0.685 0.690 +0 .5 0.830 0.790 −4.0 0.705 0.700 −0.5
+
+Qwen2.5-14B 0.780 0.775 −0.5 0.855 0.850 −0.5 0.820 0.840 +2 .0
+
+Qwen2.5-32B 0.825 0.850 +2 .5 0.900 0.895 −0.5 0.740 0.875 +13 .5
+
+Llama-3.1-8B 0.565 0.620 +5 .5 0.645 0.705 +6 .0 0.830 0.765 −6.5
+
+Mistral-7B-v0.3, lr=1e-4 † 0.525 0.465 −6.0 0.650 0.600 −5.0 0.525 0.160 −36 .5
+
+Mistral-7B-v0.3, lr=5e-6, step 150 0.525 0.505 −2.0 0.650 0.650 0.0 0.525 0.455 −7.0
+
+Table A8: Activation-patching donor controls on Qwen2.5-7B (held-out CLadder, n = 200 , depth 0.8). Matched uses the same item’s P0 hidden state, and the controls replace it with another item’s 
+
+P0 hidden state. 
+
+Setting Donor P0 P1 clean P1 patched flip target flip donor 
+
+Base matched 0.615 0.535 0.605 0.970 0.970 Base random 0.615 0.535 0.510 0.685 0.930 Base same pred. 0.615 0.535 0.620 0.965 0.965 Base different pred. 0.615 0.535 0.410 0.175 0.825 Phi-3-mini Qwen-7B Qwen-14B Qwen-32B Llama-8B Mistral   
+
+> (lr 1e-4)
+> Mistral
+> (lr 5e-6)
+> −40
+> −30
+> −20
+> −10
+> 0
+> 10
+> Δ accuracy vs base (pp)
+> capability collapse
+> MMLU HellaSwag GSM8K
+
+Figure A3: General-capability change after Vernier on MMLU (Hendrycks et al., 2021), HellaSwag, and GSM8K ( n = 200 items each under a fixed seed), reported as ∆ accuracy in percentage points versus base. Qwen2.5-32B is evaluated with QLoRA. The Qwen and Phi rows show no broad degradation, whereas Mistral-7B under the canonical learning rate collapses on GSM8K; the rescued low-rate recipe (step 150) recovers most of the loss. The per-benchmark numbers are in Table A9. Table A10: Lexical-overlap contamination check for the capability benchmarks. The 1500 CLadder training prompts are compared with the 200-item MMLU, HellaSwag, and GSM8K samples using long n-gram overlap. 
+
+Benchmark Items 8-gram overlap 13-gram overlap 
+
+MMLU 200 0.000 0.000 HellaSwag 200 0.000 0.000 GSM8K 200 0.000 0.000 
+
+19 Table A11: Hyperparameter sweeps. Top: KL vs MSE consistency form on Qwen-7B. Middle: LoRA rank on Qwen-7B. Bottom: β sweep on Qwen-14B. Best per column in each block in bold. 
+
+Configuration CLadder Gap CRASS Gap e-CARE Gap Avg. OOD reduction 
+
+Consistency form on Qwen-7B ( β = 1 , r = 16 ): 
+
+Symmetric KL (default) −2.0 +25 .0 +17 .5 −25 .2%
+
+MSE on answer-subspace logits −1.5 +24 .5 +19 .0 −22 .8% 
+
+LoRA rank on Qwen-7B ( β = 1 , symmetric KL, αLoRA = 2 r): 
+
+r = 4 −2.0 +26 .0 +20 .0 −18 .3% 
+
+r = 8 −4.5 +23 .5 +22 .0 −17 .6% 
+
+r = 16 (default) −2.0 +25 .0 +17 .5 −25 .2%
+
+r = 32 −3.0 +21 .5 +22 .5 −19 .5% 
+
+β sweep on Qwen-14B ( r = 16 , symmetric KL): 
+
+β = 0 .5 −1.5 +18 .5 (-31%) +18 .5 (-14%) −22 %
+
+β = 1 .0 (default) −1.5 +20 .5 ( -24%) +21 .0 ( -2%) −13% 
+
+β = 2 .0 +2 .0 +18 .5 ( -31%) +22 .0 ( +2%) −14% 
+
+Table A12: Adversarial-placeholder robustness on held-out CLadder ( n = 200 ). Each Vernier adapter is trained only on the canonical X1, X 2, . . . scheme (top block) and evaluated under three held-out schemes the adapter has never seen. 
+
+Phi-3-mini Qwen-7B Qwen-14B Scheme Setting P0 P1 Gap P0 P1 Gap P0 P1 Gap 
+
+X1, X 2, . . . Base 0.585 0.540 +4 .5 0.625 0.545 +8 .0 0.615 0.580 +3 .5
+
+Vernier 0.550 0.550 0.0 0.870 0.890 −2.0 0.920 0.935 −1.5
+
+foo, bar, baz, ... Base 0.585 0.575 +1 .0 0.625 0.555 +7 .0 0.615 0.605 +1 .0
+
+Vernier 0.550 0.575 −2.5 0.870 0.855 +1 .5 0.920 0.915 +0 .5
+
+alpha a, alpha b, ... Base 0.585 0.565 +2 .0 0.625 0.540 +8 .5 0.615 0.590 +2 .5
+
+Vernier 0.550 0.570 −2.0 0.870 0.845 +2 .5 0.920 0.870 +5 .0
+
+VAR A, VAR B, ... Base 0.585 0.550 +3 .5 0.625 0.515 +11 .0 0.615 0.530 +8 .5
+
+Vernier 0.550 0.545 +0 .5 0.870 0.870 0.0 0.920 0.775 +14 .5
+
+Table A13: Setting A (CLadder-only training) versus Setting B (joint training on CLadder, CRASS, and e-CARE) on Qwen2.5-7B and Qwen2.5-14B. Setting B uses 5,154 pooled training items, single seed. Best CRASS and best e-CARE per model in bold. 
+
+Gap (pp) Model Setting CLadder CRASS e-CARE ∆OOD 
+
+Qwen2.5-7B Base +8 .0 +34 .0 +23 .0 —Setting A −2.5±0.9 +24 .8±0.3 +18 .8±1.5 −22% 
+
+Setting B +0 .5 +5.5 +16 .5 −56 %
+
+Qwen2.5-14B Base +3 .5 +27 .0 +21 .5 —Setting A −1.5 +20 .5 +21 .0 −13% 
+
+Setting B +1 .0 +5.5 +14 .0 −56 %
+
+20 Table A14: Paired statistical tests for Qwen2.5-7B. Gaps are P0 − P1 in percentage points. CIs are paired bootstrap 95% intervals over items. McNemar tests whether the paired P0/P 1 correctness asymmetry differs from zero. The final column is the paired reduction in gap relative to the base row for the same benchmark. 
+
+Benchmark Setting n P0 P1 Gap Gap CI McNemar p ∆ gap vs base 
+
+CLadder Base 200 62.5 54.5 +8.0 [+3.0, +13.0] 0.004 –CLadder Vernier 200 87.0 89.0 -2.0 [-6.0, +2.0] 0.454 +10.0 [+3.5, +17.0] CRASS Base 200 84.5 50.5 +34.0 [+26.5, +41.5] < 10 −4 –CRASS Vernier 200 88.5 63.5 +25.0 [+18.0, +32.0] < 10 −4 +9.0 [+3.0, +15.5] e-CARE Base 200 81.5 58.5 +23.0 [+15.5, +30.5] < 10 −4 –e-CARE Vernier 200 81.0 63.5 +17.5 [+10.0, +25.0] < 10 −4 +5.5 [+0.5, +11.0] 
+
+Table A15: Larger CLadder held-out evaluation ( n = 1000 ). Gaps are P0 − P1 in percentage points with paired bootstrap 95% intervals. The final column reports paired gap reduction relative to the corresponding base model. 
+
+Model Setting n P0 P1 Gap Gap CI ∆ gap vs base 
+
+Qwen2.5-7B Base 1000 55.8 53.4 +2.4 [+0.0, +4.8] –Qwen2.5-7B Vernier 1000 84.2 85.5 -1.3 [-3.0, +0.4] +3.7 [+0.7, +6.7] Qwen2.5-14B Base 1000 56.8 54.0 +2.8 [+0.5, +5.2] –Qwen2.5-14B Vernier 1000 86.6 87.9 -1.3 [-2.7, +0.1] +4.1 [+1.3, +6.8] 
+
+Table A16: Larger out-of-distribution evaluation for Qwen2.5-7B and Qwen2.5-14B. CRASS uses all 274 prepared items, and e-CARE uses a 1000-item sample. The adapters are trained only on CLadder. Gap reductions are relative to the corresponding base row. 
+
+Model Benchmark / Setting n P0 P1 Gap ∆ Gap 
+
+Qwen2.5-7B CRASS Base 274 0.839 0.489 +35 .0 –CRASS Vernier 274 0.876 0.639 +23 .7 −32 %
+
+e-CARE Base 1000 0.802 0.595 +20 .7 –e-CARE Vernier 1000 0.808 0.621 +18 .7 −10 %
+
+Qwen2.5-14B CRASS Base 274 0.894 0.620 +27 .4 –CRASS Vernier 274 0.923 0.755 +16 .8 −39 %
+
+e-CARE Base 1000 0.824 0.592 +23 .2 –e-CARE Vernier 1000 0.830 0.606 +22 .4 −3% 
+
+Table A17: Base-model CLadder lexical gaps on a larger held-out slice ( n = 1000 ). Gaps are P0 − P1
+
+in percentage points with paired bootstrap 95% intervals, and p is the exact two-sided McNemar test on paired correctness. 
+
+Model P0 P1 Gap 95% CI McNemar p
+
+Qwen2.5-7B 0.553 0.534 +1 .9 [−0.6, +4 .4] 0.151 Qwen2.5-14B 0.564 0.549 +1 .5 [−0.9, +3 .9] 0.255 Qwen2.5-32B 0.568 0.558 +1 .0 [−1.3, +3 .3] 0.440 Llama-3.1-8B 0.530 0.508 +2 .2 [−1.0, +5 .3] 0.194 
+
+21 Table A18: Random stratified CLadder held-out splits on Qwen2.5-7B. Each run trains a fresh adapter on 1500 training items and evaluates on a disjoint 200-item held-out set stratified by rung. Values are mean ± standard deviation across split seeds {7, 42 , 123 }.
+
+Aggregate Base Gap Vernier Gap ∆ Gap 
+
+Mean ± std +6.2 ± 5.2 +0.2 ± 1.4 +6.0 ± 5.0 
+
+Table A19: Capacity and mechanism sweep on held-out CLadder ( n = 200 ). The gap is P0 − P1.“Probe ∆” is the change in final-layer P1 probe-transfer accuracy, and “lens ratio” is the base-to-Vernier logit-lens disagreement ratio. Small Qwen rows ( †) are three-seed means ± std, and other rows are single-seed. 
+
+Model Params Base Gap Vernier Gap Probe ∆ Lens Ratio Verdict 
+
+Qwen2.5-1.5B † 1.5B -9.0 +3.5 -0.09 1.1× fail Qwen2.5-3B † 3B +0.5 +0.5 +0.29 2.1× success 
+
+Phi-3-mini 3.8B +4.5 +0.0 +0.04 1.0× fail Gemma-2-2B 2B +9.5 -2.0 +0.07 0.4× mixed Qwen2.5-7B 7B +8.0 -2.5 +0.22 5.5× success Qwen2.5-14B 14B +3.5 +0.5 +0.09 5.0× success Qwen2.5-32B 32B -2.0 +0.5 +0.12 3.1× success 
+
+Table A20: e-CARE final-layer decision-token alignment. Cosine is cos( hL(P0), h L(P1)) at the last non-pad token. The remaining e-CARE behavioural gap is therefore not explained by a failure to move the two final-layer representations closer together. 
+
+Model Base Cosine Vernier Cosine ∆
+
+Qwen2.5-7B 0.904 0.923 +0.019 Qwen2.5-14B 0.917 0.936 +0.020 Qwen2.5-32B 0.902 0.924 +0.021 
+
+Table A21: Preliminary non-causal BBH checks with object names renamed to typed placeholders. Logical deduction uses n = 100 held-out items; colored objects uses a smaller n = 20 diagnostic slice. Augmentation closes or reduces the gap with both views rising, and activation patching shows the decision-token representation is a control point in the tested cells. 
+
+Base After Augmentation Task Model P0 P1 Gap P0 P1 Gap 
+
+Logical deduction Qwen-7B 0.740 0.650 +9.0 0.950 0.950 +0.0 
+
+Qwen-14B 0.900 0.890 +1.0 0.990 0.980 +1.0 Colored objects Qwen-7B 0.500 0.300 +20.0 0.800 0.850 -5.0 
+
+Qwen-14B 0.750 0.300 +45.0 0.850 0.650 +20.0 
+
+Activation patching (P0 decision-token state copied into P1)logical deduction, Qwen-7B, depth 0.8: P1 0.63 → 0.77 , flip-to-P0 0.89 
+
+colored objects, Qwen-14B, depth 0.8: P1 0.25 → 0.75 , flip-to-P0 1.00 
+
+22 30 35 40 45 50 55 60 
+
+Effective rank of P1→P0 correction (depth 0.8) 
+
+> CLadder 14B
+> CLadder 7B
+> CRASS 14B
+> CRASS 7B
+> LogDed 7B
+> LogDed 14B
+> Tracking 7B
+> Tracking 14B
+> Colored 14B
+> Colored 7B
+> 32.7
+> 33.3
+> 43.4
+> 44.0
+> 45.8
+> 46.5
+> 46.8
+> 47.4
+> 52.4
+> 57.5
+> steerable
+> not steerable
+
+Figure A4: Effective rank does not explain task-dependent steerability. Effective rank is the participa-tion ratio of the P1 → P0 linear-correction spectrum at depth 0.8, and a task is marked steerable if a swept linear or MLP map closes its gap. Steerable (green) and non-steerable (grey) tasks interleave along the rank axis: CLadder has a lower rank than the steerable non-causal tasks yet stays unsteer-able, while colored objects has the highest ranks and is steerable on both Qwen scales. Base gaps are measured on the steering map-fitting slice and can differ by a few points from the held-out gaps in Table A21 (logical deduction uses n = 100 , colored objects uses n = 20 ). The underlying values are in Table A22. Table A22: Effective rank does not explain task-dependent steerability. Effective rank is the participa-tion ratio of the P1 → P0 linear-correction spectrum at depth 0.8. Best gap is the smallest residual gap reached by any swept linear or MLP map. Base gaps here are measured on the steering map-fitting slice and can differ by a few points from the held-out gaps in Table A21 (logical deduction uses 
+
+n = 100 , while colored objects uses n = 20 ; e.g. colored objects on Qwen-14B is +50 .0 here versus 
+
++45 .0 held-out). 
+
+Task Model Eff. Rank Base Gap Best Gap Steerable 
+
+CLadder qwen25-14b 32.74 +4.0 +4.5 ×
+
+CLadder qwen25-7b 33.31 +5.5 +2.5 ×
+
+CRASS qwen25-14b 43.44 +29.0 +29.8 ×
+
+CRASS qwen25-7b 44.00 +41.1 +29.0 ×
+
+logical deduction qwen25-7b 45.80 +9.0 +1.0 ✓
+
+logical deduction qwen25-14b 46.53 +0.0 +0.0 ×
+
+tracking objects qwen25-7b 46.83 -9.0 +1.0 ×
+
+tracking objects qwen25-14b 47.43 -1.0 -1.0 ×
+
+colored objects qwen25-14b 52.42 +50.0 +20.0 ✓
+
+colored objects qwen25-7b 57.55 +20.0 +5.0 ✓
+
+23 0 50 100 150 200      
+
+> Training step (lr 5 × 10 −6 )
+> 0.45
+> 0.50
+> 0.55
+> 0.60
+> 0.65
+> 0.70
+> Accuracy
+> operating
+> point (150)
+> P1overshoot
+> P0acc.
+> P1acc.
+> gap (pp) −8
+> −6
+> −4
+> −2
+> 0
+> 2
+> 4
+> 6
+> 8
+> Gap  P0 − P1 (pp)
+
+Figure A5: Mistral-7B-Instruct-v0.3 checkpoint trajectory under the rescued recipe (lr 5×10 −6) on the in-distribution CLadder held-out slice. P0 and P1 accuracy (left axis) and the signed gap P0 − P1
+
+(right axis) are plotted against the training step. Step 150 is the operating point reported in Tables 2 and 3 and fig. A3; later checkpoints overshoot into a negative gap as P1 overtakes P0. The per-step numbers are in Table A23. Table A23: Mistral-7B-Instruct-v0.3 checkpoint trajectory under the rescued recipe (lr= 5×10 −6) on the in-distribution CLadder held-out slice. Step 150 is the operating point reported in Tables 2, 3 and A9. 
+
+Step P0 P1 CLadder gap Comment 
+
+Base 0.610 0.565 +4.5 —25 0.565 0.485 +8.0 no learning yet 50 0.575 0.505 +7.0 75 0.500 0.485 +1.5 100 0.590 0.550 +4.0 partial closure 125 0.600 0.590 +1.0 150 0.605 0.600 +0.5 sweet spot, reported in Tables 2, 3 and A9 175 0.585 0.625 -4.0 P1 overshoot 200 0.600 0.670 -7.0 P1 overshoot 
+
+## C PRE -SPECIFICATION , RECIPE AUDIT , AND FALSIFICATION SUMMARY 
+
+To make the selection process auditable, we list the default recipe and every per-model deviation, together with the trigger and the metric used to choose it. The default recipe uses LoRA rank 16 on the attention projections, α = β = 1 , learning rate 1 × 10 −4, and 500 steps. Two models deviate. Phi-3-mini uses learning rate 5 × 10 −6 with early stopping at step 70, because the canonical learning rate drives the adapter to a constant-output minimum by step 50; the trigger is the degenerate in-distribution collapse, observed before any out-of-distribution evaluation. Mistral-7B uses the same low learning rate with the operating point at step 150, selected as the earliest checkpoint whose in-distribution gap is within 1 pp of zero while avoiding the capability collapse of the canonical run (Figure A5); out-of-distribution metrics are not used for this selection. The 14B and 32B models use QLoRA for memory reasons only, with no change to the loss or selection rule. Seed choices are fixed in advance to {7, 42 , 123 } for the three-seed models and to 42 for the single-seed models; no seed is dropped. The argument is organised so that each diagnostic can fail independently. Table A24 summarises the prediction each account makes, the observation that would falsify the representational-misalignment reading, and where the outcome is reported. The misalignment account survives on the working-regime models and is falsified, by these same criteria, on Phi-3 and Gemma, which is why the later claims are scoped by capacity and base-model identity rather than asserted universally. 24 Table A24: Falsification summary. Each row is an independent test of the representational-misalignment account against simple information erasure or a generic-consistency explanation.                         
+
+> Prediction (misalignment) Falsifier Where
+> Gap closes with P1rising, not P0collapsing Closure driven by P0regression Table 2 (Phi-3 falsifies) Story content stays recoverable from P1Probe transfer falls toward chance Table A3 (probe rises) Decision-token beliefs of the two views converge Logit-lens disagreement does not move Table A3 (Phi-3 falsifies)
+> T, not generic consistency, drives closure R-Drop (no T) reproduces the effect Table A1 (R-Drop widens gap) The decision-token state carries answer identity Matched patch is no better than random donor Figures A2 and 3 The gap is item-conditional, not a fixed direction A once-fit map removes it at inference Tables A5 and A6 (map fails)
+
+## D PHI -3 WITH MLP-TARGETED LORA 
+
+The default Vernier configuration places LoRA on the attention projections. On Phi-3 this drives the in-distribution gap to zero through P0 regression and leaves the hidden representation unchanged (Section 4.4). To test whether the failure is intrinsic to Phi-3 or specific to the attention-only LoRA target, we re-train Phi-3 with the LoRA target set switched to the MLP projections, keeping the loss, optimiser, learning rate ( 5 × 10 −6), batch size, rank, and number of steps identical, and sweep the checkpoint at step ∈ { 25 , 50 , 75 , 100 } on the in-distribution held-out slice. The full trajectory together with out-of-distribution transfer is reported in Table A25. Table A25: Phi-3-mini with the LoRA target switched from attention to MLP projections (gate up proj , down proj ), keeping all other hyperparameters identical. The default attention-LoRA row is included for reference. 
+
+LoRA target Step P0 P1 CLadder gap OOD reduction 
+
+Base (no adapter) — 0.585 0.540 +4.5 —
+
+Attention projections ( q,k,v,o proj ), default Vernier: 
+
+attn 500 0.550 0.550 0.0 CRASS -3%, e-CARE -10% 
+
+MLP projections ( gate up proj , down proj ): 
+
+mlp 25 0.580 0.545 +3.5 —
+
+mlp 50 0.570 0.535 +3.5 CRASS -3%, e-CARE -7% 
+
+mlp 75 0.510 0.490 +2.0 CRASS +2%, e-CARE -5% 
+
+mlp 100 0.490 0.490 0.0 CRASS -5%, e-CARE -2% 
+
+The MLP-LoRA variant reproduces the attention-LoRA failure with no qualitative difference. The in-distribution gap does close (to 2.0 pp at step 75 and to 0.0 pp at step 100), but P0 regresses monotonically from 0.585 at base to 0.490 at step 100, the chance rate on the binary-answer subset. The OOD gaps on CRASS and e-CARE stay within 3 pp of the base model at every checkpoint. Switching the LoRA target therefore does not change the conclusion of Section 4.6. In our runs, the 3.8B adapter does not find an answer-subspace invariance that also preserves task accuracy, and the optimiser falls back to the same confidence-suppression shortcut regardless of which projection family it acts on. 
+
+## E PER -RUNG CL ADDER BREAKDOWN 
+
+The held-out CLadder results broken down by Pearl-ladder rung are reported in Table A26. 25 Table A26: Per-rung CLadder breakdown ( n = 200 held-out), grouped by model so the three rungs can be compared within each model. Rung n is the count of held-out items at that rung. “flip” marks a base gap that reverses sign after Vernier (relative reduction undefined). ∆gap is the relative gap reduction versus base. Within each model, bold marks the best and underline the second best across the three rungs per column ( P0/P1 higher is better; Gap closest to 0 is better). ∆gap is shown but not ranked, because the per-rung base gaps differ and flips and overcorrection make it non-monotonic.                                                                          
+
+> Base Vernier Model Rung (n)P0P1Gap P0P1Gap Rel. gap
+> Phi-3-mini Observational (75) 0.547 0.520 +2.7 0.520 0.547 -2.7 flip Interventional (57) 0.667 0.614 +5.3 0.596 0.614 -1.8 flip Counterfactual (68) 0.559 0.500 +5.9 0.544 0.500 +4.4 -25% Qwen2.5-7B Observational (75) 0.587 0.547 +4.0 0.880 0.853 +2.7 -32% Interventional (57) 0.684 0.579 +10.5 0.947 1.000 -5.3 -150% Counterfactual (68) 0.618 0.515 +10.3 0.794 0.838 -4.4 -143% Qwen2.5-14B Observational (75) 0.587 0.573 +1.3 0.893 0.907 -1.3 flip Interventional (57) 0.632 0.596 +3.5 0.947 1.000 -5.3 -251% Counterfactual (68) 0.632 0.574 +5.9 0.926 0.912 +1.5 -75%
+
+On both Qwen models the largest baseline gap is on the interventional and counterfactual rungs and the smallest is on the observational rung. After Vernier the interventional P1 accuracy reaches 1.000 on both Qwen models, the largest single-cell accuracy improvement reported in the paper, consistent with the hypothesis that lexical anchors substitute most heavily for causal-structure inference on the two causal rungs. Phi-3 shows the opposite pattern. The interventional rung gap closes purely through 
+
+P0 regression, with P0 falling from 0.667 to 0.596 while P1 stays at 0.614. This is the per-rung signature of the mechanism null reported above. 26

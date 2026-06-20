@@ -6,29 +6,37 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-06-19
-- 运行时间：2026-06-19 21:04:22 UTC
+- 最新运行日期：2026-06-20
+- 运行时间：2026-06-20 21:10:59 UTC
 - 运行状态：成功
-- 本次总论文数：2
-- 精读区：0
-- 速读区：2
+- 本次总论文数：5
+- 精读区：2
+- 速读区：3
 
 ### 今日简报（AI）
-今日精读聚焦两篇LLM推理研究，均从token级分布偏差与解耦入手探索效率提升。  
-两篇论文均提出通过细粒度处理token层次的可控性，有望优化复杂推理任务的性能与计算成本。  
-建议普通读者关注“token级分布解耦”思路，这可能是未来大模型减少冗余推理、提升实用性的关键方向。
-- 详情：[/202606/19/README](/202606/19/README)
+今日聚焦因果推理中的表征对齐与可验证强化学习策略推理，精读两篇高分论文。
+重点关注《Vernier》揭示的词汇差距背后表征不对齐问题，以及《STRIDE》提出的可验证RL判别轨迹估计方法。
+建议普通读者先阅读这两篇精读论文的引言或博客，深入理解因果推理与强化学习结合的前沿动向。
+- 详情：[/202606/20/README](/202606/20/README)
 
 ### 精读区论文标签
-- 本次无精读推荐。
+1. [Vernier: Probing Representational Misalignment Behind Lexical Gaps in Causal Reasoning](/202606/20/2606.15733v1-vernier-probing-representational-misalignment-behind-lexical-gaps-in-causal-reasoning)  
+   标签：评分：9.0/10、query:key-tokens
+   evidence：使用激活修补追踪变量名token在推理中的因果效应
+2. [STRIDE: Strategic Trajectory Reasoning via Discriminative Estimation for Verifiable Reinforcement Learning](/202606/20/2606.15866v1-stride-strategic-trajectory-reasoning-via-discriminative-estimation-for-verifiable-reinforcement-learning)  
+   标签：评分：8.0/10、query:key-tokens
+   evidence：推理轨迹中token贡献的估计
 
 ### 速读区论文标签
-1. [Beyond Entropy: Learning from Token-Level Distributional Deviations for LLM Reasoning](/202606/19/2606.19771v1-beyond-entropy-learning-from-token-level-distributional-deviations-for-llm-reasoning)  
-   标签：评分：7.0/10、query:key-tokens
-   evidence：token级分布偏差在LLM推理中的应用
-2. [ADaPT: Token-Level Decoupling for Efficient Large Reasoning Models](/202606/19/2606.19919v1-adapt-token-level-decoupling-for-efficient-large-reasoning-models)  
-   标签：评分：7.0/10、query:key-tokens
-   evidence：令牌级模式选择区分关键推理步骤，涉及令牌重要性
+1. [CoRA: Confidence-Rationale Alignment for Reliable Chain-of-Thought Reasoning](/202606/20/2606.14961v1-cora-confidence-rationale-alignment-for-reliable-chain-of-thought-reasoning)  
+   标签：评分：6.0/10、query:key-tokens
+   evidence：研究答案置信度与CoT理由的对齐，涉及推理中token级别的支持
+2. [Theorem-Grounded Execution Ontologies for Interpretable Machine Reasoning](/202606/20/2606.16010v1-theorem-grounded-execution-ontologies-for-interpretable-machine-reasoning)  
+   标签：评分：6.0/10、query:key-tokens
+   evidence：将推理建模为可执行状态转换，有利于对关键步骤进行隐藏状态分析
+3. [Tyler: Typed Latent Reasoning for Language Models -- When to Think, What to Compute, and How Much to Allocate](/202606/20/2606.16360v1-tyler-typed-latent-reasoning-for-language-models----when-to-think-what-to-compute-and-how-much-to-allocate)  
+   标签：评分：6.0/10、query:key-tokens
+   evidence：提出带预算分配的类型化潜在推理，与推理序列相关
 
 
 <div class="dpr-home-promo-card">
