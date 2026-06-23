@@ -1,0 +1,820 @@
+Title: Finding the Evidence: Discovering Decision-Supporting Tokens for On-Policy Reasoning Distillation
+
+URL Source: https://arxiv.org/pdf/2606.22830v1
+
+Published Time: Tue, 23 Jun 2026 02:38:45 GMT
+
+Number of Pages: 14
+
+Markdown Content:
+## Finding the Evidence: Discovering Decision-Supporting Tokens for On-Policy Reasoning Distillation 
+
+Jinwei Xiao 1, Zhuowen Han 3, Yueqing Sun 1, Zhengxi Lu 1, Yuxin Liu 1,Zhiyuan Yao 1, Wentao Chen 2, Qi Gu †1, Xunliang Cai 1,
+
+> 1
+
+Meituan Longcat Team, 2Nanjing University, 
+
+> 3
+
+TJUNLP Lab, College of Intelligence and Computing, Tianjin University  
+
+> xiaojinwei0917@gmail.com guqi03@meituan.com
+
+Abstract 
+
+On-policy distillation transfers reasoning abil-ity through dense token-level supervision, yet the nature of the transferable signal remains unclear. We discover that reasoning chains contain two types of knowledge that require different discovery mechanisms: decisions 
+
+(where to branch), which surface through stu-dent uncertainty, and evidence (intermediate steps that justify decisions), which hides in positions where the student is confident yet wrong. Current methods capture only deci-sions; the substantive knowledge in evidence tokens remains untransferred. We propose DEAR ( Decision-Evidence Aware Reasoning Distillation), which first identifies decisions via student entropy, then discovers their supporting evidence through hidden-state cosine similarity to decision anchors, boosted by teacher–student divergence to prioritize the largest knowledge gaps. Across three student–teacher configura-tions on math and code benchmarks, DEAR consistently outperforms standard OPD, with up to +2.5pp on competition math and +5.7pp on code generation. 
+
+1 Introduction 
+
+On-policy distillation (OPD) has become the dom-inant paradigm for teaching small models to rea-son: the student generates trajectories under its own policy, and a teacher provides dense token-level supervision (Agarwal et al., 2024; Gu et al., 2024). Despite its effectiveness, OPD leaves a crit-ical question open: what should the student learn from each token? Training on all tokens dilutes the signal; recent work selects high-entropy tokens to focus learning (Wang et al., 2026), yet the distilled student still often fails on substance. It writes “Let us try factoring” at the right moment, but the inter-mediate step is wrong, the variable substitution is incorrect, the derivation does not follow. A closer look reveals that tokens carrying rea-soning ability fall into two distinct categories (§2): • Decision tokens : positions where the student faces genuine uncertainty among reasoning paths, such as logical connectives, strategy choices, and branching markers. These surface naturally through student entropy. • Evidence tokens : positions where the student confidently produces the wrong intermediate re-sult, such as incorrect derivations, flawed vari-able substitutions, or erroneous API calls. These are invisible to entropy because the student does not know what it does not know. These two types cannot be discovered by the same mechanism. Entropy exposes the former but is blind to the latter. Current training meth-ods, whether full-token or entropy-selective (Wang et al., 2026; Ko et al., 2026; Jin et al., 2026), ei-ther dilute the signal across all tokens or capture only decisions, leaving the substantive reasoning knowledge untransferred (§2). How can evidence be discovered? The key in-sight is that genuine evidence tokens share reason-ing context with nearby decisions: an incorrect intermediate result participates in the same deriva-tion as the decision point that initiated it. In con-trast, noise sources (error accumulation, stylistic divergence) lack this connection (§2). We propose DEAR ( Decision-Evidence Aware 
+
+Reasoning Distillation), a two-stage token selec-tion method for OPD. Stage 1 identifies decisions via student entropy. Stage 2 discovers evidence through hidden-state cosine similarity to decision anchors, boosted by teacher–student divergence to prioritize the largest knowledge gaps. Our contri-butions are: • We identify a decomposition of reasoning chains into decisions and evidence, two types of knowl-edge that require fundamentally different discov-ery mechanisms (§2). • We propose DEAR, which discovers evidence via its relationship to decisions: cosine similar-ity ensures reasoning-context relatedness, and 1
+
+> arXiv:2606.22830v1 [cs.AI] 22 Jun 2026
+
+Figure 1: Overview of DEAR. ❶ The student generates a rollout; both student entropy HSt and teacher–student logprob divergence δt are computed per token. ❷ Decision Identification: the top-p% entropy tokens form the decision set D. ❸ Evidence Discovery: non-decision tokens are scored by cosine similarity to decisions, boosted by divergence; the top-q% form the evidence set E. ❹ The OPD loss is computed only on S = D ∪ E to update the policy of student model. 
+
+divergence boost prioritizes knowledge gaps. • On six math benchmarks and three code bench-marks across three student–teacher configura-tions, DEAR outperforms standard OPD by up to +2.5pp on competition math and +5.7pp on code generation (§4). 
+
+2 Dissecting the Distillation Signal 
+
+We analyze the token-level distillation signal to uncover the relationship between reasoning deci-sions and their supporting evidence. All analyses use rollout data from the first training epoch of Qwen2.5-1.5B-Instruct (Yang et al., 2024) (student) and Qwen3-4B-Instruct (Team, 2025) (teacher) on DeepMath-103K (He et al., 2025), with n=200 
+
+samples. This cross-family pair (Setting B in §4.1) maximizes the decision–evidence gap, making the phenomenon most visible. 
+
+Finding 1. The distillation signal is extremely sparse. A small minority of tokens carry the vast majority of gradient mass, motivating token selection. We measure signal concentration using the Lorenz curve, which plots cumulative gradient mass against the cumulative fraction of tokens sorted by per-token advantage magnitude. A per-fectly uniform signal would follow the diagonal; deviation indicates inequality, quantified by the Gini coefficient (0 = uniform, 1 = maximally con-centrated). Figure 2 shows a Gini of 0.776: the top-20% of tokens account for approximately 80% of total gradient mass. This extreme sparsity mo-tivates token selection, but the critical question is 0 2 4 6 8 10 12 
+
+> Logprob Divergence (Per-token Advantage)
+> 0
+> 10000
+> 20000
+> 30000
+> 40000
+> 50000
+> Token Count
+> Median = 0.146
+> P80 = 1.922
+
+(a) Logprob divergence distri-bution 0.0 0.2 0.4 0.6 0.8 1.0 
+
+> Cumulative fraction of tokens (sorted by |advantage|)
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Cumulative fraction of total |advantage|
+> Gini = 0.776
+> Lorenz curve
+> Equality line
+
+(b) Lorenz curve (Gini =0.776) 
+
+Figure 2: The distillation signal is extremely sparse. 
+
+The top-20% of tokens carry ∼80% of total gradient mass (Gini = 0.776). 
+
+not how many tokens to select, but what kind. 
+
+Finding 2. Entropy selects the reasoning skele-ton , not the reasoning knowledge . High-entropy positions are connectives and branching mark-ers; substantive intermediate steps are uniformly low-entropy. Figure 3 visualizes per-token entropy on a repre-sentative math problem. Intermediate-step tokens, including those where the student writes an incor-rect value, remain uniformly low-entropy. Entropy selection therefore captures where the student decides but not what it produces in between. This explains its effectiveness (Wang et al., 2026): decision tokens are genuinely critical for training. Yet it also exposes a gap: the reasoning knowledge that supports those decisions lives in low-entropy positions that no entropy-based selector can reach. 2To determi how many integers between · 1 and · 1 0 0 ( inclusi                                                                                                                                                                             
+
+> )are divisib by ·3or ·5,we can use the princip
+> of In clusion -Ex clusion .First ,let 's find the number of
+> integers between ·1and ·100that are divisib by ·3
+> :\[ \left \lf loor \frac {100}{ 3
+> }\right \rf loor =·33\]So ,there
+> are ·33numbers between ·1and ·100that are
+> divisib by ·3.Next ,let 's find the number of integers between
+> ·1and ·100that are divisib by ·5:\[
+> \left \lf loor \frac {100}{ 5}\
+> right \rf loor =·20\]So ,there are ·
+> 20numbers between ·1and ·100that are divisib by
+> ·5.Now ,let 's find the number of integers between ·1
+> and ·100
+> Student Entropy
+> Top-10% high-entropy tokens (n=25)
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> 1.2
+> 1.4
+> Entropy
+
+Figure 3: Entropy concentrates on the reasoning skeleton. Bright positions align with logical connec-tives and branching markers; intermediate-step tokens are uniformly dark regardless of correctness. 0 1 2 3 4 5 6 7
+
+Student Entropy 
+
+> 0
+> 5
+> 10
+> 15
+> 20
+> 25
+> 30
+> Logprob Divergence
+> Evidential Salience Expansion
+> Entropy Anchor
+
+Figure 4: The token landscape. “Entropy Anchor” tokens (blue) are captured by entropy selection. “Evi-dential Salience Expansion” tokens (pink) concentrate in the low-entropy, high-divergence region. 
+
+Finding 3. Missed reasoning knowledge con-centrates in “evidence tokens” where the stu-dent is confident yet wrong. These positions are structurally invisible to entropy selection. 
+
+Where does the missed knowledge reside? We plot all response tokens in the (HSt , δ t) plane (Fig-ure 4), where δt = | log πθ(yt) − log πT (yt)| mea-sures teacher–student disagreement. A distinct cluster appears in the upper-left: low student en-tropy paired with high divergence. These are posi-tions where the student confidently writes a wrong value that the teacher would correct. We term these evidence tokens . As we show in §4.4, they carry a substantial fraction of total gradient mass yet achieve near-zero recall under entropy selection. This is not a tuning failure but a structural impossibility: any monotone function of student entropy necessarily assigns near-zero importance to low-entropy positions, regardless of To determi how many integers between · 1 and · 1 0 0 ( inclusi                                                                                                                                                                               
+
+> )are divisib by ·3or ·5,we can use the princip
+> of In clusion -Ex clusion .First ,let 's find the number of
+> integers between ·1and ·100that are divisib by ·3
+> :\[ \left \lf loor \frac {100}{ 3
+> }\right \rf loor =·33\]So ,there
+> are ·33numbers between ·1and ·100that are
+> divisib by ·3.Next ,let 's find the number of integers between
+> ·1and ·100that are divisib by ·5:\[
+> \left \lf loor \frac {100}{ 5}\
+> right \rf loor =·20\]So ,there are ·
+> 20numbers between ·1and ·100that are divisib by
+> ·5.Now ,let 's find the number of integers between ·1
+> and ·100
+> Token Role
+> Decision (n=24) Evidence (n=41) Unselected (n=135)
+
+Figure 5: Evidence clusters around decisions. Deci-sion tokens (red) mark reasoning branches; Evidence to-kens (blue) perform intermediate steps within the same reasoning chain. Unselected tokens (gray) are discon-nected from any decision. 
+
+their divergence. 
+
+Finding 4. Genuine evidence tokens share rea-soning context with nearby decisions; noise to-kens with similar divergence do not. Selecting by divergence alone would recover ev-idence but also introduce noise: error accumula-tion (Li et al., 2026) and stylistic differences both produce high divergence without supporting any de-cision. Figure 5 shows the key distinction: genuine evidence clusters around decisions, while noise to-kens appear in isolation. We operationalize this via hidden-state cosine similarity: a token’s maximum similarity to any decision anchor measures whether it participates in the same reasoning context, motivating cosine similarity as the evidence-detection gate. 
+
+3 Method 
+
+Our analysis reveals that complete reasoning dis-tillation requires capturing both decision tokens and evidence tokens. Entropy selection identifies decisions; our task is to discover their supporting evidence. We now formalize this intuition. 
+
+3.1 Background On-policy distillation. Let πθ denote the student policy parameterized by θ, and πT a frozen teacher. Given a prompt x, the student samples a response 
+
+y = ( y1, . . . , y T ). PG-style OPD (Yang et al., 2026; Ko et al., 2026) computes a per-token advan-tage from the teacher’s log-probabilities: 
+
+At = − log πθ(yt | x, y <t )−log πT (yt | x, y <t ),
+
+(1) 3which arises from differentiating the sequence-level reverse KL divergence DKL (πθ∥πT ) (the full derivation is provided in Appendix E), and opti-mizes a clipped policy-gradient loss: 
+
+LOPD = − 1
+
+T
+
+> T
+
+X
+
+> t=1
+
+sg( At) · min  ρt · sg( At),
+
+clip( ρt, 1−ϵ, 1+ ϵ) · sg( At),
+
+(2) where ρt = πθ(yt)/π old  
+
+> θ
+
+(yt) is the importance ratio and sg( ·) denotes stop-gradient. 
+
+Entropy-selective OPD (decision-only distilla-tion). The student’s per-token entropy is: 
+
+HSt = − X
+
+> v
+
+πθ(v | x, y <t ) log πθ(v | x, y <t ).
+
+(3) Entropy selection (Wang et al., 2026) restricts the loss to the top-p% highest-entropy positions, which, as established in §2, correspond to reasoning deci-sion tokens. Let τp denote the (1 −p)-th quantile of 
+
+{H St }Tt=1 . The decision set is: 
+
+D = {t : HSt ≥ τp}. (4) This captures the reasoning skeleton but cannot reach evidence tokens (§2). 
+
+3.2 DEAR: Decision-Evidence Aware Reasoning Distillation 
+
+DEAR extends decision-only distillation by dis-covering the evidence tokens that support each de-cision (Figure 1). 
+
+Stage 1: Decision identification. The top-p%tokens by student entropy are identified as decision tokens D (Eq. 4). These mark where the student faces genuine reasoning choices. They serve as both training targets and query points for evidence discovery. 
+
+Stage 2: Evidence discovery. Given a set of de-cisions, we ask: which other tokens support those decisions? We extract the student’s hidden state 
+
+hLt ∈ Rd at the deepest transformer layer L from the forward pass already used to compute entropy. For each non-decision token yj , we compute its maximum cosine similarity to any decision: 
+
+aj = max 
+
+> i∈D
+
+hLi · hLj
+
+∥hLi ∥ · ∥ hLj ∥ . (5) High aj means that position j shares reasoning context with a decision, participating in the same reasoning step or producing a related intermedi-ate result. Since each hidden state hLt compresses all causally accessible context into a next-token prediction (Elhage et al., 2021), cosine similarity in this space captures reasoning-context sharing 
+
+rather than surface structural similarity (see Ap-pendix A). This allows evidence discovery to prop-agate from decisions to the intermediate steps that support them. 
+
+Knowledge-gap scoring. Not all tokens related to a decision need correction; some evidence the student already knows. To select evidence where the teacher has knowledge the student lacks, we incorporate teacher–student divergence as a boost. Both signals are normalized to [0 , 1] via per-sample min-max: 
+
+ˆaj = MinMax( aj ), ˆδj = MinMax( δj ), (6) and combined as Evidence Salience Score: 
+
+sj = ˆaj
+
+|{z} 
+
+> evidence relevance
+
+× (1 + ˆδj )
+
+| {z }
+
+> knowledge gap
+
+. (7) The cosine similarity ˆaj acts as the evidence gate: tokens semantically distant from all decisions re-ceive near-zero scores regardless of divergence. As established in §2, noise sources (error accumula-tion, style) lack semantic connection to decisions, so the gate naturally excludes them. The diver-gence ˆδj then boosts among evidence candidates, prioritizing those where the teacher has knowledge the student lacks. We ablate this scoring design in Appendix D. 
+
+Final selection: decisions ∪ evidence. We select the top-q% non-decision tokens by hybrid score and take their union with decisions: 
+
+S = D|{z} 
+
+> decisions
+
+∪ TopK q
+
+ {sj }j / ∈D 
+
+| {z }
+
+> evidence
+
+. (8) The OPD loss (Eq. 2) is computed only over S,which forms the complete distillable reasoning chain: both where to decide and what justifies those decisions. With p=0 .2 and q=0 .2, the total selec-tion covers approximately 36% of response tokens. 
+
+Computational overhead. The hidden states hLt
+
+are extracted from the student’s existing forward pass ( output_hidden_states=True ), requiring 4Algorithm 1 DEAR: Finding Evidence for Rea-soning Decisions                                                                                               
+
+> Require: Student πθ, teacher πT, prompt x, ratios p, q
+> Ensure: Selected token mask S
+> 1: y∼πθ(· | x)
+> ▷Student rollout 2: Compute log πθ(yt),HSt,hLt∀t▷Student forward (with hidden states) 3: Compute log πT(yt)∀t▷Teacher forward 4: I← | log πθ(yt)−log πT(yt)| ∀ t▷Per-token knowledge gap
+> ▷Stage 1: Decision Identification
+> 5: D ← { t:HSt≥τp}
+> ▷Top-p% entropy →decisions
+> ▷Stage 2: Evidence Discovery
+> 6: ¯ht←hLt/∥hLt∥ ∀ t▷ ℓ 2normalize 7: aj←max i∈D ¯hi·¯hj∀j / ∈ D
+> ▷Evidence relevance to decisions 8: ˆaj,ˆδj←MinMax( aj),MinMax( δj)
+> ▷Normalize to [0 ,1]
+> 9: sj←ˆaj×(1 + ˆδj)∀j / ∈ D
+> ▷Evidence relevance ×knowledge gap 10: E ← TopK q({sj}j / ∈D )
+> ▷Top-q% evidence tokens 11: return S ← D ∪ E
+> ▷Decisions ∪Evidence
+
+no additional forward pass. Evidence discovery reduces to a single batched matrix multiplication 
+
+¯HD · ¯H⊤ 
+
+> all
+
+with cost O(|D|× T ×d), negligible com-pared to the transformer forward pass. The com-plete procedure is summarized in Algorithm 1. 
+
+4 Experiments 
+
+4.1 Setup Benchmarks. We evaluate on six mathematical reasoning benchmarks: MATH-500 (Gao et al., 2025), Minerva Math (Lewkowycz et al., 2022), AMC 2023, Olympiad Bench (He et al., 2024), AIME 2024 (MAA, 2024), and AIME 2025 (MAA, 2025). We report Avg@8: for each problem, we sample 8 responses at temperature 1.0 and report the average accuracy across samples. We also eval-uate on code generation (§4.3). 
+
+Baselines. We compare: (1) Offline KD , SFT on teacher-generated solutions; (2) Standard OPD ,training on all response tokens; and (3) DEAR 
+
+with p=0 .2 decision ratio and q=0 .2 evidence ra-tio. We additionally compare against decision-only distillation (entropy-selective OPD (Wang et al., 2026)) in our ablation study (§4.5), where remov-ing Stage 2 reduces DEAR to this baseline. All methods train for the same epochs over the same prompt set. 
+
+Model configurations. We test three student– teacher pairs to vary the decision–evidence gap. 
+
+Setting A : Qwen2.5-1.5B-Instruct (Yang et al., 2024) as student distilled from Qwen2.5-14B-Instruct (same family, moderate gap). Setting B :Qwen2.5-1.5B-Instruct as student distilled from Qwen3-4B-Instruct (Team, 2025) (cross-family, large gap). Setting C : Qwen3-1.7B as student distilled from Qwen3-4B-Instruct (same family, stronger student, smaller gap). Settings A and B share the same student, isolating the effect of decision–evidence alignment. Training details are in Appendix F. 
+
+4.2 Main Results: Mathematical Reasoning 
+
+Table 1 reports results across all three configura-tions. DEAR achieves the best or second-best re-sult on every benchmark across all settings, with the largest gains concentrating on the hardest prob-lems. 
+
+On-policy methods generally outperform offline KD. Offline KD improves over the base model but is surpassed by on-policy methods on most benchmarks. The exception is Minerva Math, where offline KD’s advantage may stem from its shorter, more formulaic solutions that suit the benchmark format. Overall, the gap favoring on-policy methods is largest in Setting B, where off-policy teacher trajectories poorly match the stu-dent’s generation style. 
+
+Evidence discovery amplifies gains on the hard-est problems. DEAR’s improvement concen-trates on competition-level benchmarks where multi-step derivations create long evidence chains. On AIME 2024, DEAR achieves 4.58% vs. 2.08% for standard OPD in Setting A, a 2.2 × improve-ment. On AIME 2025 in Setting B, DEAR reaches 3.33% vs. 1.25%, a 2.7 × improvement. Harder problems produce more intermediate steps per de-cision, meaning more evidence tokens to discover and more knowledge to transfer. 
+
+Cross-family distillation: larger knowledge gap, larger gain. Setting B (cross-family) shows the largest absolute gain on AIME benchmarks. When student and teacher come from different model fam-ilies, the teacher possesses reasoning knowledge that is maximally different from the student’s inter-nalized patterns, making evidence discovery espe-cially valuable. 5Table 1: Main results on mathematical reasoning benchmarks. Avg@8 accuracy (%). Best per-benchmark in 
+
+bold , second-best underlined. 
+
+Setting Method MATH-500 Minerva AMC23 Olympiad AIME25 AIME24 
+
+(A) s: Qwen2.5-1.5B t: Qwen2.5-14B Base model 43.33 9.10 19.06 12.44 0.00 1.25 Offline KD 46.17 14.57 23.13 16.77 0.83 1.25 Standard OPD 51.78 12.73 26.25 17.14 0.00 2.08 DEAR 53.15 13.83 29.06 18.53 1.25 4.58 
+
+(B) s: Qwen2.5-1.5B t: Qwen3-4B Base model 43.68 8.69 20.63 12.57 0.42 1.67 Offline KD 43.85 12.82 23.75 14.97 0.42 2.08 Standard OPD 55.40 11.63 32.50 20.31 1.25 5.42 
+
+DEAR 56.20 13.60 30.94 21.05 3.33 4.17 (C) s: Qwen3-1.7B t: Qwen3-4B Base model 71.18 20.31 46.88 35.00 12.50 14.58 Offline KD 80.27 33.23 61.56 49.63 20.83 22.92 Standard OPD 83.45 27.94 69.06 49.20 23.75 31.25 DEAR 84.35 28.68 71.25 50.10 25.83 34.18 
+
+Table 2: Generalization to code generation . Pass rate (%). Best in bold , second-best underlined. 
+
+Method MBPP HumanEval APPS 
+
+Base model 53.36 47.56 10.51 Offline KD 43.24 45.43 5.03 Standard OPD 51.31 47.71 14.34 DEAR 57.05 49.84 16.90 
+
+4.3 Generalization to Code Generation 
+
+To evaluate whether DEAR generalizes beyond mathematical reasoning, we conduct experiments on code generation using Setting A (Qwen2.5-1.5B-Instruct distilled from Qwen2.5-14B-Instruct). We use Eurus-RL-Code (Cui et al., 2025) (25K samples) as training data and evaluate on three benchmarks: MBPP+ (Liu et al., 2023), Hu-manEval (Chen et al., 2021), and APPS (Hendrycks et al., 2021). Table 2 shows that DEAR’s gains transfer to code generation. Offline KD degrades below the base model on all benchmarks, confirming that off-policy trajectories are harmful when execution correctness demands precise token-level alignment. Standard OPD also degrades MBPP , consistent with the noise amplification problem (Luo et al., 2026). DEAR resolves both issues: it outperforms standard OPD by +5.74pp on MBPP, +2.13pp on HumanEval, and +2.56pp on APPS. In code, de-cision tokens correspond to control-flow choices while evidence tokens are the API calls and imple-mentation steps that realize those choices. 0.0 
+
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Fraction of Total Gradient Mass Captured
+> 35.5%
+> 39.1%
+> 75.8%
+> +36.8%
+> Random
+> Decision-Only
+> DEAR (Ours)
+
+(a) Gradient mass captured Math Content Reasoning Flow Structural  
+
+> 0
+> 2000
+> 4000
+> 6000
+> 8000
+> 10000
+> 12000
+> Recovered Valuable Tokens
+> +4,872
+> +518
+> +1,653
+> Entropy-recovered
+> DEAR-recovered
+
+(b) Recovery by category 
+
+Figure 6: Evidence discovery targets high-value to-kens. (a) Gradient mass captured by each method. (b) Recovery count stratified by semantic category. 
+
+4.4 Analysis: Closing the Loop 
+
+We analyze DEAR to verify that the discovered tokens are indeed evidence tokens that support de-cisions, and to understand why evidence-enriched training helps. 
+
+Evidence tokens carry disproportionate learn-ing signal. Figure 6a quantifies the coverage gap: decision-only selection (entropy) captures 39.1% of total gradient mass, only marginally above a random baseline (35.9%). Adding evidence discov-ery via DEAR raises coverage to 75.8%, nearly doubling the captured signal. 
+
+Closing the loop: decisions are skeleton, evi-dence is substance. We classify all response to-kens by semantic category (Figure 7). Reasoning Flow tokens, though rare at only 4,170 occurrences, carry 1.62 × the per-token average advantage, con-firming that decisions concentrate disproportionate signal. Math Content tokens number 76,777 and 6Math Content Reasoning Flow Structural 
+
+> 0
+> 10000
+> 20000
+> 30000
+> 40000
+> 50000
+> 60000
+> 70000
+> 80000
+> Token Count
+> 76,777
+> 4,170
+> 18,042
+> 0.00
+> 0.25
+> 0.50
+> 0.75
+> 1.00
+> 1.25
+> 1.50
+> 1.75
+> 2.00
+> Advantage Multiplier (vs. Average)
+> 0.94x
+> 1.62x
+> 1.09x
+> Advantage Multiplier
+
+Figure 7: Token category distribution and advantage multiplier. Bars show token counts; dashed line shows per-category advantage relative to the per-token average. [0.0,0.0)                     
+
+> [0.0,0.1)
+> [0.1,0.7)
+> [0.7,1.6)
+> [1.6,6.9)
+> Student Entropy
+> [0.0,0.0)
+> [0.0,0.0)
+> [0.0,0.4)
+> [0.4,1.9)
+> [1.9,35.0)
+> Logprob Divergence
+> +4% +9% +8% +11% +0%
+> +12% +8% +14% +13% +5%
+> +16% +17% +14% +14% +6%
+> +20% +24% +25% +22% +10%
+> +35% +51% +52% +44% +18%
+> 0.4
+> 0.2
+> 0.0
+> 0.2
+> 0.4
+> Recall difference (DEAR - Entropy)
+
+Figure 8: Evidence recovery targets the correct re-gion. Each cell shows recall difference (DEAR −
+
+decision-only) on the entropy–divergence quantile grid. Gains concentrate in the low-entropy, high-divergence region. 
+
+carry 0.94 × individually, yet dominate total gra-dient mass by volume. This confirms the comple-mentary roles: entropy captures decisions, while DEAR recovers the numerous evidence positions where the knowledge gap is large. The recall-gain heatmap (Figure 8) confirms spa-tially that DEAR’s improvement concentrates in the evidence-token region identified in §2. 
+
+Evidence discovery is selective. Figure 6b shows that DEAR recovers substantially more valu-able tokens across all categories, with the largest absolute gain in Math Content. The Evidence Salience Score ( ˆa×(1+ ˆδ)) discriminates evidence from noise by requiring both semantic connection to decisions and a teacher–student knowledge gap. 
+
+Evidence-enriched training signals compound over time. Figure 9 shows that DEAR achieves 0 20 40 60 80 100 120 140 
+
+> Training Step
+> 0.26
+> 0.28
+> 0.30
+> 0.32
+> 0.34
+> 0.36
+> 0.38
+> 0.40
+> 0.42
+> Reward (mean)
+> Training Reward
+> Standard OPD
+> DEAR (Ours)
+
+Figure 9: Training reward over steps. DEAR achieves higher reward throughout training, with the gap widen-ing over time. 
+
+consistently higher reward, with the gap widen-ing as training progresses. As the student learns evidence early, its subsequent trajectories improve and expose further evidence tokens, creating a com-pounding effect. Standard OPD exhibits elevated clip ratios (Appendix C), symptomatic of noisy up-dates from error-accumulated tokens that DEAR avoids. 
+
+4.5 Ablation Studies 
+
+We ablate DEAR’s components using Setting C (Qwen3-1.7B distilled from Qwen3-4B-Instruct), which offers the strongest baseline performance and thus the most demanding test for each compo-nent’s contribution. 
+
+Component ablation: decisions alone vs. deci-sions + evidence. Removing Stage 2 (evidence discovery) reduces DEAR to entropy-selective OPD (decision-only distillation). Table 3 reports math-average accuracy across all three settings. De-cisions alone perform comparably to standard OPD across settings, confirming the value of selective training even without evidence. Adding evidence discovery yields a further consistent gain across all three settings, demonstrating that evidence to-kens carry complementary knowledge that deci-sions alone cannot capture. The gain is largest in Setting B (cross-family), where the decision– evidence gap is widest. 
+
+Sensitivity to decision ratio p and evidence ra-tio q. Figure 10 sweeps each ratio independently. For the decision ratio p (left, Stage 1 only), per-formance is stable from 0.2 to 0.6 and degrades at p=0 .8, where low-entropy noise tokens dilute the decision set. This confirms that decision-only distillation is robust to the choice of p within a 7Table 3: Component ablation. Math-average accu-racy (%) across all settings. Removing Stage 2 reduces DEAR to decision-only distillation. Evidence discov-ery provides consistent complementary gains.                     
+
+> Method Setting A Setting B Setting C
+> Standard OPD 18.33 21.09 47.44 Decisions only 18.82 20.01 48.22 DEAR 19.86 21.55 49.06 0.2 0.4 0.6 0.8
+> Decision ratio p
+> 47.0
+> 47.5
+> 48.0
+> 48.5
+> Average Accuracy (%)
+> (a) Stage 1 only (no evidence)
+> 0.2 0.4 0.6 0.8
+> Evidence ratio q
+> 47.0
+> 47.5
+> 48.0
+> 48.5
+> 49.0
+> 49.5
+> (b) Full DEAR ( p=0.2 fixed)
+
+Figure 10: Sensitivity to selection ratios . Left: deci-sion ratio p (Stage 1 only, no evidence). Right: evidence ratio q with decisions fixed at p=0 .2. Both stages ben-efit from sparsity; performance degrades gracefully at higher ratios. 
+
+broad range; the widely-adopted p=0 .2 (Wang et al., 2026) is near-optimal. For the evidence ra-tio q (right, full DEAR with p=0 .2), the optimum is at q=0 .2 with gradual degradation at higher ra-tios as the cosine gate admits less relevant tokens. Both stages benefit from sparsity: a focused set of high-quality tokens outperforms broader but noisier coverage. 
+
+5 Related Work 
+
+On-policy distillation. Knowledge distilla-tion (Hinton et al., 2015) transfers capabilities from teacher to student. OPD extends this to autoregressive generation: the student rolls out under its own policy while the teacher provides token-level supervision (Agarwal et al., 2024; Gu et al., 2024). Recent analyses identify key failure modes: Luo et al. (2026) trace collapse to repetitive-token advantage amplification; Li et al. (2026) attribute instability to signal degradation on drifted prefixes; Zhang et al. (2026) show that focusing on the reasoning prefix improves stability. These studies converge on a common message: indiscriminate training over all tokens is inefficient and destabilizing. DEAR goes further by asking 
+
+which tokens to select, distinguishing decisions from evidence. 
+
+Token-level selective training. Wang et al. (2026) show that training on the top-20% highest-entropy tokens matches full-sequence training. Jin et al. (2026) propose forward KL at high-entropy positions; Ko et al. (2026) adopt reward-based clip-ping followed by entropy selection. These methods establish entropy as an effective proxy for decision tokens. Concurrently, Xu et al. (2026) formalize the entropy blind spot, and Feng et al. (2024) pro-pose keypoint-based progressive distillation. All treat token selection as a single-signal scoring prob-lem. DEAR instead uses a two-stage process: en-tropy identifies decisions, then cosine similarity discovers evidence tokens that no single signal can reach. 
+
+The structure of reasoning chains. Recent work reveals that reasoning ability concentrates at sparse, critical positions. Shen et al. (2026) show that correcting merely ∼8% of “decision tokens” at in-ference time recovers full reasoning performance, with these tokens strongly enriched for planning-related words. Wang et al. (2026) confirm that high-entropy tokens, which we identify as decision markers, carry the majority of learning signal. Our work complements this line by identifying a sec-ond component: evidence tokens that support and justify decisions but are invisible to entropy-based methods due to their low student uncertainty. 
+
+6 Conclusion 
+
+Reasoning chains carry two types of transferable knowledge that cannot be captured by the same selector: decisions, which surface through student uncertainty, and evidence, which hides behind con-fident errors and must be discovered via its rela-tionship to decisions. DEAR operationalizes this finding and consistently outperforms standard OPD across math and code benchmarks, with gains scal-ing with problem difficulty. Complete reasoning distillation requires transferring not just where to decide, but the knowledge that justifies those deci-sions. 8Limitations 
+
+DEAR requires access to student hidden states during training, adding memory for one layer of activations per sample. Our evaluation focuses on mathematical reasoning and code generation; the generality of the decision–evidence structure to other reasoning domains such as commonsense reasoning and scientific QA remains to be verified. The decision and evidence ratios ( p, q) are fixed throughout training; adaptive scheduling that in-creases evidence coverage as training progresses may yield further gains. Our semantic classifica-tion of tokens into decisions vs. evidence relies on surface-level heuristics. A more principled char-acterization via causal intervention on individual positions would strengthen the theoretical ground-ing of the framework. 
+
+References 
+
+Rishabh Agarwal, Nino Vieillard, Yongchao Zhou, Pi-otr Stanczyk, Sabela Ramos Garea, Matthieu Geist, and Olivier Bachem. 2024. On-policy distillation of language models: Learning from self-generated mistakes. In International Conference on Learning Representations , volume 2024, pages 21246–21263. Mark Chen, Jerry Tworek, Heewoo Jun, Qiming Yuan, Henrique Ponde De Oliveira Pinto, Jared Kaplan, Harri Edwards, Yuri Burda, Nicholas Joseph, Greg Brockman, and 1 others. 2021. Evaluating large language models trained on code. arXiv preprint arXiv:2107.03374 .Ganqu Cui, Lifan Yuan, Zefan Wang, Hanbin Wang, Wendi Li, Bingxiang He, Yuchen Fan, Tianyu Yu, Qixin Xu, Weize Chen, Jiarui Yuan, Huayu Chen, Kaiyan Zhang, Xingtai Lv, Shuo Wang, Yuan Yao, Xu Han, Hao Peng, Yu Cheng, and 4 others. 2025. Process Reinforcement through Implicit Rewards. 
+
+CoRR , abs/2502.01456. Nelson Elhage, Neel Nanda, Catherine Olsson, Tom Henighan, Nicholas Joseph, Ben Mann, Amanda Askell, Yuntao Bai, Anna Chen, Tom Conerly, and 1 others. 2021. A mathematical framework for transformer circuits. Transformer Circuits Thread ,1(1):12. Kaituo Feng, Changsheng Li, Xiaolu Zhang, Jun Zhou, Ye Yuan, and Guoren Wang. 2024. Keypoint-based progressive chain-of-thought distillation for llms. 
+
+arXiv preprint arXiv:2405.16064 .Bofei Gao, Feifan Song, Zhe Yang, Zefan Cai, Yibo Miao, Qingxiu Dong, Lei Li, Chenghao Ma, Liang Chen, Runxin Xu, Zhengyang Tang, Benyou Wang, Daoguang Zan, Shanghaoran Quan, Ge Zhang, Lei Sha, Yichang Zhang, Xuancheng Ren, Tianyu Liu, and Baobao Chang. 2025. Omni-MATH: A Uni-versal Olympiad Level Mathematic Benchmark for Large Language Models. In The Thirteenth Inter-national Conference on Learning Representations, ICLR 2025, Singapore, April 24-28, 2025 . OpenRe-view.net. Yuxian Gu, Li Dong, Furu Wei, and Minlie Huang. 2024. Minillm: Knowledge distillation of large language models. In International Conference on Learning Representations , volume 2024, pages 32694–32717. Chaoqun He, Renjie Luo, Yuzhuo Bai, Shengding Hu, Zhen Leng Thai, Junhao Shen, Jinyi Hu, Xu Han, Yu-jie Huang, Yuxiang Zhang, Jie Liu, Lei Qi, Zhiyuan Liu, and Maosong Sun. 2024. OlympiadBench: A Challenging Benchmark for Promoting AGI with Olympiad-Level Bilingual Multimodal Scientific Problems. In Proceedings of the 62nd Annual Meet-ing of the Association for Computational Linguistics (Volume 1: Long Papers), ACL 2024, Bangkok, Thai-land, August 11-16, 2024 , pages 3828–3850. Associ-ation for Computational Linguistics. Zhiwei He, Tian Liang, Jiahao Xu, Qiuzhi Liu, Xingyu Chen, Yue Wang, Linfeng Song, Dian Yu, Zhen-wen Liang, Wenxuan Wang, Zhuosheng Zhang, Rui Wang, Zhaopeng Tu, Haitao Mi, and Dong Yu. 2025. DeepMath-103K: A Large-Scale, Challenging, De-contaminated, and Verifiable Mathematical Dataset for Advancing Reasoning. CoRR , abs/2504.11456. Dan Hendrycks, Steven Basart, Saurav Kadavath, Man-tas Mazeika, Akul Arora, Ethan Guo, Collin Burns, Samir Puranik, Horace He, Dawn Song, and Jacob Steinhardt. 2021. Measuring Coding Challenge Com-petence With APPS. In Proceedings of the Neural Information Processing Systems Track on Datasets and Benchmarks 1, NeurIPS Datasets and Bench-marks 2021, December 2021, virtual .Geoffrey E. Hinton, Oriol Vinyals, and Jeffrey Dean. 2015. Distilling the knowledge in a neural network. 
+
+CoRR , abs/1503.02531. Woogyeol Jin, Taywon Min, Yongjin Yang, Swanand Ravindra Kadhe, Yi Zhou, Dennis Wei, Nathalie Baracaldo, and Kimin Lee. 2026. Entropy-aware on-policy distillation of language models. arXiv preprint arXiv:2603.07079 .Jongwoo Ko, Sara Abdali, Young Jin Kim, Tianyi Chen, and Pashmina Cameron. 2026. Scaling reasoning efficiently via relaxed on-policy distillation. arXiv preprint arXiv:2603.11137 .Aitor Lewkowycz, Anders Andreassen, David Dohan, Ethan Dyer, Henryk Michalewski, Vinay Ramasesh, Ambrose Slone, Cem Anil, Imanol Schlag, Theo Gutman-Solo, and 1 others. 2022. Solving quan-titative reasoning problems with language models. 
+
+Advances in neural information processing systems ,35:3843–3857. Yaxuan Li, Yuxin Zuo, Bingxiang He, Jinqian Zhang, Chaojun Xiao, Cheng Qian, Tianyu Yu, Huan-ang 
+
+9Gao, Wenkai Yang, Zhiyuan Liu, and 1 others. 2026. Rethinking on-policy distillation of large language models: Phenomenology, mechanism, and recipe. 
+
+arXiv preprint arXiv:2604.13016 .Jiawei Liu, Chunqiu Steven Xia, Yuyao Wang, and Ling-ming Zhang. 2023. Is Your Code Generated by Chat-GPT Really Correct? Rigorous Evaluation of Large Language Models for Code Generation. In Advances in Neural Information Processing Systems 36: An-nual Conference on Neural Information Processing Systems 2023, NeurIPS 2023, New Orleans, LA, USA, December 10 - 16, 2023 .Feng Luo, Yu-Neng Chuang, Guanchu Wang, Zicheng Xu, Xiaotian Han, Tianyi Zhang, and Vladimir Braverman. 2026. Demystifying opd: Length in-flation and stabilization strategies for large language models. arXiv preprint arXiv:2604.08527 .MAA. 2024. American invitational mathematics exami-nation - aime 2024. MAA. 2025. American invitational mathematics exami-nation - aime 2025. Kiho Park, Yo Joong Choe, and Victor Veitch. 2023. The linear representation hypothesis and the ge-ometry of large language models. arXiv preprint arXiv:2311.03658 .Changshuo Shen, Leheng Sheng, Yuxin Chen, An Zhang, and Xiang Wang. 2026. Reasoning can be restored by correcting a few decision tokens. arXiv preprint arXiv:2605.16874 .Guangming Sheng, Chi Zhang, Zilingfeng Ye, Xibin Wu, Wang Zhang, Ru Zhang, Yanghua Peng, Haibin Lin, and Chuan Wu. 2025. HybridFlow: A Flexible and Efficient RLHF Framework. In Proceedings of the Twentieth European Conference on Computer Systems, EuroSys 2025, Rotterdam, The Netherlands, 30 March 2025 - 3 April 2025 , pages 1279–1297. ACM. Qwen Team. 2025. Qwen3 Technical Report. CoRR ,abs/2505.09388. Ian Tenney, Dipanjan Das, and Ellie Pavlick. 2019. Bert rediscovers the classical nlp pipeline. In Proceedings of the 57th annual meeting of the association for computational linguistics , pages 4593–4601. Shenzhi Wang, Le Yu, Chang Gao, Chujie Zheng, Shix-uan Liu, Rui Lu, Kai Dang, Xiong-Hui Chen, Jianxin Yang, Zhenru Zhang, and 1 others. 2026. Beyond the 80/20 rule: High-entropy minority tokens drive effective reinforcement learning for llm reasoning. 
+
+Advances in Neural Information Processing Systems ,38:115452–115486. Yuanda Xu, Hejian Sang, Zhengze Zhou, Ran He, Zhipeng Wang, and Alborz Geramifard. 2026. Tip: Token importance in on-policy distillation. arXiv preprint arXiv:2604.14084 .An Yang, Baosong Yang, Beichen Zhang, Binyuan Hui, Bo Zheng, Bowen Yu, Chengyuan Li, Dayi-heng Liu, Fei Huang, Haoran Wei, Huan Lin, Jian Yang, Jianhong Tu, Jianwei Zhang, Jianxin Yang, Ji-axi Yang, Jingren Zhou, Junyang Lin, Kai Dang, and 22 others. 2024. Qwen2.5 Technical Report. CoRR ,abs/2412.15115. Wenkai Yang, Weijie Liu, Ruobing Xie, Kai Yang, Saiyong Yang, and Yankai Lin. 2026. Learn-ing beyond teacher: Generalized on-policy distil-lation with reward extrapolation. arXiv preprint arXiv:2602.12125 .Dongxu Zhang, Zhichao Yang, Sepehr Janghorbani, Jun Han, Andrew Ressler II, Qian Qian, Gregory D Lyng, Sanjit Singh Batra, and Robert E Tillman. 2026. Fast and effective on-policy distillation from reasoning prefixes. arXiv preprint arXiv:2602.15260 .
+
+10 A Why Cosine Similarity Detects Evidence Membership 
+
+In causal transformers, the hidden state at posi-tion t after L layers, hLt , is not merely a repre-sentation of token yt but the model’s compressed working memory encoding all causally accessible context (Elhage et al., 2021). We argue that co-sine similarity between deep hidden states captures evidence membership, i.e., whether a token par-ticipates in the same reasoning step as a decision, rather than surface structural similarity. Three in-dependent lines of argument support this: 
+
+Output logits equivalence. Since logits t =
+
+hLt · Wunembed , two positions with cos( hLi , hLj ) ≈ 1
+
+produce nearly identical next-token distributions, meaning they occupy the same “predictive state.” An evidence token supporting a decision shares the decision’s predictive context: both are “thinking about” the same intermediate result. 
+
+Linear representation hypothesis. Concepts are encoded as linear directions in hidden-state space (Park et al., 2023). In a d-dimensional space (e.g., d=2048 ), structural role occupies a small subspace while reasoning content dominates. Two “therefore” tokens in different reasoning chains have dissimilar hidden states because they encode different intermediate results. In contrast, a “there-fore” and an intermediate step within the same derivation have high similarity because they share reasoning context. 
+
+Empirical evidence from probing. Probing studies (Tenney et al., 2019) confirm that deep-layer representations are dominated by semantic and functional information, with syntactic features attenuating. While these findings originate from encoder models, subsequent work on autoregres-sive LLMs has confirmed that deep layers similarly encode task-relevant semantics over surface form. This means cosine similarity at deep layers reflects reasoning-content sharing, not surface structural matching. 
+
+B Semantic Token Classification 
+
+This appendix documents how response tokens are classified into the three semantic categories— 
+
+Math Content , Reasoning Flow , and Structural —reported in Figure 7 and Figure 6b. The classifier is a deterministic, rule-based lexical tagger; it in-troduces no learned parameters or external model, so the category assignments are fully reproducible. 
+
+Categories. The three categories are intended to separate the reasoning skeleton from its substance :• Reasoning Flow : tokens that steer the logical structure of the derivation—causal and inferen-tial connectives ( therefore , since , thus ), contrast markers ( however , instead ), step markers ( first ,
+
+next , finally ), reasoning verbs ( assume , prove ,
+
+conclude ), and self-correction cues ( wait , actu-ally ). These align with the decision tokens sur-faced by entropy. • Math Content : tokens that carry mathematical substance—numbers and numeric expressions, single-letter and subscripted variables, operators and L ATEX fragments, math operation verbs ( sub-stitute , simplify , factor ), and math-domain nouns (equation , polynomial , remainder ). These are the intermediate-step tokens that constitute evidence. • Structural : formatting, punctuation, and func-tion words—articles, copulas, prepositions, pro-nouns, and generic non-math verbs and nouns. 
+
+Word-level grouping. Classifying raw BPE to-kens directly would mislabel subword fragments (e.g., the continuation piece of a split word). We therefore first group BPE tokens into words us-ing the word-boundary marker ( \u0120 ), classify each word , and let all of its constituent BPE tokens inherit the word’s label. Pure-operator and pure-digit continuation pieces with no leading space are treated as standalone words, so that an expression such as bˆ2 is split into b, ˆ, 2 rather than merged. 
+
+C Training Dynamics: PPO Clip Ratio 0 25 50 75 100 125 150 
+
+> Training Step
+> 0.000
+> 0.025
+> 0.050
+> 0.075
+> 0.100
+> 0.125
+> 0.150
+> 0.175
+> Response Length Clip Ratio  Standard OPD
+> DEAR (Ours)
+
+Figure 11: PPO clip ratio over training. DEAR main-tains a lower clip ratio than standard OPD, indicating more stable policy updates. 
+
+D Knowledge-Gap Scoring Ablation 
+
+The full scoring function ( ˆa × (1 + ˆδ)) outperforms both ablated variants. Relevance-only selection 11 Table 4: Ablation of knowledge-gap scoring functions 
+
+on Setting A (Qwen2.5-1.5B distilled from Qwen2.5-14B). “Relevance” = cosine similarity gate ˆa; “Gap” = divergence boost ˆδ.                            
+
+> Scoring MATH Minerva AMC Olympiad AIME25 AIME24 Avg.
+> Relevance only ( ˆa)52.23 12.78 18.12 29.37 0.83 4.58 19.65 Full ( ˆa×(1+ ˆδ))53.15 13.83 18.53 29.06 1.25 4.58 20.07
+> Gap only ( ˆδ)52.35 13.32 18.18 29.37 1.25 1.67 19.36
+
+recovers evidence tokens that are semantically re-lated to decisions but may already be well-aligned; it severely underperforms on AMC and Olympiad where the knowledge gap is large. Gap-only se-lection recovers tokens with large teacher–student divergence regardless of reasoning context; it de-grades on AIME 2024, confirming that divergence without the cosine gate admits noise from error accumulation. The multiplicative combination en-sures both conditions are met: semantic connection to a decision and a knowledge gap worth closing. 
+
+E Derivation of PG-Style OPD 
+
+We derive the per-token advantage used in PG-style on-policy distillation (Eq. 1 in the main text). Let 
+
+πθ denote the student policy and πT the teacher. The OPD objective minimizes the reverse KL diver-gence between the student and teacher on student-generated trajectories: 
+
+JOPD (θ) = min  
+
+> θ
+
+Ex∼D, y∼πθ (·| x)
+
+[DKL (πθ(y | x) ∥ πT (y | x))] .
+
+(9) Expanding the KL divergence and applying the autoregressive chain rule: 
+
+JOPD (θ) = Ex, y∼πθ
+
+
+
+log πθ(y | x)
+
+πT (y | x)
+
+
+
+= Ex, y∼πθ
+
+" TX
+
+> t=1
+
+log πθ(yt | x, y <t )
+
+πT (yt | x, y <t )
+
+#
+
+.
+
+(10) Taking the gradient with respect to θ and ap-plying the log-derivative trick ∇θEy∼πθ [f (y)] = 
+
+Ey∼πθ [f (y)∇θ log πθ(y)] :
+
+∇θJOPD (θ) = Ex∼D, y∼πθ (·| x)
+
+
+
+> T
+
+X
+
+> t=1
+
+(log πθ (yt | x, y <t ) − log πT (yt | x, y <t )) 
+
+| {z }
+
+> −At
+
+·∇ θ log πθ (yt | x, y <t )] .
+
+(11) This takes the standard policy-gradient form 
+
+∇θJ = E[P 
+
+> t
+
+At∇θ log πθ(yt)] , where the per-token advantage is: 
+
+At = − log πθ(yt | x, y <t )−log πT (yt | x, y <t ).
+
+(12) This unifies OPD within the reinforcement learn-ing framework: the negative log-probability ratio serves as a dense, token-level reward signal from the teacher. Intuitively, At > 0 when the teacher assigns higher probability to token yt than the stu-dent does, encouraging the student to increase that token’s likelihood; At < 0 when the student is already more confident than the teacher, discour-aging overcommitment. In practice, this gradient is approximated via a PPO-style clipped surrogate (Eq. 2), which stabilizes training by bounding the policy update magnitude. 
+
+F Implementation Details 
+
+We implement DEAR based on the VeRL frame-work (Sheng et al., 2025). Tables 5 and 6 sum-marize the training hyperparameters for math and code experiments respectively. 
+
+Table 5: Math training hyperparameters .
+
+Hyperparameter Value 
+
+Training data DeepMath-103K (level-6) Training epochs 3Global batch size 1024 Micro batch size / GPU 1Learning rate 1 × 10 −6
+
+LR warmup ratio 0.0 PPO clip ϵ 0.2 Max prompt length 2048 Max response length 10240 Max tokens / GPU 32768 Rollout temperature 1.0 Rollout top-p 1.0 Rollout samples ( n) 1 (train), 8 (val) KL penalty None Grad. checkpointing Enabled Inference backend SGLang (TP=4) GPU mem. utilization 0.8 Hardware 8× H800 
+
+G Training Curves 
+
+We report the full training dynamics for all experi-mental configurations. Figure 12 shows actor en-tropy, mean reward, and mean score over training steps for the three math settings. Across all configu-rations, reward and score increase steadily through-out training, confirming stable optimization. Actor 12 Table 6: Code training hyperparameters .
+
+Hyperparameter Value 
+
+Training data Eurus-RL-Code (25K) Training epochs 5Global batch size 1024 Micro batch size / GPU 1Learning rate 1 × 10 −6
+
+LR warmup ratio 0.0 PPO clip ϵ 0.2 Max prompt length 2048 Max response length 10240 Max tokens / GPU 32768 Rollout temperature 1.0 Rollout top-p 1.0 Rollout samples ( n) 1 (train), 8 (val) KL penalty None Grad. checkpointing Enabled Inference backend SGLang (TP=4) GPU mem. utilization 0.8 Hardware 8× H800 
+
+entropy decreases as the student becomes more confident, consistent with successful knowledge transfer from the teacher. 13 0 25 50 75 100 125 150 
+
+0.315 
+
+0.320 
+
+0.325 
+
+0.330 
+
+0.335 
+
+0.340 
+
+0.345 
+
+0.350 
+
+0.355 
+
+> Actor Entropy
+
+Setting C 
+
+(Qwen3-1.7B Qwen3-4B) 
+
+0 25 50 75 100 125 150 
+
+0.42 
+
+0.44 
+
+0.46 
+
+0.48 
+
+0.50 
+
+0.52 
+
+Setting A 
+
+(Qwen2.5-1.5B Qwen2.5-14B) 
+
+80 100 120 140 160 
+
+0.385 
+
+0.390 
+
+0.395 
+
+0.400 
+
+0.405 
+
+Setting B 
+
+(Qwen2.5-1.5B Qwen3-4B) 
+
+0 25 50 75 100 125 150 
+
+0.40 
+
+0.45 
+
+0.50 
+
+0.55 
+
+0.60 
+
+0.65 
+
+> Reward (mean)
+
+0 25 50 75 100 125 150 
+
+0.28 
+
+0.30 
+
+0.32 
+
+0.34 
+
+0.36 
+
+0.38 
+
+0.40 
+
+80 100 120 140 160 
+
+0.35 
+
+0.36 
+
+0.37 
+
+0.38 
+
+0.39 
+
+0 25 50 75 100 125 150 
+
+Step 
+
+0.40 
+
+0.45 
+
+0.50 
+
+0.55 
+
+0.60 
+
+0.65 
+
+> Score (mean)
+
+0 25 50 75 100 125 150 
+
+Step 
+
+0.28 
+
+0.30 
+
+0.32 
+
+0.34 
+
+0.36 
+
+0.38 
+
+0.40 
+
+80 100 120 140 160 
+
+Step 
+
+0.35 
+
+0.36 
+
+0.37 
+
+0.38 
+
+0.39 Figure 12: Training curves on math (Settings A, B, C). Rows: actor entropy, reward (mean), score (mean). Columns: Setting C (Qwen3-1.7B ← Qwen3-4B), Setting A (Qwen2.5-1.5B ← Qwen2.5-14B), Setting B (Qwen2.5-1.5B ←
+
+Qwen3-4B). 
+
+14
