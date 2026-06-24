@@ -1,0 +1,54 @@
+{
+  "label": "2026-06-24",
+  "date": "2026-06-24",
+  "generated_at": "2026-06-24T21:47:05",
+  "count": 3,
+  "papers": [
+    {
+      "paper_id": "202606/24/2606.24165v1-spectral-evolution-guided-token-pruning-in-multimodal-large-language-models",
+      "section": "deep",
+      "title_en": "Spectral Evolution-Guided Token Pruning in Multimodal Large Language Models",
+      "authors": "Bin Chen, Yuxiang Cai, Yadan Luo, Yi Zhang, Jianwei Yin, Zhi Chen",
+      "date": "2026-06-23",
+      "pdf": "https://arxiv.org/pdf/2606.24165v1",
+      "score": "8.0",
+      "evidence": "跨层频谱演化方法衡量令牌重要性",
+      "tldr": "多模态大语言模型中，视觉token冗余影响推理效率。现有剪枝方法依赖单层信号（如注意力分数），忽略跨层变换且存在位置偏差。本文提出无训练框架CLSE，通过频域分析token表示跨层谱演化，保留从高频细节向低频语义转化显著的token。在多个MLLM上，CLSE实现FLOPs、KV缓存和延迟显著降低，同时保持或提升性能，为高效多模态推理提供新思路。",
+      "tags": "query:key-tokens",
+      "abstract_en": "Reducing visual token redundancy is critical for accelerating Multimodal Large Language Models (MLLMs) without degrading cross-modal reasoning performance. Existing token pruning methods typically rely on single-layer signals, such as attention scores or token similarities, which overlook the cross-layer transformation of visual representations and may exhibit positional bias in multimodal token sequences. To address this limitation, we propose a training-free token pruning framework based on Cross-Layer Spectral Evolution (CLSE). Instead of measuring token importance from single-layer feature magnitudes, CLSE quantifies how token representations evolve across Transformer layers in the frequency domain. This evolution reflects the transition from high-frequency structural details to low-frequency semantic abstractions. We observe that tokens with stronger spectral redistribution across layers are more likely to be semantically active and should therefore be preserved. By modeling cross-layer token dynamics, CLSE provides a stable importance criterion that mitigates positional bias. Extensive experiments on both image and video benchmarks demonstrate that CLSE achieves a superior trade-off between efficiency and accuracy under aggressive token reduction. Across multiple MLLMs, CLSE reduces FLOPs, KV cache memory, and latency while maintaining competitive or improved performance.",
+      "source": "arxiv",
+      "selection_source": "fresh_fetch"
+    },
+    {
+      "paper_id": "202606/24/2606.24467v1-compresskv-semantic-retrieval-guided-kv-cache-compression-for-resource-efficient-long-context-llm-inference",
+      "section": "quick",
+      "title_en": "CompressKV: Semantic-Retrieval-Guided KV-Cache Compression for Resource-Efficient Long-Context LLM Inference",
+      "authors": "Xiaolin Lin, Jingcun Wang, Olga Kondrateva, Yiyu Shi, Bing Li, Grace Li Zhang",
+      "date": "2026-06-23",
+      "pdf": "https://arxiv.org/pdf/2606.24467v1",
+      "score": "7.0",
+      "evidence": "通过识别语义检索头选择关键token进行KV缓存，隐式定义token重要性",
+      "tldr": "长上下文LLM推理受KV缓存内存和计算成本限制，现有压缩方法忽略注意力头功能差异导致关键token被驱逐。CompressKV识别语义检索头（SRH）选择关键token，并离线估计层间驱逐误差分配缓存预算。在LongBench上用3%缓存保留97%全缓存性能，在Needle-in-a-Haystack上用0.7%缓存达90%准确率。该方法实现了资源高效的KV缓存压缩，改善了长上下文推理的资源-性能权衡。",
+      "tags": "query:key-tokens",
+      "abstract_en": "Long-context large language model (LLM) inference is increasingly constrained by the memory footprint and decoding cost of key-value (KV) caches, limiting sustainable deployment on resource-constrained hardware. Existing KV cache eviction methods typically apply heuristic token scoring over all heads in GQA-based LLMs. These methods ignore the different functionalities of attention heads, leading to the eviction of critical tokens and thus degrading the performance of LLMs. To address this issue, we propose CompressKV, a resource-efficient KV-cache compression framework for GQA-based LLMs. Instead of aggregating attention scores from all heads, CompressKV identifies Semantic Retrieval Heads (SRHs) that capture both the initial and final tokens of a prompt and semantically important mid-context evidence, and uses them to select tokens whose KV pairs should be retained. Furthermore, CompressKV allocates cache budgets across layers according to offline estimates of layer-wise eviction error. Experiments on LongBench and Needle-in-a-Haystack show that CompressKV consistently outperforms existing KV-cache eviction methods across memory budgets. Notably, it preserves over 97\\% of full-cache performance using only 3\\% of the KV cache on LongBench question-answering tasks and achieves 90\\% accuracy with just 0.7\\% KV storage on Needle-in-a-Haystack. These results demonstrate an improved resource--performance trade-off for long-context LLM inference. Our code is publicly available at: https://github.com/TUDa-HWAI/CompressKV",
+      "source": "arxiv",
+      "selection_source": "fresh_fetch"
+    },
+    {
+      "paper_id": "202606/24/2606.21704v1-when-compression-helps-and-when-it-hurts-condition-aware-analysis-of-chain-of-thought-distillation",
+      "section": "quick",
+      "title_en": "When Compression Helps and When It Hurts: Condition-Aware Analysis of Chain-of-Thought Distillation",
+      "authors": "Siyang Lyu, Zhijing Sun, Xinghao Chen, Tong Liu, Dawei Zhu, Xiaoyu Shen",
+      "date": "2026-06-19",
+      "pdf": "https://arxiv.org/pdf/2606.21704v1",
+      "score": "6.0",
+      "evidence": "链式推理压缩中的重要性准则",
+      "tldr": "Chain-of-Thought蒸馏中，冗长的教师推理链增加成本，现有压缩方法混淆了关键因素。本文沿重要性标准、重构级别和压缩预算三个维度系统分析，发现步骤级标准收敛于共同推理骨干而令牌级需要符号感知信号；数学领域对结构破坏敏感，通用任务中激进重写可去噪；训练时压缩不保证推理节省，学生保留冗长习惯。结果提供了条件感知的压缩部署指南。",
+      "tags": "query:key-tokens",
+      "abstract_en": "Chain-of-Thought (CoT) distillation transfers multi-step reasoning from large reasoning models to smaller students, but verbose teacher traces inflate both training and inference cost. Existing CoT compression methods fall into two families, selective pruning and generative rewriting, yet prior studies have left key factors entangled: granularity is confounded with importance criteria in pruning, restructuring level is rarely isolated in rewriting, and compression budgets are not systematically evaluated across domains or regimes. We recast CoT compression along three dimensions: importance criterion, restructuring level, and compression budget. Sweeping these across two model families, Math and General domains, and Long-/Short-CoT regimes, we find that (i) importance criterion utility is strictly governed by granularity: step-level criteria converge on a shared reasoning backbone, while token-level pruning requires symbol-aware signals to preserve the logical core; (ii) restructuring level inverts across domains: Math degrades monotonically with structural disruption, while aggressive rewriting acts as a denoiser on General tasks; (iii) training-time compression does not necessarily translate to inference-time savings: Long-CoT students retain verbose habits despite concise supervision, making the training ratio an optimistic lower bound on deployment cost. These findings yield condition-aware guidelines for matching compression to deployment context.",
+      "source": "arxiv",
+      "selection_source": "fresh_fetch"
+    }
+  ],
+  "errors": []
+}

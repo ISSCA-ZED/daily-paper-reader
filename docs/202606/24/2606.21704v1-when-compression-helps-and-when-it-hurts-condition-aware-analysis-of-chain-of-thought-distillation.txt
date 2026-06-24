@@ -1,0 +1,1038 @@
+Title: When Compression Helps and When It Hurts: Condition-Aware Analysis of Chain-of-Thought Distillation
+
+URL Source: https://arxiv.org/pdf/2606.21704v1
+
+Published Time: Tue, 23 Jun 2026 01:16:51 GMT
+
+Number of Pages: 27
+
+Markdown Content:
+# When Compression Helps and When It Hurts: Condition-Aware Analysis of Chain-of-Thought Distillation 
+
+Siyang Lyu 1,2 , Zhijing Sun 1,2 , Xinghao Chen 1,3 , Tong Liu 4, Dawei Zhu 5, Xiaoyu Shen 1* 1Ningbo Institute of Digital Twin, Eastern Institute of Technology, Ningbo 
+
+> 2
+
+Viterbi School of Engineering, University of Southern California  
+
+> 3
+
+The Hong Kong Polytechnic University 4 LMU Munich 5 Saarland University 
+
+siyangly@usc.edu xyshen@eitech.edu.cn 
+
+Abstract 
+
+Chain-of-Thought (CoT) distillation transfers multi-step reasoning from large reasoning mod-els to smaller students, but verbose teacher traces inflate both training and inference cost. Existing CoT compression methods fall into two families, selective pruning and generative rewriting, yet prior studies have left key factors entangled: granularity is confounded with im-portance criteria in pruning, restructuring level is rarely isolated in rewriting, and compression budgets are not systematically evaluated across domains or regimes. We recast CoT compres-sion along three dimensions: importance crite-rion, restructuring level, and compression bud-get. Sweeping these across two model families, Math and General domains, and Long-/Short-CoT regimes, we find that (i) importance cri-terion utility is strictly governed by granular-ity: step-level criteria converge on a shared rea-soning backbone, while token-level pruning re-quires symbol-aware signals to preserve the log-ical core; (ii) restructuring level inverts across domains: Math degrades monotonically with structural disruption, while aggressive rewrit-ing acts as a denoiser on General tasks; (iii) training-time compression does not necessarily translate to inference-time savings: Long-CoT students retain verbose habits despite concise supervision, making the training ratio an opti-mistic lower bound on deployment cost. These findings yield condition-aware guidelines for matching compression to deployment context. 
+
+1 Introduction 
+
+Large reasoning models (LRMs, Chen et al. 2025a) have recently achieved strong performance on com-plex reasoning tasks (DeepSeek-AI et al., 2025; OpenAI, 2024). Because directly deploying these models is costly, a common strategy is to distill their reasoning traces into smaller student mod-els (Huang et al., 2024; Ye et al., 2025). How-
+
+> *Corresponding authors.
+
+Figure 1: The CoT Compression Pipeline. To reduce computational costs, verbose reasoning is compressed by pruning low-value words or regenerating core logic, producing concise training data for efficient SFT. 
+
+ever, these traces are often verbose, containing re-dundant verification, speculative detours, and re-peated reformulations (Chen et al., 2025d; Wang et al., 2025c; Hong et al., 2026). Such verbosity in-creases training-time token consumption and may also teach students to generate unnecessarily long reasoning traces at inference time. CoT compres-sion therefore aims to shorten reasoning supervi-sion while preserving the information needed for effective distillation. Existing CoT compression methods generally fall into two families. Selective pruning deletes parts of the original trace using saliency, uncer-tainty, surprisal, or related importance scores (Pan et al., 2024; Xia et al., 2025; Li et al., 2025; Zhao et al., 2025b). Generative rewriting produces a new shorter rationale through paraphrasing, step fusion, or structured regeneration (Yu et al., 2025; 1
+
+> arXiv:2606.21704v1 [cs.CL] 19 Jun 2026
+
+Kang et al., 2024; Wu et al., 2025; Xu et al., 2025b). While both families successfully reduce cot length, current research still lacks a unified understanding of what underlying factors actually drive effective compression . In particular, three critical issues re-main unresolved. First, for selective pruning methods, the role of granularity is insufficiently understood. Exist-ing approaches typically operate either at the step level (Li et al., 2025; Zhao et al., 2025b) or at the token level (Xia et al., 2025), but granularity is of-ten entangled with the importance criterion itself. As a result, it remains unclear whether performance differences arise from the scoring signal or from the level at which compression is applied. Second, for generative rewriting methods, the role of restructuring level is rarely studied in iso-lation. Existing rewriting approaches implicitly introduce different degrees of structural transfor-mation (Yu et al., 2025; Kang et al., 2024; Wu et al., 2025), ranging from light paraphrasing to aggressive regeneration of reasoning traces. How-ever, prior work neither isolates restructuring level as an independent variable nor controls it against compression ratio, making it difficult to determine whether performance differences stem from infor-mation preservation or structural disruption. Third, across both pruning and rewriting meth-ods, the role of compression budget lacks system-atic evaluation. Existing studies typically report token reduction and downstream accuracy under a single task domain or compression setting (Han et al., 2024), without examining how compres-sion behavior changes across domains, reasoning regimes, or compression intensities. Collectively, these gaps reduce CoT compres-sion to trial-and-error tuning rather than princi-pled design. In this work, we address these lim-itations by reframing CoT compression as a con-trolled design problem along three dimensions (Fig-ure 1): importance criterion , which determines what reasoning content is retained; restructuring level , which characterizes how strongly the original reasoning structure is modified; and compression budget , which distinguishes the target compres-sion ratio, the realized training ratio, and the actual inference-time token ratio during deployment. We systematically study these dimensions across two model families, two task domains, and both Short-CoT and Long-CoT supervision regimes. Our analysis reveals the following principal find-ings. (i) Importance criterion utility is strictly gov-erned by granularity: at the step level, distinct crite-ria converge on a shared reasoning backbone, ren-dering criterion choice largely irrelevant; at the token level, this robustness collapses, and only symbol-aware signals preserve the logical core un-der aggressive pruning. (ii) The effect of restruc-turing level inverts across domains: on Math, accu-racy degrades monotonically as structural disrup-tion increases, leaving structure-preserving meth-ods as the only reliable choice; on General tasks, aggressive rewriting acts as a denoiser, matching or exceeding structure-preserving baselines. (iii) 
+
+Training-time compression does not necessarily translate into inference-time efficiency. Under Short-CoT supervision, students learn genuinely concise reasoning patterns and achieve real deploy-ment savings. Under Long-CoT supervision, how-ever, students retain verbose reasoning behaviors even when trained on compressed traces, causing the realized inference cost to remain substantially higher than the nominal training compression ratio. These findings lead to a practical guideline for choosing CoT compression strategies. For sym-bolic or math-heavy tasks, compression should pre-serve the original reasoning structure, and token-level pruning should use symbol-aware criteria that protect constraints, operators, and intermediate val-ues. For general-domain reasoning, more aggres-sive semantic fusion or framework-level rewriting can be beneficial because it can remove noise with-out destroying a unique derivation path. When de-ployment efficiency is the goal, practitioners should measure the student’s actual inference length rather than relying only on compressed training-token counts. Overall, our study shows that effective CoT compression is not a universal token-reduction recipe, but a set of condition-aware choices that must be matched to the structure of the task and the intended deployment setting. 
+
+2 Related Works 
+
+Overthinking in LRMs Recent LRMs, like OpenAI’s o1 (OpenAI, 2024) and DeepSeek-R1 (DeepSeek-AI et al., 2025), have demonstrated strong complex-task performance. Distilling their reasoning traces enables smaller models to acquire reasoning abilities (Huang et al., 2024). However, distillation also transfers the teacher’s overthinking behavior (Chen et al., 2025d)—redundant verifi-cation, speculative detours, and repetitive restates that inflate both training-time token budgets and 2inference-time latency without significant scaling benefits in student performance (Wang et al., 2025a; Chen et al., 2025b; Wang et al., 2025c). Motivated by this, recent work on efficient CoT explores ways to retain the utility of explicit reasoning while re-ducing its cost (Sui et al., 2025a). A complemen-tary line of work tackles overthinking from a model-architecture perspective, examining the effective-ness of pruning strategies on reasoning-augmented LRMs (Ding et al., 2026) and developing dynamic layer pruning that adaptively allocates computa-tion per token (Zhao et al., 2025a). In parallel, a growing body of work studies CoT compres-sion by pruning intermediate steps or compress-ing teacher traces via summarization and rewriting, thereby obtaining cheaper supervision for student training (Zhu and Li, 2025; Sui et al., 2025b). 
+
+Trace-level CoT Compression: Selective Prun-ing and Generative Rewriting One thread, se-lective preservation and rationale pruning , retains critical trace segments: saliency-based estimators isolate informative spans to remove fluff (Pan et al., 2024; Xia et al., 2025); information-theoretic sig-nals, uncertainty or surprisal, identify essential rea-soning blocks (Li et al., 2025; Cui et al., 2025; Xu et al., 2025b); and dependency-aware frame-works preserve logically indispensable components by modeling inter-step relations through graphs or heuristic rules (Zhao et al., 2025b; Jia et al., 2025). A complementary thread, generative refine-ment and structural re-organization , paraphrases and condenses teacher traces across a transforma-tion spectrum—from skeleton-preserving polishing (Yu et al., 2025), to step-merging into abstract state-ments (Jiang et al., 2025; Kang et al., 2024), and intent-guided rewrites that replace the teacher tem-plate (Wu et al., 2025). Beyond discrete trace editing, recent work has also explored shifting rea-soning into continuous latent spaces (Chen et al., 2025c), with particular attention to designing effec-tive supervision signals for latent trajectories (Chen et al., 2026). Orthogonal to trace editing, length control constrains or predicts reasoning length, from lightweight inference-time constraints (Xu et al., 2025a; Ding et al., 2024) to budget-aware methods that distill budget-aligned traces as super-vision to internalize efficiency (Han et al., 2024). Our work systematically characterizes this com-pression spectrum to map the trade-offs between structural fidelity and distillation performance. 
+
+3 Experimental Setup 
+
+3.1 Problem Formulation 
+
+We represent CoT compression as: 
+
+˜ri = C(ri; ρ, ϕ ), (1) which maps a teacher trace r to a compressed ver-sion ˜r for fine-tuning. Here, ρ denotes the compres-sion level and ϕ captures methodological choices. 
+
+Design Dimensions We organize methods and experiments along three dimensions: (i) Importance criterion ϕimportance : Deter-mines what content is removed via a score-threshold-prune pipeline: each unit (token or step) is assigned an importance score, and those below a threshold derived from the target compression ratio are pruned. We instantiate three importance scores: LLMLingua2 (learned saliency), Entropy (uncertainty), and NLL (surprise). (ii) Restructuring level ϕrestruct : Characterizes how the trace is restructured, along a spectrum from surface trimming to template reconstruction. We use Gemini 2.5 Flash (Gemini Team, 2025) as the rewriter to span four levels: structural preser-vation ( L1: SP ), step editing ( L2: SE ), semantic fusion ( L3: SF ), and framework reconstruction (L4: FR ) 1.(iii) Compression Level ρ: This factor governs the aggressiveness of supervision degradation. We manipulate a target ratio ρtarget to observe the re-alized ratio ρrealized –the actual trace length–which ultimately determines the end-to-end inference to-ken ratio ρinference as the deployment cost. This factor applies universally: as a threshold parameter for pruning or a length constraint for rewriting. 
+
+Objective and Evaluation. A student model Mθ
+
+is fine-tuned to minimize the standard negative log-likelihood on the compressed data (x, ˜r, y ), derived from a specific teacher regime R ∈ { long , short }.We evaluate the resulting impact surface defined by task performance ( Perf ) and inference token cost ( Cost ) across domains d:
+
+ Perf , Cost  = f (ρ, ϕ, R; d), (2) where R denotes the training-trace regime (long/short) and d the evaluation domain. 
+
+> 1Prompts and comparative cases are in Appendix A and Appendix I. We additionally verify using GPT-4o-mini (Ope-nAI, 2024) in Appendix C.4
+
+3Setting Reflective steps (%) Short-CoT 0.57% Long-CoT 30.2% 
+
+> Table 1: Content-level redundancy proxies for short- vs. long-CoT traces. The percentage of reflective or self-correction steps per trace (e.g., “wait”, “let me check”).
+
+3.2 Models, Data, and Metrics Student Models. We employ LLaMA-3.1-8B-Instruct (Dubey et al., 2024) as the primary student model, with the Qwen2.5 series (Yang et al., 2024) used to verify cross-model and scale generalization; full results are provided in Appendix D. 
+
+Training Corpora. To analyze the impact of rea-soning length, we construct two training sets: a Short-CoT regime sampled from Natural Reason-ing (Yuan et al., 2025) (5k instances), and a Long-CoT regime from LIMO (Ye et al., 2025). 
+
+Evaluation Benchmarks. The evaluation spans five benchmarks in two domains: (1) Math: GSM8K, MATH500 for short-CoT regime and MATH500, AMC23, AIME24 for long-CoT 
+
+regime;(2) General: GPQA Diamond and MMLU-PRO for both regimes. 
+
+Evaluation Metrics. We report Accuracy for reasoning quality and the Inference Token Ratio (ρinference )—the ratio of generated tokens relative to the uncompressed baseline—for cost efficiency. 
+
+Implementation Details We fine-tune all mod-els via LoRA (Hu et al., 2022). Evaluation uses a standardized greedy-like decoding with tempera-ture 0.7. Full hyperparameters, prompt templates for rewriting, and importance score definitions are provided in Appendix B.1. 
+
+4 Effects of Importance Criterion 
+
+Whether CoT compression helps hinges on a sim-ple premise: teacher traces must contain content that can be removed without changing the final performance, and the pruning mechanism must be able to target such content without discarding glob-ally critical information. Rather than estimating intrinsic information redundancy directly, we adopt an operational definition of compression tolerance: the capacity of a model to maintain downstream accuracy under increasing pruning rates.                
+
+> Signal Symbol / math Stopwords Other content Entropy 0.30 0.29 0.21 NLL 0.30 0.28 0.21 LLMLingua 0.15 0.54 0.11
+> Table 2: The realized 0.3 target deleted ratio for N ATU -
+> RAL REASONING under token-level pruning. Compared with entropy/NLL, LLMLingua deletes fewer constraint-bearing tokens, shifting deletions toward stopwords.
+
+4.1 Empirical compression tolerance Long-CoT training exhibits higher empirical tol-erance. As shown in Figure 2, Long-CoT train-ing yields a larger budget of removable tokens: student accuracy stays stable across a wider range of compressing ratios compared to Short-CoT. This is not because long traces contain a specific, easily-identifiable class of “redundant” steps, such as re-flective statements(Table 1) as suggested by prior work (Jia et al., 2025). In fact, in our controlled experiments (Appendix E), pruning methods that deliberately target reflective statements perform no better than those that ignore them. Instead, redun-dancy in Long-CoT is diffuse: the critical reasoning skeleton is repeated and rephrased throughout the trace. Therefore, as long as that global skeleton sur-vives, moderate compression is robust, irrespective of which specific elaborations are removed. 
+
+Domain-Dependent Sensitivity. General bench-marks sustain accuracy under much stronger prun-ing than Math benchmarks. This is because Gen-eral tasks typically accept diverse valid rationales and do not hinge on a specific intermediate state. Consequently, performance slowly degrades even when the training signal is partially corrupted. Math tasks, by contrast, require internally consis-tent intermediate quantities and precise constraint satisfaction. Small errors introduced by compres-sion are amplified down the reasoning chain, lead-ing to earlier and sharper accuracy drops under aggressive pruning 2.
+
+4.2 Importance Score Quality and Token Preservation 
+
+LLMLingua2 yields more stable pruning under high-risk compression. At matched realized com-pression ratios, LLMLingua2-based pruning de-grades more smoothly and suffers fewer sharp ac-curacy drops than entropy or NLL baselines. The gap is largest on Math benchmarks and under the strongest compression. 
+
+> 2Prepresentative failure cases are in Appendix J
+
+40.5 0.6 0.7 0.8 0.9 1.0                     
+
+> 30
+> 40
+> 50
+> 60
+> 70
+> Math-Short
+> 0.5 0.6 0.7 0.8 0.9 1.0
+> 16
+> 20
+> 24
+> 28
+> 32
+> Math-Long
+> 0.5 0.6 0.7 0.8 0.9 1.0
+> 28
+> 32
+> 36
+> 40
+> 44
+> General-Short
+> 0.5 0.6 0.7 0.8 0.9 1.0
+> 36
+> 40
+> 44
+> 48
+> General-Long
+> Prune Ratio
+> Accuracy (%)
+> LLMLingua-2 Entropy NLL Step Token Baseline
+
+Figure 2: Accuracy of compressed students versus realized prune ratio for extraction-based pruning.             
+
+> Pair 0.1 0.3 0.5 ENT–L2 0.75 0.53 0.36 NLL–L2 0.76 0.54 0.38 ENT–NLL 0.92 0.85 0.78
+
+Table 3: Pairwise Jaccard overlap between preserved-step sets for different step-level signals under matched target ratios. (ENT: Entropy; L2: LLMLingua2) 
+
+To understand why, we analyze which tokens each method deletes. We classify removed tokens into three categories: (i) math-like patterns (op-erators, numbers, logic markers), (ii) stopwords, and (iii) other content. Table 2 shows that entropy and NLL delete a much larger fraction of math-like tokens than LLMLingua2, which concentrates its deletions on stopwords and other content. A full breakdown is in Appendix F. Deleting math-like tokens is directly harmful. Failure cases 3 show that their removal correlates with catastrophic reasoning failures. Crucially, a controlled ablation 4 demonstrates that if we simply prevent entropy/NLL from deleting math tokens, their performance gap to LLMLingua2 largely dis-appears. This confirms that LLMLingua2’s advan-tage comes specifically from preserving symbolic anchors. Thus, in high-risk extraction, the quality of the importance score dictates stability. Unlike probability-based heuristics that risk fracturing log-ical steps, LLMLingua2 functions as a symbol pre-serving filter, saving the symbolic anchors essential for valid derivation. 
+
+> 3Prepresentative failure cases are in Appendix J
+> 4Results are in Appendix F.3
+
+4.3 Granularity Modulates Importance Criterion Utility 
+
+The utility of an importance criterion depends largely on the granularity of the deletion unit. 
+
+Step-level pruning: Convergence on the back-bone. Despite their different scoring metrics, step-level strategies based on Entropy, NLL, and LLMLingua2 yield similar accuracy. We analyze the pairwise Jaccard overlap of their pruning de-cisions, as reported in Table 3. The key insight is that the criteria agree strongly on which steps to preserve, where the overlap is 70–80%, but dis-agree substantially on which steps to delete 5. This means that all criteria converge on the same critical reasoning backbone. The remaining steps are pe-ripheral and interchangeable; removing one versus another has little effect. Hence, step-level pruning is robust to the choice of importance criterion. 
+
+Token-level pruning: importance score quality matters. In stark contrast, token-level pruning is highly sensitive to importance score quality. Un-der strong compression, LLMLingua2 maintains a smooth accuracy curve, while Entropy and NLL baselines collapse, especially on Math. This di-vergence comes down to whether the criterion pre-serves local structural integrity. As shown in Sec-tion 4.2, LLMLingua2 preferentially retains sym-bolic anchors and syntactic structures. Probability-based heuristics often indiscriminately delete key operators and numbers alongside stopwords. This risks fragmenting the internal logic of a reason-ing step rather than trimming verbose phrasing, a pattern we confirm via coherence analysis 6.
+
+> 5Details are in Appendix G
+> 6Results and analysis details are in Appendix H
+
+5L3.1-8B Q2.5-1.5B            
+
+> Model
+> 0
+> 20
+> 40
+> 60
+> Accuracy (%)
+> Math-Short
+> 68.1
+> 49.8
+> 61.5
+> 47.9
+> 60.7
+> 48.9 49.4
+> 27.5
+> L3.1-8B Q2.5-1.5B
+> Model
+> 0
+> 15
+> 30
+> 45
+> General-Short
+> 38.2
+> 41.0 41.6
+> 49.2
+> 24.8
+> 42.7 43.4
+> 46.4
+> L3.1-8B Q2.5-1.5B
+> Model
+> 0
+> 6
+> 12
+> 18
+> 24
+> Math-Long
+> 24.0 23.7
+> 24.6
+> 21.3
+> 21.8
+> 24.0
+> 23.2 23.3
+> L3.1-8B Q2.5-1.5B
+> Model
+> 0
+> 15
+> 30
+> 45
+> General-Long
+> 41.8
+> 38.6 37.9 39.4
+> 43.2
+> 39.3 38.8
+> 43.9
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> 1.2
+> Token Ratio
+> Structure Strong Structure Medium Structure Light Structure None Acc (bar) Tok Ratio
+
+Figure 3: Accuracy and compression ratio across restructuring levels. Math exhibits a strict monotonic dependency on restructuring level (monotonic decay from SP to FR), whereas General domains show a restructuring benefit, where aggressive rewriting (SF/FR) matches or exceeds structure-preserving baselines. 
+
+Importance criterion utility is governed by gran-ularity. At step level, all criteria converge on a shared reasoning backbone, making criterion choice irrelevant. At token level, this robustness collapses: symbol-aware criteria, like LLMLin-gua2, thin redundancy without shattering the logical core, while probability-based heuristics risk removing constraint-bearing tokens. 
+
+Conclusion 
+
+5 Effect of Restructuring Level 
+
+CoT compression changes not only length but also the organization of the reasoning chain. We use the 
+
+restructuring level to describe how much a com-pressed CoT preserves the teacher’s step segmen-tation, local ordering, and high-level solution plan. We define a qualitative spectrum — from minimal to maximal perturbation — to characterize how each rewriting method restructures the reasoning path, while keeping compression ratio compara-ble. Each level below represents an existing class of rewriting strategies, with representative work cited in line with prompts and comparative cases in Appendix A and Appendix I: • L1: Structural Preservation (SP): The rewriter is constrained to only remove redundant words to target surface verbosity, strictly preserving the verbatim logical sequence (Yu et al., 2025). • L2: Structural Editing (SE): The rewriter per-forms step-level operations like keeping, deleting or rephrasing to create a more efficient but struc-turally similar reasoning path (Jiang et al., 2025). • L3: Semantic Fusion (SF): The rewriter is en-couraged to retain only “key information” to fuse multi-step sequences into novel statements (Kang et al., 2024). • L4: Framework Replacement (FR): The rewriter discards the original structure to regen-erate reasoning via a predefined formal tem-plate (Wu et al., 2025). 
+
+5.1 Robustness Across Restructuring Level 
+
+As illustrated in Figure 3, a consistent pattern along this spectrum: across domains, lower restructuring levels are more robust as compression strengthens, whereas higher restructuring levels deteriorate ear-lier and show more domain-dependent variability. 
+
+Robustness Degrades with Restructuring Level 
+
+From SP to SE to SF as the restructuring level increases: at light to moderate compression, SP/SE/SF typically reduce rationale length while staying near the original baseline, particularly on General tasks. When compression becomes strong, however, SE and SF drop faster, while SP remains comparatively stable. A plausible explanation is that SP/SE primarily shorten surface form while retaining the step skeleton, whereas SF already be-gins to fuse across steps; further compression then more easily weakens information that cannot be re-constructed from the remaining text. At the highest restructuring level, framework replacement (FR) pushes this unstable effect further by rewriting the entire solution template, and we frequently observe higher variance across settings. 
+
+5.2 Domain Sensitivity and Interaction Math Reasoning Demands Minimal Restructur-ing. In LLM-based summarization, we observe a domain divergence. On Math, SF and SE degrade significantly faster than SP under strong compres-sion, making SP the safest choice, as illustrated by representative failure cases in Appendix J. In Math 6domains, Accuracy declines monotonically as the restructuring level increases from SP to FR. This fragility stems from the strict logical dependencies in mathematical reasoning: errors introduced by disrupting step boundaries through Semantic Fu-sion (L3) or by editing and rephrasing steps Struc-tural Editing (L2) are amplified downstream. Con-versely, General tasks often tolerate a wider range of valid rationales. Methods at higher restructuring levels remain competitive because these tasks are less sensitive to how intermediate steps are pack-aged, allowing for more aggressive abstraction. 
+
+FR: The High-Variance Extremity. FR ampli-fies this domain split. On Math, it is among the weakest strategies; on General, it frequently reaches parity with, or even surpasses, structure-preserving methods under tight budgets. As shown in Figure 3, the Framework Replacement approach collapses on logic-heavy Math problems but re-mains competitive in General domains. We at-tribute this to the rigidity of the solution space. Imposing a predefined framework (L4) on Math problems disrupts the precise logical flow of the original rationale, leading to derivation errors. In contrast, on General tasks, template-level rewriting can effectively reorganize and denoise the trace, yielding a more focused rationale. The effect of restructuring level inverts across domains: on Math, robustness degrades mono-tonically with restructuring level, leaving SP the only reliable choice. In General, this mono-tonicity breaks down: aggressive restructur-ing (SF/FR) can match or exceed structure-preserving baselines. 
+
+Conclusion 
+
+6 Effect of Compression Budget 
+
+Building on the compression setup in Section 3, we characterize compression dynamics via three metrics: the target ratio ρtarget as the control knob, the empirical realized ratio ρrealized reflecting ac-tual compression on CoT traces, and the inference token ratio ρinference measuring deployment cost. Beyond fixed-ρtarget constraints, we also evaluate a free ratio mode, where the rewriter optimizes 
+
+ρrealized naturally within a fixed structural template without a prescribed target. 0.4 0.6 0.8 1.0       
+
+> ρ(Realized Ratio)
+> 5
+> 10
+> 15
+> 20
+> 25
+> 30
+> Token Efficiency (Perf/Cost × 100)
+> Short
+> 0.2 0.4 0.6 0.8 1.0
+> ρ(Realized Ratio)
+> 1.5
+> 3.0
+> 4.5
+> 6.0
+> 7.5
+> Long
+> Math (filled)
+> General (hollow)
+> Struct Strong
+> Struct Med
+> Struct Light
+> Struct None
+> Lingua-Step
+> Lingua-Token
+> Free
+> Baseline
+
+Figure 4: Token efficiency ( Perf /Cost ) vs. Realized Ratio ( ρrealized ), illustrating how structural fidelity de-fines length bands while the Free Ratio (stars) naturally identifies high-efficiency equilibrium points. 0.3 0.5 0.7 0.9          
+
+> (Realized Ratio)
+> 0.3
+> 0.5
+> 0.7
+> 0.9
+> 1.1
+> 1.3
+> (Inference Token Ratio)
+> Math
+> 0.3 0.5 0.7 0.9
+> (Realized Ratio)
+> General
+> Summary Extraction Short Long y=x
+
+Figure 5: Efficiency translation analysis. Short-CoT aligns with the y = x diagonal while Long-CoT exhibits an efficiency gap ( ρinference > ρ realized ). 
+
+6.1 Stability and Performance Decay 
+
+Our empirical analysis reveals that model accuracy remains remarkably resilient, staying within 90% of the original baseline across a significant com-pression interval. However, as shown in Figure 6, this stability is eventually followed by a sharp non-linear degradation. Once compression exceeds a critical threshold, performance collapses rapidly, suggesting a fundamental limit to how much in-formation can be discarded before the underlying reasoning logic is compromised. 
+
+The compression resilience is modulated by two distinct factors. Rather than a uniform decay, we observe that mathematical reasoning tasks are inherently more fragile than general-domain bench-marks, yet this sensitivity is significantly counter-acted by long-CoT teachers, which systematically extend the viable compression range. 
+
+6.2 Target vs. Realized Compression 
+
+Given the observed resilience thresholds, we evalu-ate two distinct compression styles and employ a 740     
+
+> 20
+> 0
+> 20
+> 40
+> Accuracy (%)
+> Math-Short
+> 15
+> 10
+> 5
+> 0
+> 5
+> 10
+> 15
+> General-Short
+> 0.5 0.7 0.9
+> Prune Ratio
+> 15
+> 9
+> 3
+> 3
+> 9
+> 15
+> Accuracy (%)
+> Math-Long
+> 0.5 0.7 0.9
+> Prune Ratio
+> 6
+> 3
+> 0
+> 3
+> 6
+> General-Long
+> Structure Strong
+> Structure Medium
+> Structure Light
+> LLMLingua Step
+> NLL Step
+> Entropy Step
+> LLMLingua Token
+> NLL Token
+> Entropy Token
+> 0 (Baseline)
+> 0.9×Baseline
+
+Figure 6: Comparison of summarization- and extraction-based CoT compression across domains and training regimes. Each subplot reports accuracy under different prune ratios on Math/General × Short/Long settings. Bars show accuracy at prune ratios 0.5/0.7/0.9, and the orange line shows the corresponding inference token ratio. 
+
+length-band analysis to characterize the resulting variability in token reduction. 
+
+Summarization as intent-driven rewriting. Un-like extractive methods, summarization modulates length indirectly via its rewriting objective. We observe that realized lengths do not scale linearly with target ratios; instead, the teacher LLM, con-strained by linguistic fluency and structural coher-ence, converges to method-specific characteristic lengths. Thus, the target ratio signals compression intensity rather than a precise numerical constraint. 
+
+Structural constraints define the length band. 
+
+As shown in Figure 4, the choice of structural fi-delity dictates the achievable compression range (the band), while the target ratio only facilitates marginal adjustments within that band. In High-fidelity methods, such as SP, strict struc-tural constraints force the model to preserve the original reasoning skeleton, yielding a narrow, con-servative band. Looser prompts methods such as SF/SE, permissive constraints allowing cross-step fusion enable the model to fold multiple steps into single spans, shifting the band toward smaller ra-tios and widening its variance. This suggests that stronger structural constraints yield stable but con-servative results, while weaker constraints enable more aggressive but volatile compression. 
+
+Free Ratio as a Natural Equilibrium. The free-ratio represents a method’s intrinsic set-point ab-sent of rigid constraints. Figure 4 confirms that this "natural" landing point often yields superior token efficiency, appearing as “star” points on the opti-mal frontier. In structure-preserving methods, this mechanism serves as a self-regularizer, ensuring the model settles at stable, moderate ratios. Al-though less protective for aggressive variants with naturally lower bands, the free ratio avoids the in-stability of forced compression. Thus, we propose using the free ratio as a primary configuration for ensuring consistent performance. 
+
+6.3 The Gap Between Training and Inference 
+
+We observe a positive correlation between the end-to-end inference token ratio and realized compres-sion ratio. As shown in Figure 5, this correlation is tight in the short-CoT regime but weakens un-der long-CoT regime. Generally, ρtarget serves as a viable proxy, but the efficiency translation varies significantly by regime. Short-CoT exhibits a near-linear correlation ( ρinference ≈ ρrealized ) along the diagonal, indicating successful internalization of concise reasoning styles. In contrast, the Long-CoT regime reveals a significant efficiency gap where 
+
+ρinference > ρ realized . This divergence stems from a translation loss where verbose habits persist despite concise training supervision. Thus, for complex tasks, ρ serves as an optimistic lower bound rather than a precise predictor of deployment cost. 8As compression budget decreases, accuracy de-grades as a "plateau-then-drop", with resilience shaped by domain and source-CoT regime. More critically, efficiency translation is regime-conditional: Short-CoT compresses faithfully, while Long-CoT does not, as verbose habits per-sist despite concise supervision, making ρ an optimistic lower bound for deployment cost. 
+
+Conclusion 
+
+7 Conclusion 
+
+We have reframed CoT compression into three de-sign dimensions: compression budget, importance criterion, and restructuring level. Each is governed by a distinct factor. Whether training-side com-pression translates to shorter inference depends on the source-CoT regime, with Long-CoT students retaining verbose habits despite concise supervi-sion. Criterion utility is governed by granularity: step-level methods converge on a shared backbone, while token-level pruning demands symbol-aware criteria such as LLMLingua2 to preserve the logi-cal core. Restructuring level acts in opposite direc-tions across domains, denoising General tasks but degrading Math monotonically. Together, these re-sults show that compression efficacy is conditioned on regime, granularity, and domain; no single strat-egy universally dominates. Effective deployment requires aligning each design choice with its spe-cific task context and inference constraints. 
+
+Limitations 
+
+Our experiments adopt LoRA-based fine-tuning as the training objective, as our goal is to under-stand how different compression strategies alter the supervision signal itself rather than to compen-sate for supervision degradation through stronger distillation objectives. Full-parameter fine-tuning and more aggressive objectives remain important directions for future work. Furthermore, our Math-/General partition is a pragmatic dichotomy that isolates two prototypical classes of structural sensi-tivity rather than an exhaustive taxonomy of reason-ing task types. Tasks such as code generation and deep-search reasoning may exhibit hybrid sensitiv-ity combining symbolic anchors with more flexible solution spaces, and we leave these as concrete directions for future work. 
+
+Ethics Statement 
+
+The datasets utilized in this study are publicly avail-able benchmarks. We acknowledge, however, that public web-sourced data may inherently contain so-cially harmful or toxic language, despite our inabil-ity to guarantee its complete absence. Our experi-ments rely on the Google Gemini API; at no point did we access or attempt to access the proprietary training data or underlying system weights of the models. We confirm that the datasets used do not contain personally identifiable information (PII), ensuring user privacy. All datasets and models were used in strict accordance with their permissive li-censes and intended usage guidelines. We believe this work adheres to the ACL Code of Ethics. Fi-nally, we employed GPT-5 7to correct grammatical errors in this paper. 
+
+References                  
+
+> Art of Problem Solving. 2025. Aime problems and solutions. https://artofproblemsolving. com/wiki/index.php/AIME_Problems_and_ Solutions . Accessed: 2025-12-23. Steven Bird and Edward Loper. 2004. NLTK: The natural language toolkit. In Proceedings of the ACL Interactive Poster and Demonstration Sessions ,pages 214–217, Barcelona, Spain. Association for Computational Linguistics. Qiguang Chen, Libo Qin, Jinhao Liu, Dengyun Peng, Jiannan Guan, Peng Wang, Mengkang Hu, Yuhang Zhou, Te Gao, and Wanxiang Che. 2025a. Towards reasoning era: A survey of long chain-of-thought for reasoning large language models. Preprint ,arXiv:2503.09567. Xinghao Chen, Chak Tou Leong, Wenjin Guo, Jian Wang, Wenjie Li, and Xiaoyu Shen. 2026. What makes effective supervision in latent chain-of-thought: An information-theoretic analysis. Preprint, arXiv:2606.20075. Xinghao Chen, Zhijing Sun, Guo Wenjin, Miaoran Zhang, Yanjun Chen, Yirong Sun, Hui Su, Yijie Pan, Dietrich Klakow, Wenjie Li, and Xiaoyu Shen. 2025b. Unveiling the key factors for distilling chain-of-thought reasoning. In Findings of the Association for Computational Linguistics: ACL 2025 , pages 15094–15119, Vienna, Austria. Association for Com-putational Linguistics. Xinghao Chen, Anhao Zhao, Heming Xia, Xuan Lu, Hanlin Wang, Yanjun Chen, Wei Zhang, Jian Wang, Wenjie Li, and Xiaoyu Shen. 2025c. Rea-soning beyond language: A comprehensive sur-vey on latent chain-of-thought reasoning. Preprint, arXiv:2505.16782.
+> 7https://chatgpt.com/
+
+9Xingyu Chen, Jiahao Xu, Tian Liang, Zhiwei He, Jianhui Pang, Dian Yu, Linfeng Song, Qiuzhi Liu, Mengfei Zhou, Zhuosheng Zhang, Rui Wang, Zhaopeng Tu, Haitao Mi, and Dong Yu. 2025d. Do not think that much for 2+3=? on the overthinking of o1-like llms. Preprint, arXiv:2412.21187. Karl Cobbe, Vineet Kosaraju, Mohammad Bavarian, Mark Chen, Heewoo Jun, Lukasz Kaiser, Matthias Plappert, Jerry Tworek, Jacob Hilton, Reiichiro Nakano, Christopher Hesse, and John Schulman. 2021. Training verifiers to solve math word prob-lems. CoRR, abs/2110.14168. Yingqian Cui, Pengfei He, Jingying Zeng, Hui Liu, Xi-anfeng Tang, Zhenwei Dai, Yan Han, Chen Luo, Jing Huang, Zhen Li, Suhang Wang, Yue Xing, Jiliang Tang, and Qi He. 2025. Stepwise perplexity-guided refinement for efficient chain-of-thought reasoning in large language models. Preprint, arXiv:2502.13260. Tri Dao. 2023. FlashAttention-2: Faster attention with better parallelism and work partitioning. arXiv preprint arXiv:2307.08691. DeepSeek-AI, Daya Guo, et al. 2025. Deepseek-r1: Incentivizing reasoning capability in llms via rein-forcement learning. Preprint, arXiv:2501.12948. Longwei Ding, Anhao Zhao, Fanghua Ye, Ziyang Chen, and Xiaoyu Shen. 2026. From llms to lrms: Rethink-ing pruning for reasoning-centric models. Preprint, arXiv:2601.18091. Mengru Ding, Hanmeng Liu, Zhizhang Fu, Jian Song, Wenbo Xie, and Yue Zhang. 2024. Break the chain: Large language models can be shortcut reasoners. CoRR, abs/2406.06580. Abhimanyu Dubey, Abhinav Jauhri, Abhinav Pandey, Abhishek Kadian, Ahmad Al-Dahle, et al. 2024. The llama 3 herd of models. Preprint, arXiv:2407.21783. Gemini Team. 2025. Gemini 2.5: Pushing the fron-tier with advanced reasoning, multimodality, long context, and next generation agentic capabilities. Preprint, arXiv:2507.06261. Tingxu Han, Zhenting Wang, Chunrong Fang, Shiyu Zhao, Shiqing Ma, and Zhenyu Chen. 2024. Token-budget-aware LLM reasoning. Preprint ,arXiv:2412.18547. Dan Hendrycks, Collin Burns, Saurav Kadavath, Akul Arora, Steven Basart, Eric Tang, Dawn Song, and Jacob Steinhardt. 2021. Measuring mathe-matical problem solving with the MATH dataset. In Thirty-fifth Conference on Neural Information Processing Systems Datasets and Benchmarks Track (Round 2). Jialiang Hong, Taihang Zhen, Kai Chen, Jiaheng Liu, Junlan Feng, Wenpeng Zhu, Jing Huo, Yang Gao, Depeng Wang, Haitao Wan, Xi Yang, Boyan Wang, Fanyu Meng, and Yuyao Zhang. 2026. Re-considering overthinking: Penalizing internal and external redundancy in cot reasoning. Preprint ,arXiv:2508.02178. Edward J. Hu, Yelong Shen, Phillip Wallis, Zeyuan Allen-Zhu, Yuanzhi Li, Shean Wang, Lu Wang, and Weizhu Chen. 2022. Lora: Low-rank adaptation of large language models. In The Tenth International Conference on Learning Representations, ICLR 2022, Virtual Event, April 25-29, 2022 . OpenRe-view.net. Zhen Huang, Haoyang Zou, Xuefeng Li, Yixiu Liu, Yuxiang Zheng, Ethan Chern, Shijie Xia, Yiwei Qin, Weizhe Yuan, and Pengfei Liu. 2024. O1 replication journey – part 2: Surpassing o1-preview through simple distillation, big progress or bitter lesson? Preprint, arXiv:2411.16489. Jinghan Jia, Hadi Reisizadeh, Chongyu Fan, Nathalie Baracaldo, Mingyi Hong, and Sijia Liu. 2025. EPiC: Towards lossless speedup for reasoning training through edge-preserving cot condensation. Preprint, arXiv:2506.04205. Yuxuan Jiang, Dawei Li, and Frank Ferraro. 2025. DRP: Distilled reasoning pruning with skill-aware step decomposition for efficient large reasoning models. Preprint, arXiv:2505.13975. Yu Kang, Xianghui Sun, Liangyu Chen, and Wei Zou. 2024. C3oT: Generating shorter chain-of-thought without compromising effectiveness. Preprint ,arXiv:2412.11664. Zeju Li, Jianyuan Zhong, Ziyang Zheng, Xiangyu Wen, Zhijian Xu, Yingying Cheng, Fan Zhang, and Qiang Xu. 2025. Compressing chain-of-thought in LLMs via step entropy. Preprint, arXiv:2508.03346. Mathematical Association of America. 2025. American Mathematics Competitions (AMC). Accessed: 2026-01-06. OpenAI. 2024. Gpt-4o system card. Technical report, OpenAI. OpenAI. 2024. Learning to reason with LLMs. Ac-cessed: 2025-12-30. Zhuoshi Pan, Qianhui Wu, Huiqiang Jiang, Menglin Xia, Xufang Luo, Jue Zhang, Qingwei Lin, Victor Rühle, Yuqing Yang, Chin-Yew Lin, H. Vicky Zhao, Lili Qiu, and Dongmei Zhang. 2024. LLMLingua-2: Data dis-tillation for efficient and faithful task-agnostic prompt compression. In Findings of the Association for Computational Linguistics: ACL 2024 , pages 963– 981, Bangkok, Thailand. Association for Computa-tional Linguistics. Samyam Rajbhandari, Jeff Rasley, Olatunji Ruwase, and Yuxiong He. 2020. Zero: Memory opti-mizations toward training trillion parameter models. In Proceedings of the International Conference for High Performance Computing, Networking, Storage and Analysis (SC ’20). IEEE/ACM. 
+
+10 David Rein, Betty Li Hou, Asa Cooper Stickland, Jack-son Petty, Richard Yuanzhe Pang, Julien Dirani, Ju-lian Michael, and Samuel R. Bowman. 2024. Gpqa: A graduate-level google-proof q&a benchmark. In First Conference on Language Modeling. Yang Sui, Yu-Neng Chuang, Guanchu Wang, Jiamu Zhang, Tianyi Zhang, Jiayi Yuan, Hongyi Liu, An-drew Wen, Shaochen Zhong, Hanjie Chen, and oth-ers. 2025a. Stop overthinking: A survey on effi-cient reasoning for large language models. Preprint, arXiv:2503.16419. Yang Sui, Yu-Neng Chuang, Guanchu Wang, Jiamu Zhang, Tianyi Zhang, Jiayi Yuan, Hongyi Liu, An-drew Wen, Shaochen Zhong, Na Zou, Hanjie Chen, and Xia Hu. 2025b. Stop overthinking: A survey on efficient reasoning for large language models. Preprint, arXiv:2503.16419. Rui Wang, Hongru Wang, Boyang Xue, Jianhui Pang, Shudong Liu, Yi Chen, Jiahao Qiu, Derek Fai Wong, Heng Ji, and Kam-Fai Wong. 2025a. Har-nessing the reasoning economy: A survey of effi-cient reasoning for large language models. Preprint, arXiv:2503.24377. Yibo Wang, Haotian Luo, Huanjin Yao, Tiansheng Huang, Haiying He, Rui Liu, Naiqiang Tan, Jiaxing Huang, Xiaochun Cao, Dacheng Tao, and Li Shen. 2025b. R1-compress: Long chain-of-thought com-pression via chunk compression and search. Preprint, arXiv:2505.16838. Yubo Wang, Xueguang Ma, Ge Zhang, Yuansheng Ni, Abhranil Chandra, Shiguang Guo, Weiming Ren, Aaran Arulraj, Xuan He, Ziyan Jiang, et al. 2024. Mmlu-pro: A more robust and challenging multi-task language understanding benchmark. Preprint, arXiv:2406.01574. Yue Wang, Qiuzhi Liu, Jiahao Xu, Tian Liang, Xingyu Chen, Zhiwei He, Linfeng Song, Dian Yu, Juntao Li, Zhuosheng Zhang, Rui Wang, Zhaopeng Tu, Haitao Mi, and Dong Yu. 2025c. Thoughts are all over the place: On the underthinking of o1-like llms. Preprint, arXiv:2501.18585. Yifan Wu, Jingze Shi, Bingheng Wu, Jiayi Zhang, Xi-aotian Lin, Nan Tang, and Yuyu Luo. 2025. Con-cise reasoning, big gains: Pruning long reason-ing trace with difficulty-aware prompting. Preprint, arXiv:2505.19716. Heming Xia, Chak Tou Leong, Wenjie Wang, Yongqi Li, and Wenjie Li. 2025. Tokenskip: Controllable chain-of-thought compression in LLMs. Preprint ,arXiv:2502.12067. Silei Xu, Wenhao Xie, Lingxiao Zhao, and Pengcheng He. 2025a. Chain of draft: Thinking faster by writing less. Preprint, arXiv:2502.18600. Xiaoang Xu, Shuo Wang, Xu Han, Zhenghao Liu, Hui-jia Wu, Peipei Li, Zhiyuan Liu, Maosong Sun, and Zhaofeng He. 2025b. A*-Thought: Efficient reason-ing via bidirectional compression for low-resource settings. Preprint, arXiv:2505.24550. An Yang, Baosong Yang, Beichen Zhang, Binyuan Hui, Bo Zheng, Bowen Yu, Chengyuan Li, Dayi-heng Liu, Fei Huang, Haoran Wei, Huan Lin, Jian Yang, Jianhong Tu, Jianwei Zhang, Jianxin Yang, Jiaxi Yang, Jingren Zhou, Junyang Lin, Kai Dang, Keming Lu, Keqin Bao, Kexin Yang, Le Yu, Mei Li, Mingfeng Xue, Pei Zhang, Qin Zhu, Rui Men, Runji Lin, Tianhao Li, Tingyu Xia, Xingzhang Ren, Xuancheng Ren, Yang Fan, Yang Su, Yichang Zhang, Yu Wan, Yuqiong Liu, Zeyu Cui, Zhenru Zhang, and Zihan Qiu. 2024. Qwen2.5 technical report. CoRR, abs/2412.15115. Yixin Ye, Zhen Huang, Yang Xiao, Ethan Chern, Shijie Xia, and Pengfei Liu. 2025. Limo: Less is more for reasoning. Preprint, arXiv:2502.03387. Bin Yu, Hang Yuan, Haotian Li, Xueyin Xu, Yuliang Wei, Bailing Wang, Weizhen Qi, and Kai Chen. 2025. Long-short chain-of-thought mixture supervised fine-tuning eliciting efficient reasoning in large language models. Preprint, arXiv:2505.03469. Weizhe Yuan, Jane Yu, Song Jiang, Karthik Padthe, Yang Li, Dong Wang, Ilia Kulikov, Kyunghyun Cho, Yuandong Tian, Jason E Weston, and Xian Li. 2025. Naturalreasoning: Reasoning in the wild with 2.8m challenging questions. Preprint, arXiv:2502.13124. Anhao Zhao, Fanghua Ye, Yingqi Fan, Junlong Tong, Jing Xiong, Zhiwei Fei, Hui Su, and Xiaoyu Shen. 2025a. SkipGPT: Each token is one of a kind. In Forty-second International Conference on Machine Learning. Shangziqi Zhao, Jiahao Yuan, Guisong Yang, and Us-man Naseem. 2025b. Can pruning improve rea-soning? revisiting long-cot compression with ca-pability in mind for better reasoning. Preprint ,arXiv:2505.14582. Yaowei Zheng, Richong Zhang, Junhao Zhang, Yan-han Ye, and Zheyan Luo. 2024. LlamaFactory: Unified efficient fine-tuning of 100+ language mod-els. In Proceedings of the 62nd Annual Meeting of the Association for Computational Linguistics (Volume 3: System Demonstrations) , pages 400– 410, Bangkok, Thailand. Association for Computa-tional Linguistics. Jason Zhu and Hongyu Li. 2025. Towards concise and adaptive thinking in large reasoning models: A sur-vey. Preprint, arXiv:2507.09662. 
+
+11 Appendix A Prompting Details 
+
+A.1 Prompting Templates for Summarization 
+
+All our summarization prompts share a common base structure. We generate prompts by populating slots within this template: 
+
+The base structure of summary prompt 
+
+TASK: Prune the following THOUGHT PROCESS. This is a high-difficulty task requiring careful consideration and strict adherence to all constraints. STRICT LIMIT: 
+
+{STRICT_LIMIT_SECTION} 
+
+COMPRESS STRATEGY: 
+
+{COMPRESS_STRATEGY_SECTION} 
+
+VERIFICATION: After your summary, report the exact word count. QUESTION: 
+
+{question }THOUGHT PROCESS: 
+
+{answer }Format your response EXACTLY like this: [The compressed thought process] Words: [Number of words in your summary] 
+
+Figure 7: The base structure of the prompt used for summarization-based methods. Different sections are populated based on the desired level of structural trans-formation. 
+
+A.2 Component 1: Degree of Structural Transformation 
+
+The {COMPRESS_STRATEGY_SECTION} in our base prompt is populated with instructions correspond-ing to the four levels of structural transformation defined in the main paper. 
+
+Level 1: Structural Preservation (SP). The prompt instructs the model to only remove redun-dant tokens without altering the logical structure. 
+
+The SP Compress Strategy Section 
+
+- For this task, "pruning" means you should only remove redundant tokens. - The goal is to preserve the original structure and se-quence of every logical step. - This strategy explicitly forbids rewriting sentences, merging steps, or deleting any part of the reasoning path. - Conclude with the "ANSWER" section only for ques-tions with a definitive, boxable answer. Otherwise, omit it entirely. 
+
+Level 2: Structural Editing (SE). The prompt grants the model step-level editing capabilities, in-cluding keeping, deleting, and rewriting/merging steps. 
+
+The SE Compress Strategy Section 
+
+You are an expert in logical reasoning compression. Your task is to refine and compress the provided THOUGHT PROCESS by treating it as a sequence of implicit logical steps and applying the following revision actions: 1. **Evaluate each logical component/step** within the THOUGHT PROCESS. 2. Based on your evaluation, decide how to act on it: * **KEEP:** If a step is necessary and concise, keep it. * **DELETE:** If a step is redundant, unnecessary, or logically flawed, remove it. * **SINGLE-STEP COMPRESS:** If a step is neces-sary but verbose, rewrite it more concisely. * **MULTI-STEP COMPRESS:** If several adjacent steps can be logically combined into a single, more effi-cient step, merge them. 3. Synthesize your revisions into a single, coherent, and fluent reasoning path that preserves the core logical progression to the final answer. Ensure the final answer is clearly stated at the end. 4. Conclude with the "ANSWER" section only for ques-tions with a definitive, boxable answer. Otherwise, omit it entirely. 
+
+Level 3: Semantic Fusion (SF). The prompt encourages abstraction by instructing the model to retain only the essential "key info." 
+
+The SF Compress Strategy Section 
+
+- Retain the key info needed to solve the question and do not add additional info that is not included in the origin. - Conclude with the "ANSWER" section only for ques-tions with a definitive, boxable answer. Otherwise, omit it entirely. 
+
+Level 4: Framework Replacement (FR). The prompt for FR marks a conceptual shift from "com-pression" to "reconstruction." This is explicitly signaled to the model by altering keywords in the base template itself. Specifically, the main 
+
+TASK description is changed to "Re-evaluate and Reconstruct..." and the strategy section is reti-tled RECONSTRUCTION STRATEGY . This directs the model to abandon the original CoT’s structure and generate a new reasoning trace from first principles. 12 The FR Reconstruction Strategy 
+
+1. **PRIMARY GOAL:** Your main goal is to **RE-PLACE** the original ‘THOUGHT PROCESS‘. You are **NOT** compressing or editing the original text. You are generating a superior, structured replacement from scratch. 2. **ASSESS COMPLEXITY:** First, analyze the provided ‘QUESTION‘ to assess its complexity (simple, moderately complex, or highly complex). 3. **CHOOSE FRAMEWORK:** Based on your assessment, choose **ONE** of the following three frameworks to generate a new thought process. 4. **FRAMEWORKS:** * **For simple problems:** **Analysis:** [Understand the core elements and goals of the problem] **Approach:** [Propose direct solution methods] **Summary:** [Concisely summarize the solution approach and key points] * **For moderately complex problems:** **Analysis:** [Understand the problem and identify key points and challenges] **Initial Approach:** [Propose preliminary solutions] **Reflection:** [Evaluate the pros and cons of the initial approach] **Improvement:** [Refine the solution based on reflec-tion] **Summary:** [Summarize the key points of the final solution] * **For highly complex problems:** **Analysis:** [Analyze various aspects of the problem and break down its structure] **Problem Decomposition:** [Break complex problem into manageable sub-problems] **Sub-problem Processing:** (Repeat for each sub-problem) - Sub-problem X: [Initial approach, Reflection, Improved solution] **Integration:** [Integrate sub-problem solutions] **Overall Reflection:** [Evaluate the integrated solu-tion] **Final Optimization:** [Make final optimizations] **Summary:** [Summarize key points] 5. **REFERENCE USAGE:** Use the original ‘THOUGHT PROCESS‘ (‘answer‘) only as a reference to understand the key values, steps, and final conclu-sion. **DO NOT** follow its structure, wording, or verbosity. Your new output must be self-contained and strictly adhere to the selected structured framework. 
+
+A.3 Component 2: Compression Ratio Control 
+
+The {STRICT_LIMIT_SECTION} component con-trols the target length of the compressed output. We use two modes. 
+
+Fixed-Ratio Mode. Used to enforce a specific compression ratio γ. The word limit is pre-calculated based on the original CoT’s length. 
+
+The FR Compress Strategy Section 
+
+STRICT LIMIT: Your summary MUST be around {word limit } words. This is a non-negotiable hard limit. 
+
+Self-Determined Mode. Used to let the model determine the optimal length based on the compres-sion strategy itself, which is useful for establishing a natural compression baseline for each strategy. 
+
+The FR Compress Strategy Section 
+
+STRICT LIMIT: ### Phase 1: Internal Estimation (Do this in your mind) 1. First, carefully read the entire THOUGHT PROCESS. 2. Then, mentally apply the rules from the COMPRESS STRATEGY below. 3. Estimate the final word count that would result from this pruning process. Let’s call this your "Self-Determined Budget". ### Phase 2: Execution 1. Now, perform the actual pruning according to the COMPRESS STRATEGY. 2. Your final output’s word count MUST be close to the "Self-Determined Budget" you estimated in Phase 1. 
+
+B Experimental Details 
+
+B.1 Implementation Details Training Corpora. ( R) To study how compres-sion strategies perform across different reasoning lengths, we create training sets from two repre-sentative datasets. For the short-CoT regime, we use 5,000 instances from the Natural Reasoning dataset (Yuan et al., 2025), which features compact reasoning traces. For the long-CoT regime, we use the LIMO dataset (Ye et al., 2025), which contains extended, multi-step rationales. This setup allows us to analyze performance in both data-abundant (short) and data-scarce (long) but highly detailed reasoning scenarios. 
+
+Fine-tuning Configuration. We fine-tune all stu-dent models using Parameter-Efficient Fine-Tuning (PEFT), specifically LoRA (Hu et al., 2022), man-aged by the LLaMA-Factory (Zheng et al., 2024) framework. Key hyperparameters, which were op-timized for either short or long context regimes, are summarized in Table 4. For both LLaMA-3.1 and Qwen2.5 models, LoRA was applied to a comprehensive set of layers, including all attention-related projections ( q_proj, k_proj, v_proj, o_proj ) and feed-forward network lay-ers ( gate_proj, up_proj, down_proj ), to max-imize adaptive capacity. 13 Table 4: Core fine-tuning hyperparameters for short and long-CoT regimes. The long-CoT regime uses a lower learning rate, more epochs due to a smaller dataset, and a larger effective batch size to ensure stable and robust learning.                       
+
+> Parameter Short-CoT Regime Long-CoT Regime
+> LoRA Configuration
+> Rank ( r)16 16 Alpha ( α)32 32 Dropout 0.05 0.05
+> Training Dynamics
+> Learning Rate 5e-5 1e-5 LR Scheduler Cosine Cosine Warmup Ratio 0.1 0.05 Num. Train Epochs 34Optimizer AdamW AdamW (via DeepSpeed ZeRO-2) Effective Batch Size 64 64
+> (per-dev bs × grad accum × #gpus) (4 × 16 × 1) (1 × 32 × 2)
+
+Training was performed using bfloat16 mixed-precision. To handle the extensive sequence lengths of the long-CoT regime and improve training effi-ciency, we employed FlashAttention-2 (Dao, 2023) and the DeepSpeed ZeRO-2 optimizer (Rajbhan-dari et al., 2020). The maximum sequence length (cutoff_len ) was set to 2048 for short-CoT data and 16,384 for long-CoT data. 
+
+B.2 Evaluation Evaluation Benchmarks ( d) To assess the ac-quired reasoning capabilities across diverse do-mains, we evaluate on five challenging bench-marks: • Mathematical Reasoning : GSM8K (Cobbe et al., 2021), MATH500 (Hendrycks et al., 2021), AMC23 (Mathematical Association of Amer-ica, 2025)and the high-school competition-level AIME24 (Art of Problem Solving, 2025). • General Reasoning : GPQA Diamond (Rein et al., 2024) (graduate-level science) and MMLU-PRO (Wang et al., 2024) (academic exams). 
+
+Inference Settings We run all evaluations with the vLLM backend. The backend is configured as tensor_parallel_size=1 ,
+
+dtype=bfloat16 , max_model_len=32768 , and 
+
+gpu_memory_utilization=0.9 , with optional LoRA adapters passed through lora_adapter .Sampling uses temperature=0.7 , top_p=1.0 ,
+
+seed=42 , and n=1 . The maximum generation length is task-specific: 8192 tokens for GSM8K, MATH500, GPQA-Diamond, MMLU-Pro, and AMC23, and 15000 tokens for AIME24. All runs are executed on a single NVIDIA A100 40GB GPU with CUDA 12.9.1 and 8 CPU cores (64GB RAM). 
+
+Evaluation Metrics. We jointly measure reason-ing quality and inference efficiency. All evaluations use a standardized decoding configuration (temper-ature=0.7, top-p=1.0) to ensure fair comparison across all models and strategies. • Accuracy: We report the percentage of prob-lems where the model’s final answer matches the ground truth for performance ( Perf )• Generated Length: We report the average num-ber of tokens in the model’s generated response (CoT + answer) as the inference Token Ratio ( κ)for cost. Full implementation, hyperparameter, and evalua-tion details are provided in the Appendix B.1. 
+
+C Method Details 
+
+C.1 Extraction-based Pruning 
+
+Extraction methods prune a CoT, C, by follow-ing a three-stage pipeline: 1) Scoring: computing an importance score I(u) for each unit u ∈ C; 2) Thresholding: deriving a pruning threshold Iγ from the scores based on a target ratio γ; and 3) Prun-ing: removing units with I(u) < I γ . The core of this paradigm is the choice of the scoring function, which we term the redundancy signal. 
+
+Importance criterion. Each unit u (a word or a step) receives a score s(u), where larger values in-dicate higher importance (more worth preserving). • LLMLingua-2 (preserve probability): I(u) is the probability that a unit should be preserved predicted by a bidirectional scorer MB :
+
+Ilingua (ti) = P (yi = preserve | t; θMB ) (3) 14 • Uncertainty (Entropy): I(u) downweights un-certain tokens, using the negative average token entropy under a language model: 
+
+Hj = − X
+
+> v∈V
+
+P (v | u<j , C) log P (v | u<j C)
+
+(4) 
+
+Ientropy (u) = 1
+
+|u|
+
+> |u|
+
+X
+
+> j=1
+
+Hj (5) where C denotes the conditioning context. • Predictability (NLL / Surprisal): I(u) favors predictable units via negative average surprisal: 
+
+INLL (u) = 1
+
+|u|
+
+> |u|
+
+X
+
+> j=1
+
+
+
+−log P (uj | u<j , C)
+
+
+
+(6) 
+
+Unit aggregation (word/step). For a unit u con-sisting of tokens {tj }|u|
+
+> j=1
+
+, we use the mean token importance: 
+
+I(u) = 1
+
+|u|
+
+> |u|
+
+X
+
+> j=1
+
+I(tj ), (7) which is applied to word units and step units re-spectively. 
+
+Pruning Logic. Let γ ∈ (0 , 1] denote the target compression ratio (kept fraction), and define the drop ratio ρ = 1 − γ. We assign each unit an importance score I(·), where larger values indicate higher importance. We compute a threshold Iγ
+
+using an empirical percentile with a small offset: 
+
+Iγ = Percentile  {I(ui)}Ni=1 , 100 ρ + 1 . (8) Units are retained if their importance is strictly larger than the threshold: 
+
+˜C = ( ui | I(ui) > I γ )Ni=1 . (9) We form ˜C by keeping all retained units in their original order (i.e., an order-preserving subse-quence of C). For token-level compression we first aggregate token scores into word scores (mean over tokens within each word) and apply the same percentile rule over words; For step-level compres-sion we apply the percentile rule directly over step scores. 
+
+C.2 Summarization-based Rewriting 
+
+Summarization methods leverage a powerful LLM Gemini2.5-Flash (Gemini Team, 2025) as a "rewriter" to generate a shortened trajectory ˜r, as shown in Eq. 1. To navigate this design space, we introduce the Degree of Restructing Level, a novel dimension that categorizes rewriting strate-gies based on how deeply they alter the original CoT’s logic. It spans four ordered levels: • L1: Structural Preservation (SP): The rewriter is constrained to only remove redundant tokens, preserving the original sequence of logical steps verbatim and targeting only surface-level ver-bosity. • L2: Structural Editing (SE): The rewriter performs step-level operations like merging or rephrasing to create a more efficient but struc-turally similar reasoning path. • L3: Semantic Fusion (SF): The rewriter is en-couraged to retain only "key information," allow-ing it to abstract a multi-step sequence into a single, novel statement, achieving a higher level of abstraction. • L4: Framework Replacement (FR): The rewriter discards the original structure entirely and regenerates the reasoning process following a predefined formal template, enforcing a com-plete structural overhaul. The specific prompts used to elicit these behaviors are detailed in Appendix A. 
+
+C.3 Compression Budget Compression ratios. For each example i, let 
+
+Lteacher  
+
+> i
+
+denote the token length of the original (uncompressed) teacher CoT, and Lcomp  
+
+> i
+
+the to-ken length of the compressed CoT produced by a given method. We control and measure compres-sion through three related ratios, computed at the instance level and then averaged over the dataset. 
+
+Target ratio. We denote by ρtarget ∈ (0 , 1] the desired compression level specified during training or prompting. Intuitively, ρtarget corresponds to the intended fraction of teacher tokens to keep: 
+
+PNi=1 Lcomp 
+
+> i
+
+PNi=1 Lteacher 
+
+> i
+
+≈ ρtarget . (10) For each strategy, we train variants at three target ratios γ ∈ { 0.9, 0.7, 0.5}.15 Realized ratio. The realized ratio ρinference is the actual compression achieved by the method: 
+
+ρrealized = 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+Lcomp 
+
+> i
+
+Lteacher 
+
+> i
+
+. (11) This is the quantity we use on the horizontal axis when relating compression strength to accuracy. 
+
+Inference token ratio. At evaluation time, we also track the end-to-end token cost of answering benchmark questions. For each test example i, let 
+
+T meth  
+
+> i
+
+be the number of tokens in the CoT-plus-final-answer produced by a compressed method, and T teacher  
+
+> i
+
+the same quantity under the original (uncompressed) teacher-CoT setting. The inference token ratio κ is defined as 
+
+ρinference =
+
+> 1
+> N
+
+PNi=1 T meth 
+
+> i
+> 1
+> N
+
+PNi=1 T teacher 
+
+> i
+
+. (12) This is the quantity of direct interest for deployment-time token budgets. 
+
+C.4 Cross-Rewriter Analysis 
+
+Beyond Gemini 2.5-Flash, we explored GPT-4o-mini as an alternative rewriter to characterize how rewriter choice influences compression behavior under the Short-CoT regime. As shown in Table 5, the two rewriters differ in absolute compression calibration, yet the structural ordering is consis-tent: Strong fidelity yields the most conservative compression, Light the most aggressive, and band width grows as structural constraints loosen. This suggests that length band structure is primarily gov-erned by the degree of structural transformation rather than the rewriter itself.                                  
+
+> Structure Target γGemini ρGPT-4o-mini ρ
+> Strong 0.9 0.932 0.812 Strong 0.7 0.847 0.714 Strong 0.5 0.760 0.602 Medium 0.9 0.940 0.882 Medium 0.7 0.782 0.725 Medium 0.5 0.574 0.530 Light 0.9 0.931 0.831 Light 0.7 0.755 0.682 Light 0.5 0.605 0.511
+> Table 5: Realized compression ratios ( ρ) for Gemini 2.5-Flash and GPT-4o-mini across structural fidelity levels and target ratios ( γ) under the Short-CoT regime.
+
+D Definitions, Pareto Construction, and Full Results 
+
+This appendix details the formal metrics used to characterize the safe regime, the construction of the Pareto efficiency frontiers, and the complete numerical tabulations for all experiments. 
+
+D.1 Effectiveness Criterion and Safe Regime 
+
+Let Ateacher denote the accuracy of the uncom-pressed teacher model, and let A(r) denote the student accuracy achieved at a realized compres-sion ratio r. We define a compression level as 
+
+effective if it retains at least 90% of the teacher’s performance: 
+
+A(r) ≥ 0.9 · Ateacher . (13) The safe regime is defined as the maximal contigu-ous interval of realized ratios starting from r = 1 .0
+
+(no compression) for which this condition holds. All token counts reported ( T ) include both the input prompt and the generated reasoning tokens, using the same tokenizer and decoding strategy across all comparisons. 
+
+D.2 Pareto Frontier Construction 
+
+To characterize the trade-off between deployment cost and performance, we analyze the Pareto fron-tier in the (Cost , Performance ) plane. Let C be the set of all experimental configurations (points). A point i ∈ C with inference token count Ti and ac-curacy Ai is considered Pareto-optimal if there exists no other point j ∈ C such that: 
+
+Tj ≤ Ti and Aj ≥ Ai,
+
+with at least one inequality being strict. Practically, this frontier is constructed by sorting all valid candi-dates by ascending token count and retaining only those points that establish a new strictly increasing maximum in accuracy. This frontier represents the upper bound of efficiency—the maximum accuracy achievable for a given inference budget. 
+
+D.3 Full Numerical Results 
+
+We provide the complete numerical data underpin-ning our analysis in Table 6, Table 7 and Table 8. • Table 6 and Table 7 details extraction-based 
+
+pruning results, comparing different scoring signals (L INGUA , Entropy, NLL) across both step-level and token-level granularities for CoT Compress on LLaMA-3.1-8B-Instruct and Qwen-2.5-1.5B-Instruct. 16 Methods Ratio MATH GENERAL Step Token Step Token                                                                                                                                                                                                                                                              
+
+> Acc Tok InferRatio κAcc Tok InferRatio κAcc Tok InferRatio κAcc Tok InferRatio κ
+> NATURAL REASONING
+> Original -67.1 528 67.1 67.1 528 67.1 35.4 572 32.6 35.4 572 32.6
+> L2
+> 0.9 64.6 447 84.6 65.2 466 88.2 36.9 537 93.9 36.3 441 77.1 0.7 59.4 404 76.6 61.7 386 73.1 39.1 450 78.7 35.5 405 70.9 0.5 49 377 71.5 50.1 279 52.9 37.7 368 64.3 32.7 300 52.5
+> ENT
+> 0.9 64.6 518 98.1 63.7 460 87.2 35.9 609 106.5 34.9 502 87.8 0.7 46.3 395 74.8 58.3 356 67.4 38.9 499 87.2 33.8 391 68.4 0.5 31.2 299 566.6 46.5 257 48.7 34.3 389 68.1 30.6 372 65.1
+> NLL
+> 0.9 63.2 523 99.1 64.0 489 92.6 36.0 628 109.8 34.2 582 101.7 0.7 42.2 402 76.2 58.5 398 75.4 36.7 499 87.2 35.5 452 79.1 0.5 33.3 313 59.2 45 261 49.5 34.8 398 69.6 30.3 402 70.3
+> LIMO
+> Original -27.1 3033 -27.1 3033 -40.4 1454 -40.4 1454 -
+> L2
+> 0.9 25.6 2596 85.6 24.3 2115 69.7 41.2 1161 79.8 39.5 1069 73.5 0.7 23.7 2582 85.1 23.8 2575 84.9 40.6 1278 87.9 38.2 1244 85.5 0.5 28.7 2461 81.1 27.2 2173 71.6 40.9 1289 88.6 39.9 1246 85.7
+> ENT
+> 0.9 26.6 2477 81.7 26.3 2254 74.3 38 1100 75.6 38.5 1147 78.9 0.7 25.4 2867 94.5 24.6 1935 63.8 37.8 1126 77.4 40.5 1078 74.1 0.5 23.4 2116 69.7 25.9 1836 60.5 39.2 1162 79.9 38.8 1196 82.3
+> NLL
+> 0.9 24.2 2318 76.4 30.2 2065 68.1 39.8 1102 75.8 39.7 1320 90.7 0.7 23.6 2390 78.8 22.0 1867 61.5 38.6 1131 77.8 40.5 1127 77.5 0.5 25.0 2193 72.3 27.1 1811 59.7 41.8 1078 74.1 42.0 1201 82.6
+
+Table 6: Experimental results of Cot Compress on LLaMA-3.1-8B-Instruct. We report accuracy(acc), average CoT token count (Tok), and actual compression ratio (InferRatio κ) for comparison. Accuracy (Acc) and the actual compression ratio (InferRatio κ) are both reported as percentages. (L2: LLMLingua2, ENT: Entropy) 
+
+• Table 8 details generative compression re-sults for CoT Compress on LLaMA-3.1-8B-Instruct and Qwen-2.5-1.5B-Instruct, cover-ing the spectrum of structural fidelity (SP, SE, SF, FR) across different prompt constraints. For each configuration, we report the top-1 accu-racy ( Acc ), the average length of the compressed CoT in tokens ( Tok ), and the end-to-end inference token ratio ( κ, denoted as InferRatio ). These metrics are reported separately for MATH and 
+
+GENERAL benchmarks, covering both the N ATU - 
+
+> RAL
+
+REASONING (Long-CoT) and LIMO (Short-CoT) training regimes. The data points in these tables constitute the candidate set used to derive the Pareto frontiers and "knee points" discussed in the main text. 
+
+D.4 Cross-Scale Verification on Qwen2.5-7B-Instruct 
+
+To probe whether key findings hold at a larger pa-rameter scale, we conduct a targeted verification on Qwen2.5-7B-Instruct under the Short-CoT regime, focusing on the most diagnostic conditions for each finding rather than exhaustively replicating the full sweep. 
+
+E Reflection-Aligned Step Pruning 
+
+To verify whether the compressibility of Long-CoT stems from specifically targeting reflection steps, we designed a controlled experiment to decouple 
+
+reflection deletion rate from the underlying scoring signal .
+
+E.1 Reflection-step density. 
+
+For each CoT trace t with T steps, we define the reflection-step density as: refl_density (t) = #reflection steps in tT (14) where reflection steps are identified by a rule-based tagger over discourse markers (e.g., “wait”, “hmm”) and self-referential commentary (Jia et al., 2025). 
+
+E.2 Experimental Setup and Definitions 
+
+For a teacher trace S = {si}Ni=1 , each step re-ceives a strictly defined importance score qi (via 17 Methods Ratio MATH GENERAL Step Token Step Token                                                                                                                                                                                                                                                              
+
+> Acc Tok InferRatio κAcc Tok InferRatio κAcc Tok InferRatio κAcc Tok InferRatio κ
+> NATURAL REASONING
+> Original -53.1 507 -53.1 507 -33.6 537 -33.6 537 -
+> L2
+> 0.9 50.3 442 87.3 51.2 425 83.8 32.7 505 94 30.9 447 83.1 0.7 40.5 502 99.1 48.2 355 70.1 33.2 618 115 31.1 378 70.3 0.5 25.3 821 162.1 43.5 279 55.1 35 593 110.3 31.4 328 61
+> ENT
+> 0.9 47.2 447 88.3 48 421 83 29 500 93.1 31.6 409 76.2 0.7 27.3 381 75.2 42.5 364 71.8 29.7 480 89.4 31.7 358 66.6 0.5 17.7 332 65.4 36.1 300 59.1 29.7 405 75.3 35.4 266 49.4
+> NLL
+> 0.9 42.5 446 88.1 47.3 433 85.5 31.7 548 102 30.8 397 73.8 0.7 25.8 365 72 42.4 381 75.2 31.4 527 98 33.9 348 64.7 0.5 17.3 222 43.8 37 304 59.9 30.8 403 75 36.1 280 52.1
+> LIMO
+> Original -27 1368 -27 1368 -38.9 537 -38.9 537 -
+> L2
+> 0.9 26.9 1053 77 25.6 869 63.5 40.4 499 92.8 40.1 547 101.8 0.7 25.9 1026 75 24 998 72.9 39.1 535 99.6 39.4 553 102.9 0.5 23.3 1137 83.1 25.5 1151 84.1 35.7 545 101.4 37 548 102
+> ENT
+> 0.9 23.7 1262 92.2 24.2 899 65.7 40.7 541 100.7 38.4 572 106.5 0.7 25.8 1079 78.9 26.2 1023 74.8 40.3 564 104.9 40.5 585 108.8 0.5 26 981 71.7 24 813 59.4 41.7 562 104.7 40.9 571 106.3
+> NLL
+> 0.9 25.7 1137 83.1 26.2 953 69.6 38.7 553 102.9 39.7 513 95.5 0.7 24 886 64.8 24 850 62.1 38.8 556 103.4 40.1 542 100.8 0.5 26.1 900 65.8 24.3 1008 73.7 40.1 543 101 39.1 544 101.2
+
+Table 7: Experimental results of Cot Compress on Qwen2.5-1.5B-Instruct. We report accuracy(acc), average CoT token count (Tok), and actual compression ratio (InferRatio κ) for comparison. Accuracy (Acc) and the actual compression ratio (InferRatio κ) are both reported as percentages. (L2: LLMLingua2, ENT: Entropy) 
+
+LINGUA or NLL). We identify reflection steps us-ing a fixed, case-insensitive keyword-based regu-lar expression with word-boundary matching (e.g., 
+
+wait , hmm , let me think , reconsider , wrong ,
+
+validate ) (Jia et al., 2025). Formally, we define 
+
+ri = 1[RegexMatch( si)] , where RegexMatch( ·)
+
+returns 1 iff any keyword is matched, and 0 other-wise. Given a step-level compression target c ∈{0.5, 0.7}, we define the step deletion ratio as 
+
+r = 1 − c and set the deletion budget as 
+
+K = round( r · N ) = round((1 − c) · N ).
+
+The natural tendency of a method to remove reflec-tions is measured by the reflection deletion ratio: 
+
+αdel = 1
+
+K
+
+X
+
+> i∈D
+
+ri, (15) where D is the set of deleted step indices (with 
+
+|D| = K). Empirically, L INGUA tends to yield a higher αdel (aggressive reflection removal) com-pared to NLL. 
+
+E.3 Constructing Reflection-Aligned Variants 
+
+We construct aligned variants to enforce a spe-cific target ratio αtarget while preserving the ranking logic of the base signal. We partition indices into Reflection ( R) and Other ( O) buckets. We then allocate the deletion budget across the two buckets: 
+
+KR = round (αtarget · K), KO = K − KR,
+
+(16) subject to feasibility (if one bucket is insufficient, the remainder is reassigned to the other bucket). Within each bucket, deletions preferentially target low-score steps under the same base scoring signal, and the final selection enforces the total budget K.We define two anchors based on the natural be-havior of the base methods at c ∈ { 0.5, 0.7}: αlow 
+
+(from NLL) and αhigh (from L INGUA ). This yields cross-aligned datasets: • NLL-HighRef : Forces NLL to match L INGUA ’s aggressive reflection deletion ( αhigh ). • Lingua-LowRef : Forces L INGUA to match NLL’s conservative reflection deletion ( αlow ). 18 Methods Ratio LLaMA-3.1-8B-Instruct Qwen2.5-7B-Instruct MATH GENERAL MATH GENERAL 
+
+Acc Tok InferRatio κ Acc Tok InferRatio κ Acc Tok InferRatio κ Acc Tok InferRatio κ
+
+Original - 67.1 528 61.7 35.4 572 32.6 53.1 507 – 33.6 537 –
+
+NATURAL REASONING 
+
+SP 
+
+0.9 66.9 522 98.9 39.8 582.5 101.9 50.6 464 91.6 397 533.5 99.3 0.7 66.2 564 106.8 37.7 547 95.7 48.9 432 85.2 40.4 208 38.7 0.5 68.1 442 83.7 38.2 465 81.4 49.8 411 81 41 389.5 72.5 0.35 66.8 482 91.4 34.7 541 94.7 50.8 457 90.2 30.3 496.5 92.5 
+
+SE 
+
+0.9 59 461 87.3 42.2 537.5 94.1 48.1 319 63 45.4 406.5 75.7 0.7 61.5 358 67.9 41.6 421.5 73.8 47.9 262 51.6 49.2 339.5 63.2 0.5 58.8 327 62 40.6 341 59.7 48.8 230 45.3 487 202.5 37.7 0.35 58.1 265 50.1 32.4 241 42.2 46.9 174 34.3 45 134.5 25 
+
+SF 
+
+0.9 61.8 422 0.8 43 532 93.1 49.9 370 73.1 47.4 530 98.7 0.7 60.7 438 82.9 24.8 412.5 72.2 48.9 294 58 42.7 211.5 39.4 0.5 58 413 78.3 22.9 391.5 68.5 49.3 237 46.8 43.3 143.5 26.7 0.35 59.3 193 36.6 34.2 179 31.3 44.4 157 30.9 49 86 16 
+
+FR 0.5 49.4 341 64.6 43.4 421 73.7 27.5 270 53.2 46.4 336.5 62.7 
+
+LIMO 
+
+SP 
+
+0.9 24 2333 76.9 41.8 1343 92.4 23.7 1066 77.9 38.6 577 107.4 0.7 21 2629 86.7 37.2 1248 85.8 27.4 1061 77.5 38.7 552 102.8 0.5 20.9 3439 113.4 39.9 1290 88.7 21.9 1118 81.7 38.8 599 111.5 0.35 27 3069 101.2 40.8 1308 89.9 23.1 1333 97.4 39.8 583 108.6 
+
+SE 
+
+0.9 24.6 3153 103.9 37.9 1487 102.3 21.3 1494 109.2 39.1 595 110.8 0.7 22.3 3287 108.1 41.9 1317 90.5 24.9 1210 88.5 39.4 608 113.2 0.5 23.9 3690 121.6 38.2 1543 106.1 23 1303 95.2 39.6 582 108.4 0.35 22.6 3068 101.1 35.9 896 61.6 19.3 1118 81.7 43.3 480 89.4 
+
+SF 
+
+0.9 24.1 3126 104.2 39.7 1528 105.1 25.3 1197 87.5 41.7 610 113.6 0.7 21.8 2474 81.6 43.2 1456 100.1 24 1199 87.6 39.3 640 119.1 0.5 21.2 3987 131.4 37.4 1618 111.3 24 1322 96.6 41.3 569 105.9 0.35 26.3 1844 60.8 36.2 741 51 18.1 96.8 70.8 40.7 434 80.8 
+
+FR 0.5 23.2 2375 78.3 38.8 1364 93.8 23.3 1051 76.8 43.9 566 105.4 
+
+Table 8: Experimental results of Cot Compress on LLaMA-3.1-8B-Instruct and Qwen2.5-1.5B-Instruct. We report accuracy (Acc), average CoT token count (Tok), and actual compression ratio (InferRatio κ) for comparison. Accuracy (Acc) and the actual compression ratio (InferRatio κ) are both reported as percentages. 
+
+Granularity Signal Ratio MATH GENERAL 
+
+Acc ρ Acc ρ
+
+— Baseline — 75.3 1.00 40.1 1.00 Token Entropy 0.7 54.6 0.95 36.8 0.99 Entropy 0.5 46.7 0.97 37.5 0.86 NLL 0.7 15.8 1.37 33.5 1.09 LLMLingua-2 0.7 74.1 1.21 39.6 1.14 Step Entropy 0.7 74.8 1.03 40.8 1.06 Entropy 0.5 73.3 0.87 40.8 0.91 
+
+Table 9: Targeted extraction-based verification on Qwen2.5-7B-Instruct (Short-CoT). Token-level Entropy and NLL collapse on Math while step-level methods re-main stable, consistent with findings on LLaMA-3.1-8B and Qwen2.5-1.5B. 
+
+Structure Ratio MATH GENERAL 
+
+Acc ρ Acc ρ
+
+Baseline — 75.3 1.00 40.1 1.00 SP 0.5 76.8 0.68 39.5 0.81 SE 0.5 76.2 0.69 40.2 0.66 SF 0.5 71.7 0.51 40.1 0.62 
+
+Table 10: Targeted summarization-based verification on Qwen2.5-7B-Instruct (Short-CoT). The fidelity wall reproduces: Math accuracy degrades from SP to SF while General performance remains stable, consistent with findings across all model families. 
+
+E.4 Results: Redundancy is Diffuse 
+
+We trained students on these variants and compared them to unconstrained baselines. As shown in Ta-ble 11, the impact of reflection alignment was negligible. At matched step budgets ( K), manip-19 Table 11: Results of reflection-aligned extraction. Lingua-LowRef constrains Lingua to match NLL’s lower reflection deletion rate, while NLL-HighRef forces NLL to match Lingua’s higher deletion rate. Accuracy remains stable despite significant shifts in reflection retention.                                       
+
+> Ratio ( c)Method Math General Acc (%) Tok Acc (%) Tok 0.5 LINGUA -B ASE 27.2 2173 39.9 1246 LINGUA -L OW REF 27.0 2315 38.1 1176 NLL-B ASE 27.1 2319 42.0 1201 NLL-H IGH REF 27.7 2555 40.5 1210 0.7 LINGUA -B ASE 23.8 2575 38.2 1244 LINGUA -L OW REF 25.4 2082 35.9 1121 NLL-B ASE 22.0 2391 40.5 1127 NLL-H IGH REF 23.3 2474 38.8 1208
+
+ulating αdel produced no significant deviation in downstream accuracy. Specifically: • Forcing NLL to delete more reflections did not improve its compression efficiency. • Restricting L INGUA to keep more reflections did not degrade its performance. These results confirm that the "safe regime" in Long-CoT is not driven by the specific removal of reflection steps. Instead, redundancy appears to be diffuse: critical information is distributed across both reflective and non-reflective steps, and the model is robust to pruning as long as the global reasoning skeleton is maintained. 
+
+F Detailed Analysis of Token Preservation 
+
+To understand the qualitative behavior of different pruning signals, we categorize the tokens removed by each method. We implemented a Python-based classifier to map every deleted token into one of three mutually exclusive categories based on the heuristics defined below. 
+
+F.1 Token Categorization Methodology 
+
+We first tokenize text via whitespace and strip trail-ing punctuation. Each token is then classified se-quentially according to the following priority rules, strictly aligning with our evaluation script: 1. Class 1: Constraint-Bearing & Symbolic (High Priority). This class captures the struc-tural anchors of the reasoning chain. It includes: • Logic Markers: Key deductive connec-tives (e.g., "let", "assume", "implies", "therefore", "since", "if", "iff" ). • Math Operators & Symbols: All stan-dard arithmetic operators, comparators, and Unicode mathematical symbols (e.g., 
+
+∈, ⊆, ∀, P). • LATEX Commands: Substrings indicative of formal notation (e.g., \frac , \boxed ,
+
+\sqrt ). • Numerical Patterns: Any token contain-ing digits, including scientific notation and fractions. 2. Class 2: Stopwords. Tokens found in stan-dard English stopword lists (sourced from NLTK (Bird and Loper, 2004)/scikit-learn). 
+
+Crucially , to prevent misclassification, any stop-word that also appears in the Logic Markers list (e.g., "if", "not") is removed from this set and forced into Class 1. Thus, Class 2 strictly repre-sents low-semantic syntactic glue. 3. Class 3: Content. All remaining tokens that do not fall into Class 1 or Class 2. These are typically domain-specific nouns, verbs, and ad-jectives describing the problem context. 
+
+F.2 Results: Deletion Distribution 
+
+Table 12 presents the Deletion Rate for each cate-gory, defined as the fraction of tokens of that type removed from the original trace. The data reveals a clear behavioral signature: LLML INGUA -2 acts as a "logic-aware" filter. Even at aggressive compression levels, it consistently yields significantly lower deletion rates for Sym 
+
+(Class 1) tokens compared to Entropy and NLL baselines, while shifting the deletion budget heavily towards Stop (Class 2) tokens. This confirms that semantic probability estimators are better aligned with the logical structure of chain-of-thought rea-soning than simple perplexity-based metrics. 20 0.1 0.3 0.5 Signal Sym Stop Other Sym Stop Other Sym Stop Other Entropy 0.10 0.11 0.08 0.30 0.29 0.21 0.49 0.44 0.36 NLL 0.11 0.12 0.07 0.30 0.28 0.21 0.51 0.40 0.34 LLMLingua 0.03 0.29 0.02 0.15 0.54 0.11 0.32 0.68 0.25 
+
+Table 12: Extended breakdown of deleted token types on N ATURAL REASONING for token-level pruning across target compression ratios.                  
+
+> Math General Ratio NLL +Protect NLL +Protect 0.9 0.632 0.675 0.360 0.364
+> 0.7 0.422 0.632 0.367 0.376
+> 0.5 0.333 0.608 0.348 0.404
+
+Table 13: Ablation study on token protection during NLL pruning. Results reported on Llama 3.1 8B In-struct (Short CoT). “+Protect” denotes NLL pruning where math-related tokens are excluded from the dele-tion candidates. 
+
+F.3 Validation of the Symbolic Anchor Hypothesis 
+
+To further verify that loss of symbolic structure in NLL-based degradation, we conducted a controlled experiment with a restricted pruning scope. In this setting, we excluded tokens categorized as math-like patterns from the pruning candidate set entirely. Consequently, the NLL-based ranking and deletion were applied solely to the remaining vocabulary (i.e., stopwords and other content tokens), while all math-related tokens were preserved by default. As shown in Table 13, this selective retention strategy significantly improved the stability of NLL-based pruning. By simply preventing the re-moval of these symbolic anchors, the optimized NLL baseline recovered a large portion of the per-formance gap relative to LLMLingua2. This re-sult confirms that the standard NLL metric fails in high-risk settings specifically because it assigns low probabilities to essential symbolic operators, not because the metric itself is incapable of ranking redundant prose. 
+
+G Step-Level Decision Overlap Analysis 
+
+To empirically verify the claim that different prun-ing signals converge on a shared reasoning back-bone while disagreeing on peripheral redundancy, we analyzed the pairwise consensus of their prun-ing decisions. Pair 0.1 0.3 0.5 ENT–L2 0.09 0.16 0.31 NLL–L2 0.10 0.17 0.33 ENT–NLL 0.70 0.70 0.76 
+
+Table 14: Pairwise Jaccard overlap between deleted 
+
+step sets for different step-level scoring signals under matched target ratios. (ENT: Entropy; L2: LLMLin-gua2). 
+
+G.1 Calculation Methodology 
+
+We implemented a strict index-based comparison pipeline. For any pair of pruning methods MA and 
+
+MB (e.g., Entropy vs. LLMLingua-2): 1. Alignment: We align samples by question ID across the generated ‘.jsonl‘ outputs. 2. Index Mapping: For each sample, we map the retained text segments back to the original teacher step indices {1, . . . , N }.3. Set Construction: We derive the set of deleted 
+
+indices for each method, denoted as DA and 
+
+DB .4. Metric: We compute the Jaccard Similarity Co-efficient for the deletion sets: 
+
+J(DA, DB ) = |D A ∩ D B ||D A ∪ D B | (17) This process is repeated for each target ratio and averaged across the dataset. 
+
+G.2 Divergence in Deletion Choices 
+
+Table 14 presents the overlap of deleted steps 
+
+across methods. We observe a clear dichotomy: • High Internal Consistency: Entropy (ENT) and NLL show high overlap ( > 0.70 ), indi-cating that probability-based metrics largely identify the same "easy" tokens to remove. • Low Cross-Paradigm Overlap: When com-paring probability-based methods against the symbol-aware LLMLingua-2 (L2), the over-lap drops significantly (0.10–0.33). 21 Table 15: Coherence Evaluation Results. Pairwise comparison of semantic compression (LLML INGUA -2) versus naive ratio pruning over 100 samples per setting. “Math-Prot” denotes the variant with protection for mathematical symbols. 
+
+Granularity Configuration Target ρ A Wins B Wins Win Rate (A) 
+
+Step LLMLingua-2 0.7 95 3 0.960 Step LLMLingua-2 0.9 92 5 0.935 Token LLMLingua-2 0.7 100 0 1.000 Token LLMLingua-2 0.9 100 0 1.000 Token LLMLingua-2 (Math-Prot) 0.7 100 0 1.000 
+
+Despite this substantial disagreement on what to delete , the main text (Section 4) shows that their downstream accuracy is nearly identical. This con-firms that the non-overlapping deleted steps rep-resent interchangeable redundancy —peripheral information whose removal (whether by probabil-ity or semantic estimation) does not disrupt the core reasoning chain. 
+
+H LLM-Based Coherence Judge 
+
+While quantitative metrics measure task accuracy, they do not fully capture the linguistic quality of the compressed traces. Our analysis suggests that token-level pruning—unlike step-level selec-tion—can severely disrupt local continuity and readability. While other method (Wang et al., 2025b) measures a token-level LM loss as a proxy of inter-chunk coherence, we are interested in how coherent a compressed CoT is as a teaching script for smaller models, so we implement an LLM-based coherence judge to perform pairwise com-parisons. 
+
+Task Definition. We evaluate the reasoning co-herence of two Chain-of-Thought (CoT) rationales (Method A vs. Method B) generated for the same question. The judge is explicitly instructed to ig-nore the correctness of the final answer and focus solely on linguistic and logical flow. The output is a decision label in {A, B, TIE }.
+
+Judge Implementation. We utilize a powerful LLM, gemini-2.5-flash (Gemini Team, 2025), as the judge. The prompt instructs the model to evaluate: (i) global structural organization, (ii) log-ical continuity between steps, (iii) proper usage of intermediate conclusions, and (iv) the absence of disjointed or "broken" text. 
+
+The pairwise comparison prompt used for the coher-ence judge. 
+
+You are evaluating the quality of two chain-of-thought (CoT) rationales for the **same question**. Your goal is to decide which CoT is more coherent and easier to follow **as a reasoning process**, ignoring whether the final answer is correct. Do **not** consider whether the final numerical/choice answer is correct. You should focus only on how clear and coherent the reasoning itself is. [Question] question [CoT A] 
+
+cot a
+
+[CoT B] 
+
+cot b
+
+Please compare CoT A and CoT B only in terms of **reasoning coherence**, according to the following criteria: 1. Global organization: the rationale states the goal/-known facts clearly and follows a sensible overall plan. 2. Step-to-step logic: each step follows logically from previous steps, without unexplained jumps. 3. Use of intermediate conclusions: important intermediate results are clearly derived and then used later. 4. Noise and re-dundancy: the rationale avoids unnecessary digressions, off-topic commentary, or excessive repetition that makes it harder to follow. If one CoT is much shorter but clearly skips important steps, treat it as **less** coherent than a slightly longer but well-explained CoT. Ignore minor formatting issues such as non-consecutive step numbers. Focus on whether the reasoning itself is logically coherent and easy to follow. If one CoT is more coherent, choose that one. If their coherence is very similar, choose TIE. First, briefly explain your comparison in 2–3 sentences. Then, on a separate line, output your decision in the format: DECISION: A or DECISION: B or DECISION: TIE 
+
+22 Aggregation. For each experimental configura-tion, we evaluate 100 pairs. The win rate for Method A is calculated as: WinRate(A) = #( A) + 0 .5 · #( TIE )#( A) + #( B) + #( TIE ) .
+
+Results: Extraction Table 15 summarizes the pairwise coherence results comparing semantic compression (Method A: LLML INGUA -2) against a standard length-based baseline (Method B: R A-
+
+> TIO
+
+). The results overwhelmingly favor semantic compression, particularly at the token level (100% win rate), confirming that naive token deletion catastrophic destroys coherence, whereas semantic estimators preserve readability. 
+
+Results: Summarization Table 16 extends the evaluation to summarization-based methods, com-paring each structural fidelity level against the ex-traction baseline across compression ratios.                           
+
+> Structure γ= 0 .5γ= 0 .7γ= 0 .9Free
+> None 0.41 ———Light 0.52 0.53 0.73 0.21 Medium 0.41 0.58 0.79 0.30 Strong 0.12 0.24 0.34 0.38
+> Table 16: Coherence win rates of summarization meth-ods against an extraction baseline (win rate >0.5favors summarization).
+
+Structure Light and Medium show increasing co-herence win rates as compression tightens, reach-ing 0.73 and 0.79 at γ = 0 .9. Structure Strong consistently scores below 0.5 across all settings, reflecting surface-level fragmentation from strict token-removal constraints—a pattern consistent with its strong Math accuracy in the main experi-ments. Structure None yields the lowest win rate overall, aligning with its higher output variance and degraded Math performance observed in Section 5. 23 I CoT Compression Case Study 
+
+question Calculate the energy needed for a 1 kg mass to accelerate from 2 m/s to 6 m/s, considering the reference frame for kinetic energy and speed. Provide a detailed explanation of your calculation, including how you account for the change in kinetic energy and the relevance of the reference frame. Extraction Method Generated Output Original ## Step 1: Identify the formula for kinetic energy The kinetic energy ( KE ) of an object is given by the formula 
+
+KE = 0 .5 ∗ m ∗ v2, where m is the mass of the object and v is its velocity. ## Step 2: Calculate the initial kinetic energy To find the initial kinetic energy, we use the given initial velocity (v1 = 2 m/s) and the mass ( m = 1 kg) in the kinetic energy formula: KE 1 = 0 .5 ∗ 1 ∗ (2) 2 = 0 .5 ∗ 1 ∗ 4 = 2 
+
+Joules. ## Step 3: Calculate the final kinetic energy Using the given final velocity ( v2 = 6 m/s) and the same mass (m = 1 kg) in the kinetic energy formula: KE 2 = 0 .5 ∗ 1 ∗ (6) 2 = 0 .5 ∗ 1 ∗ 36 = 18 Joules. ## Step 4: Determine the change in kinetic energy The change in kinetic energy ( ∆KE ) is the difference between the final and initial kinetic energies: ∆KE = KE 2 − KE 1 = 18 − 2 = 16 Joules. ## Step 5: Consider the relevance of the reference frame The calculation of kinetic energy and the change in kinetic energy depends on the reference frame, as kinetic energy is a frame-dependent quantity. However, since we are calculating the change in kinetic energy for an object accelerating from one speed to another within the same reference frame (implied by the problem statement), the reference frame does not affect the calculation of the energy needed for the acceleration in this context. The energy needed is the same regardless of the observer’s frame of reference because the initial and final velocities are given relative to the same frame. The final answer is: 16 
+
+Word level Entropy at 50% compression ratio ## Step Identify formula kinetic The kinetic (KE) of is KE 0.5 ∗ m and velocity. ## Calculate initial kinetic To find initial energy, we use given initial velocity (v1 = m/s) and the mass (m kg) kinetic formula: KE 11 ∗ (2) 2 = 0 .5 Joules. ## Calculate Using given the same (m kg) formula: Determine change The ( ∆KE ) is the difference final and energies: - Consider the relevance the The calculation of kinetic and the change in kinetic depends on the reference frame, as kinetic is a frame-dependent quantity. However, since we are calculating the change kinetic for an object accelerating from one speed within the reference (implied by the problem statement), the reference frame does not affect the calculation of the energy needed for the acceleration in this context. The energy needed is the same regardless of the observer’s frame of reference because the initial and final velocities are given relative to the same frame. The final answer is: 16 
+
+Word level LLMLingua2 
+
+at 50% compres-sion ratio Step Identify formula kinetic energy formula KE = 0 .5 ∗ m ∗ v2 m mass v velocity Calculate initial kinetic energy velocity ( v1 = 2 m/s) mass ( m = 1 kg) KE 1 = 0 .5 ∗ 1 ∗ (2) 2 = 0 .5 ∗ 1 ∗ 4 = 2 
+
+Joules Calculate final kinetic energy velocity ( v2 = 6 m/s) mass ( m = 1 kg) KE 2 = 0 .5∗1∗(6) 2 = 0 .5∗1∗36 = 18 
+
+Joules Determine change in kinetic energy difference final initial kinetic energies ∆KE = KE 2 − KE 1 = 18 − 2 = 16 Joules Consider relevance reference frame calculation kinetic energy depends reference frame accelerating another within the same reference frame (implied by the problem statement), the reference frame does not affect the calculation of the energy needed for the acceleration in this context. The energy needed is the same regardless of the observer’s frame of reference because the initial and final velocities are given relative to the same frame. The final answer is: 16 
+
+Word-level NLL 
+
+at 50% compres-sion ratio ## Step Identify formula kinetic The kinetic (KE) of is given KE 0.5 ∗ m of and its velocity. ## Calculate initial kinetic To find initial energy, we use given initial velocity ( v1 = m/s) and the mass ( m kg) kinetic formula: KE 11 ∗ (2) 2 = 0 .5 Joules. ## Calculate Using given same kg) formula: Determine change The ( ∆KE ) is the difference and initial energies: - Joules. ## Consider the relevance The calculation of kinetic and the change kinetic depends on reference frame, as kinetic is a frame-dependent quantity. However, since we are calculating the change for an object accelerating from one speed within the same reference (implied by the problem statement), the reference does affect the calculation of the energy needed for the acceleration in this context. The energy needed is the same regardless of the observer’s frame of reference because the initial and final velocities are given relative to the same frame. The final answer is: 16 
+
+Table 17: Case study: reflection-aligned extraction at 50% compression. For the same kinetic-energy prompt, we report the original uncompressed response and extracted outputs produced using token-level redundancy signals (Entropy, Lingua, and NLL). 
+
+Endorsement needed for cs.CL You must get an endorsement from another user to submit an article to 24 question Calculate the energy needed for a 1 kg mass to accelerate from 2 m/s to 6 m/s, considering the reference frame for kinetic energy and speed. Provide a detailed explanation of your calculation, including how you account for the change in kinetic energy and the relevance of the reference frame. Generative Rewriting Generated Output L4 :Framework Replacement at 50% compres-sion ratio **Analysis:** Determine energy for 1 kg accelerating 2 m/s to 6 m/s ( ∆KE ). Critically, address reference frame impact on KE and required energy. **Initial Approach:** Compute initial KE (0.5 ∗ 1 ∗ 22) and final KE (0.5 ∗ 1 ∗ 62). Energy needed is ∆KE .
+
+KE depends on frame. **Reflection:** Though KE is frame-dependent, *work done* ( ∆KE ) is invariant across inertial frames if velocities are consistently measured from one point. **Improvement:** KE 1 = 2 J; KE 2 = 18 J. So, ∆KE = 16 J. This energy change remains consistent for all inertial observers for this specific acceleration. **Summary:** Energy needed = ∆KE = 16 J (18 J final - 2 J initial). This change is invariant across inertial frames, as velocities were consistently defined. ANSWER: 16 
+
+L3 :Semantic Fu-sion at 50% com-pression ratio The energy needed is the change in kinetic energy. First, calculate the initial kinetic energy ( KE 1) using 
+
+KE = 0 .5 ∗ m ∗ v2: KE 1 = 0 .5 ∗ 1 kg ∗ (2 m/s )2 = 2 Joules. Next, calculate the final kinetic energy ( KE 2): 
+
+KE 2 = 0 .5 ∗ 1 kg ∗ (6 m/s )2 = 18 Joules. The energy required is ∆KE = KE 2 − KE 1 = 18 J − 2 J = 16 
+
+Joules. Although kinetic energy is frame-dependent, the change in kinetic energy for acceleration from 2 m/s to 6 m/s is calculated within the same reference frame, making the energy needed ( 16 Joules) a consistent and relevant value for this specific scenario. 
+
+L2 :Structural Editing at 50% compression ratio The energy required for acceleration is equivalent to the change in the object’s kinetic energy ( ∆KE ). Kinetic energy ( KE ) is calculated using the formula KE = 0 .5 ∗ m ∗ v2.For the 1 kg mass: 1. Initial Kinetic Energy: At 2 m/s, KE 1 = 0 .5 ∗ 1 kg ∗ (2 m/s )2 = 2 J. 2. Final Kinetic Energy: At 6 m/s, KE 2 = 0 .5 ∗ 1 kg ∗ (6 m/s )2 = 18 J. The energy needed is the difference: ∆KE = KE 2 − KE 1 = 18 J − 2 J = 16 J. While kinetic energy itself is frame-dependent, the *change* in kinetic energy and the associated energy input are frame-independent when the initial and final velocities are measured within the same reference frame, as specified in this problem. Therefore, the calculated 16 J accurately reflects the energy needed regardless of the chosen inertial reference frame. ANSWER: 16 
+
+L1 :Structural Preservation at 50% compres-sion ratio ## Step 1: Identify the formula for kinetic energy Kinetic energy ( KE ) formula: KE = 0 .5 ∗ m ∗ v2; m is mass, v is velocity. ## Step 2: Calculate the initial kinetic energy Initial KE: Use v1 = 2 m/s, m = 1 kg in KE formula: 
+
+KE 1 = 0 .5 ∗ 1 ∗ (2) 2 = 0 .5 ∗ 1 ∗ 4 = 2 Joules. ## Step 3: Calculate the final kinetic energy Final KE: Use v2 = 6 m/s, m = 1 kg in KE formula: KE 2 =0.5 ∗ 1 ∗ (6) 2 = 0 .5 ∗ 1 ∗ 36 = 18 Joules. ## Step 4: Determine the change in kinetic energy Change in KE ( ∆KE ), difference between final, initial KEs: 
+
+∆KE = KE 2 − KE 1 = 18 − 2 = 16 Joules. ## Step 5: Consider the relevance of the reference frame Calculation of KE , ∆KE depends on reference frame; KE is frame-dependent. However, calculating ∆KE for an object accelerating within same reference frame (implied), frame does not affect energy needed. Energy needed is same regardless of observer’s frame because initial, final velocities are relative to same frame. ANSWER: 16 
+
+Table 18: Case study: generative rewriting at 50% compression. For the same prompt, we report summaries generated without a redundancy signal and under different structure constraints (Structure Light/Medium/Strong), illustrating the effect of format control. 
+
+category cs.CL (Computation and Language). arXiv is an openly accessible, moderated repository for scholarly articles in specific scientific disciplines. Material submitted to arXiv is expected to be of interest, relevance, and value to those disciplines. Endorsement is necessary but not sufficient to have a article accepted in arXiv. All submissions are subject to moderation and arXiv reserves the right to reject or reclassify any submission. We’ve sent an email message to siyangly@usc.edu with a unique endorsement code; please forward this e-mail to someone authorized to endorse you for category cs.CL (Computation and Language.) Who is qualified to endorse? To endorse another user to submit to the cs.CL (Computation and Language) subject class, an arXiv submitter must have submitted 3 papers to any of cs.AI, cs.AR, cs.CC, cs.CE, cs.CG, cs.CL, cs.CR, cs.CV, 25 cs.CY, cs.DB, cs.DC, cs.DL, cs.DM, cs.DS, cs.ET, cs.FL, cs.GL, cs.GR, cs.GT, cs.HC, cs.IR, cs.IT, cs.LG, cs.LO, cs.MA, cs.MM, cs.MS, cs.NA, cs.NE, cs.NI, cs.OH, cs.OS, cs.PF, cs.PL, cs.RO, cs.SC, cs.SD, cs.SE, cs.SI or cs.SY earlier than three months ago and less than five years ago. You can find out if a particular person is qualified to endorse by looking up one or more of their articles and clicking on the link "Which of the authors of this article can endorse?" at the bottom of the abstract. It would be good for you to find an endorser who is connected with you: for instance, if you’re a graduate student, your thesis advisor or another professor in your department would be a good choice. Otherwise, you should choose an endorser whose work is related to the subject of your article. Your unique endorsement code is: ICJV6G Have questions about endorsement? Read more about the arXiv endorsement system on our help pages. 26 J Inference-Side Failure Cases 
+
+question If f (x) = 3x−2 
+
+> x−2
+
+, find f (−2) + f (−1) + f (0) .Method Generated Output 
+
+Structural Preser-vation ( ✓)
+
+· · · Step 4: f (−2) = −8 
+
+> −4
+
+= 2 . Step 5: f (−1) = −5 
+
+> −3
+
+= 53 . Step 6: f (0) = −2 
+
+> −2
+
+= 1 . · · · Step 9:  
+
+> 93
+
++ 53 = 14 3 . ANSWER: 14 3
+
+Framework Re-placement ( ✗)
+
+Analysis: The problem requires calculating f (−2) + f (−1) + f (0) for f (x) = 3x−2 
+
+> x−2
+
+. The expression is a rational function, meaning it is undefined at x = 2 . This means f (−2) , f (−1) , f (0) are undefined. Since the sum of undefined values is also undefined, the final answer is undefined. Summary: The function f (x) is undefined for x = 2 . Their sum is also undefined. Final Answer: undefined 
+
+Table 19: Case 1: The Structure None student bypasses actual substitution by latching onto a superficially relevant concept—the undefined point of the function—a direct consequence of losing step-level computational scaffolding during training. 
+
+question The solution to −4 < 2( x − 1) < 8 is expressed in the form a < x < b . Find the value of a + b.Method Generated Output 
+
+LLMLingua-2 word-level prun-ing ( ✓)Step 1: Solve inequality −4 < 2( x − 1) < 8 · · · − 2 < x − 1 < 4, add 1 to all sides inequality −2 + 1 <x − 1 + 1 < 4 + 1 . Step 2: Simplify inequalities simplify −1 < x < 5. Step 3: Determine values a and b:
+
+a = −1, b = 5 from inequality −1 < x < 5. Step 4: Calculate a + b: a + b = −1 + 5 = 4 . The final answer is: 4
+
+NLL word-level pruning ( ✗)Step 1: Solve for x in the inequality −4 < 2( x1) < 8. · · · First, we have −4 < 2( x1) , then we have 
+
+2( x1) < 8. · · · Next, solve the second part of the inequality 2( x1) < 8. Dividing both sides by 2, we get 
+
+x < 8. Combine the solutions of the two inequalities. The combined solution is −1 < x < 8. · · · Calculate 
+
+a + b. −1+ = 7 . The final answer is: 7
+
+Table 20: Case 2: Token-Level Signal Sensitivity. As shown above, NLL-based pruning removes constraint-bearing tokens at substantially higher rates than LLMLingua-2. This propagates directly to inference: the NLL student drops the critical key symbols in 2( x − 1) < 8, leading to final calculation errors, while the LLMLingua-2 student preserves all key numerical steps despite similarly fragmented prose. 
+
+27

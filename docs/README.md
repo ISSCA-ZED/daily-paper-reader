@@ -6,46 +6,29 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-06-23
-- 运行时间：2026-06-23 20:45:51 UTC
+- 最新运行日期：2026-06-24
+- 运行时间：2026-06-24 21:46:57 UTC
 - 运行状态：成功
-- 本次总论文数：8
-- 精读区：6
+- 本次总论文数：3
+- 精读区：1
 - 速读区：2
 
 ### 今日简报（AI）
-1) 今日重点解析8篇论文，聚焦推理模型的可解释性优化，精读两篇高分成果。  
-2) 最值得关注方向：通过决策支持令牌蒸馏提升策略推理能力（《Finding the Evidence》），以及基于局部因果归因揭示思维链关键步骤（《Local Causal Attribution》）。  
-3) 建议优先精读这两篇10分和9分论文，理解其方法后可用于改进LLM推理过程的调试与可解释性。
-- 详情：[/202606/23/README](/202606/23/README)
+今天对3篇论文进行精读与速读，其中1篇多模态大模型token剪枝获8分高分；值得关注谱演化剪枝方法及条件感知的链式思考蒸馏分析；建议优先精读该高分论文，利用其谱特征思路优化模型推理效率。
+- 详情：[/202606/24/README](/202606/24/README)
 
 ### 精读区论文标签
-1. [Finding the Evidence: Discovering Decision-Supporting Tokens for On-Policy Reasoning Distillation](/202606/23/2606.22830v1-finding-the-evidence-discovering-decision-supporting-tokens-for-on-policy-reasoning-distillation)  
-   标签：评分：10.0/10、query:key-tokens
-   evidence：发现推理链中支持决策的证据token，直接针对关键token识别
-2. [Local Causal Attribution of Chain-of-Thought Reasoning](/202606/23/2606.21821v1-local-causal-attribution-of-chain-of-thought-reasoning)  
-   标签：评分：9.0/10、query:key-tokens
-   evidence：通过结构因果模型对推理步骤进行因果归因
-3. [What are Key Factors for Updates in RL for LLM Reasoning?](/202606/23/2606.22570v1-what-are-key-factors-for-updates-in-rl-for-llm-reasoning)  
-   标签：评分：9.0/10、query:key-tokens
-   evidence：分析推理RLVR更新中哪些token占主导
-4. [GIF: Locally Sound Geometric Information Flow Control for LLMs](/202606/23/2606.23277v1-gif-locally-sound-geometric-information-flow-control-for-llms)  
-   标签：评分：9.0/10、query:key-tokens
-   evidence：通过Jacobian的几何信息流追踪token影响
-5. [Deeper is Not Always Better: Mitigating the Alignment Tax via Confident Layer Decoding](/202606/23/2606.21906v1-deeper-is-not-always-better-mitigating-the-alignment-tax-via-confident-layer-decoding)  
+1. [Spectral Evolution-Guided Token Pruning in Multimodal Large Language Models](/202606/24/2606.24165v1-spectral-evolution-guided-token-pruning-in-multimodal-large-language-models)  
    标签：评分：8.0/10、query:key-tokens
-   evidence：Confident Decoding基于推理相关token语义选择层
-6. [Does the Same Token Mean the Same State? MoE Routing as Signal for Reasoning Control](/202606/23/2606.22798v1-does-the-same-token-mean-the-same-state-moe-routing-as-signal-for-reasoning-control)  
-   标签：评分：8.0/10、query:key-tokens
-   evidence：相同token id的MoE路由揭示不同推理努力模式，指示token重要性
+   evidence：跨层频谱演化方法衡量令牌重要性
 
 ### 速读区论文标签
-1. [ReasoningLens: Hierarchical Visualization and Diagnostic Auditing for Large Reasoning Models](/202606/23/2606.23404v1-reasoninglens-hierarchical-visualization-and-diagnostic-auditing-for-large-reasoning-models)  
-   标签：评分：8.0/10、query:key-tokens
-   evidence：层次化可视化和审计以揭示推理链中的关键逻辑
-2. [Factual Retrieval in LLMs Is a Redundant, Distributed and Non-Contiguous Process](/202606/23/2606.21345v1-factual-retrieval-in-llms-is-a-redundant-distributed-and-non-contiguous-process)  
+1. [CompressKV: Semantic-Retrieval-Guided KV-Cache Compression for Resource-Efficient Long-Context LLM Inference](/202606/24/2606.24467v1-compresskv-semantic-retrieval-guided-kv-cache-compression-for-resource-efficient-long-context-llm-inference)  
+   标签：评分：7.0/10、query:key-tokens
+   evidence：通过识别语义检索头选择关键token进行KV缓存，隐式定义token重要性
+2. [When Compression Helps and When It Hurts: Condition-Aware Analysis of Chain-of-Thought Distillation](/202606/24/2606.21704v1-when-compression-helps-and-when-it-hurts-condition-aware-analysis-of-chain-of-thought-distillation)  
    标签：评分：6.0/10、query:key-tokens
-   evidence：迭代修补协议识别属性计算所需的最小层子集，类似于token的因果追踪
+   evidence：链式推理压缩中的重要性准则
 
 
 <div class="dpr-home-promo-card">
