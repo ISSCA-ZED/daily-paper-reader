@@ -6,29 +6,29 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-06-24
-- 运行时间：2026-06-24 21:46:57 UTC
+- 最新运行日期：2026-06-25
+- 运行时间：2026-06-25 20:41:23 UTC
 - 运行状态：成功
 - 本次总论文数：3
-- 精读区：1
-- 速读区：2
+- 精读区：2
+- 速读区：1
 
 ### 今日简报（AI）
-今天对3篇论文进行精读与速读，其中1篇多模态大模型token剪枝获8分高分；值得关注谱演化剪枝方法及条件感知的链式思考蒸馏分析；建议优先精读该高分论文，利用其谱特征思路优化模型推理效率。
-- 详情：[/202606/24/README](/202606/24/README)
+今日聚焦LLM数学推理中的单token故障触发机制与测试时扩展优化，兼论检索数据投毒检测。推荐精读《Cliff Tokens》（9分）揭示大模型推理因单个token失效的脆弱性，以及《Local Branch Routing》（8分）提出高效可训练的测试时扩展方法。普通读者可从Cliff Tokens感悟模型透明度的重要性，技术实践者可关注Local Branch Routing在推理速度与质量的平衡。
+- 详情：[/202606/25/README](/202606/25/README)
 
 ### 精读区论文标签
-1. [Spectral Evolution-Guided Token Pruning in Multimodal Large Language Models](/202606/24/2606.24165v1-spectral-evolution-guided-token-pruning-in-multimodal-large-language-models)  
+1. [Cliff Tokens: Identifying Single-Token Failure Triggers in LLM Mathematical Reasoning](/202606/25/2606.25524v1-cliff-tokens-identifying-single-token-failure-triggers-in-llm-mathematical-reasoning)  
+   标签：评分：9.0/10、query:key-tokens
+   evidence：识别LLM推理中的单token失败触发点
+2. [Efficient and Trainable Language Model Test-Time Scaling via Local Branch Routing](/202606/25/2606.25354v1-efficient-and-trainable-language-model-test-time-scaling-via-local-branch-routing)  
    标签：评分：8.0/10、query:key-tokens
-   evidence：跨层频谱演化方法衡量令牌重要性
+   evidence：基于隐状态的token级路由决策
 
 ### 速读区论文标签
-1. [CompressKV: Semantic-Retrieval-Guided KV-Cache Compression for Resource-Efficient Long-Context LLM Inference](/202606/24/2606.24467v1-compresskv-semantic-retrieval-guided-kv-cache-compression-for-resource-efficient-long-context-llm-inference)  
+1. [Tracing Target Answers in Poisoned Retrieval Corpora via Token Influence Attribution](/202606/25/2606.25721v1-tracing-target-answers-in-poisoned-retrieval-corpora-via-token-influence-attribution)  
    标签：评分：7.0/10、query:key-tokens
-   evidence：通过识别语义检索头选择关键token进行KV缓存，隐式定义token重要性
-2. [When Compression Helps and When It Hurts: Condition-Aware Analysis of Chain-of-Thought Distillation](/202606/24/2606.21704v1-when-compression-helps-and-when-it-hurts-condition-aware-analysis-of-chain-of-thought-distillation)  
-   标签：评分：6.0/10、query:key-tokens
-   evidence：链式推理压缩中的重要性准则
+   evidence：token影响力因果追踪
 
 
 <div class="dpr-home-promo-card">

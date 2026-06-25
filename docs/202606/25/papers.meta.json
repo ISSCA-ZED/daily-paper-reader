@@ -1,0 +1,54 @@
+{
+  "label": "2026-06-25",
+  "date": "2026-06-25",
+  "generated_at": "2026-06-25T20:41:30",
+  "count": 3,
+  "papers": [
+    {
+      "paper_id": "202606/25/2606.25524v1-cliff-tokens-identifying-single-token-failure-triggers-in-llm-mathematical-reasoning",
+      "section": "deep",
+      "title_en": "Cliff Tokens: Identifying Single-Token Failure Triggers in LLM Mathematical Reasoning",
+      "authors": "Jaeyong Ko, Pilsung Kang, Yukyung Lee",
+      "date": "2026-06-24",
+      "pdf": "https://arxiv.org/pdf/2606.25524v1",
+      "score": "9.0",
+      "evidence": "识别LLM推理中的单token失败触发点",
+      "tldr": "大语言模型在数学推理中个体轨迹差异显著，现有工作未精确定位触发失败的起始token。本文提出cliff token，指在自适应阈值下token-wise potential显著下降的token，并基于贪婪选择和token熵分为确定性、不确定性和采样偏离三类。实验表明，删除第一个cliff token并重采样可将pass@64恢复至1.0，保留则受限。进一步提出Cliff-DPO，在cliff位置进行单token偏好优化，跨基准提升准确率最高+6.6，其中优化不确定和采样偏离悬崖效果显著。该工作揭示了单token级别的失败触发机制，并提供了有效优化方法。",
+      "tags": "query:key-tokens",
+      "abstract_en": "Large language models (LLMs) reach high accuracy in mathematical reasoning, but individual traces on the same problem diverge; some arrive at the correct answer while others fail. Prior work analyzes failure at the step, chunk, or sentence level, or at tokens where failure has already occurred. Neither identifies the precise token that triggers the shift toward failure. We introduce the cliff token, a token where the token-wise potential drops significantly under an adaptive threshold that scales with the local token-wise potential, based on a one-sided two-proportion z-test. Across seven models and three mathematical reasoning benchmarks (GSM1K, MATH500, AIME 2025), cliff tokens act as failure triggers; deleting the first cliff token and resampling recovers pass@64 to 1.0, while keeping it limits recovery to between 0.71 and 1.00. We further introduce a cliff taxonomy of deterministic, uncertain, and sampled-off cliffs, defined by greedy choice and token entropy. Each type has distinct probabilistic characteristics, and the taxonomy generalizes across model scales. Finally, we validate the taxonomy via single-token preference optimization at cliff positions (Cliff-DPO). Trained on GSM8K, Cliff-DPO improves accuracy across benchmarks by up to +6.6. Optimizing at uncertain and sampled-off cliffs improves reasoning, while deterministic cliffs do not.",
+      "source": "arxiv",
+      "selection_source": "fresh_fetch"
+    },
+    {
+      "paper_id": "202606/25/2606.25354v1-efficient-and-trainable-language-model-test-time-scaling-via-local-branch-routing",
+      "section": "deep",
+      "title_en": "Efficient and Trainable Language Model Test-Time Scaling via Local Branch Routing",
+      "authors": "Yutong Yin, Mingyu Jin, Jin Pan, Changyi Yang, Zijie Xia, Dhruv Pai, Shuming Hu, Zhen Zhang, Chenyang Zhao, Jinman Zhao, Wujiang Xu, Raymond Li, Xin Eric Wang, Julian McAuley, Zhaoran Wang",
+      "date": "2026-06-24",
+      "pdf": "https://arxiv.org/pdf/2606.25354v1",
+      "score": "8.0",
+      "evidence": "基于隐状态的token级路由决策",
+      "tldr": "现有语言模型测试时扩展面临效率与可训练性的权衡。本文提出局部分支路由(LBR)，在token级扩展局部前瞻树，通过轻量级路由器选择深度1子树，实现离散分支身份保持和可导轨迹似然。结合强化学习联合优化模型与路由器，在数学推理任务上提升Pass@1和Pass@32，验证了轻量局部分支作为高效可训练离散测试时扩展的有效性。",
+      "tags": "query:key-tokens",
+      "abstract_en": "Test-time scaling improves language-model reasoning, but existing approaches often face a difficult trade-off: long chain-of-thought sampling remains single-threaded, while sentence- or solution-level search can be computationally expensive and hard to train end-to-end. We introduce Local Branch Routing (LBR), a token-level test-time scaling framework that expands a small local lookahead tree, forwards all sampled branches through the language model, and uses a lightweight router to select the depth-1 subtree to commit. By routing over the hidden states of candidate local futures, LBR allows each token decision to use evidence beyond the root next-token distribution while avoiding full solution-level search. The resulting prune-shift-grow decoding process preserves discrete branch identities and defines a tractable tree-trajectory likelihood: newly grown nodes are counted when first sampled, and router decisions are assigned explicit probabilities. This enables end-to-end reinforcement learning with verifiable rewards, jointly optimizing the base model and router under the same likelihood-ratio principle as discrete-token RLVR. On synthetic hierarchical-planning tasks, LBR shows that post-candidate hidden states provide useful routing evidence. On mathematical reasoning benchmarks, LBR improves both Pass@1 and Pass@32 over discrete chain-of-thought, vanilla discrete-token RLVR, and RL-compatible soft-token branching baselines. These results suggest that lightweight local branching offers an efficient, trainable, and discrete form of language-model test-time scaling.",
+      "source": "arxiv",
+      "selection_source": "fresh_fetch"
+    },
+    {
+      "paper_id": "202606/25/2606.25721v1-tracing-target-answers-in-poisoned-retrieval-corpora-via-token-influence-attribution",
+      "section": "quick",
+      "title_en": "Tracing Target Answers in Poisoned Retrieval Corpora via Token Influence Attribution",
+      "authors": "Yan-Lun Chen, Pin-Yu Chen, Chia-Mu Yu, Ying-Dar Lin, Yu-Sung Wu, Wei-Bin Lee",
+      "date": "2026-06-24",
+      "pdf": "https://arxiv.org/pdf/2606.25721v1",
+      "score": "7.0",
+      "evidence": "token影响力因果追踪",
+      "tldr": "检索增强生成系统面临语料库投毒攻击，现有检测方法依赖复杂分类器或LLM验证，计算开销大。本文提出TRACE轻量框架，通过令牌影响归因追踪答案相关令牌，先发现重复高影响力关键词，再二次验证其影响。在三个QA基准和六个LLM上，该方法不仅检测性能强，还能准确揭示攻击者指定的目标答案。该工作为RAG安全提供了高效检测新思路。",
+      "tags": "query:key-tokens",
+      "abstract_en": "Retrieval-Augmented Generation (RAG) systems are vulnerable to corpus poisoning attacks that manipulate model outputs through malicious retrieved documents. Existing detection methods typically rely on auxiliary classifiers or additional LLM-based verification, introducing substantial computational overhead. We present TRACE, a lightweight detection framework that identifies poisoning attacks by tracing answer-related tokens through token influence attribution. TRACE first discovers recurrent high-influence keywords across retrieved documents and then performs a secondary verification to confirm their influence on model predictions. Experiments on three QA benchmarks and six LLMs demonstrate strong detection performance while simultaneously uncovering attacker-specified target answers.",
+      "source": "arxiv",
+      "selection_source": "fresh_fetch"
+    }
+  ],
+  "errors": []
+}
