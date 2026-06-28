@@ -6,28 +6,26 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-06-27
-- 运行时间：2026-06-27 20:07:02 UTC
+- 最新运行日期：2026-06-28
+- 运行时间：2026-06-28 20:47:41 UTC
 - 运行状态：成功
 - 本次总论文数：1
 - 精读区：0
 - 速读区：1
 
 ### 今日简报（AI）
-今天速读了一篇关于多模态大语言模型视觉令牌剪枝的论文。
-
-该论文提出通过构建令牌最优保留集实现高效推理，是视觉令牌优化方向的有益探索。
-
-建议关注此类令牌压缩技术，可帮助理解如何在不牺牲性能下提升模型推理效率。
-- 详情：[/202606/27/README](/202606/27/README)
+今日阅读1篇论文，探索推理作为吸引子动力学的理论新视角。  
+最值得关注：将推理视为吉布斯加权能量最小化驱动的潜在记忆检索过程。  
+建议后续对比该模型与传统符号推理或神经网络推理方法的性能差异。
+- 详情：[/202606/28/README](/202606/28/README)
 
 ### 精读区论文标签
 - 本次无精读推荐。
 
 ### 速读区论文标签
-1. [TOPS: First-Principles Visual Token Pruning via Constructing Token Optimal Preservation Sets for Efficient MLLM Inference](/202606/27/2606.27161v1-tops-first-principles-visual-token-pruning-via-constructing-token-optimal-preservation-sets-for-efficient-mllm-inference)  
+1. [Reasoning as Attractor Dynamics: Latent Memory Retrieval via Gibbs-Weighted Energy Minimization](/202606/28/2606.24543v1-reasoning-as-attractor-dynamics-latent-memory-retrieval-via-gibbs-weighted-energy-minimization)  
    标签：评分：6.0/10、query:key-tokens
-   evidence：为多模态大语言模型中的视觉标记重要性度量构建最优保留集
+   evidence：通过能量景观分析推理链，与推理序列结构相关联
 
 
 <div class="dpr-home-promo-card">
