@@ -1,0 +1,1434 @@
+Title: Search for Truth from Reasoning: A Dynamic Representation Editing Framework for Steering LLM Trajectories
+
+URL Source: https://arxiv.org/pdf/2606.28589v1
+
+Published Time: Tue, 30 Jun 2026 00:18:00 GMT
+
+Number of Pages: 31
+
+Markdown Content:
+# Search for Truth from Reasoning: A Dynamic Representation Editing Framework for Steering LLM Trajectories 
+
+Tianlong Wang 1 2 3 * Yuhang Wang 1 2 3 * Weibin Liao 1 2 3 * ‡
+
+Xin Gao 1 2 3 Xinyu Ma 4 Yang Lin 5 Yasha Wang 1 3 6 Liantao Ma 1 2 3 
+
+# Abstract 
+
+Current approaches to enhance Large Language Model (LLM) reasoning, such as Chain-of-Thought and “Wait” prompts, primarily encour-age models to think more , yet often fail to guide them toward Truth . While Representation Editing (RepE) offers a intrinsic control, its application to dynamic reasoning trajectories remains underex-plored. In this work, we bridge this gap by investi-gating the geometry of truth within unfolding rea-soning chains. We uncover three critical insights: (1) Truth is encoded at the sentence level and is entangled with latent reasoning patterns; (2) Ef-fective intervention follows an Uncertainty Prin-ciple and a Decay Effect , requiring localization to early, high-entropy forks; (3) Naive steering vec-tors suffer from noise, risking collateral damage to correct trajectories. Based on these findings, we propose DynaSteer , a dynamic RepE frame-work. DynaSteer employs pattern clustering to disentangle reasoning manifolds and utilizes Fisher-LDA to project purified truth. By dynami-cally monitoring lookahead entropy, it selectively steers and rolls back trajectories only when neces-sary. Comprehensive experimental results on sev-eral MATH benchmark verify the effectiveness of 
+
+DynaSteer , and experiments on out-of-domain coding tasks further confirm its generalization ability. Our code is publicly available at https: //github.com/tianlwang/DynaSteer .
+
+> *
+
+Equal contribution ‡ Project Lead 1National Engineering Re-search Center of Software Engineering, Peking University 2School of Computer Science, Peking University 3Key Laboratory of High Confidence Software Technologies, Ministry of Education 4Seed, ByteDance Inc. 5Huawei Technologies Co., Ltd 6Peking University Information Technology Institute (Tianjin Binhai). Correspon-dence to: Tianlong Wang <tianlong.wang@stu.pku.edu.cn >,Weibin Liao <liaoweibin@stu.pku.edu.cn >, Liantao Ma 
+
+<malt@pku.edu.cn >.
+
+Proceedings of the 43 rd International Conference on Machine Learning , Seoul, South Korea. PMLR 306, 2026. Copyright 2026 by the author(s). Thinking More   
+
+> (a) Thinking More
+
+≠ Thinking Right            
+
+> h!=ℎ+𝛼𝑣
+> (b) Existing Static RepE
+> h!=ℎ+𝛼𝑣
+> (c) Our Proposed Dynamic RepE During Reasoning Trajectories
+> uncertain
+> certain
+
+Figure 1. Illustration of the key differences between (a) existing reasoning intervention approaches, (b) static representation edit-ing and (c) our dynamic representation editing during reasoning trajectories. 
+
+# 1. Introduction 
+
+Large Language Models (LLMs) have demonstrated re-markable proficiency in complex reasoning tasks (Huang & Chang, 2023; Plaat et al., 2024; Wang et al., 2025b), largely driven by the Chain-of-Thought (CoT) paradigm (Wei et al., 2022; Yao et al., 2023; Ding et al., 2025b; Fang et al., 2026a) which elicits structured reasoning trajectories. Recent ad-vancements (Yang et al., 2025; Zhou et al., 2025; Cai et al., 2015; Pipis et al., 2025) have further attempted to enhance this capability through inspired prompting strategies, such as the “Aha moment” or “Wait” prompts. While these meth-ods successfully encourage LLMs to generate more tokens and engage in deeper contemplation, they primarily induce the model to think more without explicitly guiding it to steer toward correct deductions among bifurcating possibil-ities. Consequently, when LLMs face uncertainty, simply extending the generation length often leads to “hallucination snowballs” (Zhong et al., 2024) rather than self-correction. To address this limitation, Representation Editing (RepE) (Li et al., 2023; Wang et al., 2025c; Ma et al., 2025) has emerged as a promising avenue for intrinsic control. Unlike prompting, RepE directly pinpoints and modulates the internal activation patterns of LLMs, offering a more fundamental remedy by guiding the hidden states toward a target concept. However, a critical gap remains in the litera-1
+
+> arXiv:2606.28589v1 [cs.AI] 26 Jun 2026 Search for Truth from Reasoning: A Dynamic Representation Editing Framework for Steering LLM Trajectories
+
+ture. While RepE has achieved notable success in aligning 
+
+static behavioral attributes, such as language style (Ma et al., 2025; Shen et al., 2025), honesty (Xiao et al., 2025), and harmlessness (Dong et al., 2024), its application to the dy-namic reasoning process remains largely underexplored. Prior works (Li et al., 2023; Wang et al., 2025c) predomi-nantly focus on non-reasoning modes or contexts where the conclusion is explicitly visible. The challenge of steering the model towards Truth during the intermediate deriva-tion stage, before a final answer is reached, presents unique spatiotemporal complexities. 
+
+“Truth , a binary, geometrically encoded directional signal within the LLM’s activation space, whose sign discriminates whether an ongoing reasoning trajectory ultimately arrives at a verifiable correct or incorrect answer.” 
+
+In this work, we conduct a systematic exploration of ap-plying RepE to guide LLM reasoning. Our investigation is structured around three pivotal research questions, Exis-tence , Locus , and Mitigation , that bridge the gap between static attribute editing and dynamic reasoning guidance: 1. Existence of Truth : Does the Truth exist within LLM representations along reasoning trajectories? A fun-damental prerequisite for RepE is that internal repre-sentations must distinguish between Truth and Fallacy .Our probing experiments reveal a crucial nuance: naive token-level probes struggle to discern Truth , suggesting it is not encoded in atomic units. However, when ele-vated to the sentence level, the latent distinction becomes evident. We further discover that the Truth Steering is in-herently entangled with specific reasoning patterns. By disentangling these patterns via clustering, we observe a significant enhancement in discrimination accuracy. 2. Locus of Intervention : Where and when is interven-tion effective? We identify two critical spatiotemporal dynamics that govern effective steering. First, the Decay Effect : intervention is most potent in the early stages of reasoning; as the chain lengthens, the model becomes “entrenched” in its trajectory, rendering late-stage editing ineffective. Second, the Uncertainty Principle : effective intervention strictly correlates with high entropy. Editing is necessary only at “reasoning forks” where the model exhibits uncertainty; intervening at low-entropy positions yields negligible benefits or disrupts coherence. 3. Mitigation of Risk : How to mitigate the potential risks associated with intervention? Standard RepE methods typically derive steering vectors using a naive Mean-Difference approach. However, given the entanglement of Truth with other high-level semantic concepts, this approach inevitably incorporates noise, posing a risk of corrupting originally correct trajectories. To mitigate this, we propose the use of Fisher Linear Discriminant Analysis (Fisher-LDA) . By projecting representations onto a purified subspace, we maximize the separation of Truth while minimizing interference with the model’s semantic manifold. Based on these insights, we propose DynaSteer .
+
+DynaSteer is a dynamic inference-time RepE framework designed to steer reasoning trajectories proactively. It oper-ates by (1) detecting critical reasoning forks via sentence-level lookahead entropy; (2) calculating purified Truth Steer-ing using Fisher-LDA within disentangled reasoning clus-ters; and (3) applying a temporally decaying injection to guide the model’s trajectory while employing a rollback mechanism to correct errors at their inception. In summary, our main contributions are as follows: • Systematic Analysis of Dynamic RepE: We provide the first comprehensive analysis bridging static attribute edit-ing and dynamic reasoning. We reveal the Decay Effect 
+
+and the Uncertainty Principle , establishing that interven-tion must be localized to early, high-entropy reasoning forks to be effective. • Subspace-Projected Steering Mechanism: We identify that the geometric entanglement of truth and reasoning patterns limits standard RepE. We propose a novel appli-cation of Fisher-LDA to project internal representations onto a discriminative subspace, ensuring safe and precise steering. • DynaSteer Framework: Synthesizing these findings, we introduce DynaSteer , an adaptive framework that dynamically monitors uncertainty and intervenes only when necessary. Extensive evaluations conducted in both in-domain and out-of-domain scenarios show that our approach substantially outperforms existing baselines on complex reasoning benchmarks. 
+
+# 2. Preliminary: Representation Editing 
+
+Notation. We consider an autoregressive Large Language Model (LLM) M with L layers and N heads. For an input sequence x, let h(l,n ) ∈ Rd denote the internal activation at layer l and head n, where d is the hidden dimension. The model generates the next token based on the final layer rep-resentation via a decoding head. We denote a contrastive dataset as D = {(x+ 
+
+> i
+
+, x − 
+
+> i
+
+)}Ni=1 , where x+ and x− corre-spond to inputs eliciting the target concept (e.g., truth) and its opposite (e.g., hallucination), respectively. 
+
+Core Insight. Representation Editing (RepE) operates on the geometry of the activation space. Its fundamental justi-fication is the Linear Representation Hypothesis (Wang et al., 2025c; Li et al., 2023): 2Search for Truth from Reasoning: A Dynamic Representation Editing Framework for Steering LLM Trajectories 16 heads  
+
+> 28 layers
+> (a) Token -level Probing
+> 16 heads
+> 28 layers
+> 16 heads
+> 28 layers
+> (c) Sentence -level Probing (d) Sentence -level Probing with
+> Pattern Clustering
+> 16 heads
+> 28 layers
+> (b) Token -level Probing with
+> Pattern Clustering
+
+Figure 2. Truth discrimination accuracy across individual attention heads of the large language model. Lower rows correspond to shallower layers of the LLM. Expanding token-level representations to the sentence-level and incorporating pattern clustering substantially improve the accuracy of the linear probes. 
+
+RepE assumes that high-level semantic concepts are lin-early encoded in the activation space. Specifically, there exists a direction vector v ∈ Rd such that the intensity of the concept in any representation h is determined by the projection h⊤v.
+
+Based on this assumption, the steering vector v representing the target concept is typically extracted by computing the difference in means between positive and negative activa-tions: 
+
+v ≈ Ex∼D [h(x+)] − Ex∼D [h(x−)] . (1) To control the model’s behavior during inference, we inter-vene on the hidden state h by injecting this vector with a steering coefficient α:
+
+˜h = h + α · v
+
+∥v∥2
+
+. (2) This linear shift biases the model’s subsequent computa-tions towards the target concept without altering the model weights. 
+
+# 3. Does the Truth Exist Within LLM Representations Along Reasoning Trajectories? 
+
+The theoretical foundation of RepE rests on the Linear Rep-resentation Hypothesis (see Sec. 2). While prior work (Li et al., 2023; Wang et al., 2025c; Liao et al., 2026b; Zhang et al., 2025) has demonstrated that Truth can be encoded in representations containing the answer text, it remains un-clear whether Truth is also present in reasoning trajectories where the answer is not observable. Formally, let M denote an autoregressive LLM with L lay-ers and H heads. For a given input sequence, let h(l,n ) 
+
+> t
+
+∈ Rd
+
+denote the hidden-state activation at layer l ∈ { 1, . . . , L },head n ∈ { 1, . . . , N }, and token position t. We investi-gate whether there exists a global steering vector v ∈ Rd
+
+such that the induced binary decision sgn 
+
+
+
+h(l,n )⊤ 
+
+> t
+
+v
+
+
+
+serves as a reliable discriminator of the correctness of the trajec-tory. If such a vector exists, the sign of h(l,n )⊤ 
+
+> t
+
+v should correlate systematically with the binary ground-truth label 
+
+y ∈ { +1 , −1}, where y = +1 denotes a trajectory leading to Truth and y = −1 denotes one leading to Fallacy . We deliberately employ linear probes to test the Linear Repre-sentation Hypothesis. By restricting the probe to minimal capacity, we ensure that the observed discriminability re-flects the genuine linear structure of the Truth signal rather than the probe’s own expressive power, adhering to the probe complexity control principle (Hewitt & Liang, 2019; Ding et al., 2025a). 
+
+Semantic Granularity: From Tokens to Sentences. Our initial probing experiments focused on the atomic unit of generation: the token. We defined the representation space at the token level, treating each h(l,n ) 
+
+> t
+
+as an independent sample. In both token-level and sentence-level settings, the hidden state is extracted from the last token’s activation of the input sequence. For token-level probing, the sequence is truncated at any arbitrary position. However, as shown in Fig. 2(a), our empirical results indicate that the linear separability of Truth at this granularity is poor, with classifi-cation accuracy saturating near 55%. We further elevate the analysis to the sentence level , where trajectory segmentation is guided by punctuation (e.g., .\n), restricting truncation exclusively to sentence boundaries. This acts as a filtering mechanism, ensuring hidden states are extracted only where complete semantic units form. As shown in Fig. 2(b), by shifting the domain from instantaneous token activations to semantically complete sentence representations, we observe a substantial increase in linear separability, with probing accuracy exceeding 69% (16% ↑) across multiple attention 3Search for Truth from Reasoning: A Dynamic Representation Editing Framework for Steering LLM Trajectories 
+
+heads. This suggests that the Truth is an emergent property of semantic units rather than a localized feature of individual tokens. 
+
+Manifold Disentanglement via Pattern Clustering. De-spite the improvements yielded by sentence-level aggrega-tion, the decision boundary between Truth and Fallacy re-mains noisy. We hypothesize that this noise arises from rea-soning heterogeneity : the geometric realization of Truth may vary depending on the underlying reasoning pattern (Bog-dan et al., 2025; Liao et al., 2025) (e.g., plan generation, fact retrieval). If the manifold of reasoning representations is non-convex or consists of multiple disjoint regions, a sin-gle global linear probe will be suboptimal. To test this, we employ an unsupervised clustering approach to partition the activation space. Let H = {hSi }Ni=1 be the set of collected sentence representations. We apply k-means clustering to decompose H into M disjoint clusters C1, . . . , CM , where each cluster conceptually corresponds to a distinct latent reasoning pattern. Within each cluster Cj , we independently optimize a local linear probe defined by a cluster-specific 
+
+Truth Steering vj .
+
+max 
+
+> vj
+
+X
+
+> h∈C j
+
+I[sgn( h⊤vj ) = y], (3) where I[·] is the indicator function. As shown in Fig. 2(b) and (d), post-clustering analysis reveals a dramatic improve-ment in separability, with intra-cluster classification accu-racy reaching approximately 78% (23% ↑). We further il-lustrate the separability of these reasoning patterns using a t-SNE visualization in Fig. 7. This finding implies that while the Truth signal is strong, it is entangled with the pattern of reasoning. The global geometry of Truth is likely piecewise linear, becoming linearly accessible only when the latent reasoning patterns are disentangled. 
+
+Summary. Our investigation confirms the existence of a recoverable Truth signal, subject to specific structural constraints. 
+
+Takeaway : We validate the core prerequisite for RepE: a discernible Truth Direction exists within the LLM acti-vation space. However, this direction is not encoded in isolated token-level activations but emerges in sentence-level aggregates. Furthermore, the linearity of this signal is significantly enhanced when latent reasoning patterns are disentangled via clustering. 
+
+# 4. Where and When Is Intervention Effective? 
+
+Having established the existence of the Truth , we now turn to the optimization of the intervention policy. A naive ap-plication of RepE at every time step is computationally pro-hibitive and risks degrading generation quality. Therefore, we seek to identify the optimal spatiotemporal coordinates       
+
+> Figure 3. The relationship between the Recovery Rate of erroneous reasoning trajectories under representation editing and Entropy Quantiles across different Temporal Segments .
+
+for intervention. We analyze this along two orthogonal axes: the spatial locus (identifying critical decision points) and the temporal locus (determining the effective window of opportunity). 
+
+Spatial Locus: Entropy-Based Selection. Reasoning is not a uniform process; it consists of deterministic transitions (e.g., syntactic completion) and stochastic decision points, which we term reasoning forks . We hypothesize that inter-vention is only necessary at these forks, where the model’s internal confidence wavers between competing logical paths. To quantify this, we utilize the Shannon entropy (Yin et al., 2024) of the next-token distribution. Let P (xt+1 | x≤t)
+
+denote the probability distribution over the vocabulary V at time step t. The local uncertainty is given by: 
+
+H(t) = − X
+
+> w∈V
+
+P (w | x≤t) log P (w | x≤t). (4) Previous works (Wang et al., 2025a; Hao et al., 2025) ob-serve that peaks in H(t) typically align with the initiation of new logical steps. Based on this, we investigate a Selec-tive Editing strategy. Let τ be a dynamic threshold derived from the distribution of entropy values within a trajectory (e.g., the top-k percentile). The intervention set is defined as Iselect = {t | H(t) > τ }.We investigate the relationship between the intrinsic Recov-ery Rate and entropy quantiles. Let Sneg denote the set of sentence-level segments belonging to trajectories that orig-inally result in incorrect answers ( y = −1). For a given segment s ∈ S neg , we generate N independent stochastic rollouts. Let {y1, y 2, . . . , y N } denote the binary correctness labels of the resulting trajectories for these rollouts. We define the segment s as recoverable if the correct answer exists within the sampled space. Formally, the recoverability 4Search for Truth from Reasoning: A Dynamic Representation Editing Framework for Steering LLM Trajectories          
+
+> Figure 4. Distributional comparison of Truth and Fallacy represen-tations under Mean-Difference and Fisher LDA projections.
+> Figure 5. Intervention strength of representation editing on Truth
+> and Fallacy under Mean-Difference and Fisher-LDA.
+
+indicator R(s) is defined as: 
+
+R(s) = I [∃n ∈ { 1, . . . , N } : yn = 1] , (5) where I[·] is the indicator function. The Recovery Rate for a group of segments is then calculated as the expected value of R(s).As illustrated in Fig. 3, we observe a distinct correlation: for segments with low entropy, the Recovery Rate is minimal (peaking at only 12.3%), indicating that the model is deeply “entrenched” in the fallacy and consistently reproduces the error even under stochastic sampling. Conversely, at high-entropy forks, the Recovery Rate rises significantly to 58.3%. This suggests that at these uncertain moments, the Truth is still accessible within the model’s hypothesis space. Thus, entropy serves as a highly effective proxy for identifying the spatial locus of intervention. 
+
+Temporal Locus: The Decay Effect. Beyond spatial se-lection, the timing of intervention relative to the overall trajectory is critical. We investigate the temporal sensitiv-ity of the model’s intrinsic error-correction capability. We divide the reasoning trajectories into 5 relative temporal segments T1, . . . , T 5. Our experiments, as shown in Fig. 3, reveal a pronounced monotonic decay in this intrinsic po-tential: R(T1) ≫ R (T5). Specifically, segments located in the early stage ( T1) exhibit a hig Recovery Rate of 62.9%, whereas those in the final stage ( T5) drop significantly to 24.9%. We term this phenomenon the Decay Effect . It suggests that autoregressive reasoning exhibits strong path dependence. As the model generates more tokens consistent with an ini-tial fallacy, its internal state becomes “entrenched” in that error. The hidden states ht at later time steps t ≫ 1 are con-ditioned on a long history of incorrect tokens x<t , making the incorrect trajectory a deep local minimum in the energy landscape. This implies that the “window of opportunity” for effective steering is transient. Interventions must be an-ticipatory : corrections are most feasible at the inception of a reasoning error ( T1), before the trajectory collapses into a deep local minimum from which even stochastic exploration cannot escape. 
+
+Summary. The integration of spatial and temporal analyses defines a precise regime for efficient RepE. 
+
+Takeaway : Effective intervention is highly localized in both space and time. Spatially, editing is strictly necessary only at high-entropy reasoning forks. Temporally, inter-vention must occur early in the derivation process, as the model’s susceptibility to correction decays rapidly due to the entrenchment of logical errors over time. 
+
+# 5. How to Mitigate the Potential Risks Associated with Intervention? 
+
+While the previous sections established the existence of 
+
+Truth and the optimal timing for its application, a critical safety challenge remains. As shown in Fig. 4, the distri-butions of representations for Truth (h+) and Fallacy (h−)are not perfectly disjoint. This overlap creates the risk of 
+
+False Positive Intervention , where the steering vector in-advertently perturbs a correct reasoning process towards 
+
+Fallacy . In this section, we analyze this risk through a ge-ometric lens and propose a subspace projection method to mitigate it. 
+
+The Risk of Naive Mean-Difference Steering. Standard RepE typically estimates the steering direction using the difference of class means. Let D+ and D− be the sets of hidden representations for Truth and Fallacy , respectively. The Mean-Difference (MD) vector is defined as: 
+
+vMD = μ+ − μ−, (6) 
+
+μc = 1
+
+|D c|
+
+X
+
+> h∈D c
+
+h, c ∈ { +, −} . (7) The intervention strength at inference time is proportional to the projection scalar h⊤vMD . Ideally, this projection should act as a robust discriminator: maximizing intensity for Fal-lacy while vanishing (or becoming negative) for Truth .However, the density plots in Fig. 4 reveal that upon project-ing h onto vMD , a significant distributional overlap emerges, where a portion of Truth samples is indistinguishable from 
+
+Fallacy . This entanglement is further quantified in Fig. 5: when the intervention strength for Fallacy is normalized to 1.000 , Truth samples inadvertently inherit a substantial strength of 0.394 . This makes naive RepE a losing propo-sition : the expected utility is negative because the harm 5Search for Truth from Reasoning: A Dynamic Representation Editing Framework for Steering LLM Trajectories 
+
+caused by corrupting Truth trajectories outweighs the bene-fit of repairing Fallacy ones. 
+
+Fisher-LDA for Truth Purification. We attribute the failure of naive mean-difference steering to the extreme anisotropy 
+
+of the activation space, where non-informative outlier dimen-sions dominate the variance (Rudman & Eickhoff, 2024). To purify the Truth signal, we employ Fisher Linear Dis-criminant Analysis (Fisher-LDA) to find a direction that maximizes class separability while suppressing within-class noise. Let δ = μ+ − μ− be the mean difference between Truth 
+
+and Fallacy representations. We define the within-class covariance matrix Σw as: 
+
+Σw = X
+
+> c∈{ +,−}
+
+1
+
+|D c|
+
+X
+
+> h∈D c
+
+(h − μc)( h − μc)⊤. (8) The optimal steering axis w∗ is derived by maximizing the Rayleigh Quotient (Rayleigh, 2013), yielding the closed-form solution w∗ = Σ−1 
+
+> w
+
+δ (see Appendix B for the detailed derivation). Under the Fisher-LDA paradigm, the adaptive intervention intensity during inference is computed as: 
+
+η(h) = α · tanh 
+
+
+
+ReLU 
+
+ μp proj − hproj 
+
+σp proj 
+
+ 
+
+, (9) where hproj = w∗⊤ h, and μp proj , σ p proj are the mean and standard deviation of positive samples in the projected space. This formulation acts as an asymmetric gate: the 
+
+ReLU ensures that intervention is selectively applied only to representations lagging behind the Truth center, while the Z-score normalization and tanh function provide scale-invariant alignment and numerical stability against outliers. Finally, α serves as a hyperparameter that regulates the global magnitude of the intervention. As illustrated in Fig. 4 and Fig. 5, projecting h onto the puri-fied axis w∗ significantly reduces the distributional overlap compared to the naive mean-difference. This ensures that 
+
+Truth representations receive minimal perturbation, thereby transforming RepE from a risky heuristic into a controlled and safe mechanism. 
+
+Summary. We address the geometric entanglement of truth and semantics to ensure safe intervention. 
+
+Takeaway : Naive mean-difference steering risks corrupt-ing correct reasoning due to significant distributional over-lap. By employing Fisher-LDA, we identify a purified sub-space that maximizes the signal-to-noise ratio of the truth direction. This significantly reduces collateral damage to correct trajectories, ensuring a positive cost–benefit trade-off for the intervention. 
+
+# 6. Methodology 
+
+Building upon the empirical evidence of a recoverable Truth 
+
+signal (Sec. 3) and the spatiotemporal constraints of inter-vention (Sec. 4), we introduce DynaSteer , a framework that bridges the gap between static representation editing and dynamic reasoning trajectories. 
+
+6.1. Consistency-based Truth Annotation 
+
+To align the representation space with semantic reasoning steps rather than atomic tokens, DynaSteer operates at the level of trajectory sentences. Let a reasoning trajectory generated by the model M be decomposed into a sequence of sentences T = ( S1, S 2, . . . , S T ), where each sentence 
+
+St represents a coherent semantic unit, such as a clause or a deduction step. 
+
+DynaSteer employs a consistency-based filtering strat-egy to construct a robust dataset D. For a given sentence St
+
+located at a high-entropy reasoning fork, the framework per-forms N stochastic rollouts to generate a set of final answers 
+
+{y1, . . . , y N }. The semantic label L(St) for the hidden rep-resentations associated with this sentence is assigned via consensus: 
+
+L(St) = 
+
+
+
++1( Truth ) if yn = 1 ∀n ∈ { 1, . . . , N },
+
+−1( Fallacy ) if yn̸ = 1 ∀n ∈ { 1, . . . , N },
+
+⊥(Discard ) otherwise .
+
+(10) Subsequently, DynaSteer collects the internal hidden states h ∈ Rd corresponding to accepted sentences (L(St)̸ = ⊥) to form the paired dataset D = {(hi, L (Si)) }.
+
+6.2. Truth -Relevant Head Location 
+
+Not all attention heads encode the Truth signal equally. To ensure computational efficiency and intervention precision, 
+
+DynaSteer identifies the specific subset of heads that act as the locus for truth differentiation. Using the labeled dataset D, it trains linear probes on the hidden states of each head across all layers. 
+
+DynaSteer ranks the heads based on their probing accu-racy in distinguishing Truth (+1 ) from Fallacy (−1) and selects the top-k heads, denoted as Htop , to serve as the intervention targets. Consequently, the subsequent clus-tering and steering operations are restricted exclusively to representations h(l,h ) where (l, h ) ∈ H top .
+
+6.3. Manifold Disentanglement & Truth Purification 
+
+As established in Sec. 3, the geometry of Truth is entangled with latent reasoning patterns. DynaSteer addresses this via a two-stage offline process: separating reasoning modes and then purifying the truth direction within those modes. 6Search for Truth from Reasoning: A Dynamic Representation Editing Framework for Steering LLM Trajectories … … … … …  
+
+> …
+> nheads
+> l layers
+> Non -existence
+> of Truth
+> Existence
+> of Truth
+
+h𝒊 
+
+> "
+
+𝒉 𝒊 
+
+> #
+
+𝒉 𝒌 
+
+> "
+
+𝒉 𝒌 
+
+> #
+
+𝒉 𝒋 
+
+> "
+
+𝒉 𝒋 
+
+> #
+> Min. Min.
+> Max.
+> Optimal
+> Projection
+
+Multi -Head Attention 
+
+… …
+
+… …
+
+… …
+
+> Consistency -based
+> Rollout
+> Rollback
+> Rollback
+
+𝜶 𝒋 𝒗 𝒋 
+
+𝜶 &𝒗 𝒊 
+
+𝜶 𝒌 𝒗 𝒌         
+
+> (a) Consistency -based
+> Truth Annotation
+> (b) Trut h-Relevant
+> Head Location
+> (c) Pattern Clustering
+> &Truth Purification
+> (d) Dynamic Reasoning
+> via Aggregated Steering
+
+Figure 6. Overview of the DynaSteer framework. (a) illustrates the data construction phase, where DynaSteer samples high-entropy sentences and uses consistency to distinguish between Truth and Fallacy . (b) presents the use of probing techniques to localize Truth -relevant attention heads within the LLM. In (c), DynaSteer utilizes pattern clustering for manifold disentanglement, followed by Fisher-LDA to derive pure Truth Steering . Finally, (d) shows the dynamic inference stage, where lookahead entropy monitoring identifies trajectories that need correction, applying an adaptive aggregated steering to guide the reasoning. 
+
+Manifold Disentanglement via Pattern Clustering. 
+
+DynaSteer hypothesizes that the activation space con-sists of multiple reasoning manifolds. To disentangle these, it computes the raw difference vector δi = h+ 
+
+> i
+
+− h− 
+
+> i
+
+for pairs of positive and negative forks derived from the same context. DynaSteer applies k-means clustering to the set of difference vectors {δi}, partitioning the space into M
+
+disjoint clusters {C 1, . . . , CM }. Each cluster Cm conceptu-ally represents a distinct reasoning pattern (e.g., symbolic logic vs. arithmetic derivation). 
+
+Truth Purification via Fisher-LDA. Within each reason-ing cluster Cm, to extract a purified steering direction, 
+
+DynaSteer employs Fisher-LDA (Sec. 5). For a specific cluster Cm and head, let μ+ 
+
+> m
+
+and μ− 
+
+> m
+
+de-note the centroids of the Truth and Fallacy classes, respec-tively. DynaSteer computes the within-class scatter ma-trix Σw,m and calculates steering vector vm:
+
+vm = Σ −1
+
+> w,m
+
+(μ+ 
+
+> m
+
+− μ−
+
+> m
+
+). (11) The vector vm defines the normal to the hyperplane that best discriminates truth from fallacy within the specific reasoning mode m.
+
+6.4. Dynamic Reasoning via Aggregated Steering 
+
+During the online inference phase, DynaSteer applies the pre-computed steering vectors dynamically. This process is governed by entropy monitoring and a rollback mechanism to handle the path-dependent nature of generation. 
+
+Lookahead Entropy Monitoring. To avoid unnecessary perturbations, DynaSteer adopts a selective intervention strategy. As the model generates a candidate sentence Scand ,the framework computes its average token entropy H(Scand ).It employs a threshold γ, set to the 80 th percentile of the training entropy distribution, following prior work (Wang et al., 2025a). • If H(Scand ) ≤ γ, the sentence is deemed deterministic and reliable; generation proceeds normally. • If H(Scand ) > γ, the sentence represents a high-uncertainty reasoning fork, triggering the intervention mechanism. 
+
+Temporal Decay and Dynamic Strength Calculation. 
+
+When intervention is triggered at step t, DynaSteer 
+
+calculates the steering parameters. First, to account for the Decay Effect , we define a temporal gating coefficient 
+
+β(t) = I[t ≤ τdecay ], where τdecay is a pre-defined thresh-old. Intervention is applied only when β(t) = 1 . Second, 
+
+DynaSteer computes the dynamic intervention strength 
+
+ηm(h) for each reasoning cluster Cm according to Eq. 9. 
+
+Multi-Steering Aggregation and Rollback. The final steer-ing is an aggregate of the purified directions from all rea-soning clusters. The edited hidden state ˜h is formulated as: 
+
+˜h = h + β(t)
+
+> M
+
+X
+
+> m=1
+
+ηm(h)vm. (12) Crucially, mere injection is insufficient if the candidate sen-tence Scand has already committed to an error. Therefore, 
+
+DynaSteer executes a Rollback : it discards Scand and forces the model to traverse the reasoning fork again, now guided by the purified Truth signal. 
+
+# 7. Experiment 
+
+Experimental Setups. We present our experimental setup in Appendix. E, including the network architecture, datasets, evaluation metrics, baselines, and implementation details. 7Search for Truth from Reasoning: A Dynamic Representation Editing Framework for Steering LLM Trajectories 
+
+Table 1. Performance comparison of Original, “Wait” prompt, RepE methods, and DynaSteer across three backbone LLMs on three MATH datasets and two Coding datasets. The best results are highlighted in bold , while the second-best results are underlined .The Impro (%) indicates the relative improvement of DynaSteer 
+
+over the second-best performance. ID: In-Domain. OOD: Out-of-Domain.                                                                                                                
+
+> MATH (ID) Coding (OOD) Methods GSM8K MATH500 AMC23 HumanEval+ MBPP+
+> Qwen3-1.7B
+> Plain 79.61 69.20 40.00 65.24 50.26 “Wait” 81.05 71.20 40.00 65.85 50.26 ITI 81.50 71.80 37.50 65.24 50.00 ACT 81.73 72.60 42.50 65.85 51.06 DRESS 81.65 72.80 42.50 65.24 51.32
+> DynaSteer 82.87 74.80 47.50 67.68 54.50
+> Impro.(%) 1.39 2.75 11.76 2.78 6.20
+> Llama3.2-3B-Instruct
+> Plain 80.14 47.80 27.50 47.56 50.53 “Wait” 80.06 46.20 25.00 48.17 50.53 ITI 79.98 48.40 25.00 48.78 51.06 ACT 80.29 48.80 32.50 51.83 52.65 DRESS 80.06 48.60 30.00 51.22 51.85
+> DynaSteer 81.35 52.40 35.00 54.27 54.50
+> Impro.(%) 1.32 7.38 7.69 4.71 3.51
+> Qwen3-8B
+> Plain 92.49 84.00 65.00 79.88 61.90 “Wait” 92.57 84.20 65.00 78.66 61.64 ITI 92.27 84.20 67.50 79.27 62.17 ACT 92.80 84.80 70.00 79.88 62.43 DRESS 92.72 84.60 67.50 80.49 63.76
+> DynaSteer 94.39 86.20 72.50 81.71 65.61
+> Impro.(%) 1.71 1.65 3.57 1.52 2.90
+
+Comparison with Recent Literature. As shown in Ta-ble 1, we compare DynaSteer with Plain generation, “Wait” prompt, and various Representation Engineering (RepE) methods (ITI, ACT, and DRESS) across three MATH datasets and two Coding datasets. To comprehen-sively evaluate the universality of DynaSteer , we em-ploy backbone LLMs with diverse scales, ranging from 1.7B to 8B parameters. The experimental results demon-strate that DynaSteer achieves the best performance in all cases, consistently surpassing strong baselines like ACT and DRESS. Moreover, compared to the second-best per-formance, DynaSteer yields an average relative improve-ment of 4.36% ↑ on MATH tasks and 3.60% ↑ on Coding tasks across all settings, with a maximum improvement of 11.76% ↑ on the AMC23 dataset. Notably, the “Wait” prompt method performs comparably to or only marginally better than the Plain baseline in the majority of scenar-ios. This supports our earlier claim that simple prompting strategies are insufficient to effectively elicit the model’s potential capabilities, making it challenging to handle com-plex reasoning tasks without internal intervention. Further-more, we provide additional experimental results comparing 
+
+DynaSteer against TruthX (Zhang et al., 2024) and Truth-Flow (Wang et al.) baselines in Appendix F. 
+
+Ablation Studies. We conduct ablation studies on all eval-
+
+Table 2. Ablation Studies of DynaSteer using Qwen3-1.7B as backbone LLM on MATH and Coding tasks. ♣ represents that the advantage of this component is not reflected in performance. ID: In-Domain. OOD: Out-of-Domain.                                          
+
+> MATH (ID) Coding (OOD) Methods GSM8K MATH500 AMC23 HumanEval+ MBPP+
+> DynaSteer 82.87 74.80 47.50 67.68 54.50 Sentence →Token 81.27 71.80 37.50 64.63 48.94 w/o Pattern Clustering 81.73 72.80 45.00 66.46 53.17 LDA →SVD 81.88 73.20 42.50 66.46 53.17 LDA →MD 81.50 72.60 42.50 65.85 52.91 w/o Entropy Monitoring ♣81.73 75.20 45.00 67.07 55.56 w/o Temporal Decay ♣82.94 74.00 47.50 67.68 54.50
+
+uation datasets using Qwen3-1.7B. As shown in Table 2, substituting our sentence-level truth steering with token-level editing or removing the Pattern Clustering module re-sults in substantial performance degradation. Furthermore, we investigate the choice of truth purification algorithms by replacing Fisher-LDA with the conventional Mean Dif-ference (MD) method and Singular Value Decomposition (SVD). Both alternatives lead to noticeable performance drops. While SVD is numerically stable, it is an unsuper-vised approach that captures the maximum variance direc-tion, which is not necessarily the most discriminative for sep-arating truth from fallacy. In contrast, Fisher-LDA directly optimizes the between-class over within-class variance ratio using explicit Truth labels, extracting a significantly more robust and precise steering direction. These results collec-tively validate the necessity of the proposed components in enabling DynaSteer to accurately identify and extract truthful representations. We further investigate two addi-tional variants: removing Entropy Monitoring, i.e., applying truth steering to all sentences, and removing Temporal De-cay. Notably, eliminating these components does not lead to a significant drop in performance. This is because steering low-entropy sentences is largely ineffective, as the model exhibits high confidence on such sentences and they are therefore difficult to edit meaningfully. Similarly, sentences appearing at the end of the reasoning trajectory often corre-spond to deeply entrenched errors, making it difficult to fully correct the model’s behavior. Although these designs do not provide clear performance gains, we emphasize their advan-tages in inference efficiency. By editing only a subset of sentences, Entropy Monitoring and Temporal Decay reduce inference token consumption by approximately 56.22% ↓
+
+and 52.19% ↓, respectively. Detailed experimental results can be found in Appendix. F.6. 
+
+# 8. Limitation, Discussion and Conclusion 
+
+Despite the promising results obtained in our work, it is im-portant to acknowledge the limitations. Current mainstream research regarding guiding LLMs through reasoning forks predominately relies on Reinforcement Learning (RL). No-tably, Wang et al. (2025a) explicitly demonstrates that lever-aging GRPO on reasoning forking tokens can substantially 8Search for Truth from Reasoning: A Dynamic Representation Editing Framework for Steering LLM Trajectories 
+
+elevate the model’s reasoning capabilities. We compared 
+
+DynaSteer against GRPO under identical experimental settings. The results indicate that GRPO achieves a perfor-mance of 84 .6% (6.4% ↑), whereas DynaSteer achieves 
+
+82 .3% (4.0% ↑). We hypothesize that this performance gap primarily stems from the geometric nature of the Truth .
+
+DynaSteer assumes that Truth Steering can be captured by linear steering vectors . However, the actual manifold of 
+
+Truth within complex reasoning trajectories involves high-dimensional, non-linear dependencies . RL methods like GRPO update the underlying policy parameters, enabling the model to internalize these complex, non-linear mappings more effectively than an external linear intervention. Nevertheless, we claim a stark contrast on computational cost: GRPO requires approximately 160GB of VRAM and spans up to 15 hours of training time to converge. In con-trast, DynaSteer is a training-free framework that directly modulates the LLM during inference. Consequently, while RL methods offer a higher upper bound in performance, 
+
+DynaSteer makes a distinct contribution to resource-constrained communities. 
+
+Conclusion. In this work, we present a systematic explo-ration of Representation Edit into the dynamics of Truth 
+
+within LLM reasoning trajectories, moving beyond static attribute editing to dynamic process control. Our investi-gation establishes the theoretical foundations for dynamic intervention: confirming that the Truth exists but is geomet-rically entangled with reasoning patterns, and revealing that the window for effective correction is transient, constrained by the Decay Effect .To operationalize these insights, we introduce DynaSteer ,a RepE framework that leverages pattern clustering and Fisher-LDA, DynaSteer successfully disentangles the 
+
+Truth Steering from other high-level semantic concepts, ad-dressing the safety risks inherent in naive representation editing. Furthermore, our entropy-aware monitoring en-sures that intervention is precise and economical, applied only at critical reasoning forks. Empirical results across diverse benchmarks confirm that DynaSteer not only mit-igates hallucinations but also achieves superior performance compared to strong baselines. Ultimately, this work of-fers a resource-efficient alternative to reinforcement learn-ing for steering LLMs, paving the way for more reliable, self-correcting AI systems that seek Truth from the very inception of their reasoning. 
+
+# Impact Statement 
+
+This paper presents work whose goal is to advance the field of machine learning. There are many potential societal consequences of our work, none of which we feel must be specifically highlighted here. 
+
+# Acknowledgements 
+
+This work was supported by the National Natural Science Foundation of China (62402017), Prevention and Control of Emerging and Major Infectious Diseases-National Sci-ence and Technology Major Project (2025ZD01906000, 2025ZD01906004), Beijing Natural Science Foundation (L244063, L244025), and Peking University (Clinical Medicine Plus X Pilot Program-Key Technologies Project 2024YXXLHGG007; “TengYun” Clinical Research Pro-gram TY2025015) . Liantao Ma was supported by the Beijing Traditional Chinese Medicine Science and Technology Development Fund (BJZYZD-2025-13), Young Elite Scientists Spon-sorship Program of the Beijing High Innovation Plan (20250628), and Xuzhou Municipal Health Commission Project (2025DF03). 
+
+# References 
+
+Austin, J., Odena, A., Nye, M., Bosma, M., Michalewski, H., Dohan, D., Jiang, E., Cai, C., Terry, M., Le, Q., et al. Program synthesis with large language models. arXiv preprint arXiv:2108.07732 , 2021. Bai, J., Bai, S., Chu, Y., Cui, Z., Dang, K., Deng, X., Fan, Y., Ge, W., Han, Y., Huang, F., et al. Qwen technical report. arXiv preprint arXiv:2309.16609 , 2023. Bogdan, P. C., Macar, U., Nanda, N., and Conmy, A. Thought anchors: Which llm reasoning steps matter? 
+
+arXiv preprint arXiv:2506.19143 , 2025. Cai, C. J., Guo, P. J., Glass, J. R., and Miller, R. C. Wait-learning: Leveraging wait time for second language edu-cation. In Proceedings of the 33rd annual ACM confer-ence on human factors in computing systems , pp. 3701– 3710, 2015. Chen, M., Tworek, J., Jun, H., Yuan, Q., Pinto, H. P. D. O., Kaplan, J., Edwards, H., Burda, Y., Joseph, N., Brockman, G., et al. Evaluating large language models trained on code. arXiv preprint arXiv:2107.03374 , 2021. Ding, H., Fang, Y., Zhu, R., Jiang, X., Zhang, J., Xu, Y., Liao, W., Chu, X., Zhao, J., and Wang, Y. 3ds: Medical domain adaptation of llms via decomposed difficulty-based data selection. In Proceedings of the 2025 Con-ference on Empirical Methods in Natural Language Pro-cessing , pp. 19473–19495, 2025a. Ding, H., Huang, B., Fang, Y., Liao, W., Jiang, X., Li, Z., Zhao, J., and Wang, Y. Promed: Shapley information gain guided reinforcement learning for proactive medical llms. arXiv preprint arXiv:2508.13514 , 2025b. 9Search for Truth from Reasoning: A Dynamic Representation Editing Framework for Steering LLM Trajectories 
+
+Dong, P., Wang, B., Guo, S., Wang, J., Zhang, J., and Hong, Z. Towards safe concept transfer of multi-modal diffusion via causal representation editing. Advances in Neural Information Processing Systems , 37:12708–12738, 2024. Fang, Y., Guo, Y., Gao, J., Ding, H., Jiang, X., Liao, W., Xu, Y., Zhu, Y., Yang, Z., Ma, L., et al. Toward better ehr reasoning in llms: Reinforcement learning with expert at-tention guidance. In Proceedings of the AAAI Conference on Artificial Intelligence , volume 40, pp. 30690–30698, 2026a. Fang, Y., Liao, W., Guo, Y., Gao, J., Ding, H., Zhang, J., Jiang, X., Yang, Z., Zhao, J., Wang, Y., et al. Graph-walker: Graph-guided in-context learning for clinical reasoning on electronic health records. arXiv preprint arXiv:2604.06684 , 2026b. Hao, Z., Wang, H., Liu, H., Luo, J., Yu, J., Dong, H., Lin, Q., Wang, C., and Chen, J. Rethinking entropy interventions in rlvr: An entropy change perspective. arXiv preprint arXiv:2510.10150 , 2025. Hendrycks, D., Burns, C., Kadavath, S., Arora, A., Basart, S., Tang, E., Song, D., and Steinhardt, J. Measuring math-ematical problem solving with the math dataset. arXiv preprint arXiv:2103.03874 , 2021. Hewitt, J. and Liang, P. Designing and interpreting probes with control tasks. In Proceedings of the 2019 conference on empirical methods in natural language processing and the 9th international joint conference on natural language processing (emnlp-ijcnlp) , pp. 2733–2743, 2019. Huang, J. and Chang, K. C.-C. Towards reasoning in large language models: A survey. In Findings of the association for computational linguistics: ACL 2023 , pp. 1049–1065, 2023. Kwon, W., Li, Z., Zhuang, S., Sheng, Y., Zheng, L., Yu, C. H., Gonzalez, J. E., Zhang, H., and Stoica, I. Efficient memory management for large language model serving with pagedattention. In Proceedings of the ACM SIGOPS 29th Symposium on Operating Systems Principles , 2023. Li, K., Patel, O., Vi ´egas, F., Pfister, H., and Wattenberg, M. Inference-time intervention: Eliciting truthful answers from a language model. Advances in Neural Information Processing Systems , 36:41451–41530, 2023. Li, Q., Cui, L., Zhao, X., Kong, L., and Bi, W. Gsm-plus: A comprehensive benchmark for evaluating the robustness of llms as mathematical problem solvers. arXiv preprint arXiv:2402.19255 , 2024. Liao, W., Gao, X., Jia, T., Qiu, R., Zhu, Y., Lin, Y., Chu, X., Zhao, J., and Wang, Y. Learnat: Learning nl2sql with ast-guided task decomposition for large language models. 
+
+arXiv preprint arXiv:2504.02327 , 2025. Liao, W., Lou, J.-g., and Xiong, H. Hyfunc: Accelerating llm-based function calls for agentic ai through hybrid-model cascade and dynamic templating. In Proceedings of the 32nd ACM SIGKDD Conference on Knowledge Discovery and Data Mining V. 1 , pp. 819–830, 2026a. Liao, W., Wang, T., Zhu, Y., Wang, Y., Gao, J., and Ma, L. Magical: Medical lay language generation via semantic invariance and layperson-tailored adaptation. Advances in Neural Information Processing Systems , 38:118787– 118817, 2026b. Lightman, H., Kosaraju, V., Burda, Y., Edwards, H., Baker, B., Lee, T., Leike, J., Schulman, J., Sutskever, I., and Cobbe, K. Let’s verify step by step. In The Twelfth International Conference on Learning Representations ,2023. Liu, J., Xia, C. S., Wang, Y., and Zhang, L. Is your code generated by chatGPT really correct? rigorous evaluation of large language models for code generation. In Thirty-seventh Conference on Neural Information Processing Systems , 2023. URL https://openreview.net/ forum?id=1qvx610Cu7 .Ma, X., Xu, Y., Lin, Y., Wang, T., Chu, X., Gao, X., Zhao, J., and Wang, Y. Dressing up llm: Efficient stylized question-answering via style subspace editing. arXiv preprint arXiv:2501.14371 , 2025. Marks, S. and Tegmark, M. The geometry of truth: Emergent linear structure in large language model representations of true/false datasets. arXiv preprint arXiv:2310.06824 , 2023. Meng, K., Sharma, A. S., Andonian, A. J., Belinkov, Y., and Bau, D. Mass-editing memory in a transformer. In The Eleventh International Conference on Learning Repre-sentations .Meng, K., Bau, D., Andonian, A., and Belinkov, Y. Locating and editing factual associations in gpt. Advances in neural information processing systems , 35:17359–17372, 2022. Pipis, C., Garg, S., Kontonis, V., Shrivastava, V., Kr-ishnamurthy, A., and Papailiopoulos, D. Wait, wait, wait... why do reasoning models loop? arXiv preprint arXiv:2512.12895 , 2025. Plaat, A., Wong, A., Verberne, S., Broekens, J., van Stein, N., and Back, T. Reasoning with large language models, a survey. arXiv preprint arXiv:2407.11511 , 2024. Rayleigh, J. W. S. The theory of sound, Volume One , vol-ume 1. Courier Corporation, 2013. Rudman, W. and Eickhoff, C. Stable anisotropic regu-larization. In The Twelfth International Conference on 
+
+10 Search for Truth from Reasoning: A Dynamic Representation Editing Framework for Steering LLM Trajectories 
+
+Learning Representations, ICLR 2024, Vienna, Austria, May 7-11, 2024 . OpenReview.net, 2024. URL https: //openreview.net/forum?id=dbQH9AOVd5 .Shao, Z., Wang, P., Zhu, Q., Xu, R., Song, J., Bi, X., Zhang, H., Zhang, M., Li, Y., Wu, Y., et al. Deepseekmath: Push-ing the limits of mathematical reasoning in open language models. arXiv preprint arXiv:2402.03300 , 2024. Shen, C., Sun, Z., Shi, T., Zhang, X., and Xu, J. Balanc-ing stylization and truth via disentangled representation steering. arXiv preprint arXiv:2508.04530 , 2025. Touvron, H., Lavril, T., Izacard, G., Martinet, X., Lachaux, M.-A., Lacroix, T., Rozi `ere, B., Goyal, N., Hambro, E., Azhar, F., et al. Llama: Open and efficient foundation lan-guage models. arXiv preprint arXiv:2302.13971 , 2023. Wang, H., Cao, B., Cao, Y., and Chen, J. Truthflow: Truth-ful llm generation via representation flow correction. In Forty-second International Conference on Machine Learning .Wang, S., Yu, L., Gao, C., Zheng, C., Liu, S., Lu, R., Dang, K., Chen, X., Yang, J., Zhang, Z., et al. Beyond the 80/20 rule: High-entropy minority tokens drive effective reinforcement learning for llm reasoning. arXiv preprint arXiv:2506.01939 , 2025a. Wang, T., Chen, J., Liao, W., Han, X., and Bai, J. Teaching llms to plan, not just solve: Plan learning boosts llms generalization in reasoning tasks. In Findings of the As-sociation for Computational Linguistics: EMNLP 2025 ,pp. 8531–8545, 2025b. Wang, T., Jiao, X., Zhu, Y., Chen, Z., He, Y., Chu, X., Gao, J., Wang, Y., and Ma, L. Adaptive activation steering: A tuning-free llm truthfulness improvement method for diverse hallucinations categories. In Proceedings of the ACM on Web Conference 2025 , pp. 2562–2578, 2025c. Wei, J., Wang, X., Schuurmans, D., Bosma, M., Xia, F., Chi, E., Le, Q. V., Zhou, D., et al. Chain-of-thought prompting elicits reasoning in large language models. Advances in neural information processing systems , 35:24824–24837, 2022. Wolf, T. Huggingface’s transformers: State-of-the-art natural language processing. arXiv preprint arXiv:1910.03771 , 2019. Xiao, Y., Liu, A., Liang, S., Ying, Z., Liu, X., and Tao, D. Detoxifying large language models via autoregres-sive reward guided representation editing. arXiv preprint arXiv:2510.01243 , 2025. Yang, S., Wu, J., Chen, X., Xiao, Y., Yang, X., Wong, D. F., and Wang, D. Understanding aha moments: from exter-nal observations to internal mechanisms. arXiv preprint arXiv:2504.02956 , 2025. Yao, S., Yu, D., Zhao, J., Shafran, I., Griffiths, T., Cao, Y., and Narasimhan, K. Tree of thoughts: Deliberate problem solving with large language models. Advances in neural information processing systems , 36:11809–11822, 2023. Yin, M., Wu, C., Wang, Y., Wang, H., Guo, W., Wang, Y., Liu, Y., Tang, R., Lian, D., and Chen, E. Entropy law: The story behind data compression and llm performance. 
+
+arXiv preprint arXiv:2407.06645 , 2024. Zhang, J., Fang, Y., Ding, H., Liao, W., Ye, M., Chu, X., Zhao, J., and Wang, Y. Adept: Continual pretraining via adaptive expansion and dynamic decoupled tuning. arXiv preprint arXiv:2510.10071 , 2025. Zhang, S., Yu, T., and Feng, Y. Truthx: Alleviating hal-lucinations by editing large language models in truthful space. In Proceedings of the 62nd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) , pp. 8908–8949, 2024. Zhong, W., Feng, X., Zhao, L., Li, Q., Huang, L., Gu, Y., Ma, W., Xu, Y., and Qin, B. Investigating and mitigating the multimodal hallucination snowballing in large vision-language models. In Proceedings of the 62nd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) , pp. 11991–12011, 2024. Zhou, K., Zhao, X., Srinivasa, J., Liu, G., Feng, A., Song, D., and Wang, X. E. Safekey: Amplifying aha-moment insights for safety reasoning. In Proceedings of the 2025 Conference on Empirical Methods in Natural Language Processing , pp. 25407–25423, 2025. Zou, A., Phan, L., Chen, S., Campbell, J., Guo, P., Ren, R., Pan, A., Yin, X., Mazeika, M., Dombrowski, A.-K., et al. Representation engineering: A top-down approach to ai transparency. arXiv preprint arXiv:2310.01405 , 2023. 11 Search for Truth from Reasoning: A Dynamic Representation Editing Framework for Steering LLM Trajectories 
+
+# A. Related Work 
+
+Representation Editing for Truth Representation Editing (RepE) has emerged as a powerful paradigm for interpretability and control, aiming to locate and intervene on high-level concepts encoded within the linear activation space of LLMs (Zou et al., 2023; Liao et al., 2026a; Fang et al., 2026b). In the context of Truth , Li et al. (2023) proposed Inference-Time Intervention (ITI), which identifies attention heads correlated with truthfulness and shifts their activations to suppress hallucinations. Similarly, Marks & Tegmark (2023) investigated the geometry of truth, revealing that truthful statements often align along specific linear directions in the representation space regardless of the topic. However, a critical limitation of these approaches is their reliance on static editing derived from datasets containing explicit answers or simple true/false statements. There is a notable lack of exploration into dynamic representation editing, specifically regarding how to calculate truth directions within unfolding reasoning trajectories where the final answer is latent and not yet observable. 
+
+Reinforcing LLM Reasoning Enhancing the reasoning capabilities of Large Language Models has predominantly relied on Reinforcement Learning (RL) paradigms. Recent advancements have shifted focus from outcome-based supervision to process-oriented approaches, where the model is guided at critical “reasoning forks”. For instance, Lightman et al. (2023) demonstrated that Process Reward Models (PRMs) can significantly improve mathematical reasoning by verifying intermediate steps. Furthermore, Shao et al. (2024) introduced Group Relative Policy Optimization (GRPO), which leverages group-level comparisons at reasoning forks to efficiently steer the model toward correct trajectories, yielding substantial performance gains. Wang et al. (2025a) further demonstrates that leveraging GRPO on reasoning forking tokens can substantially elevate the model’s reasoning capabilities. Despite their effectiveness, these RL-based methods suffer from prohibitive computational costs, often requiring massive GPU resources (e.g., hundreds of gigabytes of VRAM) and extensive training time, rendering them largely inaccessible to resource-constrained research communities. 
+
+# B. Derivation of the Fisher-LDA Steering Vector 
+
+In this section, we provide the detailed mathematical derivation for the purified steering vector w∗ used in Section 5. 
+
+Rayleigh Quotient Objective Let D+ = {h+ 
+
+> i
+
+}N + 
+
+> i=1
+
+and D− = {h− 
+
+> j
+
+}N − 
+
+> j=1
+
+denote the sets of hidden state activations (defined in Section 2) corresponding to Truth and Fallacy trajectories, respectively. Let N = N + + N − be the total sample size. Let δ = μ+ − μ− be the mean difference vector, where μ+ and μ− are the class centroids. Consistent with Eq. 1 and the definition in Section 5, the within-class covariance matrix Σw is defined as: 
+
+Σw = X
+
+> c∈{ +,−}
+
+1
+
+|D c|
+
+X
+
+> h∈D c
+
+(h − μc)( h − μc)⊤. (13) To find the optimal direction w, we maximize the Rayleigh Quotient J (w), which represents the ratio of the inter-class signal to the intra-class noise :
+
+J (w) = (w⊤δ)2
+
+w⊤Σww . (14) By minimizing the denominator, we penalize directions aligned with high-variance outlier dimensions, thereby aligning w
+
+with the most discriminative Truth features. 
+
+Analytical Solution and Regularization To maximize J (w), we set its gradient with respect to w to zero. Using the quotient rule: 
+
+∇wJ (w) = 2( w⊤δ)δ(w⊤Σww) − (w⊤δ)2(2 Σww)(w⊤Σww)2 = 0. (15) Assuming w⊤δ̸ = 0 , we can divide by 2( w⊤δ) and rearrange the terms to obtain the generalized eigenvalue problem: 
+
+ w⊤Σwww⊤δ
+
+
+
+δ = Σww. (16) Since the term in the parenthesis is a scalar λ, this implies Σww ∝ δ. Assuming Σw is invertible, the analytical closed-form solution is: 
+
+w∗ ∝ Σ−1 
+
+> w
+
+δ = Σ−1 
+
+> w
+
+(μ+ − μ−). (17) 12 Search for Truth from Reasoning: A Dynamic Representation Editing Framework for Steering LLM Trajectories 
+
+In practical LLM scenarios, Σw may become singular when the number of samples N < d . Even when N > d , the matrix often becomes ill-conditioned due to high multi-collinearity. To ensure numerical stability, we employ shrinkage estimation to obtain a positive-definite estimate: ˆΣw = (1 − ζ)Σw + ζI, (18) where ζ ∈ [0 , 1] is the shrinkage coefficient (determined by the Ledoit-Wolf estimator). The final discriminant axis used in 
+
+DynaSteer is w∗ = ˆΣ−1 
+
+> w
+
+δ.
+
+# C. Notations and Algorithm 
+
+To facilitate understanding of the proposed framework, we first summarize the mathematical notations used throughout this paper in Table 3. Subsequently, we present the procedural details of the DynaSteer algorithm.  
+
+> Table 3. Summary of Notations.
+
+Symbol Description 
+
+M The autoregressive Large Language Model 
+
+L, N, d Number of layers, heads, and hidden dimension 
+
+h(l,n ) 
+
+> t
+
+Hidden state at layer l, head n, token t
+
+T Reasoning trajectory composed of sentences (S1, . . . , S T )
+
+y ∈ { +1 , −1} Binary label for Truth ( +1 ) and Fallacy ( −1)
+
+D Contrastive dataset of hidden states 
+
+Htop Set of identified truth-relevant attention heads 
+
+H(S) Shannon entropy of the token distribution for sentence Sγ Entropy threshold for detecting reasoning forks 
+
+M Number of latent reasoning pattern clusters 
+
+Cm The m-th reasoning cluster 
+
+Σw,m Within-class covariance matrix for cluster m
+
+vm Purified steering vector for cluster m (Fisher-LDA) 
+
+ηm(h) Dynamic intervention strength for cluster mβ(t) Temporal gating coefficient for the Decay Effect 
+
+˜h The edited hidden state after intervention 
+
+C.1. Algorithm Description 
+
+The DynaSteer framework operates in two distinct phases: an offline preparation phase for steering vector derivation and an online inference phase for dynamic intervention. The complete procedure is outlined in Algorithm 1. In the Offline Phase , we first construct a consistency-based dataset by filtering reasoning trajectories that lead to consensus answers. We then identify the truth-relevant heads ( Htop ) via linear probing. To handle reasoning heterogeneity, difference vectors are clustered into M patterns. For each cluster, we compute a purified steering vector vm using Fisher-LDA to maximize the separation between Truth and Fallacy while minimizing within-class variance. In the Online Phase , the model generates reasoning chains sentence by sentence. We monitor the entropy H(Scand ) of each candidate sentence. If the entropy exceeds the threshold γ (indicating a reasoning fork) and the step is within the effective temporal window ( β(t) = 1 ), we trigger the intervention. The current hidden state is projected onto the pre-computed clusters to determine adaptive strengths ηm, and the aggregated steering is applied. Crucially, a rollback mechanism is employed: the unsteered candidate sentence is discarded, and the model regenerates the step using the edited representation 
+
+˜h.
+
+# D. Prompts Used in This Work 
+
+Prompt used for solving Math problems In our assessment of DynaSteer performance, we employ the following prompts to address relevant Math tasks, including GSM8K (Li et al., 2024), MATH500 (Hendrycks et al., 2021) and AMC23 (Hendrycks et al., 2021) datasets. 13 Search for Truth from Reasoning: A Dynamic Representation Editing Framework for Steering LLM Trajectories 
+
+Algorithm 1 DynaSteer : Dynamic Reasoning Editing 
+
+Require: Model M, Prompt x, Thresholds γ, τ decay 
+
+Require: Pre-computed Clusters {C m}Mm=1 , Steering Vectors {vm}Mm=1 , Heads Htop 
+
+1: Initialize: Trajectory T ← ∅ , Step t ← 0
+
+2: while not end of generation do 
+
+3: t ← t + 1 
+
+4: // Generate candidate sentence without intervention 
+
+5: Scand ← M .generate sentence (x, T )
+
+6: Calculate entropy H(Scand )
+
+7: // Check Spatial (Entropy) and Temporal (Decay) Locus 
+
+8: if H(Scand ) > γ and t ≤ τdecay then 
+
+9: h ← Get Activations (M, x, T )|Htop 
+
+10: ∆total ← 0
+
+11: for m = 1 to M do 
+
+12: Calculate strength ηm(h) using Eq. 9 
+
+13: ∆total ← ∆total + ηm(h) · vm
+
+14: end for 
+
+15: // Apply Aggregated Steering and Rollback 
+
+16: ˜h ← h + ∆ total 
+
+17: M.set activations (˜h)
+
+18: Ssteered ← M .generate sentence (x, T )
+
+19: T ← T ∪ { Ssteered }
+
+20: else 
+
+21: // Keep original sentence 
+
+22: T ← T ∪ { Scand }
+
+23: end if 
+
+24: end while Return T
+
+Prompt 1 
+
+INSTRUCTION = r””” Solve the following math problem step by step. The last line of your response should be of the form Answer: boxedAnswer where Answer is the answer to the problem. problem Remember to put your answer on its own line after ”Answer:”. ””” 
+
+Prompt used for solving Coding problems . In our assessment of DynaSteer performance, we employ the following prompts to address relevant Coding task on HumanEval+ (Chen et al., 2021) and MBPP+ (Austin et al., 2021) datasets. 
+
+Prompt 2 
+
+MATH WAIT = r””” Wait ””” CODE WAIT = r””” Wait, let me rethink about it and give the final Python script. “‘python ””” 14 Search for Truth from Reasoning: A Dynamic Representation Editing Framework for Steering LLM Trajectories 
+
+# E. Experimental Setups 
+
+Network Architecture, Datasets and Metrics Our experiments were based on various backbone LLMs, including Qwen3 series (Bai et al., 2023) of various sizes (Qwen3-1.7B and Qwen3-8B) and LLaMA3.2-3B-Instruct (Touvron et al., 2023). We collected Truth and Fallacy representation using GSM8K (Li et al., 2024) and MATH (Hendrycks et al., 2021) training set to calculate Truth Steering . We introduced two types of tasks, Math (in-distribution) and Coding (out-of-distribution), to assess the effectiveness of DynaSteer . For the Math tasks, we considered the following datasets: GSM8K test part, MATH500 (Hendrycks et al., 2021) and AMC23 (Hendrycks et al., 2021). For the Coding tasks, we considered the HumanEval+ (Chen et al., 2021) and MBPP+ (Austin et al., 2021) datasets. We evaluated these datasets with pass@1 accuracy. 
+
+Baselines We adopt the following state-of-the-art approaches as our compared baselines. • Plain : Plain does not use any techniques, LLM directly reason and answer questions. • “Wait” : “Wait” monitors entropy in real-time and manually injects Wait prompts at high entropy locations to guide LLM to perform more thinking. • RepE literature : We adopt several recently proposed RepE literature as our baseline models, including ITI (Li et al., 2023), ACT (Wang et al., 2025c) and DRESS (Ma et al., 2025). The details of the baseline RepE algorithm we use is as follows: 1. ITI (Li et al., 2023) (NeurIPS’23): Inference-Time Intervention (ITI) is a lightweight method that improves the truthfulness of large language models by adjusting internal activations along learned directions at inference time, using only a small subset of attention heads. ITI also exposes a controllable trade-off between truthfulness and helpfulness by tuning the intervention strength, suggesting that LLMs encode latent representations of truth internally. 2. ACT (Wang et al., 2025c) (WWW’25): Adaptive Activation Steering (ACT) is a tuning-free inference-time method that enhances LLM truthfulness by adaptively steering model activations toward linearly encoded Truth Steering . By leveraging multiple truthfulness-related steering vectors and dynamically adjusting intervention strength, ACT effectively mitigates diverse hallucination types. As a plug-and-play add-on, it achieves substantial truthfulness gains across a wide range of models and scales robustly to large LLMs. 3. DRESS (Ma et al., 2025) (ICLR’25): DRESS is a lightweight, train-free representation editing method for generating stylized LLM responses while preserving the original semantics. It disentangles a style-relevant subspace in the model’s representations and applies adaptively scaled steering vectors to balance stylistic fidelity and semantic integrity. 
+
+Implement Details We implemented our framework using PyTorch and the Hugging Face transformers library (Wolf, 2019). To enable high-throughput inference, we integrated vLLM (Kwon et al., 2023) as the generation backend. For mathe-matical reasoning benchmarks, we utilized vLLM for sampling and employed the math-verify library 1 to rigorously parse and validate answer correctness. For code generation tasks, we strictly followed the evaluation protocols and settings established by EvalPlus (Liu et al., 2023). All experiments were conducted on a single NVIDIA A800 (80GB) GPU. 
+
+Construction of Contrastive Pairs. To reliably estimate the Truth Steering vector, we meticulously construct positive and negative contrastive samples from the training set. Specifically, we prompt the LLM to generate reasoning trajectories. At each generated sentence boundary, we compute the lookahead entropy. When the entropy exceeds a pre-defined threshold— indicating a critical reasoning fork—we pause the primary generation and conduct N independent stochastic rollouts from that exact state (in our experiments, N = 10 ). We then evaluate the final answers of all N rollouts. If all rollouts yield the correct answer, the hidden representations of the current reasoning fork are assigned the label Truth (+1 ). Conversely, if all rollouts yield an incorrect answer, they are labeled as Fallacy (−1). To ensure geometric purity of the representations and to eliminate noise, any ambiguous cases—where the rollouts produce a mix of correct and incorrect answers—are strictly discarded. This highly rigorous filtering strategy guarantees that the resulting contrastive pair dataset robustly captures the intrinsic directional difference between truth and fallacy. 
+
+> 1https://github.com/huggingface/math-verify
+
+15 Search for Truth from Reasoning: A Dynamic Representation Editing Framework for Steering LLM Trajectories 
+
+# F. Additional Experiment 
+
+F.1. t-SNE Visualization of Pattern Clustering 
+
+To empirically validate the hypothesis of Reasoning Heterogeneity , we visualize the geometric distribution of the extracted 
+
+Truth Steering (i.e., the difference vectors h+ − h−) using t-SNE dimensionality reduction. As illustrated in Fig 7, the steering vectors do not coalesce into a single, monolithic distribution; instead, they spontaneously segregate into distinct, well-separated clusters. This visual evidence strongly suggests that the Truth signal is not encoded as a universal global direction. Rather, it is realized through diverse geometric orientations that are specific to the underlying reasoning patterns, thereby corroborating the necessity of our pattern clustering approach to capture these local directional nuances.  
+
+> Figure 7. t-SNE Visualization of Pattern Clustering.
+
+F.2. Comparison with Causal Intervention Baselines 
+
+To further validate the effectiveness of our probing-based truth localization strategy, we compare DynaSteer against two prominent causal intervention methods, ROME (Meng et al., 2022) and MEMIT (Meng et al.). These methods explicitly target specific attention heads based on causal tracing to edit associations within the model. The experiment is conducted using the Qwen3-8B model as the backbone.    
+
+> Table 4. Performance comparison between DynaSteer and causal intervention baselines using Qwen3-8B. ID: In-Domain. OOD: Out-of-Domain.
+
+MATH (ID) Coding (OOD) Methods GSM8K MATH500 AMC23 HumanEval+ MBPP+ 
+
+ROME 77.94 82.80 62.50 77.44 55.82 MEMIT 76.95 80.40 57.50 73.78 53.70 
+
+DynaSteer 94.39 86.20 72.50 81.71 65.61 
+
+As shown in Table 4, DynaSteer substantially outperforms both ROME and MEMIT across all benchmarks. We attribute this performance gap to a fundamental architectural mismatch: causal tracing methods primarily intervene on discrete, individual heads, operating under the assumption that specific concepts or factual associations are highly localized. However, according to the Linear Representation Hypothesis, abstract cognitive signals such as Truth are likely encoded as distributed 16 Search for Truth from Reasoning: A Dynamic Representation Editing Framework for Steering LLM Trajectories 
+
+directions across the residual stream. While an exhaustive combinatorial search for multi-head causal interactions entails exponential complexity and is thus infeasible, our probing-based localization naturally accommodates such distributed and entangled representations, yielding more precise and effective steering. 
+
+F.3. Comparison with TruthX and TruthFlow Baselines 
+
+We present additional comparisons with two recent representation editing methods, TruthFlow (Wang et al.) and TruthX (Zhang et al., 2024), focusing on the Qwen3-1.7B backbone.    
+
+> Table 5. Performance comparison of DynaSteer against TruthX and TruthFlow on Qwen3-1.7B.
+
+MATH (ID) Coding (OOD) Methods GSM8K MATH500 AMC23 HumanEval+ MBPP+ 
+
+TruthX 77.71 68.00 35.00 64.63 51.06 TruthFlow 79.23 69.00 35.00 64.02 52.12 
+
+DynaSteer 82.87 74.80 47.50 67.68 54.50 
+
+Table 5 illustrates that DynaSteer achieves considerable performance gains over both TruthFlow and TruthX. A key architectural distinction lies in how the steering is dynamically adapted. TruthFlow computes a static steering direction once at the beginning of the generation based on the user query. Conversely, DynaSteer dynamically monitors and adapts the steering vectors in response to the continuously evolving reasoning state, enabling real-time corrections at critical high-entropy forks. On the other hand, TruthX constructs a global mean-difference vector within a pre-trained truthful subspace, implicitly assuming a uniform truth direction. This assumption is precisely what DynaSteer challenges and resolves via pattern clustering, demonstrating that capturing reasoning-specific geometric orientations is vital for optimizing representation editing during complex derivations. 
+
+F.4. Discussion on Attention Probes 
+
+In Section 3, we employed minimal-capacity linear probes to ascertain the intrinsic linear separability of Truth . Here, we explore the impact of replacing linear probes with more expressive attention-based probes for temporal aggregation. While attention probes elevate the detection accuracy of Truth from approximately 78% to 84% , we observe that the downstream task performance remains comparable, as shown in Table 6.  
+
+> Table 6. Ablation study on the choice of probe architecture using Qwen3-1.7B.
+
+MATH (ID) Coding (OOD) Probe Type GSM8K MATH500 AMC23 HumanEval+ MBPP+ 
+
+Attention Probe 82.18 75.00 47.50 68.29 53.70 Linear Probe 82.87 74.80 47.50 67.68 54.50 
+
+This parity in end-to-end performance is expected within our framework. Although attention probes enhance the precision of identifying truth-relevant features during the initial localization phase, the actual steering vectors injected during inference are independently derived by the subsequent Fisher-LDA optimization. Since the efficacy of Fisher-LDA relies predominantly on the geometric distribution of the aggregated hidden representations rather than the capacity of the upstream discriminator, the generative accuracy is not fundamentally constrained by the choice between linear and attention probes. 
+
+F.5. Generalization on Multi-hop QA 
+
+To further attest to the generalization capabilities of DynaSteer beyond mathematical reasoning and code generation, we extended our evaluation to multi-hop Question Answering (QA) tasks using HotpotQA and 2WikiQA. Multi-hop QA inherently demands dynamic adjustments of reasoning trajectories based on intermediate retrieved knowledge or partial deductions. We utilize Qwen3-8B as the underlying language model for this experiment. The results in Table 7 illustrate that DynaSteer consistently surpasses all benchmark RepE methodologies on both datasets. 17 Search for Truth from Reasoning: A Dynamic Representation Editing Framework for Steering LLM Trajectories  
+
+> Table 7. Generalization performance on Multi-hop QA benchmarks using Qwen3-8B.
+
+Methods HotpotQA 2WikiQA 
+
+Base Model 37.40 31.60 ITI 47.30 43.70 ACT 54.60 41.30 DRESS 50.20 48.50 
+
+DynaSteer 55.40 52.30 
+
+This confirms that the pattern-disentangled, dynamically adaptive steering mechanism orchestrated by DynaSteer pos-sesses broad applicability. It effectively captures universally applicable cognitive primitives—such as logical bridging, context integration, and fact-checking—that transcend specific task domains, corroborating its robustness and generalizabil-ity. 
+
+F.6. Ablation Study on Additional Token Cost 
+
+To evaluate the computational overhead of DynaSteer , we measure the Additional Token Cost incurred during inference. This metric quantifies the extra tokens generated due to the rollback-and-regenerate mechanism triggered by interventions. We compare the full framework against two ablated variants on both In-Domain (MATH) and Out-of-Domain (Coding) tasks using Qwen3-1.7B. The results are presented in Table 8. 
+
+Impact of Entropy Monitoring (Spatial Efficiency) The removal of entropy-based filtering ( w/o Entropy Monitoring )results in a dramatic increase in token cost across all benchmarks. For instance, on the OOD HumanEval+ dataset, the cost surges from 16 .88 to 175 .67 (∼ 10 × increase). Similarly, on MATH500 , the cost more than doubles. This validates our hypothesis regarding the Spatial Locus (Sec. 4): the vast majority of generation steps are deterministic syntactic transitions. Without entropy monitoring, the model attempts to intervene at non-critical points, leading to unnecessary rollbacks that do not contribute to reasoning correction but significantly inflate computational cost. 
+
+Impact of Temporal Decay (Temporal Efficiency) The exclusion of the temporal gating mechanism ( w/o Temporal Decay ) leads to a substantial efficiency degradation, particularly in complex reasoning tasks. On the challenging AMC23 
+
+benchmark, the token cost spikes from 192 .48 to 474 .63 . This empirical finding reinforces the Decay Effect theory (Sec. 4). In long-horizon reasoning, errors become “entrenched” in the later stages. Without the temporal decay constraint, the model futilely attempts to intervene on deep-rooted fallacies. These late-stage interventions rarely succeed in recovering the correct trajectory, resulting in repeated failures and wasted generation cycles. Notably, on Coding tasks, the cost remains identical to the baseline, suggesting that for these specific OOD tasks, effective interventions naturally occur early in the generation, making the late-stage decay gate redundant but harmless.    
+
+> Table 8. Ablation Studies on Additional Token Cost due to representation using Qwen3-1.7B as backbone LLM on MATH and Coding tasks. ID: In-Domain. OOD: Out-of-Domain.
+
+MATH (ID) Coding (OOD) Methods GSM8K MATH500 AMC23 HumanEval+ MBPP+ 
+
+DynaSteer 28.57 107.18 192.48 16.88 13.04 w/o Entropy Monitoring 39.33 232.67 238.65 175.67 131.58 w/o Temporal Decay 47.35 251.93 474.63 16.88 13.04 
+
+F.7. Hyper-Parameter Analysis 
+
+We further investigate several important hyper-parameters introduced in DynaSteer to facilitate future applications, including cluster number M in pattern clustering, Intervention intensity coefficient α in Equ. 9, and the number of selected heads Htop for intervention, n head . The experimental results are shown in Fig. 8. 18 Search for Truth from Reasoning: A Dynamic Representation Editing Framework for Steering LLM Trajectories            
+
+> (a) Cluster number Min pattern cluster-ing.
+> (b) Intervention intensity coefficient α.(c) The number of selected heads Htop for intervention, n head .
+> Figure 8. Sensitivity Analysis of Hyper-Parameter.
+
+Cluster number in pattern clustering, M We hypothesize that the geometry of truth is entangled with latent reasoning patterns. By varying the cluster number M ∈ { 1, 3, 5, 8}, we observe the effect of manifold disentanglement. • Global vs. Local Geometry: The baseline M = 1 (global mean-difference) yields an accuracy of 72.8%. Increasing 
+
+M to 5 results in a peak performance of 74.8%, validating our core hypothesis that constructing local linear probes for distinct reasoning patterns captures the truth signal more effectively than a single global direction. • Over-Clustering: However, further increasing M to 8 leads to a performance drop (72.4%). We attribute this to cluster sparsity : as the number of clusters increases, the number of samples per cluster decreases, leading to unstable estimation of the covariance matrices for Fisher-LDA. 
+
+Intervention intensity coefficient, α The coefficient α in Eq. 9 controls the magnitude of the steering vector injection. • Steering Efficacy: As α increases from 0.3 to 3.0, we observe a steady improvement in recovery rates (69.8% → 74.8%), indicating that a sufficient magnitude is required to push the model out of the “entrenched” local minima of incorrect reasoning. • Safety Saturation: Notably, performance plateaus at α = 5 .0 (74.8%) rather than degrading. This contrasts with standard mean-difference steering, where excessive strength often destroys generation coherence. This stability highlights the effectiveness of our Fisher-LDA purification : by projecting onto a subspace that minimizes within-class variance, 
+
+DynaSteer ensures that even strong interventions remain orthogonal to essential semantic features, preserving the integrity of the generation. 
+
+The number of selected heads for intervention, n head We analyze the localization of the truth signal by varying the number of manipulated heads. • Signal Localization: The performance exhibits an inverted U-shaped trend, peaking at 32 heads. Using too few heads (16) fails to capture the distributed nature of the truth representation across layers. • Noise Introduction: Conversely, expanding the selection to 64 or 128 heads causes a decline in accuracy (72.6% and 73.2%). This suggests that the truth signal is sparse; including irrelevant heads introduces noise into the aggregated steering vector, diluting the corrective effect. Thus, precise head location is crucial for optimal performance. 
+
+# G. Case Studies 
+
+To intuitively understand how DynaSteer corrects reasoning trajectories, we present a series of qualitative examples from the MATH500 dataset across various mathematical domains. These include both single-step interventions and complex multi-steering scenarios. 19 Search for Truth from Reasoning: A Dynamic Representation Editing Framework for Steering LLM Trajectories 
+
+G.1. Single-Steering Case Studies 
+
+G.1.1. T RIGONOMETRIC IDENTITY RETRIEVAL 
+
+Analysis of the Original Trajectory (Fallacy) The model’s initial inclination (highlighted in red ) is to employ a 
+
+Numerical Approximation strategy. It attempts to convert the exact symbolic angles ( 53 ◦, 81 ◦) into floating-point approximations ( tan 53 ◦ ≈ 1.3270 ). While mathematically valid in principle, this approach is suboptimal for competitive mathematics. Our post-hoc verification confirmed that trajectories following this “calculation-heavy” pattern consistently failed to reach the exact integer solution. 
+
+Effect of Intervention (Truth) Upon detecting high entropy at the reasoning step, DynaSteer intervenes. The steered trajectory (highlighted in green ) activates the model’s latent knowledge of high-level trigonometric identities. Specifically, it recalls the conditional identity: If A + B + C = 180 ◦, then tan A tan B tan C = tan A + tan B + tan C. 
+
+Recognizing this pattern allows the model to bypass calculation entirely and solve the problem via simple linear algebra (53 + 81 + x = 180 ), instantaneously deriving the correct answer. 
+
+Problem Input & Reference 
+
+Problem: For some value of x, 0 < x < 180 ,
+
+tan 53 ◦ tan 81 ◦ tan x◦ = tan 53 ◦ + tan 81 ◦ + tan x◦.
+
+Find x. 
+
+Reference Answer: 46 
+
+Qwen3-1.7B Reasoning Trajectory 
+
+Context Generation: 
+
+We are given the equation: tan 53 ◦ tan 81 ◦ tan x◦ = tan 53 ◦ + tan 81 ◦ + tan x◦
+
+We are to find x such that 0 < x < 180 .
+
+Intervention Point (Reasoning Fork): 
+
+Original Trajectory (Numerical Approximation) 
+
+Step 1: Use known values 
+
+We use the known values of the tangents: • tan 53 ◦ ≈ 1.3270 
+
+• tan 81 ◦ ≈ 6.3138 
+
+We see that both values are positive... [Leads to approx. error x ≈ 45 .8]
+
+# ↓ DynaSteer Steering 
+
+20 Search for Truth from Reasoning: A Dynamic Representation Editing Framework for Steering LLM Trajectories 
+
+Steered Trajectory (Symbolic Identity) 
+
+Step 1: Use known trigonometric identities 
+
+We recognize a useful identity: 
+
+tan A tan B tan C = tan A + tan B + tan C if A + B + C = 180 ◦
+
+This is a well-known identity in trigonometry. 
+
+Continued Generation: Step 2: Match the identity 
+
+In our equation: tan 53 ◦ tan 81 ◦ tan x◦ = tan 53 ◦ + tan 81 ◦ + tan x◦. This matches the identity above if: 
+
+53 ◦ + 81 ◦ + x◦ = 180 ◦
+
+Solve for x:
+
+x = 180 ◦ − 53 ◦ − 81 ◦ = 46 ◦
+
+Final Answer: 46     
+
+> Figure 9. Case Study on Trigonometry. The figure contrasts the model’s original tendency to perform approximate calculation (Red) with the steered trajectory (Green). DynaSteer successfully guides the model to retrieve the relevant symbolic identity, avoiding calculation errors and directly deriving the integer solution.
+
+G.1.2. N UMBER BASE CONVERSION 
+
+Analysis of the Original Trajectory (Fallacy) When converting from binary to octal, the model groups digits into sets of three. However, it fails to pad the binary string to a multiple of three digits beforehand. By grouping directly without padding, the grouping boundaries become misaligned relative to the most significant bits, resulting in an incorrect translation. 
+
+Effect of Intervention (Truth) DynaSteer intervenes at the critical step of grouping, directing the model to explicitly pad the binary string with leading zeros. This ensures proper 3-bit chunking and yields the correct octal representation. 
+
+Problem Input & Reference 
+
+Problem: The binary number 10101001110 2 is equal to what number in base eight? 
+
+Reference Answer: 2516 8
+
+Qwen3-8B Reasoning Trajectory 
+
+Context Generation: 
+
+To convert from binary to octal, we group the binary digits into sets of 3, starting from the right. The binary number is 10101001110 .
+
+Intervention Point (Reasoning Fork): 
+
+Original Trajectory (Incorrect Grouping) 
+
+Step 1: Group from the right 
+
+We partition the digits as: 101 | 010 | 011 | 110 .Converting each group: 5, 2, 3, 6.
+
+[Leads to incorrect answer 5236 8 due to misaligned grouping boundaries] 
+
+21 Search for Truth from Reasoning: A Dynamic Representation Editing Framework for Steering LLM Trajectories 
+
+# ↓ DynaSteer Steering 
+
+Steered Trajectory (Correct Grouping with Padding) 
+
+Step 1: Pad and group correctly 
+
+The number has 11 digits, which is not a multiple of 3. Pad with one leading zero: 010 | 101 | 001 | 110 .Converting each group: 010 2 = 2 , 101 2 = 5 , 001 2 = 1 , 110 2 = 6 .
+
+Continued Generation: Step 2: Assemble the result 
+
+Concatenating the octal digits in order gives: 
+
+10101001110 2 = 2516 8
+
+Final Answer: 2516 8    
+
+> Figure 10. Case Study on Number Base Conversion. The model originally misaligns the 3-bit grouping boundaries (Red), producing an incorrect octal representation. DynaSteer steers the model to first pad the binary string to a multiple of 3 digits before grouping, yielding the correct conversion.
+
+G.1.3. L OGARITHMIC EQUATION DOMAIN ANALYSIS 
+
+Analysis of the Original Trajectory (Fallacy) Faced with finding conditions for “exactly one solution”, the model falls back on a common heuristic: setting the discriminant of the resulting quadratic equation to zero. This simplistic approach completely ignores the domain restrictions inherent to logarithmic functions, which can invalidate extraneous roots. 
+
+Effect of Intervention (Truth) DynaSteer steers the model away from the discriminant-only shortcut and prompts a systematic, domain-aware case analysis. By carefully evaluating the roots against the domain constraints, the model successfully identifies the vast majority of valid cases where a positive discriminant yields exactly one valid root. 
+
+Problem Input & Reference 
+
+Problem: Find the number of integer values of k in the closed interval [−500 , 500] for which the equation 
+
+log( kx ) = 2 log( x + 2) has exactly one real solution. 
+
+Reference Answer: 501 
+
+Qwen3-8B Reasoning Trajectory 
+
+Context Generation: 
+
+We rewrite log( kx ) = log(( x + 2) 2), so kx = ( x + 2) 2, yielding x2 + (4 − k)x + 4 = 0 .
+
+Intervention Point (Reasoning Fork): 
+
+Original Trajectory (Discriminant-Only Analysis) 
+
+Step 1: Set discriminant to zero 
+
+For exactly one solution, require ∆ = (4 − k)2 − 16 = 0 , giving k = 0 or k = 8 . After checking validity, only k = 8 works. 
+
+[Concludes only 1 value of k, missing the vast majority of valid cases] 
+
+# ↓ DynaSteer Steering 
+
+22 Search for Truth from Reasoning: A Dynamic Representation Editing Framework for Steering LLM Trajectories 
+
+Steered Trajectory (Domain-Aware Case Analysis) 
+
+Step 1: Recognize domain constraints 
+
+The equation requires kx > 0 and x > −2. Even when the quadratic has two real roots, a domain restriction may eliminate exactly one, leaving exactly one valid solution. 
+
+Continued Generation: Step 2: Systematic case analysis Case A (k > 0): need x > 0 and x > −2, so x > 0. The quadratic x2 + (4 − k)x + 4 = 0 has product of roots 
+
+= 4 > 0 and sum = k − 4. Both roots positive iff k > 4, so for 0 < k ≤ 4 at most one positive root, and for k > 8
+
+(∆ > 0, both roots positive) we get two solutions. For 4 < k < 8 or k = 8 , exactly one valid solution. 
+
+Case B (k < 0): need x < 0 and x > −2, so −2 < x < 0. At most one root can fall in this interval. Careful counting over k ∈ [−500 , 500] yields 501 valid integer values. 
+
+Final Answer: 501     
+
+> Figure 11. Case Study on Logarithmic Equations. The model originally reduces “exactly one solution” to “discriminant equals zero” (Red), a common reasoning shortcut that ignores how domain restrictions on logarithms can convert a two-root quadratic into a one-solution scenario. DynaSteer steers the model toward a domain-aware case analysis (Green), recovering the full count.
+
+G.1.4. P IECEWISE FUNCTION SURJECTIVITY 
+
+Analysis of the Original Trajectory (Fallacy) To determine surjectivity, the model analyzes the range of the linear piece of the function. It incorrectly assumes the linear piece spans its entire natural range (−∞ , ∞) because the slope is positive, completely overlooking the explicit domain restriction x < a .
+
+Effect of Intervention (Truth) DynaSteer forces the model to re-evaluate the range of each piece strictly within its respective domain boundary. This precise range computation leads to the correct no-gap inequality condition ( a3 ≤ a2 + 2 a)necessary for surjectivity. 
+
+Problem Input & Reference 
+
+Problem: Consider the function f (x) = 
+
+(
+
+ax 2 if x ≥ a, ax + 2 a if x < a, where a is some number. What is the largest value of a such that the graph of y = f (x) intersects every horizontal line at least once? 
+
+Reference Answer: 2
+
+Qwen3-8B Reasoning Trajectory 
+
+Context Generation: 
+
+We need f to be surjective (onto R). The linear piece ax + 2 a covers (−∞ , f (a−)) and the quadratic piece ax 2
+
+covers [f (a), +∞) when a > 0.
+
+Intervention Point (Reasoning Fork): 
+
+23 Search for Truth from Reasoning: A Dynamic Representation Editing Framework for Steering LLM Trajectories 
+
+Original Trajectory (Overlooking Domain Restriction) 
+
+Step 1: Analyze surjectivity 
+
+The linear piece ax + 2 a has slope a > 0, so as x → −∞ , f (x) → −∞ . Therefore, the linear part alone covers all horizontal lines. 
+
+[Ignores that the linear piece is only defined for x < a , not all of R; concludes a = 1 without checking the gap between the two pieces] 
+
+# ↓ DynaSteer Steering 
+
+Steered Trajectory (Correct Range Analysis) 
+
+Step 1: Compute the range of each piece precisely 
+
+For the linear piece ( x < a ): range is (−∞ , a · a + 2 a) = ( −∞ , a 2 + 2 a).For the quadratic piece ( x ≥ a, a > 0): ax 2 is increasing on [a, ∞), so the minimum is a · a2 = a3, giving range [a3, ∞).
+
+Continued Generation: Step 2: No-gap condition 
+
+For surjectivity, the ranges must cover all of R, requiring a3 ≤ a2 + 2 a:
+
+a3 − a2 − 2a ≤ 0 = ⇒ a(a − 2)( a + 1) ≤ 0
+
+For a > 0, this gives 0 < a ≤ 2. The largest such a is 2 .
+
+Final Answer: 2             
+
+> Figure 12. Case Study on Piecewise Functions. The model originally overlooks the domain restriction of the linear piece ( x < a ) and incorrectly concludes it covers all of R(Red). DynaSteer steers the model to correctly compute the bounded range of each piece and derive the no-gap inequality a3≤a2+ 2 a, identifying a= 2 as the critical threshold.
+
+G.1.5. R ECURSIVE SEQUENCE PERIODICITY 
+
+Analysis of the Original Trajectory (Fallacy) The model attempts a brute-force computation of the recursive sequence to detect its period. However, it makes a critical arithmetic error at x9. This arithmetic drift cascades into all subsequent terms, permanently derailing the period detection. 
+
+Effect of Intervention (Truth) Rather than relying on flawless exhaustive computation, DynaSteer guides the model to recognize the structural anti-symmetry of the recurrence relation ( xn+5 = −xn). This high-level structural insight immediately establishes a period of 10, enabling a direct and accurate modulo reduction for the final answer. 
+
+Problem Input & Reference 
+
+Problem: Given that x1 = 211 , x2 = 375 , x3 = 420 , x4 = 523 , and xn = xn−1 − xn−2 + xn−3 − xn−4 for 
+
+n ≥ 5, find x531 + x753 + x975 .
+
+Reference Answer: 898 
+
+Qwen3-8B Reasoning Trajectory 
+
+Context Generation: 
+
+We compute terms to detect periodicity. x5 = 523 − 420 + 375 − 211 = 267 , x6 = 267 − 523 + 420 − 375 = −211 .24 Search for Truth from Reasoning: A Dynamic Representation Editing Framework for Steering LLM Trajectories 
+
+Intervention Point (Reasoning Fork): 
+
+Original Trajectory (Arithmetic Drift) 
+
+Step 1: Continue computing 
+
+x7 = −211 − 267 + 523 − 420 = −375 , x8 = −375 + 211 + 267 − 523 = −420 
+
+x9 = −420 + 375 − 211 + 267 = 11 ... 
+
+[Accumulates sign errors at x9 (correct value is −523 ), derailing all subsequent terms and the period detection] 
+
+# ↓ DynaSteer Steering 
+
+Steered Trajectory (Structured Period Analysis) 
+
+Step 1: Identify the anti-symmetry 
+
+Computing carefully: x6 = −211 = −x1, x7 = −375 = −x2, ..., x10 = −267 = −x5. The sequence satisfies xn+5 = −xn, hence it is periodic with period 10 .
+
+Continued Generation: Step 2: Reduce indices modulo 10 
+
+531 mod 10 = 1 , 753 mod 10 = 3 , 975 mod 10 = 5 .Therefore: x531 + x753 + x975 = x1 + x3 + x5 = 211 + 420 + 267 = 898 .
+
+Final Answer: 898          
+
+> Figure 13. Case Study on Recursive Sequences. The model attempts brute-force computation but accumulates arithmetic errors at x9
+> (Red), derailing period detection. DynaSteer steers the model to identify the anti-symmetry xn+5 =−xnand period-10 structure, enabling direct index reduction and an exact answer.
+
+G.1.6. C OMBINATORIAL PROBABILITY 
+
+Analysis of the Original Trajectory (Fallacy) In calculating the probability of restoring the original state of the bags, the model recognizes that Bob must return the exact color Alice transferred. However, it overlooks the fact that Bob’s bag now contains two identical balls of that color. It incorrectly assigns a return probability of 1/6 instead of 2/6.
+
+Effect of Intervention (Truth) DynaSteer intervenes to structure the conditional probability calculation. By explicitly conditioning on Alice’s choice, the model correctly tracks the updated composition of Bob’s bag, recognizing the duplicate ball and arriving at the correct 2/6 probability for the return transfer. 
+
+Problem Input & Reference 
+
+Problem: Bob and Alice each have a bag that contains one ball of each of the colors: blue, green, orange, red, and violet. Alice randomly selects one ball from her bag and puts it into Bob’s bag. Bob then randomly selects one ball from his bag and puts it into Alice’s bag. What is the probability that after this process, the contents of the two bags are the same as they were before? 
+
+Reference Answer: 13
+
+Qwen3-8B Reasoning Trajectory 
+
+Context Generation: 
+
+Alice transfers one of 5 balls to Bob (now 6 balls). Bob then transfers one of 6 balls back to Alice. We need both 25 Search for Truth from Reasoning: A Dynamic Representation Editing Framework for Steering LLM Trajectories 
+
+bags to return to their original state. 
+
+Intervention Point (Reasoning Fork): 
+
+Original Trajectory (Missing Duplicate Ball) 
+
+Step 1: Compute return probability 
+
+Bob must return the same color Alice gave. Bob has 6 balls, so P = 16 .
+
+[Overlooks that Bob now has two balls of that color (his original + Alice’s), so the correct probability is 26 ]
+
+# ↓ DynaSteer Steering 
+
+Steered Trajectory (Conditional Case Analysis) 
+
+Step 1: Condition on Alice’s choice 
+
+Let Alice transfer color c. Bob’s bag now has 6 balls: 5 original + one extra c.For bags to restore, Bob must return color c. His bag contains two copies of c (his original + Alice’s), so 
+
+P (Bob returns c) = 26 = 13 .
+
+Continued Generation: Step 2: Combine 
+
+Since this probability 13 is the same regardless of which color c Alice chose, the total probability is: 
+
+P = X
+
+> c
+
+P (Alice picks c) · P (Bob returns c) = 5 · 15 · 26 = 13
+
+Final Answer: 13          
+
+> Figure 14. Case Study on Combinatorial Probability. The model correctly identifies that Bob must return the transferred color, but overlooks the duplicate ball in Bob’s bag, computing 16instead of 26(Red). DynaSteer steers the model to recognize the duplicate and arrive at the correct probability 13.
+
+G.2. Multi-Steering Case Studies 
+
+In more complex problems, a single intervention may not be sufficient to fully correct a trajectory, as the model may encounter multiple independent or cascading reasoning forks. We demonstrate DynaSteer ’s capability to apply successive interventions in these multi-steering case studies. G.2.1. P OLYNOMIAL FACTORIZATION 
+
+Analysis of the Original Trajectory (Fallacy) The model commits two independent cascading errors. First, during polynomial multiplication, it only considers the single highest-order product for each degree, systematically ignoring all cross-terms. Second, when solving for the coefficients, it treats them as free variables and assigns arbitrary values instead of solving the resulting fully determined linear system. 
+
+Effect of Intervention (Truth) DynaSteer intervenes twice. The first steering corrects the polynomial expansion, ensuring all cross-terms are explicitly enumerated and matched. The second steering prevents the model from guessing arbitrary values, forcing it to properly set up and solve the 4 × 4 linear system to find the unique coefficients. 26 Search for Truth from Reasoning: A Dynamic Representation Editing Framework for Steering LLM Trajectories 
+
+Problem Input & Reference 
+
+Problem: The polynomial x3 − 3x2 + 4 x − 1 is a factor of x9 + px 6 + qx 3 + r. Enter the ordered triple (p, q, r ).
+
+Reference Answer: (6 , 31 , −1) 
+
+Qwen3-8B Reasoning Trajectory (Multi-Steering) 
+
+Context Generation: 
+
+Let f (x) = x3 − 3x2 + 4 x − 1 and g(x) = x9 + px 6 + qx 3 + r. Since f (x) | g(x), we write g(x) = f (x) · h(x)
+
+where h(x) = x6 + a5x5 + a4x4 + a3x3 + a2x2 + a1x + a0.
+
+Intervention Point 1 (Coefficient Matching): 
+
+Original Trajectory #1: Incorrect Cross-Term Enumeration 
+
+Step 3: Compute the coefficient of x8 in f (x) · h(x):“Only x3 · a5x5 = a5x8, so a5 = 0 .” Similarly concludes a4 = 0 , a2 = 0 , a1 = 0 .
+
+[Error: Considers only the single highest-order product for each degree, systematically ignoring cross-terms such as (−3x2)( a5x5) in x7, (4 x)( a4x4) in x5, etc. This cascading omission forces all intermediate coefficients to zero.] 
+
+# ↓ DynaSteer Steering #1 
+
+Steered Trajectory #1: Complete Cross-Term Expansion 
+
+Step 3 (corrected): The coefficient of x8 involves all pairs (xi from f ) × (xj from h) with i + j = 8 :coeff (x8) = 1 · a5 + ( −3) · 1 = a5 − 3 = 0 ⇒ a5 = 3 .
+
+Similarly: coeff (x7) = a4 − 3a5 + 4 = a4 − 5 = 0 ⇒ a4 = 5 .
+
+Continued Generation (after Steering #1): 
+
+From zero-coefficient constraints on x5 and x4:
+
+a2 − 3a3 + 4 a4 − a5 = 0 and a1 − 3a2 + 4 a3 − a4 = 0 .From x1 and x2: 4a0 − a1 = 0 and −3a0 + 4 a1 − a2 = 0 .
+
+Intervention Point 2 (System Solving): 
+
+Original Trajectory #2: Arbitrary Free-Variable Assignment 
+
+Step 5: “We can choose a0 = 1 , then q = 1 , r = −1, and pick p = 0 .” 
+
+[Error: Treats a3 and a0 as free variables due to the earlier zero-coefficient error, then assigns arbitrary values instead of solving the fully determined 4 ×4 linear system.] 
+
+# ↓ DynaSteer Steering #2 
+
+Steered Trajectory #2: Solve the Determined System 
+
+Step 5 (corrected): The system has 4 equations in 4 unknowns (a3, a 2, a 1, a 0):Substituting a5=3 , a 4=5 into the constraints and solving: a3 = 10 , a2 = 13 , a1 = 4 , a0 = 1 .
+
+27 Search for Truth from Reasoning: A Dynamic Representation Editing Framework for Steering LLM Trajectories 
+
+Final Computation: 
+
+p = a3 − 3a4 + 4 a5 − 1 = 10 − 15 + 12 − 1 = 6 , q = a0 − 3a1 + 4 a2 − a3 = 1 − 12 + 52 − 10 = 31 ,
+
+r = −a0 = −1.
+
+Final Answer: (6 , 31 , −1) 
+
+Figure 15. Multi-Steering Case Study: Polynomial Factorization. The model commits two cascading errors: (1) it enumerates only single-product terms for each degree, ignoring cross-terms from the three non-leading coefficients of f (x) (Red #1), which collapses the quotient h(x) to x6 + a3x3 + a0; (2) believing a3 and a0 are free, it assigns arbitrary values instead of solving the determined linear system (Red #2). DynaSteer applies two successive steering interventions at tokens 127 and 246, correcting the cross-term expansion and then the system solving, recovering the correct (p, q, r ) = (6 , 31 , −1) .
+
+G.2.2. GCD/LCM C OMBINATORIAL COUNTING 
+
+Analysis of the Original Trajectory (Fallacy) The model makes two compounding errors in combinatorial counting. First, it conflates the formulas for ordered and unordered coprime factor pairs, applying 2k−1 while inconsistently describing it. Second, believing it needs to account for symmetry again, it redundantly divides the already-correct count by 2, halving the final answer. 
+
+Effect of Intervention (Truth) DynaSteer applies two successive steering interventions. The first establishes an explicit 24 → 16 ordered pair derivation before halving to 8, clarifying the logic. The second intervention triggers at the final count to prevent the spurious redundant division, confidently halting the process at the correct answer of 8. 
+
+Problem Input & Reference 
+
+Problem: If a and b are positive integers such that gcd( a, b ) = 210 , lcm [a, b ] = 210 3, and a < b , how many possible values are there for a?
+
+Reference Answer: 8
+
+Qwen3-8B Reasoning Trajectory (Multi-Steering) 
+
+Context Generation: 
+
+Write a = 210 x, b = 210 y with gcd( x, y ) = 1 . Then xy = 210 2 = 2 2 · 32 · 52 · 72. We seek coprime pairs (x, y )
+
+with x < y .
+
+Intervention Point 1 (Pair-Counting Formula): 
+
+Original Trajectory #1: Wrong Formula Application 
+
+Step 5: “The number of unordered coprime factor pairs is 2k−1 where k is the number of distinct primes. With k = 4 : 24−1 = 8 unordered pairs.” 
+
+[Error: Conflates the formula. The correct reasoning is: 2k = 16 ordered pairs (each of k=4 primes goes entirely to x or y), and 2k−1 = 8 unordered pairs. The model states 2k−1 = 8 as “unordered pairs,” which is actually correct at this step, but then proceeds to divide again.] 
+
+# ↓ DynaSteer Steering #1 
+
+28 Search for Truth from Reasoning: A Dynamic Representation Editing Framework for Steering LLM Trajectories 
+
+Steered Trajectory #1: Explicit Pair Enumeration 
+
+Step 5 (corrected): Each of the 4 prime-power factors {22, 32, 52, 72} must go entirely to x or y (to maintain coprimality). This gives 24 = 16 ordered pairs. Since no pair has x = y (that would require gcd( x, y ) = x̸ = 1 ), exactly half satisfy x < y : 8 unordered pairs .
+
+Continued Generation (after Steering #1): 
+
+The 8 pairs (x, y ) with x < y are: (1 , 44100) , (4 , 11025) , (9 , 4900) , (25 , 1764) , (36 , 1225) , (49 , 900) ,
+
+(100 , 441) , (225 , 196) .
+
+Intervention Point 2 (Final Count): 
+
+Original Trajectory #2: Redundant Division by 2 
+
+Step 7: “So there are 8 unordered coprime factor pairs. But we want ordered pairs with x < y , so we divide by 2: 82 = 4 .” 
+
+[Error: The 8 pairs are already unordered with x < y ; dividing again halves the correct count.] 
+
+# ↓ DynaSteer Steering #2 
+
+Steered Trajectory #2: Recognize Counting Is Complete 
+
+Step 7 (corrected): The 8 pairs listed above already satisfy x < y . No further division is needed. Each gives a distinct value a = 210 x.
+
+Final Answer: The number of possible values for a is 8 .          
+
+> Figure 16. Multi-Steering Case Study: GCD/LCM Counting. The model makes two compounding errors in combinatorial counting: (1) it applies the formula 2k−1without clarifying whether it yields ordered or unordered pairs (Red #1); (2) it then redundantly divides by 2 a second time, halving the already-correct count from 8 to 4 (Red #2). DynaSteer steers at both junctures—first to establish the explicit 24→8derivation, then to prevent the spurious halving—recovering the correct answer of 8.
+
+G.2.3. T RIANGLE TRIGONOMETRY 
+
+Analysis of the Original Trajectory (Fallacy) The model falls into a circular reasoning loop. It initially computes tan A
+
+as a symbolic expression involving side lengths a, b, c , failing to realize the area constraint implies a unique numeric value. When attempting to solve the trigonometric equation, it re-substitutes the side-length expressions back in, resulting in a useless tautology ( tan A = tan A). 
+
+Effect of Intervention (Truth) DynaSteer steers the model out of the loop at two critical junctures. First, it guides the model to substitute the law of cosines into the area formula, successfully eliminating the side lengths and yielding a single-variable equation sin A = 4(1 − cos A). Second, instead of re-substituting, it prompts the use of half-angle identities to analytically solve the pure trigonometric equation, yielding the final numeric answer. 29 Search for Truth from Reasoning: A Dynamic Representation Editing Framework for Steering LLM Trajectories 
+
+Problem Input & Reference 
+
+Problem: The area of triangle ABC is equal to a2 − (b − c)2, where a, b, c are the sides of triangle ABC , as usual. Compute tan A. 
+
+Reference Answer: 815 
+
+Qwen3-8B Reasoning Trajectory (Multi-Steering) 
+
+Context Generation: 
+
+From the area formula: 12 bc sin A = a2 − (b − c)2 = a2 − b2 + 2 bc − c2.By the law of cosines: a2 = b2 + c2 − 2bc cos A, so a2 − b2 − c2 = −2bc cos A.
+
+Intervention Point 1 (Substitution Strategy): 
+
+Original Trajectory #1: Direct Ratio Approach (Circular) 
+
+Step 4: Compute tan A = sin A  
+
+> cos A
+
+by dividing the area expression by the cosine expression: 
+
+tan A = 4( a2−(b−c)2) 
+
+> b2+c2−a2
+
+.
+
+[Error: This expression still contains a, b, c . The model fails to recognize that the area condition provides an additional constraint that uniquely determines tan A as a numeric constant, independent of specific side lengths.] 
+
+# ↓ DynaSteer Steering #1 
+
+Steered Trajectory #1: Substitute Law of Cosines into Area 
+
+Step 4 (corrected): Substitute a2 − b2 − c2 = −2bc cos A into the area equation:  
+
+> 12
+
+bc sin A = −2bc cos A + 2 bc = 2 bc (1 − cos A).Dividing both sides by bc : 12 sin A = 2(1 − cos A).
+
+Continued Generation (after Steering #1): 
+
+We now have: sin A = 4(1 − cos A). This is a single-variable trigonometric equation in A.
+
+Intervention Point 2 (Solving the Trigonometric Equation): 
+
+Original Trajectory #2: Circular Re-substitution 
+
+Step 5–6: Attempts to solve sin A = 4(1 − cos A) by substituting sin A = 2( a2−(b−c)2) 
+
+> bc
+
+back into the equation, re-introducing a, b, c and arriving at the tautology tan A = tan A.
+
+[Error: Instead of using a half-angle identity to solve the pure trigonometric equation, the model loops back to the original side-length expressions.] 
+
+# ↓ DynaSteer Steering #2 
+
+30 Search for Truth from Reasoning: A Dynamic Representation Editing Framework for Steering LLM Trajectories 
+
+Steered Trajectory #2: Apply Half-Angle Identities 
+
+Step 5 (corrected): Use half-angle substitutions: sin A = 2 sin A 
+
+> 2
+
+cos A 
+
+> 2
+
+and 1 − cos A = 2 sin 2 A 
+
+> 2
+
+:
+
+2 sin A 
+
+> 2
+
+cos A 
+
+> 2
+
+= 4 · 2 sin 2 A 
+
+> 2
+
+.Since sin A
+
+> 2
+
+̸ = 0 for a valid triangle, divide: cos A 
+
+> 2
+
+= 4 sin A 
+
+> 2
+
+, i.e., tan A 
+
+> 2
+
+= 14 .
+
+Final Computation: 
+
+By the double-angle formula: tan A = 2 tan A
+
+> 2
+
+1 − tan 2 A
+
+> 2
+
+= 2 · 14
+
+1 − 116 
+
+=
+
+> 1215 16
+
+= 815 .
+
+Final Answer: 815 
+
+Figure 17. Multi-Steering Case Study: Triangle Trigonometry. The model encounters two distinct reasoning failures: (1) it computes 
+
+tan A as a symbolic expression in a, b, c without recognizing that the area constraint determines a unique numeric value (Red #1); (2) when guided to the single-variable equation sin A = 4(1 − cos A), it re-introduces side-length variables instead of applying half-angle identities, producing a tautology (Red #2). DynaSteer steers twice—first to eliminate side lengths via the law of cosines substitution, then to invoke half-angle identities—breaking the circular reasoning and extracting tan A = 815 .
+
+31

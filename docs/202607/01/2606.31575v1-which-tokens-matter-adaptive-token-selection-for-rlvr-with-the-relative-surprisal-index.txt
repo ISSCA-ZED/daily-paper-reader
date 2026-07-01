@@ -1,0 +1,1179 @@
+Title: Which Tokens Matter? Adaptive Token Selection for RLVR with the Relative Surprisal Index
+
+URL Source: https://arxiv.org/pdf/2606.31575v1
+
+Published Time: Wed, 01 Jul 2026 01:05:26 GMT
+
+Number of Pages: 13
+
+Markdown Content:
+# Which Tokens Matter? Adaptive Token Selection for RLVR with the Relative Surprisal Index 
+
+## Outongyi Lv 1,2,3* Yanzhao Zheng 2* Yuanwei Zhang 3* Zhenghao Huang 1,2* 
+
+## Xingjun Wang 1,2 Baohua Dong 2 Hangcheng Zhu 2 Yingda Chen 1,2 †
+
+> 1
+
+## ModelScope Team, 2Alibaba Group, Hangzhou, China. 
+
+> 3
+
+## Shanghai Jiao Tong University, Shanghai, China. 
+
+## Abstract 
+
+Reinforcement learning (RL) has become a powerful tool for propelling Large Language Models (LLMs) beyond imitation-based training towards more robust reasoning ca-pabilities. Among existing approaches, RL with Verifi-able Rewards (RLVR) has emerged as a pivotal paradigm for advancing LLM reasoning. Despite its empirical suc-cess, recent studies have offered different insights. One line of inquiry advocates prioritizing high-entropy token positions during training, while another perspective cau-tions against allowing low-probability tokens to dominate gradient updates. Notably, although high-entropy tokens are usually correlated with low probability, both paradigms empirically yield substantial performance gains. In this work, we argue that evaluating sampled-token probability or entropy in isolation is insufficient to capture the pol-icy optimization dynamics. To resolve this tension, we introduce the Relative Surprisal Index (RSI), a principled, information-theoretic metric that naturally couples the to-ken’s entropy with the probability of the selected token. We show that, under mild conditions, RSI is related to the local ratio between the first-order variations of the logit-gradient norm and predictive entropy under a selected-logit perturbation. Building on RSI, we propose RSI Selection (RSI-S), an entropy-adaptive token filtering method that re-tains tokens within a stable RSI interval. RSI-S success-fully reconciles previous contradictory paradigms and fil-ters out both redundant low-surprisal tokens and unstable high-surprisal tail tokens. Empirical evaluations show that RSI-S achieves higher avg@32 accuracy across different model scales (Qwen2.5-1.5B, 3B, and 7B) on AIME and AMC benchmarks: RSI-S improves avg@32 accuracy by 2–3 percentage points over GRPO. Overall, RSI offers a promising perspective for RLVR improvement. 
+
+> *These authors contributed equally to this work.
+> †Corresponding author.
+
+## 1. Introduction 
+
+Large Language Models (LLMs) have achieved remarkable breakthroughs across diverse domains, including conversa-tional systems [1, 16, 32], generative modeling [2, 17, 22], and mathematical reasoning [20, 25, 28]. Within the post-training pipeline, Reinforcement Learning (RL) has emerged as a pivotal paradigm for overcoming the per-formance bottlenecks inherent in Supervised Fine-Tuning (SFT) [6]. In particular, RL with Verifiable Rewards (RLVR) has gained substantial traction due to its practi-cal utility and computational efficiency. A prominent base-line of this direction is Group Relative Policy Optimization (GRPO) [19], a method introduced by DeepSeek that dis-penses with the traditional value function by estimating ad-vantages via rule-based rewards within each group. Build-ing upon GRPO, several variants such as Dr. GRPO [11], Dynamic sAmpling Policy Optimization (DAPO) [31], and Group Sequence Policy Optimization (GSPO) [34] have been proposed to address its inherent limitations. However, the above variants remain agnostic to the vary-ing importance of individual tokens: they assign the same contribution to all tokens within a sequence. Recent work has begun to investigate token-level heterogeneity in RLVR, and existing methods can be broadly grouped into two cat-egories. One line of work identifies subsets of influential tokens that affect the optimization dynamics [13, 15, 24]. Another line of work adaptively adjusts token-level weights during training, effectively reweighting the contribution of different tokens [14, 29, 30]. Together, these studies high-light the importance of token-level signals in RLVR. In this work, we study which tokens are beneficial for RLVR optimization. Our motivation comes from an appar-ent tension between two recent findings: on the one hand, Wang et al. [24] advocate training exclusively on high-entropy token positions. Empirically, we find high predic-tive entropy tends to correlate with low probability assigned to the sampled token, although entropy and sampled-token probability are not equivalent. On the other hand, Yang 
+
+> arXiv:2606.31575v1 [cs.AI] 30 Jun 2026
+
+et al. [29] argue that low-probability tokens should not dom-inate LLM updates, showing theoretically that they can in-duce unstable gradient magnitudes. Despite this apparent tension, both approaches report empirical improvements on RLVR-based reasoning tasks. These observations suggest that neither sampled-token probability nor predictive en-tropy alone is sufficient to characterize a token’s contribu-tion to RLVR optimization. This naturally raises the follow-ing question: 
+
+How can we define a principled metric that unifies token entropy and sampled-token probability for identifying influential training tokens? 
+
+To address this question, we introduce the Relative Sur-prisal Index (RSI), a principled token-level metric that in-herently couples the token’s entropy with its sampled-token probability. Compared with entropy alone, RSI further in-corporates the likelihood of the realized token, allowing it to distinguish token positions with similar uncertainty but dif-ferent realized-token probabilities. We show, both analyti-cally and empirically, that RSI offers three main advantages as a token-selection criterion: • Analytical connection to token-level gradients. Under mild assumptions, we derive RSI from the relationship between token-level gradient magnitude and its entropy, providing a principled basis for token selection rather than a purely heuristic criterion. • Connecting entropy- and probability-based views. 
+
+RSI helps explain the apparent tension between Wang et al. [24] and Yang et al. [29]: it favors uncertain token positions while accounting for the probability assigned to the selected token. In this way, RSI integrates entropy-and probability-based criteria into a token-level score. • Consistent gains across model scales. Experiments on AIME and AMC show that using RSI as a token-importance metric consistently outperforms the entropy-based 80/20 rule [24] and the probability-based method of Yang et al. [29]. Across Qwen2.5-1.5B, 3B, and 7B, RSI-S improves avg@32 accuracy by 2–3 percentage points over GRPO while producing shorter responses. 
+
+1.1. Related Work 
+
+GRPO and its variants. Group Relative Policy Optimiza-tion (GRPO) [19] motivates a series of recent variants that improve its efficiency, stability, and robustness. DAPO [31] improves the training efficiency of GRPO by removing the KL regularizer and introducing dynamic sampling mecha-nisms. GSPO [34] revisits the importance-sampling formu-lation in GRPO and moves the correction from the token level to the sequence level. BAPO [27] introduces an adap-tive clipping rule to stabilize policy updates and balance the optimization process. GDPO [10] extends GRPO to multi-reward settings and is designed to mitigate reward hacking under multiple reward signals. 
+
+Token selection in RLVR. Wang et al. [24] identify an empirical “80/20 rule,” showing that a small fraction of high-entropy token positions can account for a large por-tion of the training benefit. Building on this observation, Lv et al. [13] connect token entropy with gradient magni-tude and propose prioritizing tokens with larger gradient signals. Other studies examine alternative token-level in-dicators: Huan et al. [9] and Chen et al. [4] analyze token-level KL divergence and logit-rank shifts, while Meng et al. [15] observe that RLVR tends to update a sparse subset of influential tokens. Collectively, these works indicate that effective RLVR does not require treating all tokens equally. However, existing token-selection criteria typically rely on a single signal, such as entropy, gradient magnitude, KL di-vergence, or logit-rank shift, leaving open how to jointly characterize predictive uncertainty and the probability of the selected token. 
+
+Recalibrating token contributions. Another line of work modulates token contributions through reweighting rather than hard selection. Yang et al. [29] highlight the risk of unstable gradients when low-probability tokens dominate LLM updates and propose adjusting token-level advantages to mitigate this issue. Chen et al. [3], Zhang et al. [33], Wang et al. [23] and Tang et al. [21] study how the sign of the advantage function induces different update behav-iors, motivating heterogeneous weighting strategies for pos-itive and negative feedback. Ma et al. [14] and Yao et al. [30] introduce future KL as a signal for estimating a to-ken’s downstream effect on subsequent generation, and use it to recalibrate token importance. Zhu et al. [35] decouple the processing of positive and negative samples, introducing an adaptive reweighting mechanism specifically tailored for negative instances. 
+
+## 2. Preliminaries 
+
+The auto-regressive generation process of an LLM can be formally cast as a finite-horizon Markov Decision Process (MDP). Formally, the policy πθ of the LLM is parameter-ized by weights θ. Given an input query q, the LLM gener-ates a response o = ( o1, o 2, o 3, ..., o T ) auto-regressively to-ken by token, where T denotes the sequence length. Specif-ically, at each step t, the next token ot is sequentially sam-pled from the conditional probability distribution governed by the preceding context πθ (· | q, o<t ) = [ pt, 1, . . . , p t,V ],where o<t represents the previously generated tokens and 
+
+V is the vocabulary size. 
+
+2.1. Group Relative Policy Optimization 
+
+To mitigate the computational overhead of traditional prox-imal policy optimization (PPO) [18], Shao et al. [19] in-troduce Group Relative Policy Optimization (GRPO). A defining characteristic of GRPO is that it dispenses with the auxiliary value network typically mandated by PPO. Figure 1. Overall pipeline of the RSI framework. (1) We collect all token-position entropy and sampled-token probability to compute the Relative Surprisal Index (RSI) by coupling these two quantities. (2) RSI-S introduces an interval-based token filtering mechanism within 
+
+[a, b ] for RL training. Crucially, the lower bound a removes excessively high-surprisal tail tokens, while the upper bound b removes overly predictable low-surprisal tokens. (3) RSI-S enhances training stability and consistently outperforms other baselines across various model scales and benchmarks. 
+
+Instead, it leverages the statistical baseline of a localized group of sampled responses to estimate the token-level ad-vantage. Specifically, for a given query q ∼ D with ground truth, GRPO uses the old policy πold to gener-ate G responses {oi}Gi=1 , and then the ground truth can be used to verify each response and get the reward list 
+
+R = [ R1, R 2, R 3, ..., R G], where Ri = 1 if oi matches the ground-truth answer and Ri = 0 otherwise. The advantage for the i-th response is defined as: 
+
+Ai = Ri − mean (R)
+
+std (R) .
+
+To constrain policy updates and prevent the learned policy from deviating excessively from the reference policy πref ,GRPO introduces a KL-divergence regularization term with respect to πref . Formally, the objective function of GRPO is formulated as follows: 
+
+JGRP O (θ) = Eq∼D ,{oi}Gi=1 ∼πold (·| q)
+
+ 1
+
+G
+
+> G
+
+X
+
+> i=1
+
+1
+
+|oi|
+
+> |oi|
+
+X
+
+> t=1
+
+ηi,t (θ)
+
+ .
+
+Here, ηi,t (θ) incorporates the standard PPO clipping mech-anism alongside a reference policy KL penalty: 
+
+ηi,t (θ) = min( ri,t (θ)Ai, clip (ri,t (θ), 1 − ϵ1, 1 + ϵ2)Ai)
+
+− βDKL 
+
+ πθ (· | q, oi,<t ) ∥ πref (· | q, oi,<t )) .
+
+Here β is the KL penalty coefficient, ϵ1 and ϵ2 are the clipping boundaries, which have been shown to be rele-vant to the exploration and exploitation of the model [31], 
+
+ri,t (θ) = πθ (oi,t |q,oi,<t ) 
+
+> πold (oi,t |q,oi,<t )
+
+.
+
+## 3. Methodology 
+
+Our method is motivated by a trade-off between explo-ration and optimization stability in current RLVR frame-works. On one hand, Wang et al. [24] demonstrate that high-entropy tokens are important for effective learning, and recommend a training regime that prioritizes the top 20% highest-entropy tokens for performance improvement. In LLMs, such high-entropy positions are often associated with low-probability tokens, as shown in Fig. 2 (left and middle). On the other hand, Yang et al. [29] caution that Figure 2. (Left) Token entropy versus sampled-token probability on Qwen2.5-1.5B , showing that most tokens cluster in the high probability regime, with the median value decaying monotonically as entropy increases. (Middle) Spearman correlation coefficients between token entropy and probability across individual questions for Qwen2.5-1.5B / 3B , substantiating the stable inverse relationship where high entropy often signifies low probability. (Right) The empirical distribution of RSI, demonstrating a heavy concentration near 1, which implies that the vast majority of generated tokens yield low surprisal. 
+
+over-emphasizing low-probability tokens may destabilize the optimization process and introduce substantial gradi-ent variance. Although seemingly different, the empirical success of both approaches suggests a deeper underlying connection. We posit that these methods are not contra-dictory, but instead reflect complementary aspects of how entropy and probability characterize the optimization dy-namics in RLVR. Therefore, our goal is to define a token-level measure that combines both sources of information, rather than relying on entropy or sampled-token probability alone. Based on this observation, we find that entropy pro-vides a natural normalization structure for token-level un-certainty. Specifically, for the token ot ∼ πθ (· | q, o<t ) = [pt, 1, . . . , p t,V ], the entropy Ht of this token is defined as: 
+
+Ht = −
+
+> V
+
+X
+
+> s=1
+
+pt,s log pt,s = −Ept,s [log pt,s ],
+
+The entropy Ht can be interpreted as the negative expected log-probability under the token distribution πθ (· | q, o<t ).For a sampled token ot ∼ πθ (· | q, o<t ), let πθ (ot |
+
+q, o<t ) = pt,n , its log-probability induces a deviation from the distribution-level average: 
+
+δt = log( pt,n ) − Ept,s [log pt,s ],δt measures the deviation of the selected token’s log-probability from the distribution-level average log-probability. We then normalize δt using Ht, yielding the Relative Surprisal Index (RSI): 
+
+RSI t = δt
+
+Ht
+
+= 1 + log πθ (ot | q, o <t )
+
+Ht
+
+. (1) 
+
+RSI t is defined for non-degenerate distributions with Ht >
+
+0. For degenerate distributions where Ht = 0, we de-fine RSI by continuity as: lim Ht→0 RSI t = 1 , with the proof in Appendix 3. RSI measures the relative surprisal of the selected token with respect to the underlying to-ken distribution. It is neither purely entropy-based nor purely probability-based. Specifically, RSI t > 0 indicates that the selected token has a higher log-probability than the distribution-level average, corresponding to lower-than-average surprisal. Conversely, RSI t < 0 indicates that the selected token is less likely than average, corresponding to higher surprisal. RSI quantifies the surprisal of the selected token rela-tive to the underlying generative distribution. Beyond its intuitive interpretation, RSI admits a principled theoretical characterization. We show that under mild regularity con-ditions, RSI can be derived as a normalized form of the dif-ferential relationship between token-level entropy and the gradient of the log-probability at the last layer. For a given query q and its generated response o, at each step t, let 
+
+lt = [ lt, 1, l t, 2, . . . , l t,V ] denote the logits over the vocabu-lary produced by the final layer of the LLM. The next token 
+
+ot is sampled from the distribution induced by the softmax transformation: ot ∼ πθ (· | q, o<t ) = Softmax( lt) := [pt, 1, p t, 2, . . . , p t,V ]. Then we have the following theorem: 
+
+Theorem 1. Let Tt denote the ℓ2-norm of the gradient of the log-probability log πθ (ot | q, o<t ) with respect to the logits lt, and let Ht denote the entropy of the distribution 
+
+πθ (· | q, o<t ). Suppose the generated token ot corresponds to the n-th vocabulary entry, i.e., πθ (ot | q, o<t ) = pt,n .Consider a small perturbation lt,n → lt,n +∆ lt,n and Ht >
+
+0, RSI t̸ = 0 . Then both log Tt and log Ht admit first-order variations with respect to lt,n , we have: 
+
+d log Tt
+
+d log Ht
+
+:=     
+
+> dlog Tt
+> dl t,n
+> dlog Ht
+> dl t,n
+
+= 1RSI t
+
+.
+
+The proof of Theorem 1 is provided in Appendix 6.3. Theorem 1 shows that RSI characterizes the local sensi-tivity between token entropy and the logit-gradient norm. Thus, RSI provides a principled characterization of how perturbations to the logits associated with a selected to-ken affect both predictive uncertainty and gradient magni-tude. Under identical logit perturbations, a smaller magni-tude |RSI t| indicates a stronger coupling between changes in token entropy and the corresponding change in the logit-gradient norm. RSI values are bounded within (−∞ , 1] 
+
+and exhibit a strong concentration around 1 (as illustrated in Figure 2 (right)). This empirical distribution suggests that a vast majority of generated tokens carry limited infor-mativeness, contributing marginally to gradient optimiza-tion—a phenomenon that aligns with the sparse training findings of Meng et al. [15]. Furthermore, the empirical density is asymmetric around zero, reflecting an imbalance between the positive and negative RSI regimes. Inspired by Theorem 1 and the intrinsic property that the expected RSI over the policy distribution πθ (· | q, o<t ) is 0, to-kens with moderate RSI values may have more influence on gradient updates compared to extreme values, which moti-vates an interval-based token filtering anchored around the zero-mean RSI reference. To accommodate the asymmet-ric empirical density, we apply an asymmetric interval [a, b ]
+
+(a < 0 < b ) where the negative tail threshold requires a larger magnitude ( |a| > b ). Formally, a token ot is retained for policy updates only if its RSI t satisfies: 
+
+RSI t ∈ [a, b ].
+
+This mechanism selects tokens whose log-probabilities are aligned with an entropy-induced reference scale, while ex-cluding both highly predictable tokens and excessively low-probability tail tokens. In other words, this criterion defines a bounded selection region over the current policy distribu-tion, formalized as: 
+
+e(a−1) Ht ≤ πθ (ot | q, o <t ) ≤ e(b−1) Ht .
+
+By adjusting the upper bound b, the framework sup-presses tokens with low surprisal, which correspond to high-probability and low-uncertainty regions of the model distribution. Concurrently, it preserves a moderate surprisal regime, preventing gradient updates from being dominated by rare high-surprisal tokens. On the other hand, adjusting the lower bound a prevents instability caused by excessively high-surprisal tokens. At the same time, it retains a bounded subset of informative high-surprisal tokens that remain use-ful for policy updates. Overall, adjusting the dual thresholds 
+
+a and b enables a unified control over token selection, con-necting the high-entropy emphasis of Wang et al. [24] with the stability considerations of Yang et al. [29] and reduc-ing updates from less-informative tokens while mitigating instability induced by extreme high-surprisal tokens. Crucially, we emphasize that this filtration mechanism differs from standard static probability-thresholding ap-proaches. Instead, RSI-based filtering induces an entropy-adaptive gating mechanism, where the allowed probability range of each token is modulated by the entropy Ht. To op-erationalize this principle, we introduce a token importance calibration scheme, termed RSI Selection ( RSI-S ), and in-corporate it into the optimization objective. Formally, the objective of RSI-S under GRPO is given by: 
+
+JRSI (θ) = Eq∼D ,{oi}Gi=1 ∼πold (·| q)
+
+ 1
+
+G
+
+> G
+
+X
+
+> i=1
+
+1
+
+|κa,b i |
+
+> |oi|
+
+X
+
+> t=1
+
+γi,t (θ)
+
+ ,
+
+where 
+
+γi,t (θ) = I[RSI i,t ∈ [a, b ]] · ηi,t (θ)=
+
+(
+
+ηi,t (θ), if RSI i,t ∈ [a, b ],
+
+0, otherwise. and |κa,b i | = # {t | RSI i,t ∈ [a, b ]} denotes the cardinality of the subset of tokens within the output sequence oi that actively contribute to the gradient updates. To avoid the ill-defined normalization in our objective, if |κa,b i | = 0 , it means the corresponding trajectory oi is excluded from the update, i.e., it contributes zero to the objective function. 
+
+## 4. Experiments 
+
+4.1. Training and Evaluation Settings 
+
+Our distributed training pipeline is built on EasyR1 1, a modular RLVR framework implemented on top of verl 2. To avoid potential confounding effects from supervised fine-tuning (SFT) on downstream mathematical corpora [26], we conduct all experiments using base language models only, specifically Qwen2.5-1.5B , Qwen2.5-3B , and Qwen2.5-7B . We utilize the DAPO-MATH-17K dataset [31] as the primary training set and adopt the following unified prompt template across all training stages:             
+
+> Please solve this problem step by step, and put your final answer within \boxed {} .
+
+To evaluate the reasoning and generalization capabili-ties of the trained policies, we report performance on two benchmark families covering 6 contest-year subsets: 
+
+AIME (AIME 2024 ∼AIME 2026 ) and AMC (AMC 2022 ∼AMC 2024 ). We adopt sample-averaged accuracy under a 32-sample rollout protocol (denoted as avg@32 ) as the primary evaluation metric. Formally, for each evalua-tion prompt, the model generates 32 independent response trajectories, and the score is computed as the mean accuracy over these completions. We provide additional details of the training and evaluation procedures in Appendix 6.1.   
+
+> 1https://github.com/hiyouga/EasyR1/tree/main
+> 2https://github.com/verl-project/verl Figure 3. We contrast baseline GRPO and GRPO with RSI-S across different model scales. Training accuracy curves over gradient steps
+> (Left) and evaluation-results curves (each under avg@32 accuracy) across 6 challenging mathematical benchmarks (Right) .
+
+4.2. Main Results 
+
+We adopt the 80/20 rule proposed by Wang et al. [24] as our entropy baseline (EB) 3. We follow the recommenda-tion and retain the top 20% highest-entropy tokens to com-pute the GRPO loss. For the probability baseline (PB) 4,we employ the method introduced by Yang et al. [29]. For our RSI-S framework, the interval hyperparameters are set to [−6, 0.95] , [−6, 0.9] , and [−6, 0.8] for the 1.5B, 3B, and 7B models, respectively. Importantly, this scale-specific configuration is not an artifact of meticulous hyperparam-eter tuning. Rather, it is motivated by the observation that models exhibit distinct behavioral patterns at varying scales, necessitating a downward shift of the surprisal upper bound as capacity increases. Nevertheless, this variation does not imply that a uniform interval degrades RSI-S performance, a point we elaborate on in the subsequent section. The em-pirical results are summarized in Tables 1–3 and Figure 3. We evaluate the avg@32 accuracy and average response lengths of Qwen2.5 (1.5B, 3B, and 7B) under the GRPO, EB, PB, and RSI-S frameworks. Crucially, RSI-S consis-tently enhances performance across all model scales, sur-passing both the EB and PB baselines. Moreover, RSI-S yields shorter average response lengths. Furthermore, we observe that under GRPO, the performance of EB and PB is markedly less pronounced on smaller models, exposing their inherent limitations. This phenomenon underscores that RSI-S is a unified framework that effectively synthe-sizes the strengths of both entropy and probability. 
+
+4.3. Ablation Study and Discussion 
+
+RSI-S vs. Static Probability Thresholds. To verify that RSI-S is not equivalent to simple probability truncation, we 
+
+> 3https : / / github . com / Shenzhi - Wang / Beyond - the -80-20-Rule-RLVR/tree/main
+> 4https://github.com/zhyang2226/AR-Lopti
+
+evaluate Qwen2.5-3B using fixed probability intervals. To-kens outside these predefined ranges ( P1 : [0.1, 0.9], P2 :[0.2, 0.8], P3 : [0.3, 0.7]) are strictly masked to neutralize their gradient contributions. As shown in Table 4 (extended in Appendix 6.2), these static baselines fail to achieve the consistent optimization gains of RSI-S. This performance gap confirms that rather than applying a rigid heuristic, RSI-S dynamically scales the valid probability space based on token-level entropy, thereby preserving critical tokens that static intervals inadvertently discard. 
+
+The Necessity of Balanced RSI Intervals. To verify the necessity of both RSI bounds, we perform a factorial ab-lation study along two axes. First, we examine the ef-fect of removing the upper bound by comparing [a, b ] with 
+
+[a, 1] (RSI-SU), which tests whether suppressing overly predictable tokens is necessary. Second, we examine the ef-fect of removing the lower bound by comparing [a, b ] with 
+
+[−∞ , b ] (RSI-SL), which tests whether excluding high-surprisal tail tokens is beneficial. As shown in Table 5 for Qwen2.5-3B (extended in Appendix 6.2), both one-sided variants consistently underperform the balanced in-terval [a, b ]. This highlights that effective token selection requires a delicate trade-off. Specifically, RSI bounds unify the complementary hypotheses of Wang et al. [24] and Yang et al. [29]: upper bound b removes predictable low-surprisal tokens; lower bound a removes extreme high-surprisal tail tokens. Removing either bound disrupts this balance. 
+
+Effect of Model Scale on RSI Upper Bound. As demon-strated in Table 6, we find the best-performing upper bound 
+
+b among the tested values shifts toward lower values as model capacity increases, even though our method consis-tently maintains its superiority under identical settings. To further elucidate this, Figure 4 (left) shows that 1.5b, 3b and 7b have significant differences in behavioral patterns. We attribute this discrepancy to the learning dynamics at varying scales: smaller models primarily prioritize exploita-Table 1. The experimental results of GRPO, GRPO + EB, GRPO + PB, GRPO + RSI-S across 6 math reasoning benchmarks on Qwen2.5-1.5B . We report avg@32 accuracy (Acc, %) and average generation length (Len), along with the improvements. 
+
+Benchmark GRPO GRPO + EB GRPO + PB GRPO + RSI-S Gain vs. GRPO 
+
+Acc Len Acc Len Acc Len Acc Len ∆ Acc ∆ Len AIME (2024 ∼2026) 2.36 1220.65 2.22 1138.05 2.12 1084.09 2.47 1082.70 +0.11 -137.95 AMC (2022 ∼2024) 21.95 997.41 21.06 994.19 21.54 913.13 26.04 917.96 +4.09 -79.45 
+
+Average 12.15 1109.03 11.64 1066.12 11.83 998.61 14.25 1000.33 +2.10 -108.70 
+
+Table 2. The experimental results of GRPO, GRPO + EB, GRPO + PB, GRPO + RSI-S across 6 math reasoning benchmarks on Qwen2.5-3B . We report avg@32 accuracy (Acc, %) and average generation length (Len), along with the improvements. 
+
+Benchmark GRPO GRPO + EB GRPO + PB GRPO + RSI-S Gain vs. GRPO 
+
+Acc Len Acc Len Acc Len Acc Len ∆ Acc ∆ Len AIME (2024 ∼2026) 5.07 1311.26 3.85 1208.87 3.61 991.41 5.73 1117.29 +0.66 -193.97 AMC (2022 ∼2024) 31.98 1098.70 31.88 1030.31 33.02 854.23 37.93 926.96 +5.95 -171.74 
+
+Average 18.53 1204.98 17.86 1119.59 18.32 922.82 21.83 1022.12 +3.30 -182.86 
+
+Table 3. The experimental results of GRPO, GRPO + EB, GRPO + PB, GRPO + RSI-S across 6 math reasoning benchmarks on Qwen2.5-7B . We report avg@32 accuracy (Acc, %) and average generation length (Len), along with the improvements. 
+
+Benchmark GRPO GRPO + EB GRPO + PB GRPO + RSI-S Gain vs. GRPO 
+
+Acc Len Acc Len Acc Len Acc Len ∆ Acc ∆ Len AIME (2024 ∼2026) 10.69 1314.80 9.97 1277.61 10.56 1124.84 11.25 969.56 +0.56 -345.24 AMC (2022 ∼2024) 47.41 1019.43 49.79 1036.50 47.19 908.22 51.24 832.76 +3.83 -186.67 
+
+Average 29.05 1167.11 29.88 1157.06 28.87 1016.53 31.24 901.16 +2.19 -265.95 
+
+Table 4. The final avg@32 accuracy (Acc, %) and average gen-eration length (Len) performance comparison of GRPO, GRPO + RSI-S and GRPO + P1, P2 and P3 across 6 math reasoning bench-marks on Qwen2.5-3B .                        
+
+> Method Acc (%) Len Imp. Acc (%) Imp. Len
+> GRPO 18.53 1204.98 ––GRPO + RSI-S 21.83 1022.12 +3.30 -182.86 GRPO + P1 16.16 1058.22 -2.37 -146.76 GRPO + P2 15.84 1041.63 -2.69 -163.35 GRPO + P3 15.99 1075.54 -2.54 -129.44
+
+tion and knowledge consolidation, thus demanding a larger proportion of low-surprisal tokens. Conversely, larger mod-els exhibit a stronger capacity for active exploration; exces-sively predictable (low-surprisal) tokens become less criti-cal for optimization, thereby driving the downward shift of the b-value. This perspective is well-corroborated by recent literature [5, 7, 8, 12]. 
+
+RSI Stably Captures RL-Critical Tokens. Following Meng et al. [15], we compute the per-token Jensen– 
+
+Table 5. The final avg@32 accuracy (Acc, %) and average gen-eration length (Len) performance comparison of GRPO, GRPO + RSI-S, GRPO + RSI-SU and GRPO + RSI-SL across 6 math rea-soning benchmarks on Qwen2.5-3B .                    
+
+> Method Acc (%) Len Imp. Acc (%) Imp. Len
+> GRPO 18.53 1204.98 ––GRPO + RSI-S 21.83 1022.12 +3.30 -182.86 GRPO + RSI-SU 19.14 999.59 +0.61 -205.39 GRPO + RSI-SL 18.45 1101.98 -0.08 -103.00
+
+Table 6. The final avg@32 accuracy (Acc, %) performance com-parison of GRPO and GRPO + RSI-S under different RSI intervals across 6 math reasoning benchmarks and model sizes (1.5B, 3B and 7B).                 
+
+> Model Size GRPO + RSI-S[-6,0.8] + RSI-S[-6,0.9] + RSI-S[-6,0.95]
+> 1.5B 12.15 12.55 (+0.40) 12.69 (+0.54) 14.25 (+2.10)
+> 3.0B 18.53 19.45 (+0.92) 21.83 (+3.30) 19.31 (+0.78) 7.0B 29.05 31.24 (+2.19) 29.13 (+0.08) 30.11 (+1.06)
+
+Shannon (JS) divergence between pre-RL and post-RL out-Figure 4. Recall/coverage of high-JS tokens under different JS thresholds for 1.5B, 3B, and 7B models, comparing RSI with high-entropy token selection. RSI consistently achieves substantially higher coverage than entropy-based selection across model scales and JS thresholds (left). Threshold sensitivity is measured by the per-model normalized variance of coverage across JS thresholds. RSI exhibits only 0.50×, 0.11×, and 0.22× of the sensitivity of entropy for 1.5B, 3B, and 7B, respectively, indicating that RSI more stably captures high-JS tokens under threshold shifts (right). 
+
+put distributions on 1.5B, 3B, and 7B models, and regard high-JS tokens as those more affected by RL. Figure 4 compares the recall of high-JS tokens by RSI and entropy-based selection under different JS thresholds. RSI con-sistently covers more high-JS tokens than entropy across model scales, while also exhibiting lower threshold sensi-tivity. Specifically, the normalized variance of RSI is only 
+
+0.50 ×, 0.11 ×, and 0.22 × that of entropy on 1.5B, 3B, and 7B models, respectively. This suggests that RSI more stably captures RL-critical tokens, aligning with Meng et al. [15]’s observation that high-JS tokens are more critical after RL. 
+
+## 5. Conclusion 
+
+In this paper, we introduce the Relative Surprisal Index (RSI), a novel metric designed to quantify token impor-tance. Moving beyond existing paradigms, RSI successfully reconciles the seemingly contradictory conclusions derived from predictive entropy and sampled-token probability, uni-fying both perspectives through RSI-S, a token-selection method built on RSI. Crucially, we demonstrate that un-der the conditions specified in Theorem 1, RSI emerges as a mathematically principled consequence of entropy and gradient differentiation, rather than a mere heuristic for-mulation. Finally, we conduct extensive numerical exper-iments across different model scales to evaluate the scala-bility and generalization of RSI-S. Coupled with rigorous ablation studies, the empirical results provide encouraging evidence that RSI delivers consistent, stable, and parameter-robust performance gains for RLVR. These findings under-score RSI’s potential as a promising token-selection crite-rion for RLVR. 
+
+## References 
+
+[1] Josh Achiam, Steven Adler, Sandhini Agarwal, Lama Ah-mad, Ilge Akkaya, Florencia Leoni Aleman, Diogo Almeida, Janko Altenschmidt, Sam Altman, Shyamal Anadkat, et al. Gpt-4 technical report. arXiv preprint arXiv:2303.08774 ,2023. [2] Tiwei Bie, Maosong Cao, Xiang Cao, Bingsen Chen, Fuyuan Chen, Kun Chen, Lun Du, Daozhuo Feng, Haibo Feng, Min-gliang Gong, et al. Llada2. 1: Speeding up text diffusion via token editing. arXiv preprint arXiv:2602.08676 , 2026. [3] Minghan Chen, Guikun Chen, Wenguan Wang, and Yi Yang. Seed-grpo: Semantic entropy enhanced grpo for uncertainty-aware policy optimization. arXiv preprint arXiv:2505.12346 , 2025. [4] Xingwu Chen, Tianle Li, and Difan Zou. Reshaping reason-ing in llms: A theoretical analysis of rl training dynamics through pattern selection. arXiv preprint arXiv:2506.04695 ,2025. [5] Zhiqi Chen, Rui Lu, Andrew Zhao, Zhaokai Wang, Yang Yue, Shiji Song, and Gao Huang. Does reinforcement learn-ing really incentivize reasoning capacity in llms beyond the base model? Advances in Neural Information Processing Systems , 38:57654–57689, 2026. [6] Tianzhe Chu, Yuexiang Zhai, Jihan Yang, Shengbang Tong, Saining Xie, Dale Schuurmans, Quoc V Le, Sergey Levine, and Yi Ma. Sft memorizes, rl generalizes: A comparative study of foundation model post-training. In Forty-second In-ternational Conference on Machine Learning , 2025. [7] Ganqu Cui, Yuchen Zhang, Jiacheng Chen, Lifan Yuan, Zhi Wang, Yuxin Zuo, Haozhan Li, Yuchen Fan, Huayu Chen, Weize Chen, et al. The entropy mechanism of reinforce-ment learning for reasoning language models. arXiv preprint arXiv:2505.22617 , 2025. [8] Zhezheng Hao, Hong Wang, Haoyang Liu, Jian Luo, Jiarui Yu, Hande Dong, Qiang Lin, Can Wang, and Jiawei Chen. Rethinking entropy interventions in rlvr: An entropy change perspective. arXiv preprint arXiv:2510.10150 , 2025. [9] Maggie Huan, Yuetai Li, Tuney Zheng, Xiaoyu Xu, Seun-gone Kim, Minxin Du, Radha Poovendran, Graham Neubig, and Xiang Yue. Does math reasoning improve general llm capabilities? understanding transferability of llm reasoning. 
+
+arXiv preprint arXiv:2507.00432 , 2025. [10] Shih-Yang Liu, Xin Dong, Ximing Lu, Shizhe Diao, Peter Belcak, Mingjie Liu, Min-Hung Chen, Hongxu Yin, Yu-Chiang Frank Wang, Kwang-Ting Cheng, et al. Gdpo: Group reward-decoupled normalization policy optimiza-tion for multi-reward rl optimization. arXiv preprint arXiv:2601.05242 , 2026. [11] Zichen Liu, Changyu Chen, Wenjun Li, Penghui Qi, Tianyu Pang, Chao Du, Wee Sun Lee, and Min Lin. Understand-ing r1-zero-like training: A critical perspective. In Second Conference on Language Modeling , 2025. [12] Brian Lu, Hongyu Zhao, Shuo Sun, Hao Peng, Rui Ding, and Hongyuan Mei. Generalization of rlvr using causal reasoning as a testbed. arXiv preprint arXiv:2512.20760 , 2025. [13] Outongyi Lv, Yuanwei Zhang, et al. Gmts: Gradient magnitude-based token selection improves rlvr training for llm reasoning, 2026. [14] Chiyu Ma, Shuo Yang, Kexin Huang, Jinda Lu, Haoming Meng, Shangshang Wang, Bolin Ding, Soroush Vosoughi, Guoyin Wang, and Jingren Zhou. Fipo: Eliciting deep rea-soning with future-kl influenced policy optimization. arXiv preprint arXiv:2603.19835 , 2026. [15] Haoming Meng, Kexin Huang, Shaohang Wei, Chiyu Ma, Shuo Yang, Xue Wang, Guoyin Wang, Bolin Ding, and Jin-gren Zhou. Sparse but critical: A token-level analysis of distributional shifts in rlvr fine-tuning of llms. In The Four-teenth International Conference on Learning Representa-tions , 2026. [16] Long Ouyang, Jeffrey Wu, Xu Jiang, Diogo Almeida, Car-roll Wainwright, Pamela Mishkin, Chong Zhang, Sandhini Agarwal, Katarina Slama, Alex Ray, et al. Training language models to follow instructions with human feedback. Ad-vances in neural information processing systems , 35:27730– 27744, 2022. [17] Alec Radford, Karthik Narasimhan, Tim Salimans, Ilya Sutskever, et al. Improving language understanding by gen-erative pre-training. 2018. [18] John Schulman, Filip Wolski, Prafulla Dhariwal, Alec Rad-ford, and Oleg Klimov. Proximal policy optimization algo-rithms. arXiv preprint arXiv:1707.06347 , 2017. [19] Zhihong Shao, Peiyi Wang, Qihao Zhu, Runxin Xu, Junx-iao Song, Xiao Bi, Haowei Zhang, Mingchuan Zhang, YK Li, et al. Deepseekmath: Pushing the limits of mathemat-ical reasoning in open language models. arXiv preprint arXiv:2402.03300 , 2024. [20] Zhihong Shao, Yuxiang Luo, Chengda Lu, ZZ Ren, Jiewen Hu, Tian Ye, Zhibin Gou, Shirong Ma, and Xiaokang Zhang. Deepseekmath-v2: Towards self-verifiable mathe-matical reasoning. arXiv preprint arXiv:2511.22570 , 2025. [21] Xinyu Tang, Yuliang Zhan, Zhixun Li, Wayne Xin Zhao, Zhenduo Zhang, Zujie Wen, Zhiqiang Zhang, and Jun Zhou. Rethinking sample polarity in reinforcement learning with verifiable rewards. In Proceedings of the 64th Annual Meet-ing of the Association for Computational Linguistics (Volume 1: Long Papers) , pages 2928–2954, 2026. [22] Qwen Team. Qwen3. 5-omni technical report. arXiv preprint arXiv:2604.15804 , 2026. [23] Shumin Wang, Yuexiang Xie, Wenhao Zhang, Yuchang Sun, Yanxi Chen, Yaliang Li, and Yanyong Zhang. On the en-tropy dynamics in reinforcement fine-tuning of large lan-guage models. arXiv preprint arXiv:2602.03392 , 2026. [24] Shenzhi Wang, Le Yu, Chang Gao, Chujie Zheng, Shix-uan Liu, Rui Lu, Kai Dang, Xiong-Hui Chen, Jianxin Yang, Zhenru Zhang, et al. Beyond the 80/20 rule: High-entropy minority tokens drive effective reinforcement learning for llm reasoning. Advances in Neural Information Processing Systems , 38:115452–115486, 2026. [25] Xuezhi Wang, Jason Wei, Dale Schuurmans, Quoc V Le, Ed H Chi, Sharan Narang, Aakanksha Chowdhery, and Denny Zhou. Self-consistency improves chain of thought reasoning in language models. In The Eleventh International Conference on Learning Representations , 2023. [26] Mingqi Wu, Zhihao Zhang, Qiaole Dong, Zhiheng Xi, Jun Zhao, Senjie Jin, Xiaoran Fan, Yuhao Zhou, Huijie Lv, Ming Zhang, et al. Reasoning or memorization? unreliable results of reinforcement learning due to data contamination. In Pro-ceedings of the AAAI Conference on Artificial Intelligence ,pages 33944–33952, 2026. [27] Zhiheng Xi, Xin Guo, Yang Nan, Enyu Zhou, Junrui Shen, Wenxiang Chen, Jiaqi Liu, Jixuan Huang, Zhihao Zhang, Honglin Guo, et al. Bapo: Stabilizing off-policy reinforce-ment learning for llms via balanced policy optimization with adaptive clipping. arXiv preprint arXiv:2510.18927 , 2025. [28] An Yang, Beichen Zhang, Binyuan Hui, Bofei Gao, Bowen Yu, Chengpeng Li, Dayiheng Liu, Jianhong Tu, Jingren Zhou, Junyang Lin, et al. Qwen2. 5-math technical report: Toward mathematical expert model via self-improvement. 
+
+arXiv preprint arXiv:2409.12122 , 2024. [29] Zhihe Yang, Xufang Luo, Zilong Wang, Dongqi Han, Zhiyuan He, Dongsheng Li, and Yunjian Xu. Do not let low-probability tokens over-dominate in rl for llms. In 2nd AI for Math Workshop@ ICML , 2025. [30] Jiarui Yao, Ruida Wang, et al. Future-kl regularized grpo: Process-level credit assignment from f-divergence regular-ization. arXiv preprint arXiv:2601.10201 , 2026. [31] Qiying Yu, Zheng Zhang, Ruofei Zhu, Yufeng Yuan, Xi-aochen Zuo, Yu Yue, Weinan Dai, Tiantian Fan, Gaohong Liu, Lingjun Liu, et al. Dapo: An open-source llm reinforce-ment learning system at scale. Advances in Neural Informa-tion Processing Systems , 38:113222–113244, 2026. [32] Aohan Zeng, Xin Lv, Zhenyu Hou, Zhengxiao Du, Qinkai Zheng, Bin Chen, Da Yin, Chendi Ge, Chenghua Huang, Chengxing Xie, et al. Glm-5: from vibe coding to agentic engineering. arXiv preprint arXiv:2602.15763 , 2026. [33] Xingjian Zhang, Siwei Wen, Wenjun Wu, and Lei Huang. Edge-grpo: Entropy-driven grpo with guided error correction for advantage diversity. arXiv preprint arXiv:2507.21848 ,2025. [34] Chujie Zheng, Shixuan Liu, Mingze Li, Xiong-Hui Chen, Bowen Yu, Chang Gao, Kai Dang, Yuqiong Liu, Rui Men, An Yang, et al. Group sequence policy optimization. arXiv preprint arXiv:2507.18071 , 2025. [35] Xinyu Zhu, Mengzhou Xia, Zhepei Wei, Wei-Lin Chen, Danqi Chen, and Yu Meng. The surprising effectiveness of negative reinforcement in llm reasoning. Advances in Neural Information Processing Systems , 38:126546–126573, 2026. 6. Appendix 
+
+6.1. Appendix A 
+
+All experiments are conducted with random seed fixed to 
+
+0 unless otherwise specified. For the PB experiments, we directly follow the released implementation of Yang et al. [29]. For the EB experiments, we port the key micro-batch processing routine from Wang et al. [24] into our EasyR1-based training pipeline, which enables token-level filtering under the same training framework as our method. During training, responses are sampled with temperature 1.0 and top-p 1.0. The maximum input length and maximum out-put length are set to 1024 and 4096 , respectively. We use a learning rate of 1 × 10 −6. The batch size and mini-batch size are set to 1024 and 128 , respectively; therefore, each outer training step is divided into 8 mini-batch gradient up-dates. The GRPO group size is set to G = 16 . We train each model for 10 epochs. Since drop last is enabled for the training set, this corresponds to 160 outer training steps and 
+
+1280 mini-batch gradient updates in total. Unless explic-itly stated otherwise, all remaining hyperparameters follow the default EasyR1 configuration. For evaluation, we use temperature 0.6 and top-p 0.95 . We perform avg@32 eval-uation every 4 outer training steps, where each evaluation example is sampled 32 times and the reported score is aver-aged over these samples. 
+
+6.2. Appendix B 
+
+We report the additional ablation results in Tables 7–10. These results complement the main ablations in Tables 4 and 5. Together with Table 4, Tables 7 and 8 show that the improvement of RSI-S cannot be attributed to a fixed hard probability threshold. Instead, RSI-S defines an entropy-adaptive probability interval for token selection: the effec-tive selection range changes according to the uncertainty of the policy distribution rather than remaining fixed across all decoding states. This pattern is consistent across different model scales, suggesting that the benefit of RSI-S comes from adaptive token selection rather than from a manually chosen static cutoff. Tables 9 and 10 further extend the anal-ysis in Table 5 by ablating the two RSI-S boundaries, a and 
+
+b. The results indicate that both constraints are necessary for stable and effective token selection. The lower bound removes extreme high-surprisal tail tokens and the upper bound removes predictable low-surprisal tokens. Removing either boundary weakens the stability of the selected token set and leads to inferior performance. These findings sup-port the design choice of using both lower and upper RSI constraints in RSI-S. 
+
+6.3. Appendix C 
+
+Proposition. Assume that the vocabulary size V is finite. Let pt,n = πθ (ot | q, o <t ). If pt,n → 1, or equivalently 
+
+Table 7. The final avg@32 accuracy (Acc, %) and average gen-eration length (Len) performance comparison of GRPO, GRPO + RSI-S and GRPO + P1, P2 and P3 across 6 math reasoning bench-marks on Qwen2.5-1.5B .                        
+
+> Method Acc (%) Len Imp. Acc (%) Imp. Len
+> GRPO 12.15 1109.03 ––GRPO + RSI-S 14.25 1000.33 +2.10 -108.70 GRPO + P1 11.35 1064.06 -0.80 -44.97 GRPO + P2 11.44 949.45 -0.71 -159.58 GRPO + P3 11.05 1017.59 -1.10 -91.44
+
+Table 8. The final avg@32 accuracy (Acc, %) and average gen-eration length (Len) performance comparison of GRPO, GRPO + RSI-S and GRPO + P1, P2 and P3 across 6 math reasoning bench-marks on Qwen2.5-7B .                        
+
+> Method Acc (%) Len Imp. Acc (%) Imp. Len
+> GRPO 29.05 1167.11 ––GRPO + RSI-S 31.24 901.16 +2.19 -265.95 GRPO + P1 26.14 1115.01 -2.91 -52.10 GRPO + P2 24.16 947.22 -4.89 -219.89 GRPO + P3 24.56 992.48 -4.49 -174.63
+
+Table 9. The final avg@32 accuracy (Acc, %) and average gen-eration length (Len) performance comparison of GRPO, GRPO + RSI-S, GRPO + RSI-SU and GRPO + RSI-SL across 6 math rea-soning benchmarks on Qwen2.5-1.5B .                    
+
+> Method Acc (%) Len Imp. Acc (%) Imp. Len
+> GRPO 12.15 1109.03 ––GRPO + RSI-S 14.25 1000.33 +2.10 -108.70 GRPO + RSI-SU 12.64 1089.25 +0.49 -19.78 GRPO + RSI-SL 11.81 1118.04 -0.34 +9.01
+
+Table 10. The final avg@32 accuracy (Acc, %) and average gen-eration length (Len) performance comparison of GRPO, GRPO + RSI-S, GRPO + RSI-SU and GRPO + RSI-SL across 6 math rea-soning benchmarks on Qwen2.5-7B .                    
+
+> Method Acc (%) Len Imp. Acc (%) Imp. Len
+> GRPO 29.05 1167.11 ––GRPO + RSI-S 31.24 901.16 +2.19 -265.95 GRPO + RSI-SU 28.93 1000.66 -0.12 -166.45 GRPO + RSI-SL 29.17 1016.53 +0.12 -150.58
+
+pt,n = 1 − ε with ε → 0, then 
+
+lim  
+
+> Ht→0
+
+RSI t = 1 .
+
+Proof. By definition, 
+
+RSI t = 1 + log πθ (ot | q, o <t )
+
+Ht
+
+.According to the definition of Ht:
+
+Ht = −
+
+> V
+
+X
+
+> s=1
+
+pt,s log pt,s 
+
+= −pt,n log pt,n −
+
+X
+
+> s̸=n
+
+(1 − pt,n ) pt,s 
+
+(1 − pt,n ) log((1 − pt,n ) pt,s 
+
+(1 − pt,n ) )= −pt,n log pt,n − (1 − pt,n ) log(1 − pt,n )−
+
+(1 − pt,n ) X
+
+> s̸=n
+
+pt,s 
+
+(1 − pt,n ) log pt,s 
+
+(1 − pt,n ) .
+
+Observe that − P 
+
+> s̸=npt,s
+> (1 −pt,n )
+
+log pt,s  
+
+> (1 −pt,n )
+
+is the entropy of the normalized residual distribution over the remain-ing vocabulary. We denote it by Ht(p/p t,n ). Moreover, 
+
+−pt,n log pt,n −(1 −pt,n ) log(1 −pt,n ) is the binary entropy of the split [pt,n , 1 − pt,n ], denoted by Ht(pt,n ). Hence, 
+
+Ht = Ht(pt,n ) + (1 − pt,n )Ht(p/p t,n ).
+
+Therefore, 
+
+lim  
+
+> Ht→0
+
+RSI t = lim  
+
+> ε→0
+
+RSI t = 1 + lim 
+
+> ε→0
+
+log(1 − ε)
+
+Ht
+
+.
+
+Where: 
+
+Ht = −ε log ε − (1 − ε) log((1 − ε)) + εHt(p/p t,n ),
+
+It suffices to show that: 
+
+lim 
+
+> ε→0
+
+log(1 − ε)
+
+−ε log ε − (1 − ε) log((1 − ε)) + εHt(p/p t,n ) = 0 .
+
+Let Dε = −ε log ε − (1 − ε) log((1 − ε)) + εHt(p/p t,n ).It remains to prove that: 
+
+lim 
+
+> ε→0
+
+log(1 − ε)
+
+Dε
+
+= 0 .
+
+Notice that: 
+
+Dε ≥ − ε log ε. 
+
+Then we have: 
+
+0 ≤ | log(1 − ε)
+
+Dε
+
+| ≤ − log(1 − ε)
+
+−ε log ε .
+
+So according to Taylor expansion: 
+
+lim 
+
+> ε→0
+
+− log(1 − ε)
+
+−ε log ε = lim 
+
+> ε→0
+
+ε + O(ε2)
+
+ε log(1 /ε ) = lim 
+
+> ε→0
+
+1 + O(ε)log(1 /ε ) = 0 .
+
+Thus, by the squeeze theorem, 
+
+log(1 − ε)
+
+Dε
+
+→ 0.
+
+Therefore, log(1 − ε)
+
+Dε
+
+→ 0.
+
+Theorem 1: Let Tt denote the ℓ2-norm of the gradient of the log-probability log πθ (ot | q, o<t ) with respect to the logits lt, and let Ht denote the entropy of the distribution 
+
+πθ (· | q, o<t ). Suppose the generated token ot corresponds to the n-th vocabulary entry, i.e., πθ (ot | q, o<t ) = pt,n .Consider a small perturbation lt,n → lt,n + ∆ lt,n and Ht >
+
+0, RSI t̸ = 0 . Then both log Tt and log Ht admit first-order variations with respect to lt,n , we have: 
+
+d log Tt
+
+d log Ht
+
+:=     
+
+> dlog Tt
+> dl t,n
+> dlog Ht
+> dl t,n
+
+= 1RSI t
+
+.
+
+Proof. First, by the softmax definition, for any i,
+
+pt,i = elt,i 
+
+PVj=1 elt,j 
+
+,
+
+Therefore, 
+
+∂p t,i 
+
+∂l t,j 
+
+= −pt,j pt,i (j̸ = i), ∂p t,i 
+
+∂l t,i 
+
+= pt,i (1 − pt,i ).
+
+According to πθ (·| q, o<t ) = [ pt, 1, p t, 2, ..., p t,V ], we have: 
+
+∇lt log( pt,i ) = ∇lt pt,i 
+
+pt,i 
+
+= 1
+
+pt,i 
+
+[pt,i (et,i − πθ (·| q, o<t ))] = et,i − πθ (·| q, o<t ).
+
+where et,i is the unit vector at step t whose i-th entry is 1 and the others are 0. According to the definition of Tt:
+
+Tt = ||∇ lt log( pt,n )|| 2 =
+
+s
+
+(1 − pt,n )2 + X 
+
+> j̸=n
+
+p2 
+
+> t,j
+
+.
+
+Consider the total differentials of Ht and Tt with respect to lt, consider perturbing lt by lt + ∆ lt where ∆lt =[∆ lt, 1, ∆lt, 2, . . . , ∆lt,V ]. Then we have: 
+
+d(log Tt) = ∇lt log Tt · ∆lt =
+
+> V
+
+X
+
+> k=1
+
+∂ log Tt
+
+∂l t,k 
+
+∆lt,k ,d(log Ht) = ∇lt log Ht · ∆lt =
+
+> V
+
+X
+
+> k=1
+
+∂ log Ht
+
+∂l t,k 
+
+∆lt,k .
+
+We first compute ∂Ht 
+
+> ∂l t,i
+
+first, we have: 
+
+∂Ht
+
+∂l t,i 
+
+= X
+
+> k
+
+∂Ht
+
+∂p t,k 
+
+· ∂p t,k 
+
+∂l t,i 
+
+,and 
+
+∂Ht
+
+∂p t,k 
+
+= ∂(−pt,k log pt,k )
+
+∂p t,k 
+
+= −(log pt,k + pt,k · 1
+
+pt,k 
+
+)= −(log pt,k + 1) .
+
+Therefore: 
+
+∂Ht
+
+∂l t,i 
+
+= X
+
+> k
+
+ ∂Ht
+
+∂p t,k 
+
+· ∂p t,k 
+
+∂l t,i 
+
+
+
+= X
+
+> k
+
+−(log pt,k + 1) · pt,k (δtki − pt,i )
+
+= X
+
+> k
+
+−pt,k log pt,k (δtki − pt,i ) + X
+
+> k
+
+−pt,k (δtki − pt,i ) .
+
+Where: 
+
+δtki =
+
+(
+
+1, if i = k, 
+
+0, if i̸ = k. 
+
+Notice that: 
+
+X
+
+> k
+
+−pt,k δtki + X
+
+> k
+
+pt,k pt,i = −pt,i + pt,i (X
+
+> k
+
+pt,k ) = 0 .
+
+So: 
+
+∂Ht
+
+∂l t,i 
+
+= X
+
+> k
+
+−pt,k log pt,k δtki − X
+
+> k
+
+(−pt,k log pt,k )pt,i 
+
+= −pt,i (log pt,i + Ht)= −pt,i Ht(1 + log( pt,i )
+
+Ht
+
+).
+
+and 
+
+> V
+
+X
+
+> k=1
+
+∂Ht
+
+∂l t,k 
+
+∆lt,k = −
+
+> V
+
+X
+
+> k=1
+
+pt,k (log pt,k + Ht)∆ lt,k .
+
+On the other hand, we compute the derivative of Tt with respect to each logit lt,i . Since 
+
+T 2 
+
+> t
+
+= ∥en−pt∥22 = (1 −pt,n )2+X 
+
+> k̸=n
+
+p2 
+
+> t,k
+
+= 1 −2pt,n +
+
+> V
+
+X
+
+> k=1
+
+p2
+
+> t,k
+
+,
+
+we have 
+
+∂T 2
+
+> t
+
+∂l t,i 
+
+= −2 ∂p t,n 
+
+∂l t,i 
+
++ 2 
+
+> V
+
+X
+
+> k=1
+
+pt,k 
+
+∂p t,k 
+
+∂l t,i 
+
+.
+
+Using the softmax derivative 
+
+∂p t,k 
+
+∂l t,i 
+
+= pt,k (δtki − pt,i ),
+
+we obtain 
+
+∂T 2
+
+> t
+
+∂l t,i 
+
+= −2pt,n (δtni − pt,i ) + 2 
+
+> V
+
+X
+
+> k=1
+
+p2
+
+> t,k
+
+(δtki − pt,i )= −2pt,n δtni + 2 pt,n pt,i + 2 p2 
+
+> t,i
+
+− 2pt,i VX
+
+> k=1
+
+p2
+
+> t,k
+
+.
+
+Since pt,n δtni = pt,i δtni , this can be rewritten as 
+
+∂T 2
+
+> t
+
+∂l t,i 
+
+= −2pt,i δtni − pt,n − pt,i +
+
+> V
+
+X
+
+> k=1
+
+p2
+
+> t,k
+
+!
+
+.
+
+Moreover, 
+
+∂T 2
+
+> t
+
+∂l t,i 
+
+= 2 Tt
+
+∂Tt
+
+∂l t,i 
+
+.
+
+Therefore, 
+
+∂Tt
+
+∂l t,i 
+
+= − pt,i 
+
+Tt
+
+δtni − pt,n − pt,i +
+
+> V
+
+X
+
+> k=1
+
+p2
+
+> t,k
+
+!
+
+.
+
+Using VX
+
+> k=1
+
+p2 
+
+> t,k
+
+= T 2 
+
+> t
+
++ 2 pt,n − 1,
+
+we further obtain 
+
+∂Tt
+
+∂l t,i 
+
+= − pt,i 
+
+Tt
+
+ δtni − pt,i + T 2 
+
+> t
+
++ pt,n − 1 .
+
+Equivalently, 
+
+∂Tt
+
+∂l t,i 
+
+=
+
+
+
+−T tpt,n , i = n, 
+
+−T tpt,i + p2 
+
+> t,i
+
+− pt,i pt,n + pt,i 
+
+Tt
+
+, i̸ = n. 
+
+Since Ht > 0, the distribution is not degenerate on ot;therefore Tt > 0, and the division by Tt is well-defined. Using the expression derived above, 
+
+∂Tt
+
+∂l t,k 
+
+= −T tpt,k − pt,k 
+
+Tt
+
+(δnk − pt,k + pt,n − 1) ,
+
+we obtain 
+
+> V
+
+X
+
+> k=1
+
+∂Tt
+
+∂l t,k 
+
+∆lt,k 
+
+=
+
+> V
+
+X
+
+> k=1
+
+
+
+−T tpt,k − pt,k 
+
+Tt
+
+ δtnk − pt,k + pt,n − 1
+
+∆lt,k 
+
+= −T tVX
+
+> k=1
+
+pt,k ∆lt,k − 1
+
+TtVX
+
+> k=1
+
+pt,k 
+
+ δtnk − pt,k + pt,n − 1 ∆lt,k .The second summation can be simplified as follows. For 
+
+k = n,
+
+δtnk − pt,k + pt,n − 1 = 0 .
+
+For k̸ = n,
+
+δnk − pt,k + pt,n − 1 = − (pt,k − pt,n + 1) .
+
+Therefore, 
+
+> V
+
+X
+
+> k=1
+
+∂Tt
+
+∂l t,k 
+
+∆lt,k 
+
+= −T tVX
+
+> k=1
+
+pt,k ∆lt,k + 1
+
+Tt
+
+X 
+
+> k̸=n
+
+pt,k (pt,k − pt,n + 1) ∆ lt,k .
+
+So, in general, we have: 
+
+d(log Tt)
+
+d(log Ht) = Ht
+
+Tt
+
+PVk=1  
+
+> ∂Tt
+> ∂l t,k
+
+∆lt,k 
+
+PVk=1  
+
+> ∂Ht
+> ∂l t,k
+
+∆lt,k 
+
+= Ht
+
+Tt
+
+TtVX
+
+> k=1
+
+pt,k ∆lt,k − 1
+
+Tt
+
+X 
+
+> k̸=n
+
+pt,k 
+
+· (pt,k − pt,n + 1)∆ lt,k 
+
+PVk=1 pt,k (log pt,k + Ht)∆ lt,k 
+
+=
+
+> V
+
+X
+
+> k=1
+
+pt,k ∆lt,k − 1
+
+T 2
+
+> t
+
+X 
+
+> k̸=n
+
+pt,k 
+
+· (pt,k − pt,n + 1)∆ lt,k VX
+
+> k=1
+
+pt,k ∆lt,k + 1
+
+HtVX
+
+> k=1
+
+pt,k 
+
+· (log pt,k )∆ lt,k 
+
+.
+
+According to our assumption, if we only consider a small amount on ∆lt,n , then we obtain: 
+
+d(log Tt)
+
+d(log Ht) = Ht
+
+Tt
+
+Ttpt,n ∆lt,n 
+
+pt,n (log pt,n + Ht)∆ lt,n 
+
+= Ht
+
+Ht + log pt,n 
+
+= 11 + log πθ (ot|q,o<t )
+
+> Ht
+
+= 1
+
+RSI t
+
+.
