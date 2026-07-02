@@ -6,34 +6,35 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-07-01
-- 运行时间：2026-07-01 20:32:28 UTC
+- 最新运行日期：2026-07-02
+- 运行时间：2026-07-02 20:42:31 UTC
 - 运行状态：成功
-- 本次总论文数：4
-- 精读区：2
-- 速读区：2
+- 本次总论文数：5
+- 精读区：1
+- 速读区：4
 
 ### 今日简报（AI）
-今日推荐聚焦Token与推理优化，精读两篇高分论文分别提出自适应Token选择法和可解释离散潜在推理。
-最值得关注的方向是：利用相对惊奇指数动态筛选关键Token以提升强化学习效率，以及通过渲染压缩实现可解释的离散推理过程。
-建议普通读者优先精读这两篇论文，再速读草案增强生成与动态表示编辑方法以拓展视野。
-- 详情：[/202607/01/README](/202607/01/README)
+今日聚焦Token影响衰减机制与LLM推理优化，精读9分论文揭示语言模型中间层权重函数视角下的距离衰减规律。重点推荐：精读论文发现Token影响随距离呈格林函数式衰减，为理解注意力机制提供新工具；速读中Coverage-Driven KV缓存淘汰策略（7分）值得关注，可提升推理效率。建议普通读者优先精读该篇理解模型行为，再结合KV缓存优化实践。
+- 详情：[/202607/02/README](/202607/02/README)
 
 ### 精读区论文标签
-1. [Which Tokens Matter? Adaptive Token Selection for RLVR with the Relative Surprisal Index](/202607/01/2606.31575v1-which-tokens-matter-adaptive-token-selection-for-rlvr-with-the-relative-surprisal-index)  
+1. [How Token Influence Decays with Distance: A Green-Function View of Trained Language Models](/202607/02/2606.29139v1-how-token-influence-decays-with-distance-a-green-function-view-of-trained-language-models)  
    标签：评分：9.0/10、query:key-tokens
-   evidence：直接使用相对惊奇指数识别关键token用于RLVR
-2. [Why Struggle with Continuous Latents? Interpretable Discrete Latent Reasoning via Rendered Compression](/202607/01/2606.29712v1-why-struggle-with-continuous-latents-interpretable-discrete-latent-reasoning-via-rendered-compression)  
-   标签：评分：8.0/10、query:key-tokens
-   evidence：将连续潜在状态转换为离散token以增强可解释性
+   evidence：token影响衰减提供了token重要性度量
 
 ### 速读区论文标签
-1. [Dustin: Draft-Augmented Sparse Verification for Efficient Long-Context Generation with Speculative Decoding](/202607/01/2606.24957v1-dustin-draft-augmented-sparse-verification-for-efficient-long-context-generation-with-speculative-decoding)  
+1. [Coverage-Driven KV Cache Eviction for Efficient and Improved Inference of LLM](/202607/02/2606.29563v1-coverage-driven-kv-cache-eviction-for-efficient-and-improved-inference-of-llm)  
+   标签：评分：7.0/10、query:key-tokens
+   evidence：覆盖驱动的缓存驱逐使用标记选择度量
+2. [Efficient and Trainable Language Model Test-Time Scaling via Local Branch Routing](/202607/02/2606.25354v2-efficient-and-trainable-language-model-test-time-scaling-via-local-branch-routing)  
    标签：评分：6.0/10、query:key-tokens
-   evidence：在推测解码中识别关键令牌用于稀疏验证
-2. [Search for Truth from Reasoning: A Dynamic Representation Editing Framework for Steering LLM Trajectories](/202607/01/2606.28589v1-search-for-truth-from-reasoning-a-dynamic-representation-editing-framework-for-steering-llm-trajectories)  
+   evidence：利用隐藏状态进行令牌级路由，涉及推理令牌选择与分析
+3. [Know When to Stop: Segment-Level Credit Assignment for Reducing Overthinking](/202607/02/2607.00482v1-know-when-to-stop-segment-level-credit-assignment-for-reducing-overthinking)  
    标签：评分：6.0/10、query:key-tokens
-   evidence：研究推理链中句子级别的真实性几何，涉及隐藏状态分析
+   evidence：通过信用分配识别推理轨迹中无生产力的自我反思token
+4. [Prototype Language Models](/202607/02/2607.00510v1-prototype-language-models)  
+   标签：评分：6.0/10、query:key-tokens
+   evidence：基于原型的架构可追溯预测到训练样本，与因果追溯相关
 
 
 <div class="dpr-home-promo-card">

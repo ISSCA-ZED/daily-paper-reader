@@ -1,0 +1,684 @@
+Title: Know When to Stop: Segment-Level Credit Assignment for Reducing Overthinking
+
+URL Source: https://arxiv.org/pdf/2607.00482v1
+
+Published Time: Thu, 02 Jul 2026 00:33:06 GMT
+
+Number of Pages: 15
+
+Markdown Content:
+## Know When to Stop: Segment-Level Credit Assignment for Reducing Overthinking 
+
+Chia-Hsuan Lee, Sihui Dai, Mingyang Zhou, Isha Slavin Shi-Xiong Zhang, Sambit Sahu, William Campbell 
+
+Capital One 
+
+Abstract 
+
+Reasoning language models frequently over-think: generating extended chains of behaviors such as hedging, approach abandonment, and self contradiction that consume tokens without improving answers. We show that these behav-iors are not merely a consequence of length; even when controlling for response length, in-correct traces exhibit higher rates of unpro-ductive self-reflection than correct ones. Ad-dressing this requires identifying where self-reflection helps vs hurts, but obtaining these step-level annotations is costly. We observe that intermediate answer commitments within reasoning traces can provide a cheap proxy: by comparing each final answer candidate in the trace to the ground truth, we can determine whether subsequent reflection is productive without any additional supervision. Building on this insight, we propose DASH (Drift Aware advantage SHaping), which assigns segment-level credit based on whether each reasoning segment leads toward or away from correctness. On competition-level math benchmarks, DASH achieves the highest accuracy where overthink-ing is prevalent (AIME25: 50.8% vs. 45.4% GRPO) while reducing overthinking behaviors and achieving more productive self-correction than baselines. 
+
+1 Introduction 
+
+Reasoning-focused language models, such as DeepSeek-R1 (DeepSeek-AI, 2025), achieve strong performance through extended chains of thought. However, longer reasoning does not al-ways help: models frequently exhibit overthinking behaviors such as hedging, re-verifying, or switch-ing approaches (Wang et al., 2025b; Peng et al., 2025) which can lead the model to an incorrect final answer. This motivates a natural question: can we train models to retain productive self-reflection while surpressing unproductive self-reflection? A signif-icant challenge is cost: identifying whether self-reflection is helpful at each reasoning step would require step-wise labels via a process reward model (Lightman et al., 2024; Wang et al., 2024), LLM-as-a-judge, or manual annotation (Lightman et al., 2024). In this work, we propose a cheaper alterna-tive. Our key observation is that reasoning models can commit to intermediate answers within their thinking traces–for example, writing "the answer is X" or boxing a result before continuing to reason. These commitments provide verifiable demonstra-tions of productive and unproductive self-reflection: by comparing each to the ground truth, we know whether subsequent reflection improved or de-graded the answer, without any external supervi-sion. When a model reaches a correct intermediate answer and then reflects its way to an incorrect one, we have direct evidence that this self-reflection was harmful. Based on this intuition, we propose DASH 
+
+(Drift-Aware advantage SHaping), which converts traces where the answer drifts from correct to incor-rect intermediate examples from wasted negatives into informative training examples. Rather than assigning a single scalar advantage to the entire rollout, DASH divides each trace into segments bounded by consecutive answer checkpoints and assigns advantages based on whether each segment moves towards or away from the correct answer. A single drift trace simultaneously teaches the model to reinforce the reasoning that found the correct answer and to suppress the overthinking that aban-doned it–extracting dual training signal from what GRPO would treat as a flat negative example. We complement DASH with six lightweight lin-guistic overthinking signals —repetition, hedging, abandonment, contradiction, recomputation, and length outlier—that characterize reasoning quality without requiring intermediate answer extraction. These signals serve as evaluation metrics to verify 1  
+
+> arXiv:2607.00482v1 [cs.CL] 1 Jul 2026 Figure 1: Overview of DASH. We decompose reasoning traces into segments bounded by intermediate answer checkpoints. Segments leading to correct answers (green) receive positive advantage; segments leading to incorrect answers (red) receive escalating negative advantage. Standard GRPO assigns uniform negative advantage to all tokens in an incorrect trace, discarding the structure within.
+
+that accuracy gains correspond to genuine behav-ioral improvements rather than superficial short-cuts. Experiments on Nemotron-4B across four competition-level math benchmarks show: • Best accuracy where drift is worst. DASH achieves 50.8% on AIME25 (vs. 45.4% GRPO, 46.1% base)—the benchmark with the highest drift prevalence. • Self-correction over spiraling. DASH’s correct traces exhibit twice as many contradiction-then-resolution patterns as GRPO’s (0.92 vs. 0.47/trace), while showing fewer blind approach abandonments— reasoning longer but more productively. 
+
+2 Analyzing Overthinking in Reasoning Traces 
+
+Prior work on reasoning efficiency has primar-ily characterized overthinking through response length: longer traces are treated as less efficient, and length penalties or early-stopping mechanisms are used to encourage brevity (Muennighoff et al., 2025). However, length alone does not provide detail signals for what overthinking behaviors are exhibited by the model. To address this, we first introduce a set of lin-guistic signals to analyze overthinking patterns. All signals are regex- or n-gram-based, requiring no learned components: • S1 (Repetition): Maximum n-gram overlap be-tween sliding windows. Captures circular rea-soning loops where the model rephrases without progressing (Duan et al., 2026). • S2 (Hedging): Density of uncertainty markers (“wait, no,” “let me reconsider”) per 100 tokens. Operationalizes the self-doubt mechanism pre-ceding negative flips (Zhou et al., 2026). • S3 (Abandonment): Count of explicit strategy switches (“this approach is wrong,” “let me try another way”). The strongest individual failure predictor: 4.1–4.3 × more common in incorrect traces across all models tested. • S4 (Contradiction): Count of self-contradiction markers (“which is impossible,” “can’t be right”). Captures unresolved inconsistencies (Mündler et al., 2024; Yang et al., 2026). • S5 (Recomputation): Numerical values derived 3+ times in computation contexts. Targets con-firmatory re-checking that rarely catches errors (Long et al., 2026). • S6 (Length outlier): Per-prompt group z-score of response length. Adaptive: hard problems warrant long responses, but within-group outliers indicate pathology. Using these signals, we analyze reasoning traces generated by Llama-3.1-Nemotron-Nano-4B-v1.1 (NVIDIA, 2025) on AIME 2025. We bucket gen-erated responses by length and analyze the correla-tion between correctness, length, and overthinking behaviors. We present results for abandonment and self-contradiction dimensions in Figure 2 and a full analysis in Appendix C. Figure 2(a) shows that accuracy decreases mono-tonically with response length, confirming that the model’s additional computation in longer traces is largely unproductive. Panels (b) and (c) reveal a more nuanced finding: even controlling for re-sponse length, incorrect traces exhibit higher rates of approach abandonment and self-contradiction than correct traces within the same length bucket. 21k 4k 4k 9k 9k 12k 12k 14k 14k 18k         
+
+> Response Length (words)
+> 0
+> 20
+> 40
+> 60
+> 80
+> 100
+> Accuracy (%)
+> (a) Accuracy by Length
+> 1k 4k 4k 9k 9k 12k 12k 14k 14k 18k
+> Response Length (words)
+> 0.00
+> 0.01
+> 0.02
+> 0.03
+> 0.04
+> 0.05
+> Count per 100 words
+> (b) Approach Abandonment
+> Correct
+> Incorrect
+> 1k 4k 4k 9k 9k 12k 12k 14k 14k 18k
+> Response Length (words)
+> 0.000
+> 0.005
+> 0.010
+> 0.015
+> 0.020
+> 0.025
+> 0.030
+> 0.035
+> Count per 100 words
+> (c) Self-Contradiction
+> Correct
+> Incorrect
+
+Figure 2: Overthinking signals in Nemotron-4B reasoning traces on AIME 2025 (960 traces, 32 per problem). Traces are grouped into quintiles by word count. (a) Accuracy drops sharply with response length. (b–c) Approach abandonment and self-contradiction density (per 100 words), split by correctness within each length bucket. Even controlling for length, incorrect traces exhibit higher rates of unproductive self-reflection than correct traces, indicating these linguistic signals carry information beyond response length alone. 
+
+The gap is most pronounced for approach aban-donment, where incorrect traces show consistently elevated density across all buckets, while self-contradiction shows a similar but more moderate trend. These patterns suggest that much of the model’s unproductive computation involves cycles of self-reflection that actively steer reasoning in the wrong direction—abandoning viable approaches or ar-riving at contradictions that undermine earlier progress. This motivates our central hypothesis: if we can discourage self-reflective behavior that ultimately leads to incorrect answers while preserv-ing reflection that aids error correction, we may improve both reasoning efficiency and accuracy without simply truncating generation length. 
+
+3 Drift-Aware Advantage Shaping 
+
+One challenge is that it is difficult to identify where self-reflective behavior is needed for correcting errors in reasoning steps and where it hurts per-formance. In this section, we consider a cheap proxy: rather than obtaining annotations across each step containing self-reflection and whether it is helpful or not, we instead extract signals from self-reflection that occurs after arriving at a candi-date final answer, which can be verified with the ground truth as a measure of whether self-reflection was helpful or not. 
+
+3.1 Preliminaries: GRPO 
+
+In Group Relative Policy Optimization (Shao et al., 2024), for each prompt x, the model generates n
+
+rollouts {y1, . . . , y n}. Each rollout receives a re-ward ri, and advantages are computed by group normalization: 
+
+Ai = ri − mean ({rj }nj=1 )
+
+std ({rj }nj=1 ) (1) This scalar Ai is broadcast identically to every token position in rollout yi, yielding per-token ad-vantages at = Ai for all t ∈ { 1, . . . , |yi|} . The policy gradient loss is: 
+
+L = − 1
+
+|yi|
+
+> |yi|
+
+X
+
+> t=1
+
+min ( ρtAi, clip (ρt, 1 ± ϵ)Ai)
+
+(2) where ρt = πθ(yt|x, y <t )/π ref (yt|x, y <t ).
+
+3.2 Identifying Answer Drift 
+
+Our proposed algorithm is centered around the key idea of detecting portions of self-reflection where the final answer is incorrect even though the trace had reached the correct solution at some point. For-mally, we define answer drift as: 
+
+Definition 3.1 (Answer Drift) . Let y be a reason-ing trace produced for a question with ground-truth answer a∗. Suppose we extract from y an ordered sequence of intermediate answer candi-dates (ˆ a1, . . . , ˆaK ), representing successive points at which the model commits to an answer be-fore potentially reconsidering. We say y exhibits 
+
+answer drift if ˆaK = a∗ and there exists some 
+
+i ∈ 1, . . . , K − 1 such that ˆai̸ = a∗.In order to identify drift occurrence, we ex-tract intermediate answer commitments within the reasoning trace by matching patterns including 
+
+\boxed{...} , “the answer is X”, and natural-language answer commitments. Instances where 3drift occurs are prime examples of where self-reflection harms performance that we aim to pe-nalize. 
+
+3.3 Segment-Based Advantage Shaping 
+
+One important consideration is that we would like to maintain positive self-correction even within traces with drift. For example, a trace can oscil-late between a correct answer candidate and an incorrect answer candidate, and we would like to encourage behavior where the model’s self reflec-tion changes to the correct answer while penaliz-ing shifts from correct to incorrect. To handle this, rather than broadcasting a single advantage to all to-kens, we divide each rollout into segments bounded by consecutive answer checkpoints ( ˆaj−1, ˆaj ] and assign segment-specific advantages. 
+
+Segment construction. Given checkpoints at to-ken positions p1 < p 2 < . . . < p K within the response, we define segments: • Neutral segment S0: tokens before the first checkpoint ( t < p 1)• Positive segment S+ 
+
+> j
+
+: tokens in segment 
+
+(ˆ aj−1, ˆaj ] where checkpoint ˆaj is correct • Negative segment S− 
+
+> j
+
+: tokens in segment 
+
+(ˆ aj−1, ˆaj ] where checkpoint ˆaj is incorrect 
+
+Advantage assignment. For each token at posi-tion t:
+
+at =
+
+
+
++|Ai| · α+ if t ∈ S+
+
+> j
+
+−| Ai| · α− · w(t) if t ∈ S−
+
+> j
+
+Ai · αn if t ∈ S0 (conditional) (3) where α+, α − are positive and negative scale factors, αn is the neutral scale, and w(t) is a length penalty weight defined below. 
+
+Length penalty within negative segments. To encode “the longer you continue past a correct an-swer, the worse it gets,” tokens in negative seg-ments receive an escalating penalty: 
+
+w(t) = 1 + α · t − t(k)
+
+> start
+
+t(k) 
+
+> end
+
+− t(k)
+
+> start
+
+(4) where α controls the ramp rate and the penalty is capped at wmax to prevent gradient explosion. 
+
+Conditional neutral mode. Tokens before the first answer checkpoint (the “neutral” segment) present a design choice. We implement three modes: • zero : No gradient on neutral tokens (conser-vative). • standard : Apply the standard GRPO advan-tage. • conditional : Apply a scaled advantage based on whether the trace eventually drifts, providing a weak signal that the initial reason-ing trajectory correlates with drift. 
+
+3.4 Reward Shaping for Drift Traces 
+
+Before advantage computation, drift traces receive a shaped reward that reflects their partial correct-ness: 
+
+rdrift = rincorrect + δ ·
+
+
+
+1 − Lpost-drift 
+
+Ltotal 
+
+
+
+(5) where δ is the drift partial credit and the formula naturally decreases as the post-drift section grows. The shaped reward is capped: rdrift ≥ rincorrect , en-suring drift traces are never penalized more harshly than pure-incorrect traces. 
+
+4 Experimental Results 
+
+4.1 Experimental Setup 4.1.1 Model and Data 
+
+We evaluate on Llama-3.1-Nemotron-Nano-4B-v1.1 (NVIDIA, 2025), a 4B-parameter reasoning model that exhibits “detailed thinking” mode trig-gered by a system prompt. This model exhibits high drift rates ( ∼20% on AIME-level problems), making it a natural testbed for drift-aware train-ing. Training data consists of 16.5K mathematical reasoning problems sampled from OpenR1-Math-220K (Open R1 Team, 2025), sourced from Numi-naMath 1.5 (AI-MO Team, 2024) with reasoning traces from DeepSeek-R1 (DeepSeek-AI, 2025) verified by Math-Verify. We restrict to problems with both correct and incorrect verified traces to ensure meaningful GRPO signal. 
+
+4.1.2 Evaluation 
+
+We evaluate on four competition-level mathemati-cal reasoning benchmarks: OlympiadBench (He et al., 2024), AMC 2023 (Mathematical Asso-ciation of America, 2023), AIME 2024 (Math-AI, 2025), and AIME 2025 (Math-AI, 2026). For AMC23, AIME24, and AIME25, we report avg@32 (average accuracy over 32 sampled solu-tions per problem). For OlympiadBench, we report pass@1. 44.1.3 Training Configuration 
+
+All runs use GRPO with group size n = 16 trained on 4 nodes of 8 H100 GPUs. For our drift-aware (DASH) runs, we set positive and negative advan-tage scales to α+ = 1 .0, α − = 1 .0, use a length penalty with α = 3 .0 and wmax = 3 .0, and ap-ply a conditional neutral mode with αn = 0 .1.Full training hyperparameters are provided in Ap-pendix F. 
+
+4.1.4 Baselines 
+
+Along with the base model and standard GRPO, we compare against two baselines designed to address lengthy reasoning traces: 
+
+DR-GRPO (Liu et al., 2025). DR-GRPO is a debiased variant of GRPO that addresses an im-plicit length bias in the optimization objective. It makes two modifications: (1) replacing per-response length normalization in the policy loss with a constant scaling factor, which ensures that longer and shorter responses receive equal per-token gradient weight, and (2) computing advan-tages as ˆAi = ri−mean ({rj }nj=1 ) without dividing by std ({rj }nj=1 ), which removes a question-level difficulty bias. These changes have been shown to improve token efficiency and reduce the length of incorrect responses. This baseline tests whether an explicit credit assignment over the reasoning trajectory is more effective at reducing drift and overthinking behavior compared to using a debi-ased optimizer. 
+
+GRPO + Brevity Bonus. We introduce a simple reward shaping baseline that explicitly encourages shorter correct traces. For each prompt group, we identify the length of the shortest correct response 
+
+lmin . Each correct trace of length li then receives an additive per-token bonus: bi = β·lmin 
+
+> l2
+> i
+
+, where 
+
+β is a scale hyperparameter. The shortest correct trace receives the maximum total bonus of β, while longer correct traces receive proportionally less (scaling as lmin /l i). Incorrect traces receive no bonus. This baseline tests whether a simple length pressure on correct traces–without any fine-grained credit assignment over the reasoning trajectory– suffices to reduce drift and overthinking behavior. In our experiments, we use β = 0 .2
+
+4.2 Results 4.2.1 Main Results 
+
+Table 1 presents accuracy across benchmarks. 
+
+Key observations. (1) Strongest performance on the hardest benchmark. DASH achieves the highest AIME25 accuracy (50.8%), outperforming GRPO and DR-GRPO. AIME25 is the benchmark with the highest drift prevalence and longest rea-soning traces, suggesting that segment-level credit assignment is most impactful where overthinking is most severe. 
+
+(2) GRPO’s blind spot on AIME25. Standard GRPO improves over the base model on Olympiad-Bench (+6.4) and AIME24 (+1.3) but degrades on AIME25 ( −0.7). DASH avoids this regression, im-proving AIME25 by +4.7 over base. This aligns with our drift analysis: AIME25 has the highest correct-to-wrong drift rate, and GRPO’s uniform negative advantage on drift traces inadvertently pe-nalizes the valid reasoning prefix, discouraging the strategies that found the correct intermediate an-swer. 
+
+4.2.2 Drift Reduction 
+
+In Figure 3, we report plot the rate of positive changes in answer (Wrong → Right) as a percent-age of all flips in answer correctness for generated traces on AIME across DASH and baselines. We observe that DASH maintains the high combined accuracy and self-correction rate among methods that do not sacrifice accuracy, while Brevity Bonus achieves a high W →R rate but at the cost of re-duced accuracy. 
+
+5 Analysis 
+
+5.1 Ablation Studies Ablation results. Table 2 isolates the contribu-tion of two DASH components. Removing the length penalty on negative segments (which es-calates the penalty for tokens further past a cor-rect answer) reduces AIME25 by −2.2 and aver-age by −1.18, confirming that the “the longer you continue past a correct answer, the worse” signal is load-bearing. Removing the conditional neu-tral mode (which provides a weak gradient on tokens before the first answer checkpoint) has a smaller effect on AIME25 ( −1.9) but interestingly improves OlympiadBench (+1.5), suggesting that pre-answer tokens on OlympiadBench contain less drift-predictive signal. The full DASH configura-tion achieves the best average and the best AIME25 score, indicating that both components contribute complementary value. 5Method OlympiadBench AMC23 AIME24 AIME25 Average 
+
+Baselines 
+
+Nemotron-4B 60.9 90.8 60.5 46.1 64.57 GRPO 67.3 92.8 61.8 45.4 66.83 DR-GRPO 66.7 94.3 62.2 50.3 68.38 
+
+GRPO + Brevity Bonus 66.5 91.6 58.5 45.9 65.63 
+
+DASH (Ours) 65.2 91.8 61.1 50.8 67.22 
+
+Table 1: Main results. DASH compared against RL baselines on competition math benchmarks. Best per column in 
+
+bold . Average is computed over OlympiadBench, AMC23, AIME24, and AIME25. 
+
+Variant OlympiadBench AMC23 AIME24 AIME25 Average 
+
+DASH (full) 65.2 91.8 61.1 50.8 67.22 
+
+w/o length penalty on negative 63.1 91.2 61.3 48.6 66.05 w/o conditional neutral 66.7 90.4 61.1 48.9 66.78 
+
+Table 2: Ablation study on DASH components. Best per column in bold . Average is computed over OlympiadBench, AMC23, AIME24, and AIME25. 70 75 80 85 90          
+
+> % W R (of all answer flips)
+> 58.5
+> 59.0
+> 59.5
+> 60.0
+> 60.5
+> 61.0
+> 61.5
+> 62.0
+> Accuracy (%)
+> AIME 2024
+> Base
+> GRPO
+> DR-GRPO
+> Brevity Bonus
+> DASH
+> 62 64 66 68 70 72 74 76
+> % W R (of all answer flips)
+> 46
+> 47
+> 48
+> 49
+> 50
+> 51
+> Accuracy (%)
+> AIME 2025
+
+Figure 3: Accuracy vs. self-correction rate on AIME 2024 (top) and AIME 2025 (bottom). The x-axis re-ports the percentage of answer flips that are beneficial (wrong →right), computed as W →R / (W →R + R →W) across all traces where consecutive answer checkpoints differ in correctness. Methods in the upper-right region achieve both high accuracy and effective self-correction. 
+
+Figure 4: Overthinking signal profile on AIME25. 
+
+Each axis represents one of six linguistic signals, nor-malized to [0 , 1] . Smaller area = less overthinking. DASH achieves the lowest or near-lowest values on five of six signals while attaining the highest accu-racy (50.8% avg@32). The sole elevated signal— contradiction (s4)—reflects productive self-monitoring (§D). 
+
+5.2 Overthinking Signal Analysis 
+
+Figure 4 compares five training methods across six overthinking signals on AIME25. DASH achieves the tightest profile: lowest repetition (s1: 0.40 vs. 0.47 Nemotron-4B), lowest abandonment (s3: 2.59 vs. 2.70 GRPO), and lowest length-outlier (s6: 0.008 vs. 0.010 GRPO)—while producing 11.8% longer traces and achieving the highest accuracy (50.8% vs. 45.4% GRPO avg@32). 6Contradiction as self-monitoring. The one axis where DASH exceeds GRPO is contradiction (s4: 2.67 vs. 1.63). Rather than indicating overthink-ing, this reflects a qualitative shift in error-handling strategy. In GRPO, contradictions are 6.1 × more frequent in incorrect than correct traces—they are almost exclusively failure symptoms. In DASH, this discrimination ratio drops to 3.9 × because DASH’s correct traces contain nearly twice as many contradictions (0.92 vs. 0.47 per trace), using them as an error-monitoring mechanism: detect inconsistency → diagnose root cause → resolve →
+
+proceed. GRPO instead responds to confusion by silently abandoning approaches (8 abandonments per trace in the example of Figure 6) without ever identifying what went wrong. Full discrimination statistics are in Table 4 (Appendix D), and a head-to-head trace comparison on AIME25 Problem 20 is in Figure 6. In summary: DASH’s reasoning is longer but 
+
+not more wasteful—it exhibits less repetition, less abandonment, and more deliberate error-checking, consistent with a model that has learned to self-correct rather than spiral. 
+
+5.3 Qualitative Analysis 
+
+To demonstrate how our drift-aware algorithm mit-igates answer drift, we analyze two concrete case studies from the AIME 2025 evaluation set in Ta-ble 3. In both instances, the base model success-fully uncovers the correct solution in its intermedi-ate reasoning trace but drifts away from the answer (often numerous times), choosing alternative ap-proaches. It ultimately exhausts the token limit without generating a final answer. In contrast, our drift-hybrid model stabilizes after a single valida-tion phase and successfully commits to the correct solution. 
+
+6 Related Work 
+
+6.1 Overthinking and Reasoning Efficiency 
+
+Excessive reasoning in LLMs has been documented across multiple studies. Chen et al. (2024) first named the “overthinking” phenomenon in o1-like models, showing that models over-allocate com-pute to simple problems. Su et al. (2025) demon-strated a U-shaped relationship between reason-ing length and accuracy, and the “Reasoning Com-pletion Point” framework (Wei et al., 2025) for-mally showed that once a model reaches its peak correctness probability, continued reasoning al-most never improves the answer—it primarily re-confirms or flips to wrong. Wang et al. (2025b) link drift to thought-switching, and Peng et al. (2025) trace the mechanism to self-doubt after correct an-swers. Rather than hoping continued reasoning self-corrects, we train the model to recognize when to stop within a trace. 
+
+6.2 Length Control in RL for Reasoning 
+
+Several methods address the length problem in GRPO training. 
+
+Length-penalized rewards : Dr. GRPO (Liu et al., 2025) corrects a per-token normalization bias that dilutes penalties for long incorrect traces; DAPO (Yu et al., 2025) uses token-level loss aggre-gation; ShorterBetter (Yi et al., 2025) introduces “Sample Optimal Length” as a reward signal. 
+
+Progressive constraints : ThinkPrune (Hou et al., 2025) iteratively tightens token budgets, and L1/LCPO (Aggarwal and Welleck, 2025) adds ex-plicit length-controlled objectives. 
+
+Decoupled normalization : DRPO (Li et al., 2025) normalizes correct and incorrect rollouts sep-arately, preventing length effects from corrupting advantage estimates. Our method adopts decoupled normalization as a component but adds segment-level granularity within individual traces. All of these approaches use token count as a proxy for overthinking—a lossy signal that penal-izes all length equally, including legitimate com-plex reasoning. Our method instead targets why 
+
+a response is long (detecting actual answer drift) rather than that it is long. 
+
+6.3 Token- and Segment-Level Credit Assignment 
+
+Standard GRPO broadcasts a single advantage to all tokens. Several methods provide finer-grained credit through learned weighting (GTPO (Tan et al., 2025), λ-GRPO (Wang et al., 2025a)), external judges (CAPO (Xie et al., 2025)), or Monte Carlo value estimation (VinePPO (Kazemnejad et al., 2025), SPO (Guo et al., 2025)). Most closely related to our work, VPPO (Liu et al., 2026) uses a process reward model (PRM) to localize the first incorrect step in a failed rollout, partitioning the trajectory into a verified correct pre-fix (rewarded) and an erroneous suffix (penalized). This shares our intuition that not all tokens in a failed trace deserve equal blame. However, VPPO 7AIME 2025 Problem #1 AIME 2025 Problem #2                                                 
+
+> Let Nbe the number of 8-digit positive integers using digits 1–8exactly once divisible by 22. Find N−2025 .(Answer: 279 )Let Abe the set of positive integer divisors of 2025 and Ba random subset of A. The probability that Bis nonempty with lcm( B) = 2025 is m/n . Find m+n.(Answer: 237 )Base Model ✓“2304 −2025 = 279.”
+> ⟲“Is that the answer? Wait, let me verify. . . ”
+> ✓“Then, 2304 −2025 = 279.”
+> ⟲“Is that correct? Let me verify with another approach. . . ”
+> ✓“Maybe the answer is 279, but I need to verify.”
+> ⟲“Wait, let’s check another resource. . . ”
+> · · ·
+> ✗Token limit exhausted. No final answer.
+> ✓“m + n = 237.”
+> ⟲“Wait, hold on. Let me double-check. . . ”
+> ✓“Therefore, m + n = 237.”
+> ⟲“But wait, let me think again. Let’s think differently. . . ”
+> · · ·
+> ✗Token limit exhausted. No final answer. DASH
+> ✓“So 2304 −2025 = 279.”
+> ▷“Wait, let me double-check the logic. . . ”
+> ✓“The calculation seems correct.”
+> ✓279 Correct.
+> ✓“The answer is 109 + 128 = 237.”
+> ▷“Let me just make sure I didn’t make a mistake. . . ”
+> ✓“So m + n = 237.”
+> ✓237 Correct.
+
+Table 3: Qualitative comparison of reasoning traces on two AIME 2025 problems. The base model reaches the correct answer repeatedly ( ✓) but enters self-verification loops ( ⟲) until the token limit is exhausted. DASH commits to the answer after brief verification ( ▷), avoiding drift entirely. 
+
+relies on an external PRM for error localization and targets correctness boundaries, whereas our method uses the model’s own intermediate answers to detect drift boundaries—requiring no additional models and applying to both correct and incorrect traces, since a correct trace that drifts before self-correcting still wastes compute. VPPO’s binary pre-fix/suffix partition also does not capture the richer structure of traces with multiple answer changes, which our segment-based formulation handles nat-urally. 
+
+6.4 Inference-Time Early Exit 
+
+Orthogonal to our training-time approach, several methods diagnose overthinking at inference (Fu et al., 2026; Yang et al., 2025; Wang et al., 2026; Muennighoff et al., 2025). These are complemen-tary to ours: a model trained with drift-aware shap-ing could additionally use inference-time early exit for further efficiency gains. We discuss extended related work in Appendix G. 
+
+7 Conclusion 
+
+We presented DASH, a segment-level credit assign-ment method for reducing overthinking in reason-ing language models. The core idea is to use the model’s own answer checkpoints as free supervi-sion: when a trace reaches a correct answer and later moves away from it, the trace reveals both a useful reasoning prefix and a harmful reflective suffix. DASH preserves this structure by reward-ing segments that lead to correct checkpoints and penalizing segments that lead away from them. Our analysis shows why this distinction mat-ters. Overthinking is not simply a matter of re-sponse length; even among traces of comparable length, incorrect solutions contain more abandon-ment and unresolved contradiction. On competition math benchmarks, DASH is most effective where this failure mode is most prevalent, achieving the best AIME25 accuracy while reducing repetition, abandonment, and length outliers. The remain-ing contradiction signal becomes more productive: DASH uses contradictions for diagnosis and recov-ery rather than as a prelude to spiraling. These results suggest that efficient reasoning training should focus less on making models uni-versally shorter and more on teaching them when reflection has stopped being useful. Segment-level credit from answer checkpoints offers a simple way to make that distinction without process labels or external judges. 
+
+Limitations 
+
+Our work has several limitations. First, experi-ments are conducted on a 4B model; while our analysis suggests drift patterns are scale-invariant, training dynamics may differ at larger scales. Sec-ond, our method requires extractable intermediate answers for drift detection, which limits applicabil-8ity to domains with verifiable checkpoints (math-ematics, code with test cases). Open-ended rea-soning tasks without clear answer markers would require alternative drift indicators. Third, the slight accuracy decrease on some easy benchmarks for Nemotron (MATH-500: −1.7pp vs. base) repre-sents a real trade-off that practitioners must weigh against gains on hard problems. Finally, our evalu-ation is limited to mathematical reasoning; general-ization to other reasoning domains (logical, scien-tific, commonsense) remains to be validated. Future work could explore difficulty-adaptive methods that modulate drift penalty strength based on problem difficulty or model uncertainty. As with any RL fine-tuning method, DASH in-herits the safety properties and failure modes of the base model; we do not introduce safety mitigations beyond those of the upstream models. 
+
+References 
+
+Pranjal Aggarwal and Sean Welleck. 2025. L1: Con-trolling how long a reasoning model thinks with re-inforcement learning. In Proceedings of the Second Conference on Language Modeling .AI-MO Team. 2024. NuminaMath 1.5. 
+
+https://huggingface.co/datasets/AI-MO/ NuminaMath-1.5 .Xingyu Chen, Jiahao Xu, Tian Liang, Zhiwei He, Jianhui Pang, Dian Yu, Linfeng Song, Qiuzhi Liu, Mengfei Zhou, Zhuosheng Zhang, Rui Wang, Zhaopeng Tu, Haitao Mi, and Dong Yu. 2024. Do NOT think that much for 2+3=? on the overthinking of o1-like LLMs. Preprint , arXiv:2412.21187. DeepSeek-AI. 2025. DeepSeek-R1: Incentivizing rea-soning capability in LLMs via reinforcement learning. 
+
+Preprint , arXiv:2501.12948. Zenghao Duan, Liang Pang, Zihao Wei, Wenbin Duan, Yuxin Tian, Shicheng Xu, Jingcheng Deng, Zhiyi Yin, and Xueqi Cheng. 2026. Circular reasoning: Understanding self-reinforcing loops in large reason-ing models. Preprint , arXiv:2601.05693. Gongfan Fang, Xinyin Ma, and Xinchao Wang. 2025. Thinkless: LLM learns when to think. In Advances in Neural Information Processing Systems .Yichao Fu, Junda Chen, Siqi Zhu, Zheyu Fu, Zhong-dongming Dai, Yonghao Zhuang, Yian Ma, Aurick Qiao, Tajana Rosing, Ion Stoica, and Hao Zhang. 2026. Efficiently scaling LLM reasoning programs with certaindex. In The Thirty-ninth Annual Confer-ence on Neural Information Processing Systems .Yiran Guo, Lijie Xu, Jie Liu, Ye Dan, and Shuang Qiu. 2025. Segment policy optimization: Effective segment-level credit assignment in RL for large lan-guage models. In Advances in Neural Information Processing Systems .Chaoqun He, Renjie Luo, Yuzhuo Bai, Shengding Hu, Zhen Thai, Junhao Shen, Jinyi Hu, Xu Han, Yujie Huang, Yuxiang Zhang, Jie Liu, Lei Qi, Zhiyuan Liu, and Maosong Sun. 2024. OlympiadBench: A challenging benchmark for promoting AGI with olympiad-level bilingual multimodal scientific prob-lems. In Proceedings of the 62nd Annual Meeting of the Association for Computational Linguistics (Vol-ume 1: Long Papers) , pages 3828–3850. Association for Computational Linguistics. Bairu Hou, Yang Zhang, Jiabao Ji, Yujian Liu, Kaizhi Qian, Jacob Andreas, and Shiyu Chang. 2025. Thinkprune: Pruning long chain-of-thought of LLMs via reinforcement learning. Preprint ,arXiv:2504.01296. Jian Hu. 2025. REINFORCE++: A simple and effi-cient approach for aligning large language models. 
+
+Preprint , arXiv:2501.03262. Amirhossein Kazemnejad, Milad Aghajohari, Eva Porte-lance, Alessandro Sordoni, Siva Reddy, Aaron Courville, and Nicolas Le Roux. 2025. VinePPO: Refining credit assignment in RL training of LLMs. In Proceedings of the 42nd International Conference on Machine Learning , volume 267 of Proceedings of Machine Learning Research , pages 29557–29590. PMLR. Gang Li, Yan Chen, Ming Lin, and Tianbao Yang. 2025. DRPO: Efficient reasoning via decoupled reward pol-icy optimization. Preprint , arXiv:2510.04474. Hunter Lightman, Vineet Kosaraju, Yuri Burda, Harri-son Edwards, Bowen Baker, Teddy Lee, Jan Leike, John Schulman, Ilya Sutskever, and Karl Cobbe. 2024. Let’s verify step by step. In International Conference on Learning Representations , volume 2024, pages 39578–39601. Haolin Liu, Dian Yu, Sidi Lu, Yujun Zhou, Rui Liu, Zhenwen Liang, Haitao Mi, Chen-Yu Wei, and Dong Yu. 2026. Save the good prefix: Precise error penal-ization via process-supervised RL to enhance LLM reasoning. Preprint , arXiv:2601.18984. Zichen Liu, Changyu Chen, Wenjun Li, Penghui Qi, Tianyu Pang, Chao Du, Wee Sun Lee, and Min Lin. 2025. Understanding R1-Zero-Like training: A criti-cal perspective. In Proceedings of the Second Con-ference on Language Modeling .Quanyu Long, Kai Jie Jiang, Jianda Chen, Xu Guo, Leilei Gan, and Wenya Wang. 2026. Self-verification dilemma: Experience-driven suppression of overused checking in LLM reasoning. Preprint ,arXiv:2602.03485. Math-AI. 2025. Aime24: Math reasoning benchmark. 
+
+https://huggingface.co/datasets/math-ai/ aime24 .
+
+9Math-AI. 2026. Aime25: American invitational math-ematics examination 2025. https://huggingface. co/datasets/math-ai/aime25 .Mathematical Association of America. 2023. American Mathematics Competitions (AMC) 8, 10A, 10B, 12A, 12B . Mathematical Association of America, Wash-ington, DC. Competitions aimed at middle and high school students. Niklas Muennighoff, Zitong Yang, Weijia Shi, Xi-ang Lisa Li, Li Fei-Fei, Hannaneh Hajishirzi, Luke Zettlemoyer, Percy Liang, Emmanuel Candès, and Tatsunori Hashimoto. 2025. s1: Simple test-time scaling. In Proceedings of the 2025 Conference on Empirical Methods in Natural Language Processing ,pages 20275–20321, Suzhou, China. Association for Computational Linguistics. Niels Mündler, Jingxuan He, Slobodan Jenko, and Mar-tin Vechev. 2024. Self-contradictory hallucinations of large language models: Evaluation, detection and mitigation. In The Twelfth International Conference on Learning Representations .NVIDIA. 2025. Llama-nemotron: Efficient reasoning models. Preprint , arXiv:2505.00949. Open R1 Team. 2025. OpenR1-Math-220k. 
+
+https://huggingface.co/datasets/open-r1/ OpenR1-Math-220k . Apache 2.0 License. Keqin Peng, Liang Ding, Yuanxin Ouyang, Meng Fang, and Dacheng Tao. 2025. Revisiting overthinking in long chain-of-thought from the perspective of self-doubt. Preprint , arXiv:2505.23480. Charilaos Pipis, Shivam Garg, Vasilis Kontonis, Vaish-navi Shrivastava, Akshay Krishnamurthy, and Dim-itris Papailiopoulos. 2025. Wait, wait, wait... why do reasoning models loop? arXiv preprint arXiv:2512.12895 .Zhihong Shao, Peiyi Wang, Qihao Zhu, Runxin Xu, Junxiao Song, Xiao Bi, Haowei Zhang, Mingchuan Zhang, Y. K. Li, Y. Wu, and Daya Guo. 2024. DeepSeekMath: Pushing the limits of mathemati-cal reasoning in open language models. Preprint ,arXiv:2402.03300. Guangming Sheng, Chi Zhang, Zilingfeng Ye, Xibin Wu, Wang Zhang, Ru Zhang, Yanghua Peng, Haibin Lin, and Chuan Wu. 2025. Hybridflow: A flexible and efficient rlhf framework. In Proceedings of the Twentieth European Conference on Computer Sys-tems , pages 1279–1297. Jinyan Su, Jennifer Healey, Preslav Nakov, and Claire Cardie. 2025. Between underthinking and overthink-ing: An empirical study of reasoning length and cor-rectness in LLMs. Preprint , arXiv:2505.00127. Hongze Tan, Zihan Wang, Jianfei Pan, Jinghao Lin, Hao Wang, Yifan Wu, Tao Chen, Zhihang Zheng, Zhihao Tang, and Haihua Yang. 2025. GTPO and GRPO-S: Token and sequence-level reward shaping with policy entropy. Preprint , arXiv:2508.04349. Hieu Tran, Zonghai Yao, and Hong Yu. 2025. Exploit-ing tree structure for credit assignment in RL training of LLMs. Preprint , arXiv:2509.18314. Peiyi Wang, Lei Li, Zhihong Shao, Runxin Xu, Damai Dai, Yifei Li, Deli Chen, Yu Wu, and Zhifang Sui. 2024. Math-shepherd: Verify and reinforce LLMs step-by-step without human annotations. In Proceed-ings of the 62nd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Pa-pers) , pages 9426–9439, Bangkok, Thailand. Associ-ation for Computational Linguistics. Xinyan Wang, Xiaogeng Liu, and Chaowei Xiao. 2026. ROM: Real-time overthinking mitigation via streaming detection and intervention. Preprint ,arXiv:2603.22016. Yining Wang, Jinman Zhao, Chuangxin Zhao, Shuhao Guan, Gerald Penn, and Shinan Liu. 2025a. λ-GRPO: Unifying the GRPO frameworks with learn-able token preferences. Preprint , arXiv:2510.06870. Yue Wang, Qiuzhi Liu, Jiahao Xu, Tian Liang, Xingyu Chen, Zhiwei He, Linfeng Song, Dian Yu, Juntao Li, Zhuosheng Zhang, Rui Wang, Zhaopeng Tu, Haitao Mi, and Dong Yu. 2025b. Thoughts are all over the place: On the underthinking of o1-like LLMs. 
+
+Preprint , arXiv:2501.18585. Zihao Wei, Liang Pang, Jiahao Liu, Jingcheng Deng, Shicheng Xu, Zenghao Duan, Jingang Wang, Fei Sun, Xunliang Cai, Huawei Shen, and Xueqi Cheng. 2025. Stop spinning wheels: Mitigating LLM overthinking via mining patterns for early reasoning exit. Preprint ,arXiv:2508.17627. Guofu Xie, Yunsheng Shi, Hongtao Tian, Ting Yao, and Xiao Zhang. 2025. CAPO: Towards enhancing LLM reasoning through generative credit assignment. 
+
+Preprint , arXiv:2508.02298. Bangji Yang, Hongbo Ma, Jiajun Fan, and Ge Liu. 2026. Batched contextual reinforcement: A task-scaling law for efficient reasoning. Preprint ,arXiv:2604.02322. Chenxu Yang, Qingyi Si, Yongjie Duan, Zheliang Zhu, Chenyu Zhu, Qiaowei Li, Minghui Chen, Zheng Lin, and Weiping Wang. 2025. Dynamic early exit in reasoning models. Preprint , arXiv:2504.15895. Jingyang Yi, Justin Wang, and Sida Li. 2025. Short-erBetter: Guiding reasoning models to find optimal inference length for efficient reasoning. In Advances in Neural Information Processing Systems .Qiying Yu, Zheng Zhang, Ruofei Zhu, Yufeng Yuan, Xiaochen Zuo, Yu Yue, Weinan Dai, and 1 others. 2025. DAPO: An open-source LLM reinforcement learning system at scale. In Advances in Neural Information Processing Systems .Yu Yue, Yufeng Yuan, Qiying Yu, Xiaochen Zuo, Ruofei Zhu, Wenyuan Xu, Jiaze Chen, Chengyi Wang, 
+
+10 Tiantian Fan, Zhengyin Du, Xiangpeng Wei, Xi-angyu Yu, Gaohong Liu, Juncai Liu, Lingjun Liu, Haibin Lin, Zhiqi Lin, Bole Ma, Chi Zhang, and 8 others. 2025. VAPO: Efficient and reliable reinforce-ment learning for advanced reasoning tasks. Preprint ,arXiv:2504.05118. Shu Zhou, Rui Ling, Junan Chen, Xin Wang, Tao Fan, and Hao Wang. 2026. When more thinking hurts: Overthinking in LLM test-time compute scal-ing. Preprint , arXiv:2604.10739. 
+
+A Signal Implementation Details 
+
+S1: Repetition. Window size 200 tokens, stride 50. Jaccard similarity over 5-grams between non-adjacent window pairs. Score = max similarity, clipped to [0 , 1] . Threshold: > 0.4.
+
+S2: Hedging. Case-insensitive regex: wait , hmm ,
+
+actually , hold on , let me reconsider , I’m confused , not sure , on second thought . Den-sity = count per 100 tokens. 
+
+S3: Abandonment. Regex: this approach is wrong , let me try another , let’s restart ,
+
+going back to , scrapping this , dead end ,
+
+alternatively . Raw count per trace. 
+
+S4: Contradiction. Regex: contradicts the previous , which is impossible , this is impossible , can’t be right , that’s not possible , inconsistent with , but we just showed . Raw count per trace. 
+
+S5: Recomputation. Numeric values extracted via [-+]?\d+(?:\.\d+)? . Values appearing 3+ times within 10-token computation contexts (near 
+
+=, +, −, ×) are flagged. Count of unique repeated values. 
+
+S6: Length outlier. z-score of thinking-section length within the GRPO prompt group. Flag thresh-old: z > 2.0. Score = min(( z −2) /2, 1) for z > 2,else 0.
+
+Composite. Signals are normalized to [0 , 1] :
+
+˜s1 = max( s1 − 0.2, 0) /0.8, ˜s2 = min( s2/3, 1) ,
+
+˜s3 = min( s3/3, 1) , ˜s4 = min( s4/3, 1) , ˜s5 =min( s5/5, 1) . Composite ω = (˜ s1 + ˜ s2 + ˜ s3 +˜s4 + ˜ s5)/5, clamped to [0 , 1] . Overthinking flag: 
+
+ω > 0.3.
+
+B Signal Motivation and Prior Work 
+
+S1 (Repetition). Reasoning models generate long chains of thought but often loop at low temper-atures, repeating the same text (Pipis et al., 2025). Duan et al. (2026) classify these as circular rea-soning loops driven by self-reinforcing attention mechanisms that prevent escape from local min-ima. 
+
+S2 (Hedging) and S3 (Abandonment). Zhou et al. (2026) examine negative flips—cases where extended reasoning changes correct answers to in-correct ones. They find that explicit reconsideration (hedging) precedes approach abandonment in over 67% of negative flip cases, and that abandonment rates increase monotonically with token count. The “alternatively” marker alone is 4.1–4.3 × more com-mon in incorrect Nemotron traces across all scales tested. 
+
+S4 (Contradiction). Self-contradiction is aprevalent LLM failure mode: Mündler et al. (2024) find contradictions in 17.7% of all ChatGPT sen-tences. Yang et al. (2026) note that extended rea-soning chains specifically increase opportunities for self-contradiction and degenerate outputs. 
+
+S5 (Recomputation). Duan et al. (2026) clas-sify “numerical loops”—where models repeatedly derive the same constants—as a distinct loop cate-gory triggered by reasoning impasses. Long et al. (2026) show through large-scale analysis that mod-els spend a substantial fraction of reasoning on con-firmatory self-verification that rarely catches errors, reducing tokens by 20.3% when suppressed. 
+
+S6 (Length outlier). Our analysis of Nemotron-4B across difficulty levels reveals a bimodal length distribution on hard problems: responses either solve in <2K tokens (88% accuracy) or spiral into a 10K–25K token dead zone (0.6% accuracy). Within-group normalization captures this pathol-ogy adaptively without penalizing legitimately long solutions. 
+
+C Full Overthinking Signals On Nemotron-4B 
+
+Figure 5 extends the main-text analysis by showing all four count-based linguistic signals on AIME 2024 and AIME 2025. The top row reports density-normalized counts within each length quintile, while the bottom row reports raw counts. This separation is important: if overthinking were only a length artifact, the density-normalized gaps be-tween correct and incorrect traces should largely disappear once traces are compared within the same length bucket. Instead, incorrect traces re-11 1k 4k 4k 9k 9k 12k 12k 14k 14k 18k                             
+
+> Response Length (words)
+> 0.0
+> 0.1
+> 0.2
+> 0.3
+> 0.4
+> 0.5
+> 0.6
+> 0.7
+> 0.8
+> Hedging Density
+> (per 100 words)
+> Correct
+> Incorrect
+> 1k 4k 4k 9k 9k 12k 12k 14k 14k 18k
+> Response Length (words)
+> 0.00
+> 0.01
+> 0.02
+> 0.03
+> 0.04
+> 0.05
+> Approach Abandonment
+> (per 100 words)
+> Correct
+> Incorrect
+> 1k 4k 4k 9k 9k 12k 12k 14k 14k 18k
+> Response Length (words)
+> 0.000
+> 0.005
+> 0.010
+> 0.015
+> 0.020
+> 0.025
+> 0.030
+> 0.035
+> Self-Contradiction
+> (per 100 words)
+> Correct
+> Incorrect
+> 1k 4k 4k 9k 9k 12k 12k 14k 14k 18k
+> Response Length (words)
+> 0
+> 1
+> 2
+> 3
+> 4
+> 5
+> 6
+> Numerical Recomputation
+> (per 100 words)
+> Correct
+> Incorrect
+> 1k 4k 4k 9k 9k 12k 12k 14k 14k 18k
+> Response Length (words)
+> 0
+> 20
+> 40
+> 60
+> 80
+> 100
+> 120
+> Hedging Count
+> (raw)
+> Correct
+> Incorrect
+> 1k 4k 4k 9k 9k 12k 12k 14k 14k 18k
+> Response Length (words)
+> 0
+> 1
+> 2
+> 3
+> 4
+> 5
+> Abandonment Count
+> (raw)
+> Correct
+> Incorrect
+> 1k 4k 4k 9k 9k 12k 12k 14k 14k 18k
+> Response Length (words)
+> 0
+> 1
+> 2
+> 3
+> 4
+> 5
+> Contradiction Count
+> (raw)
+> Correct
+> Incorrect
+> 1k 4k 4k 9k 9k 12k 12k 14k 14k 18k
+> Response Length (words)
+> 0
+> 100
+> 200
+> 300
+> 400
+> 500
+> 600
+> Recomputation Count
+> (raw)
+> Correct
+> Incorrect
+> Overthinking Signals: Nemotron-4B on AIME 2025 (960 traces)
+
+Figure 5: Full breakdown of overthinking signals in Nemotron-4B reasoning traces on AIME 2024 and 2025 combined (1,920 traces, 32 per problem). Traces are grouped into quintiles by word count, with bars showing the mean signal value for correct (green) and incorrect (red) traces within each bucket. Top row: density-normalized signals (counts per 100 words), which control for the trivial effect of longer traces containing more text. Bottom row: raw counts. Across all four signal types—hedging, approach abandonment, self-contradiction, and numerical recomputation—incorrect traces exhibit higher density than correct traces of comparable length, with the gap most pronounced for abandonment and contradiction. Raw counts show that incorrect traces accumulate substantially more overthinking markers in absolute terms, consistent with their longer average length. 
+
+tain higher signal density across most buckets, especially for approach abandonment and self-contradiction. These are precisely the behaviors most associated with harmful post-answer reflec-tion: the model notices uncertainty, changes direc-tion, and often fails to resolve the inconsistency before continuing. The raw-count panels show the compounding effect of this behavior. Longer incorrect traces do not merely contain more words; they accumulate more abandonment, contradiction, hedging, and recomputation events in absolute terms. Thus the long-tail failures are both quantitatively longer and qualitatively different from successful traces. Hedg-ing and recomputation are less individually diag-nostic than abandonment, but their upward trend in incorrect traces suggests a common failure pattern: the model repeatedly re-opens decisions it has al-ready made rather than converting verification into commitment. This supports the central motivation for DASH: reducing overthinking should not mean penalizing all long reasoning, but assigning credit according to whether reflection moves the answer trajectory toward resolution or back into search. 
+
+GRPO DASH 
+
+Correct Incorrect Correct Incorrect s4: Contradiction 0.47 2.86 0.92 3.54 s3: Abandonment 1.13 2.50 1.60 3.77 s4/s3 ratio 0.41 1.14 0.57 0.94 s4 discrim. (inc/cor) 6.11 × 3.86 ×
+
+s3 discrim. (inc/cor) 2.22 × 2.35 ×
+
+% correct w/ s4 26.1% 33.1% 
+
+% incorrect w/ s4 64.0% 81.6% 
+
+Table 4: Contradiction as self-monitoring vs. over-thinking (AIME25, 240 traces/model). DASH’s lower discrimination ratio (3.9 × vs. 6.1 ×) indicates contradictions are less predictive of failure—correct traces actively use them for error-monitoring (0.92 vs. 0.47/trace). Higher s4/s3 ratio in correct traces (0.57 vs. 0.41) shows more diagnosis per approach switch. 
+
+D Contradiction Signal: Discrimination Analysis 
+
+The raw s4 count conflates two phenomena: • Productive contradiction (predominant in DASH correct traces): detect inconsistency →
+
+diagnose source → resolve → correct answer. • Unproductive contradiction (predominant in GRPO incorrect traces): notice error → fail to diagnose → silently abandon → repeat. 12 Table 4 shows that 33.1% of DASH cor-rect traces contain contradictions (vs. 26.1% for GRPO), averaging 0.92 per trace—nearly double GRPO’s 0.47. This indicates DASH learned to use self-contradiction as a reasoning tool rather than being derailed by it. 
+
+D.1 Qualitative Example: Self-Correction vs. Spiraling 
+
+Figure 6 contrasts the two reasoning strategies on AIME25 Problem 20 (circle geometry). GRPO never identifies the root cause—a misunderstand-ing of internal tangency—and instead exhaustively substitutes values across 8 different parameteriza-tions until truncation. DASH explicitly names the geometric impossibility (“that can’t be”), iteratively narrows the misunderstanding, resolves it at 59% of the trace, and proceeds linearly to the correct computation. 
+
+E Training Dynamics 
+
+Figure 7 plots KL divergence and entropy over training for all methods. DASH maintains the low-est KL divergence throughout training, indicating that it achieves length reduction through targeted segment-level credit assignment rather than aggres-sive policy deviation, while GRPO + Brevity Bonus suffers from entropy collapse ( →0.21), suggesting a loss of output diversity. 
+
+F Training Configuration 
+
+All runs share: • GRPO with group size n = 16 , learning rate 
+
+3 × 10 −6, grad clip 1.0 • KL penalty: βKL = 10 −4
+
+• Temperature 0.9, max response length 15,821 tokens • 4 nodes × 8 H100 GPUs, 1 epochs 
+
+DASH configuration. 
+
+• Advantage estimator: grpo_drift_hybrid 
+
+• Positive/negative scales: α+ = 1 .0, α− = 1 .0
+
+• Length penalty: α = 3 .0, wmax = 3 .0
+
+• Neutral mode: conditional , αn = 0 .1
+
+• Segment length penalty: enabled 
+
+G Extended Related Work 
+
+G.1 Adaptive Reasoning Depth 
+
+Fang et al. (2025) approach overthinking from a model-selection perspective: their Thinkless frame-work trains a model to adaptively choose between short-form and long-form reasoning via control to-kens and a Decoupled GRPO (DeGRPO) objective, learning when to engage in extended reasoning at all. Our work differs in granularity: rather than gating reasoning depth at the response level, we shape credit within a single reasoning trace. 
+
+G.2 Additional Length Control Methods Global vs. local normalization. REIN-FORCE++ (Hu, 2025) replaces GRPO’s group-level advantage normalization with global batch-level normalization, arguing that the former is a biased estimator that interacts poorly with length variation. 
+
+Value-based methods. VAPO (Yue et al., 2025) addresses the length problem within a value-based PPO framework, introducing Decoupled GAE to handle heterogeneous sequence lengths and a length-adaptive discount to prevent long traces from dominating value estimates. While VAPO tackles length heterogeneity through the value func-tion, our method instead operates directly on the policy gradient by reshaping advantages based on detected drift. 
+
+G.3 Token-Level Credit Assignment, Continued 
+
+TEMPO (Tran et al., 2025) builds prefix trees for nonparametric token-level credit. SPO (Guo et al., 2025) bridges token- and trajectory-level feedback through mid-grained, segment-level advantage esti-mation using flexible cutpoint- or tree-based parti-tions evaluated via Monte Carlo sampling without a critic model. These methods provide general-purpose credit assignment without specifically tar-geting drift; our approach is complementary in that we use the structure of intermediate answers to as-sign credit based on the model’s own reasoning tra-jectory, requiring no additional models, sampling, or learned components. 
+
+G.4 Inference-Time Early Exit, Continued 
+
+Certaindex (Fu et al., 2026) uses answer stability for early stopping, DEER (Yang et al., 2025) ter-minates based on confidence, and ROM (Wang et al., 2026) monitors for real-time overthinking indicators. Muennighoff et al. (2025) take a sim-pler approach with budget forcing, which controls test-time compute by forcefully terminating or ex-tending the model’s thinking process via appended tokens. 13 GRPO — INCORRECT 61K chars DASH — CORRECT 34K chars 8 abandonments · 0 contradictions 1 abandonment · 4 contradictions  
+
+> [44%]
+
+We need integers satisfying these. Let’s try possible pairs. b = 36 , d = −36 . . . not satisfied.  
+
+> [51%]
+
+Let’s try b = 72 , d = 72 . . . −864 = −1728 . Not true. Next: b = 48 , d = 108 . . .  
+
+> [61%]
+
+Let’s try q = 81 , t = 13 . . . −136 ̸ = −1080 . Next: 
+
+q = 27 , t = 39 . . . p2 = −24 . Impossible.  
+
+> [75%]
+
+Let’s try b = 6 :̸ = 36 . b = 4 :̸ = 36 . b = 5 :̸ = 36 . 
+
+> [82%]
+
+Let’s try m = 0 .5. . . negative. m = 0 .8. . . positive. Not helpful. . .  
+
+> [100%]
+
+[truncates mid-computation]  
+
+> [8%]
+
+Not on the line connecting centers. That can’t be. Let me check— ω1 internally tangent at B, so centers must be collinear with B. 
+
+> [23%]
+
+Distance O2 to B is 3, but ω2 has radius 15. That can’t be. If ω1 inside ω2, then AO 2 = 15 − 6 = 9 . . .  
+
+> [37%]
+
+9 + 15 = 24 , but AB = 6 . This is impossible. Must re-examine internal tangency. . .  
+
+> [59%]
+
+OB = OA + AB = 9 + 6 = 15 = r2. Resolved: B
+
+is 6 units beyond A from O. 
+
+> [80–100%]
+
+a = 2 b, 5b2 = 36 , area = 288 /5. 293 
+
+Figure 6: AIME25 Problem 20 (answer = 293). Left: GRPO cycles through 8 blind substitutions ( red ) without diagnosing the geometric misconfiguration, truncating at 61K chars. Right: DASH encounters 4 contradictions ( blue ), reasons about each, resolves the tangency configuration at 59%, and reaches the answer in 34K chars (43% shorter). 
+
+H Artifact Licenses 
+
+We list below the licenses of the scientific artifacts used in this work. Our use of all artifacts is re-stricted to non-commercial research on language-model reasoning, which is consistent with the in-tended use specified by each artifact’s authors. • Llama-3.1-Nemotron-Nano-4B-v1.1 
+
+(NVIDIA, 2025): released by NVIDIA under the NVIDIA Open Model License, with additional terms from the Llama 3.1 Community License Agreement. • veRL (Sheng et al., 2025): released by ByteDance Seed under the Apache License 2.0. • OpenR1-Math-220K (Open R1 Team, 2025): released by the Hugging Face Open-R1 team under the Apache License 2.0. • OlympiadBench (He et al., 2024): released by OpenBMB under the MIT License. • AMC 2023, AIME 2024, AIME 2025 : these are public mathematics competition problems originally published by the Mathematical As-sociation of America (MAA). We use them solely as held-out evaluation benchmarks, consistent with established practice in the reasoning-LLM literature. 14 0 25 50 75 100 125 150 175 200 
+
+> Training Step
+> 0.00
+> 0.02
+> 0.04
+> 0.06
+> 0.08
+> 0.10
+> KL Divergence
+
+KL Divergence         
+
+> GRPO
+> GRPO + Brevity Bonus
+> DASH
+> 025 50 75 100 125 150 175 200
+> Training Step
+> 0.20
+> 0.25
+> 0.30
+> 0.35
+> 0.40
+> 0.45
+> Entropy
+
+Entropy 
+
+> GRPO
+> GRPO + Brevity Bonus
+> DASH
+
+Figure 7: KL divergence and entropy over training. 
+
+DASH maintains the lowest KL divergence, achiev-ing length reduction through targeted credit assign-ment rather than aggressive policy deviation. GRPO + Brevity Bonus exhibits entropy collapse ( →0.21); stan-dard GRPO shows gradually increasing entropy and KL. 
+
+15

@@ -1,0 +1,250 @@
+Title: How Token Influence Decays with Distance: A Green-Function View of Trained Language Models
+
+URL Source: https://arxiv.org/pdf/2606.29139v1
+
+Published Time: Tue, 30 Jun 2026 00:54:45 GMT
+
+Number of Pages: 14
+
+Markdown Content:
+# How Token Influence Decays with Distance: A Green-Function View of Trained Language Models 
+
+A Preprint 
+
+Matthias Brändel,  Stephan Köhler and  Oliver Rheinbach 
+
+Faculty of Mathematics and Computer Science Technische Universität Bergakademie Freiberg, Freiberg, Germany June 30, 2026 
+
+# Abstract 
+
+We study how the next-token prediction of an autoregressive Transformer language model changes under small perturbations of earlier input token embeddings. Motivated by operator learning and iterative solvers for differential equations, we investigate how the influence of one token on another decays with distance in a trained model. In multilevel methods for differential equations—such as domain decomposition, multigrid, and multilevel preconditioning—one often exploits a separation between strong local interactions and weaker but essential global interactions. The latter correspond to the long tail of the Green’s function and are typically handled by a coarse-level operator. Inspired by this perspective, we compute an empirical, distance-resolved gradient profile of token dependencies using autograd. For a target position 
+
+j and distance r, we differentiate a selected next-token logit at position j with respect to the input embedding at position j − r. This yields a local linearization of the learned nonlinear operator. The resulting object is not a Green’s function of the text itself, but a Green-function-like property of the trained model on a given context. Experiments on trained Pythia models and Qwen2.5-0.5B show that, over the measured distance range, the median Jacobian sensitivity is much better described by a power-law-type decay than by an exponential alternative: the diagonal-normalized profile is well described by 
+
+G(r) ≈ γ + β(r + 1) −p
+
+with exponents p ≈ 0.7–0.9 (typically 0.8–0.9). This behavior appears on coherent text from Gutenberg and WikiText-103. Token-shuffling experiments show that the power-law profile persists even when syntax and prediction quality collapse, whereas randomly initialized models do not exhibit it. The slowly decaying long-range sensitivity thus appears to be a learned property of trained autoregressive Transformer operators. These findings suggest that hierarchical or coarse-level mechanisms in language models may be able to exploit the long-tailed sensitivity profiles. 
+
+# 1 Introduction 
+
+When striving to transfer ideas from numerical analysis and scientific computing to natural language processing (NLP), a natural question emerges: how does the influence of one token on another decay with distance? Large language models (LLMs) process sequences of tokens, and understanding this long-range information propagation is essential for interpretability, better architectural choices, and more efficient training or inference. The motivation for this question comes from hierarchical solvers for differential equations. In a typical elliptic problem, local degrees of freedom interact strongly with nearby degrees of freedom, while global interactions are weaker but cannot be ignored. In domain decomposition preconditioners, local subdomain solvers are therefore not enough: one also needs coarse functions that carry the global, slowly varying, or long-range part 
+
+> arXiv:2606.29139v1 [cs.LG] 28 Jun 2026
+
+How Token Influence Decays with Distance: A Green-Function View of Trained Language Models A Preprint 
+
+of the operator. This principle appears already in classical Schwarz methods [ 1] and is central to modern domain decomposition and multigrid theory [ 2– 4]. In short, good hierarchical solvers exploit strong local interactions and represent weak global interactions by a suitable coarse operator. Recent work at the interface of machine learning and domain decomposition further supports the idea that hierarchical numerical concepts can inform architectures in machine learning [5, 6]. Our recent operator-learning approach using linear attention was precisely of this type [ 6 ]. If an attention-like architecture is interpreted as an approximation of an inverse operator, then a natural question is what the analog of coarse-grid functions should be for natural language. For a Poisson problem, one has a clear mathematical answer: coarse basis functions, interface functions, or low-energy modes capture the global component. For natural language processing, there is no obvious analog of a finite-element coarse basis. Should the coarse variables correspond to words, sentences, topics, positions, summaries, or something else? Before proposing such a construction, one should first ask whether trained language models even possess a measurable long-range response that would justify a coarse level. This report attempts to address this question. We use automatic differentiation to measure how selected next-token logits change when earlier input-token embeddings are infinitesimally perturbed. Treating the forward pass of a trained LLM as a highly nonlinear operator, we empirically extract its local influence function across token distances. This gradient-based analysis provides a quantitative and interpretable view of token interactions that goes beyond conventional attention visualizations. Attention weights describe one internal mechanism of the model, but they should not be identified directly with input-output explanations [ 7– 9]. The derivative measured here describes the first-order effect of an input perturbation on an output logit. Our main empirical observation is that trained Transformer language models exhibit slowly decaying, long-range Jacobian sensitivities. This is in contrast to the typically exponential decay observed in classical recurrent neural networks (RNNs). The decay of long-range token influence is stable across several corpora and models, the median diagonal-normalized profile is well described, over the measured distance range, by a power-law-type decay rather than by the exponential alternative tested here. The effect persists when tokens are shuffled, but disappears for random weights. This suggests that trained LLMs contain learned long-range response modes. From the point of view of hierarchical architectures, these modes are precisely the kind of object that a coarse level would have to represent. 
+
+# 2 From Green Functions to Transformer Jacobians 
+
+In the theory of differential equations, for a linear problem Lu = f , the Green’s function [ 10 ] is the kernel of the solution operator L−1: u(x) = ( L−1f )( x) = ∫ G(x, y )f (y) dy. Formally, this means that 
+
+δu (x)
+
+δf (y) = G(x, y ),
+
+or, in a discrete problem Au = f ,
+
+∂u i
+
+∂f j
+
+= ( A−1)ij .
+
+The columns of A−1 are the discrete harmonic extensions (or equivalently, the energy-minimizing extensions) of unit perturbations on the right-hand side. A Green’s function therefore measures how strongly the solution at one position responds to a localized perturbation of the input at another position. This sensitivity interpretation motivates our empirical analogue for language models: we compute distance-resolved Jacobian responses of next-token logits with respect to earlier input embeddings. We believe that the Green-function analogy may be useful in the present context because efficient hierarchical solvers for differential equations are designed to exploit the fact that Green’s functions often exhibit strong local interactions together with weaker, but still important, long-range tails. For an autoregressive Transformer, no fixed linear inverse matrix is available. We therefore transfer the response-based viewpoint to local Jacobian responses of the trained model. A tokenized sequence with length 
+
+n is written as 
+
+T = ( t1, . . . , t n), ti ∈ V , (1) where V is the vocabulary. Let 
+
+E = ( e1, . . . , e n), ei ∈ Rd, (2) 2How Token Influence Decays with Distance: A Green-Function View of Trained Language Models A Preprint 
+
+be the input embeddings of T , and let 
+
+zj (E) ∈ R|V| (3) be the output logit vector at position j. The vector zj (E) contains the scores used to predict the next token: 
+
+ˆtj+1 = arg max  
+
+> v∈V
+
+zj,v (E). (4) To obtain a scalar derivative, we select one component of this logit vector. We use either the component corresponding to the observed next token in the sequence tj+1 or the component corresponding to the model prediction: 
+
+ϕtrue  
+
+> j
+
+(E) = zj,t j+1 (E),ϕpred  
+
+> j
+
+(E) = zj, ˆtj+1 (E).
+
+The distance-resolved sensitivity is defined for a target position j and a causal token distance r by 
+
+Gα(j, r ) = ∥∥∇ej−r ϕj (E)∥∥2 , α ∈ { true , pred } (5) where j − r is the source position. The parameters j and r are chosen such that j − r lies inside the sequence. The case r = 0 measures the local self-sensitivity at the target position. The Euclidean norm gives the largest first-order change of the selected logit under a unit perturbation of the source embedding. The absolute scale of Gα(j, r ) depends on embedding norms, logit scales, model size, and the selected target position. Since the present study focuses on the distance dependence of the response, each profile is normalized by its local response at zero distance: 
+
+˜Gα(j, r ) = Gα(j, r )
+
+Gα(j, 0) . (6) In the tables and figures, the corresponding normalized gradient-norm profile based on the true next-token logit is denoted by gradnorm_diag ; the analogous profile based on the model-predicted next-token logit is denoted by pred_gradnorm_diag .Thus, for all retained normalized profiles, the local reference value satisfies 
+
+˜Gα(j, 0) = 1 . (7) Let S denote the set of sampled sequences. For a fixed causal distance r, the aggregate profile is defined by the median over all sampled sequences S and all target positions j:
+
+Gα(r) = median S∈S , j ˜GαS (j, r ). (8) The median represents the typical normalized response at distance r and is used because individual profiles can contain large outliers. In the numerical implementation, profiles with non-finite Gα(j, 0) or |Gα(j, 0) | ≤ τ ,with τ = 10 −30 , are not included in the normalized aggregate statistics. All derivatives are computed by reverse-mode automatic differentiation in PyTorch [ 11 ] with respect to the continuous input embeddings; see section 4. To characterize the distance dependence of the aggregated profile, we compare three elementary decay models. We denote a fitted model profile by m(r) and use 
+
+mpow (r) = β(r + 1) −p, (9) for a pure power law decay, 
+
+mpow ,γ (r) = γ + β(r + 1) −p, (10) for a power law decay with a nonzero offset, and 
+
+mexp ,γ (r) = γ + β exp( −r/ξ ), (11) for an exponential decay with a characteristic length scale ξ.The exponent p measures the strength of the power law decay. Small values of p correspond to slowly decaying long-range influence. The parameter ξ plays the analogous role for the exponential model: it is the distance scale over which the response decreases by a factor of e. The offset γ allows for a distance-independent background level in the aggregated profile. 3How Token Influence Decays with Distance: A Green-Function View of Trained Language Models A Preprint 
+
+Remark 1 Since a Transformer defines a nonlinear map from the input embeddings to the next-token logits, there is no fixed Green’s function in the classical linear sense. However, for each fixed input text, the model can be linearized around the corresponding embedding sequence. The Jacobian of a selected logit with respect to an earlier input embedding is then the analogue of the Green kernel of this local linearization. In our experiments we do not use the signed Jacobian entries themselves, but their embedding-space norms, aggregated as a function of the causal distance. 
+
+# 3 Related Work 
+
+Our work is related to efforts in the analysis of Transformers. In particular, [ 12 ] introduced the notion of an induction head, where two attention heads collaborate, e.g., for sequence completion, using context information over long distances. In [ 13 ], the authors adopt the idea of in-context learning as decreasing loss with increasing token index, which they attribute to [14]. These approaches aim to identify internal mechanisms or prediction-specific computational graphs. In contrast, our approach does not reconstruct individual circuits. We measure a distance-resolved Jacobian profile of the trained Transformer operator, aggregated over many contexts, in order to study how input-output sensitivity decays with causal token distance. These works highlight the importance of understanding information flow and interaction patterns across positions. In contrast, our approach is motivated from multilevel methods in the numerical analysis of differential equations. Our work also has some relation to the broader discussion of whether attention weights can be interpreted as explanations because gradients are typical alternatives. In [ 7], the authors argue that attention weights should not automatically be treated as faithful explanations of model predictions; they consider the correlation of attention weights with gradient-based feature importance. The authors of [ 8] argue against this view and discuss conditions under which attention may still be explanatory. The authors of [ 15 ] argue in favor of saliency methods instead of attention, which include gradient-based methods for the explanation of model predictions. Saliency methods are well established in computer vision and image classification. Such methods are closely related to our approach. However, we are not interested in explaining model predictions for specific inputs but rather in average sensitivity as a function of token distance. In [ 9 ], the authors propose attention rollout and attention flow as methods for quantifying how information is mixed across layers in Transformers. These approaches analyze attention-based internal mixing patterns. In contrast, our diagnostic is based on derivatives of output logits with respect to input embeddings. It therefore measures a first-order input-output sensitivity rather than an attention weight or an attention-flow score. This places our method closer to gradient-based attribution methods such as Integrated Gradients [ 16 ], but, again, with a different objective: we compute many gradient norms and aggregate them by causal distance using the median. Recent related work includes [ 17 , 18 ]. In [ 17 ], the authors propose to use gradient information for attribution, i.e., to quantify how input tokens influence a model’s prediction. For example, using auto-diff on LlaMA-3.2 1B, they investigate how perturbations to an input token embedding affect a hidden state. As a gradient-based method, this work is clearly very closely related to ours. However, while in [ 17 ], the authors are interested in performing attribution for a given specific context, we are interested in averaged distance profiles of token dependencies using evaluation of the model at many different contexts. In [ 18 ], the authors investigate influence profiles in Transformers where attention concentrates on early and late tokens to explain the Lost-in-the-Middle effect [19] as a result of primacy and recency biases; see [18] and the references therein. Long-context behavior and position bias provide another important point of comparison. The discussion on long-range effects go back to [ 20 ], where the authors study whether long-range language models actually use distant context and show that the benefit of long context is selective rather than uniform across all predictions. In [ 19 ] the Lost-in-the-Middle effect was discussed showing that language models can fail to use relevant information when it is placed in the middle of a long context, even when the same information is used more reliably near the beginning or the end. Relatedly, [ 21 ] identifies attention sinks, where early tokens receive large attention mass even when they are not semantically important. In [ 22 ] and [ 18 ] the authors analyze the emergence of position bias in Transformers and connect influence profiles to primacy and recency effects. These works show that distance and position effects are fundamental in long-context Transformers. The long-context and position-bias literature shows that distant tokens are not used uniformly and that models may prefer information near the beginning or the end of a context [18–21]. 4How Token Influence Decays with Distance: A Green-Function View of Trained Language Models A Preprint 
+
+This supports the view that a coarse-level mechanism for language models should not be chosen solely from human semantic units such as sentences, paragraphs, or topics. It should also account for the learned long-range response structure of the trained operator. In our setting, this structure is represented by the distance-resolved Jacobian profile rather than by attention weights or retrieval accuracy alone. Other important approaches to understanding language models include graph-based methods in mechanistic interpretability, such as attribution graphs and information-flow routes [ 23 , 24 ]. These methods pursue a different goal than us: they aim to identify the internal components, features, or computational paths responsible for particular model outputs. In contrast, we do not attempt to reconstruct a circuit or assign attribution to individual heads, layers, or features. We use derivatives only as a local linear response of the original model and aggregate the resulting embedding-gradient norms by causal distance. 
+
+# 4 Automatic Differentiation 
+
+The distance-resolved sensitivities Gα(j, r ) are computed via reverse-mode automatic differentiation using PyTorch [ 11 ]. Conceptually, the computation for one target position j and causal distance r proceeds as follows: Listing 1: Conceptual procedure for computing the empirical sensitivity Gα(j, r ).                                                                                         
+
+> 1#Conceptual algorithm ( simplified for clarity )
+> 2embeds =model . get_input_embeddings () ( input_ids )
+> 3embeds =embeds . detach () . requires_grad_ ( True ) #make input embeddings differentiable
+> 45hidden =backbone ( inputs_embeds = embeds ) #transformer forward pass
+> 6logits =lm_head ( hidden ) #[ batch , seq_len , vocab_size ]
+> 78#Select the scalar logit we want to differentiate
+> 9target_logit =logits [0 , j , next_token_id ] #z_ {j , t_ { j +1}}
+> 10 11 #Compute gradient of this scalar w . r . t . all input embeddings
+> 12 grad =torch . autograd . grad ( target_logit , embeds ) [0] #shape : [ batch , seq_len , d_model ]
+> 13 14 #Extract gradient at source position i=j - r and take L2 norm
+> 15 sensitivity =grad [0 , j-r ]. norm () #|| \ nabla_ { e_ {j - r }} z_j || _2
+
+In the actual implementation several practical optimizations are applied: 
+
+• Only the required logit entry is computed (instead of materializing the full vocabulary-sized logit tensor). 
+
+• Multiple target positions are processed from a single forward pass. 
+
+• Gradients are computed for both the true next token and the model-predicted token. 
+
+• The resulting sensitivity profiles are normalized by their value at r = 0 and aggregated using the median across thousands of samples. This yields the measured quantity 
+
+Gα(j, r ) = ∥∥∇ej−r ϕj (E)∥∥2
+
+as defined in Section 2. 
+
+# 5 Experimental Setup 
+
+We evaluate distance-resolved Jacobian profiles for trained autoregressive language models and for control experiments. The model-size sweep uses the Pythia family [ 25 ]: Pythia-14M, Pythia-70M, Pythia-160M, and Pythia-410M. In addition, we evaluate Qwen2.5-0.5B as a model from a different trained model family [ 26 ]. As an architecture-only control, we also include a randomly initialized Pythia-14M model with the same configuration but untrained weights. 5How Token Influence Decays with Distance: A Green-Function View of Trained Language Models A Preprint 
+
+The main data source is a Gutenberg-style corpus of long documents. To test whether the observed profiles are specific to this text domain, we also evaluate WikiText-103 [ 27 ]. As an order-destruction control, we use a shuffled Gutenberg variant. This preserves the token source but destroys the coherent sequential structure of the text. The datasets are not evaluated exhaustively. Instead, a bounded set of candidate documents is first loaded. At most 1500 candidate documents are retained. The order of these candidate documents is randomized before tokenization. Documents with fewer than L + 1 tokens are discarded, where L is the model input context length. From the remaining tokenized documents, the scripts draw 1024 contiguous token chunks with replacement. Each chunk has length L + 1 . The first L tokens are used as model input, and the additional token provides the observed next-token target for the last admissible target position. For the Pythia runs, the model input context length is L = 2048 . For Qwen2.5-0.5B, we use L = 4096 .For each selected target position j, gradients are computed for prescribed causal distances r. For the Pythia runs as well as the Qwen2.5-0.5B run, the distance values are 
+
+r ∈ { 0, 1, 2, 3, 4, 5, 6, 8, 10 , 12 , 16 , 24 , 32 , 48 , 64 , 96 , 128 , 192 ,
+
+256 , 384 , 512 , 768 , 1024 , 1280 , 1536 }. (12) All target-position parameters in this section refer to zero-based implementation indices, with jmax excluded. Within each sampled input sequence, target positions are selected close to the right end of the context. For the Pythia runs, the target-position parameters are jmin = 1920 , jmax = 2048 , and j∆ = 8 . This gives 16 
+
+target positions per sampled chunk. Target positions are deliberately restricted to the same narrow interval near the end of each context window. This keeps the absolute target positions and the prediction setting comparable across all evaluated distances, avoids mixing different target regions of the context, and the maximum evaluated distance is chosen such that even for the largest r, the corresponding source position remains well inside the available context. This reduces potential confounding by absolute-position effects such as primacy and recency biases [ 18 – 21 ] and allows the measured profiles to more closely reflect dependence on causal distance alone. However, source-position effects are reduced but not fully removed. Since we use 1024 sampled chunks, each Pythia run contains 
+
+1024 × 16 = 16384 
+
+evaluated sample–target-position pairs over which Gα(r) is computed. For Qwen2.5-0.5B, the corresponding parameters are jmin = 3584 , jmax = 4096 , and j∆ = 32 , again giving 16 target positions per chunk and thus 
+
+16384 evaluated sample–target-position pairs. The decay models introduced above are fitted to the aggregated median profiles. Fits are performed in log-space. The value r = 0 is used for normalization but excluded from the decay fits. Model comparison uses log-space root mean squared error (RMSE) for the fit. 
+
+# 6 Results 
+
+6.1 Prediction quality at measured target positions 
+
+This section is a sanity check for the selected target logits. It shows whether the true-token logits used in the sensitivity computation correspond to plausible model predictions, and it separates normal language-modeling cases from diagnostic controls such as shuffled text and randomly initialized models. Table 1 reports prediction quality at the target positions. All entries are computed over 16384 evaluated target positions per experiment. For each target position, the model assigns a logit score to every vocabulary token as a possible next token. Sorting these scores in descending order gives the rank of the actually observed next token. Top-k accuracy is the fraction of target positions for which the observed next token appears among the k
+
+highest-scoring entries of the model’s logit vector. For coherent Gutenberg text, prediction quality improves with model size. Top-1 accuracy increases from 
+
+26 .77% for Pythia-14M to 45 .70% for Pythia-410M, and the median true-token rank decreases from 5 to 2.Qwen2.5-0.5B reaches a comparable prediction quality on the same corpus, with median rank 2 and top-10 accuracy 74 .05% .6How Token Influence Decays with Distance: A Green-Function View of Trained Language Models A Preprint 
+
+Experiment Top-1 Top-5 Top-10 Median rank Mean rank Pythia-14M, Gutenberg 26.77% 45.61% 53.50% 5 297.5 Pythia-70M, Gutenberg 33.15% 54.16% 62.00% 3 146.5 Pythia-160M, Gutenberg 40.53% 62.97% 70.50% 2 111.9 Pythia-410M, Gutenberg 45.70% 67.88% 75.51% 2 80.8 Qwen2.5-0.5B, Gutenberg 42.54% 66.50% 74.05% 2 113.1 Pythia-14M, WikiText-103 25.06% 43.36% – 5 404.2 Pythia-14M, shuffled Gutenberg 3.39% 9.69% – 234 3084.8 Random-init Pythia-14M, Gutenberg 0.00% 0.01% – 23287.5 23799.9 Random-init Pythia-14M, shuffled Gutenberg 0.00% 0.00% – 23371.0 24122.4 
+
+Table 1: Prediction quality at the target positions. All entries are computed over 16384 evaluated target positions per experiment. A dash indicates that the corresponding value was not recorded in that run. The shuffled Gutenberg control is different. After shuffling, word order, syntax, and long-range semantic structure are destroyed. The trained Pythia-14M model reaches only 3.39% top-1 accuracy and 9.69% top-5 accuracy. In this control, even a unigram baseline, i.e., predicting tokens solely by their global frequency in the corpus, is stronger: unigram Top-1 = 4 .24% , unigram Top-5 = 17 .14% , unigram Top-10 = 26 .79% . Thus the shuffled experiment should not be interpreted as successful language modeling. It is used to test the trained operator under a deliberately non-linguistic input distribution. The randomly initialized Pythia-14M model performs much worse still, with essentially zero accuracy. These values are not intended as benchmark results for the model families. They report prediction quality only at the target positions used for the Jacobian measurements. Published model reports for Pythia and Qwen2.5 provide standard benchmark evaluations, but those evaluations are not directly comparable to the present target-position Top-k statistics. 
+
+Remark 2 Token shuffling does not remove all information from the input. The shuffled sequence still contains the same tokens. A language model may use such cues to produce a plausible thematic summary, although much of the apparent narrative structure may then come from the model’s prior rather than from the shuffled sequence itself. Thus, the shuffled experiment is not a test against a semantically empty input. Rather, it tests whether the distance-resolved Jacobian profile depends on coherent sequential word order and successful next-token prediction. The collapse in prediction accuracy under shuffling shows that the autoregressive task is strongly disrupted. At the same time, the persistence of a similar sensitivity profile indicates that the measured long-range structure is not determined solely by coherent next-token prediction. 
+
+6.2 Distance-Resolved Jacobian Profiles 
+
+Tables 2 and 3 report the fitted decay models for the median profiles Gα(r), together with their log-space RMSE as well as the quality of the fits. Here, the true next token is used. Across the trained models, the exponential-with-floor model has a substantially larger log-space RMSE than the power law alternatives. Thus, over the measured distance range, the median profiles are much better described by a power-law-type decay than by the exponential-with-floor model considered here. For Pythia-70M, Pythia-160M, Pythia-410M, and Qwen2.5-0.5B, the best fit in terms of log-space RMSE is a power law with a small empirical floor, 
+
+Gα(r) = γ + β(r + 1) −p
+
+For Pythia-14M, the pure power law and the power law with floor give the same log-space RMSE up to the reported precision, and the fitted floor is numerically zero. In this case, we therefore report the simpler pure power-law fit. We emphasize that the floor is an empirical parameter over the finite measured distance range, not evidence for a nonzero asymptotic limit. For Pythia-14M, the fitted exponent is stable across different input types: 
+
+pGutenberg ≈ 0.88 , pWikiText ≈ 0.87 ,
+
+This indicates that the effect is not specific to one corpus. 7How Token Influence Decays with Distance: A Green-Function View of Trained Language Models A Preprint                                                     
+
+> Experiment Best model βpγlogRMSE Pythia-14M, Gutenberg pure power 0.5877 0.8825 –0.1614 Pythia-70M, Gutenberg power + floor 1.1049 0.8817 0.000971 0.0607 Pythia-160M, Gutenberg power + floor 1.1700 0.8193 0.004573 0.0355 Pythia-410M, Gutenberg power + floor 1.0120 0.7148 0.010076 0.0594 Qwen2.5-0.5B, Gutenberg power + floor 1.1628 0.8811 0.001787 0.0690 Pythia-14M, WikiText-103 pure power 0.5767 0.8725 –0.1454 Pythia-14M, shuffled Gutenberg pure power 0.5114 0.8372 –0.1382 Random-init Pythia-14M, Gutenberg degenerate pure power 0.0007649 ≈0–0.1256 Random-init Pythia-14M, shuffled Gutenberg degenerate pure power 0.0007633 ≈0–0.1264
+
+Table 2: Best fits for the median gradnorm_diag profiles. For the random-init controls, the fitted exponent is essentially zero; the formally selected pure-power fit is therefore a degenerate constant profile. Model Best model by logRMSE mpow mpow ,γ mexp ,γ 
+
+Pythia-14M pure power / power+floor 0.1614–0.1622 0.1614–0.1622 0.6220–0.6229 Pythia-70M power+floor 0.0906–0.0932 0.0607–0.0618 0.4861–0.4866 Pythia-160M power+floor 0.1335–0.1355 0.0340–0.0355 0.3527–0.3549 Pythia-410M power+floor 0.1343–0.1383 0.0594–0.0615 0.2940–0.2955 Qwen2.5-0.5B power+floor 0.1349–0.1380 0.0682–0.0690 0.4198–0.4227 Table 3: Fit quality of the median distance profiles Gtrue (r) and Gpred (r). The entries give ranges of log-space RMSE over these two quantities. The mexp ,γ model is consistently worse. Except for Pythia-14M, where the fitted floor in the mpow ,γ model is of order 10 −12 and hence the fit effectively reduces to a pure power law, the smallest log-space RMSE is obtained by a power law with an empirical floor. Figure 1 shows the median Jacobian sensitivity for Qwen2.5-0.5B in a log-log-plot. Figure 2 depicts randomly selected 250 individual profiles as well as the median, mean and trim10; for each causal distance, trim10 is computed after discarding the lowest and highest 10% of the finite positive gradient-norm values and averaging the remaining values. Figure 3 shows the same quantities as in Figure 1, but for the largest Pythia model with 410M parameters. 
+
+6.3 True-token versus predicted-token logits 
+
+The comparison between true-token and predicted-token logits is also stable. Table 4 reports the fitted power law exponents and floors for Gtrue (r) and Gpred (r). The profiles are nearly identical; see also Figure 4. Thus the decay is not an artifact of differentiating the corpus token even when the model would have predicted another token. Experiment ptrue γtrue ppred γpred 
+
+Pythia-14M, Gutenberg 0.8825 – 0.8816 –Pythia-70M, Gutenberg 0.8817 0.000971 0.8843 0.000996 Pythia-160M, Gutenberg 0.8193 0.004573 0.8212 0.004653 Pythia-410M, Gutenberg 0.7148 0.010076 0.7134 0.010744 Qwen2.5-0.5B, Gutenberg 0.8811 0.001787 0.8869 0.001809 Pythia-14M, WikiText-103 0.8725 – 0.8728 –Pythia-14M, shuffled Gutenberg 0.8372 – 0.8347 –Table 4: Comparison between true-token and predicted-token sensitivity fits. The table reports the logRMSE-selected exponent and floor for Gtrue (r) and Gpred (r).
+
+6.4 Token shuffling 
+
+The shuffled Gutenberg experiment is the most important argument against the interpretation “Green’s function of text.” Shuffling destroys coherent word order and therefore destroys meaningful next-token prediction. Nevertheless, over the measured distance range, the median Jacobian profile remains power-law-8How Token Influence Decays with Distance: A Green-Function View of Trained Language Models A Preprint 
+
+Figure 1: Median distance-resolved Jacobian sensitivity profile for Qwen2.5-0.5B using the true next-token logit. 
+
+Figure 2: Individual diagonal-normalized sensitivity profiles for Qwen2.5-0.5B using the true next-token logit. The spread illustrates why medians are used as the primary aggregation statistic. 9How Token Influence Decays with Distance: A Green-Function View of Trained Language Models A Preprint 
+
+Figure 3: Median distance-resolved Jacobian sensitivity profile for Pythia-410M using the true next-token logit. like, with a fitted exponent 
+
+pshuffled ≈ 0.84 .
+
+The amplitude and individual profiles are not identical to the coherent-text case, but the qualitative long-range decay survives. This means that the measured profile cannot be explained only by linguistic coherence, syntax, or long-range semantic dependencies in the corpus. The text still matters: it supplies the token identities, embeddings, positions, and the point at which the nonlinear network is linearized. But the persistence under shuffling shows that the power law profile is largely a property of the trained operator acting on token sequences and not determined solely by well-formed text. 
+
+6.5 Randomly initialized models 
+
+The random-initialization test case addresses the opposite possibility: perhaps any Transformer with causal attention and positional structure would produce a similar profile. This is not observed. A randomly initialized Pythia-14M model with the same architecture has essentially no useful prediction ability, and its normalized sensitivity profile Gtrue (r) is flat and extremely small. The fitted power exponent collapses to p ≈ 0, and the typical off-diagonal level is approximately Gtrue (r) ≈ 7.6 · 10 −4. The same conclusion holds for coherent Gutenberg input and shuffled Gutenberg input. Thus the power law decay is not a trivial consequence of the untrained architecture. Training is essential. The learned weights create a long-range Jacobian structure that is absent, or at least not visible at the same scale, in the randomly initialized network. 
+
+# 7 Interpretation for Coarse Spaces in Language Models 
+
+The operator-learning motivation arising from our recent work [ 6 ] can now be stated more precisely. In a PDE setting, a Green kernel describes how perturbations propagate through the inverse operator. If this propagation is essentially local, then independent local blocks, sparse approximations, or one-level methods 10 How Token Influence Decays with Distance: A Green-Function View of Trained Language Models A Preprint 
+
+Figure 4: Median distance-resolved sensitivity profile for Qwen2.5-0.5B using the model-predicted next-token logit. The profile is very close to the true-token profile. may be sufficient. If the response has a slowly decaying tail, then the long-range part should not be ignored – but it also need not be represented by a dense global operator. The typically more efficient hierarchical alternative is to combine local operators with a coarse representation of the weak global interactions. This is the standard logic behind two-level Schwarz methods, multigrid, and related hierarchical preconditioners [ 1 –4 ]. In the attention setting, the analogous idea is to replace fully global attention by a hierarchical approximation consisting of local attentions and a coarse attention mechanism. In [ 6], this led to better approximation quality with about an order of magnitude fewer parameters than the corresponding standard global attention model. The present report provides empirical motivation for this hierarchy by measuring how input-output sensitivity in trained autoregressive language models decays with causal distance. The model has strong local token interactions, but it also retains weak long-range interactions whose median strength decays only slowly with causal distance. These interactions are not attention weights and not direct semantic relations between words. Rather, they are sensitivities of a selected next-token logit with respect to earlier input-token embeddings. Since each token is represented by a high-dimensional embedding vector, the derivative with respect to one earlier token is not a single scalar entry, but a small Jacobian block. In our distance-resolved profile, this block is reduced to a scalar by taking its Euclidean norm. This observation may help to design coarse variables for NLP. A purely linguistic coarse space might be based on sentences, paragraphs, topics, or summary tokens. Such choices may be useful, but they are not the only possibility. From the Green-function view, a coarse space should represent slowly decaying response components of the trained operator. These modes may combine position, token identity, syntax, and model-internal learned structure. They may therefore be only partially aligned with human semantic units. This is also why the shuffling result is important, rather than disappointing. If the profile survived only on coherent text, one might conclude that the coarse level should be primarily semantic. Since the power law profile survives shuffling but disappears for random weights, the long-range component appears to be a learned property of the trained sequence operator itself. A future hierarchical architecture inspired by numerical analysis and scientific computing could attempt to capture this learned long-range Jacobian structure, not merely summarize the surface text. 11 How Token Influence Decays with Distance: A Green-Function View of Trained Language Models A Preprint 
+
+# 8 Conclusion 
+
+We asked how token influence decays with distance in trained language models, motivated by Green functions, coarse spaces, and hierarchical preconditioners in numerical analysis. The measured object is a distance-resolved Jacobian sensitivity: the derivative of a selected next-token logit with respect to an earlier input embedding. This is not a Green’s function of natural language in the classical sense. It is a Green-function view of the trained Transformer as a nonlinear operator, evaluated at given token sequences. Across trained Pythia models, Qwen2.5-0.5B, using text from Gutenberg and Wikitext-103, the median diagonal-normalized sensitivity profile is well described, over the measured distance range, by a power-law-type fit. The profile persists under token shuffling, although token prediction quality collapses, but disappears for randomly initialized models. Thus the main phenomenon appears to be a learned long-range response of trained Transformer LLMs. Existing hierarchical, sparse, retrieval-based, or token-compression mechanisms in the LLM literature— including summary tokens, pooling tokens, memory tokens, and related global-token constructions—are typically motivated by efficiency, architectural, or semantic considerations. In contrast, we motivate hierarchy from the measured, distance-resolved Jacobian structure of the trained operator. For hierarchical model design, this suggests that in NLP coarse spaces can be designed using similar principles of locality and global coupling as in numerical analysis and scientific computing, as in our own attempt in [6], which motivated this work. 
+
+Remark 3 It was our original goal to identify a Green’s function for text. However, our experiments show that this is not quite what we have obtained. Token shuffling destroys coherent word order and makes next-token prediction much worse, but the distance-resolved token influence profile remains similar to the case of standard text. We also find that randomly initialized Transformer models do not show the same distance profile. Thus, what we measure is not directly an intrinsic property of natural language text, and it is also not a trivial property of the Transformer architecture. Rather, it appears to be a property of the trained Transformer operator, acquired during training on natural language. In this sense, the experiment views natural language through the lens of the trained model: the token sequence specifies where the nonlinear operator is linearized, while the learned weights determine the response. 
+
+# Statement on AI Use 
+
+The large language models ChatGPT 5.5, Grok 4.5 and Mistral Large 3 675B Instruct 2512 were used to assist in the literature review, the development of the Python codes for the methods discussed in this paper and for the data extraction from the log files. Mistral was used via the Chat-AI service of the GWDG [ 28 ]. The LLMs were also used to support the preparation of the manuscript, in particular to generate the tables, improve wording, structure, and presentation. 
+
+# References 
+
+[1] Pierre-Louis Lions. On the Schwarz alternating method. I. In Roland Glowinski, Gene H. Golub, Gérard A. Meurant, and Jacques Périaux, editors, First International Symposium on Domain Decomposition Methods for Partial Differential Equations , Philadelphia, PA, 1988. SIAM. [2] Andrea Toselli and Olof Widlund. Domain Decomposition Methods – Algorithms and Theory , volume 34 of Springer Series in Computational Mathematics . Springer, Berlin, Heidelberg, 2005. [3] Barry F. Smith, Petter E. Bjørstad, and William D. Gropp. Domain Decomposition: Parallel Multilevel Methods for Elliptic Partial Differential Equations . Cambridge University Press, Cambridge, 1996. [4] Ulrich Trottenberg, Cornelis W. Oosterlee, and Anton Schüller. Multigrid . Academic Press, London, San Diego, 2001. [5] Axel Klawonn, Martin Lanser, and Janine Weber. Machine learning and domain decomposition methods - a survey. Computational Science and Engineering , 1(2):2, 2024. doi: 10.1007/s44207-024-00003-y. URL 
+
+https://doi.org/10.1007/s44207-024-00003-y .[6] Stephan Köhler and Oliver Rheinbach. Hierarchical attention via domain decomposition, 2026. URL 
+
+https://arxiv.org/abs/2606.18525 .12 How Token Influence Decays with Distance: A Green-Function View of Trained Language Models A Preprint 
+
+[7] Sarthak Jain and Byron C. Wallace. Attention is not explanation. In Proceedings of the 2019 Conference of the North American Chapter of the Association for Computational Linguistics: Human Language Technologies , pages 3543–3556. Association for Computational Linguistics, 2019. doi: 10.18653/v1/ N19-1357. URL https://aclanthology.org/N19-1357/ .[8] Sarah Wiegreffe and Yuval Pinter. Attention is not not explanation. In Proceedings of the 2019 Conference on Empirical Methods in Natural Language Processing , pages 11–20. Association for Computational Linguistics, 2019. doi: 10.18653/v1/D19-1002. URL https://aclanthology.org/D19-1002/ .[9] Samira Abnar and Willem Zuidema. Quantifying attention flow in transformers. In Proceedings of the 58th Annual Meeting of the Association for Computational Linguistics , pages 4190–4197. Association for Computational Linguistics, 2020. doi: 10.18653/v1/2020.acl-main.385. URL https://aclanthology. org/2020.acl-main.385/ .[10] Lawrence C. Evans. Partial Differential Equations , volume 19 of Graduate Studies in Mathematics .American Mathematical Society, Providence, RI, 2 edition, 2010. ISBN 978-0-8218-4974-3. [11] Adam Paszke, Sam Gross, Francisco Massa, Adam Lerer, James Bradbury, Gregory Chanan, Trevor Killeen, Zeming Lin, Natalia Gimelshein, Luca Antiga, Alban Desmaison, Andreas Kopf, Edward Yang, Zachary DeVito, Martin Raison, Alykhan Tejani, Sasank Chilamkurthy, Benoit Steiner, Lu Fang, Junjie Bai, and Soumith Chintala. Pytorch: An imperative style, high-performance deep learning library. In 
+
+Advances in Neural Information Processing Systems , volume 32, pages 8024–8035, 2019. [12] Nelson Elhage, Neel Nanda, Catherine Olsson, Tom Henighan, Nicholas Joseph, Ben Mann, Amanda Askell, Yuntao Bai, Anna Chen, Tom Conerly, Nova DasSarma, Dawn Drain, Deep Ganguli, Zac Hatfield-Dodds, Danny Hernandez, Andy Jones, Jackson Kernion, Liane Lovitt, Kamal Ndousse, Dario Amodei, Tom Brown, Jack Clark, Jared Kaplan, Sam McCandlish, and Chris Olah. A mathematical framework for transformer circuits. Transformer Circuits Thread , 2021. URL https://transformer-circuits. pub/2021/framework/index.html .[13] Catherine Olsson, Nelson Elhage, Neel Nanda, Nicholas Joseph, Nova DasSarma, Tom Henighan, Ben Mann, Amanda Askell, Yuntao Bai, Anna Chen, Tom Conerly, Dawn Drain, Deep Gan-guli, Zac Hatfield-Dodds, Danny Hernandez, Scott Johnston, Andy Jones, Jackson Kernion, Liane Lovitt, Kamal Ndousse, Dario Amodei, Tom Brown, Jack Clark, Jared Kaplan, Sam McCandlish, and Chris Olah. In-context learning and induction heads. Transformer Circuits Thread , 2022. doi: 10.48550/arXiv.2209.11895. URL https://transformer-circuits.pub/2022/ in-context-learning-and-induction-heads/index.html .[14] Jared Kaplan, Sam McCandlish, Tom Henighan, Tom B. Brown, Benjamin Chess, Rewon Child, Scott Gray, Alec Radford, Jeffrey Wu, and Dario Amodei. Scaling laws for neural language models. arXiv preprint arXiv:2001.08361 , 2020. URL https://arxiv.org/abs/2001.08361 .[15] Jasmijn Bastings and Katja Filippova. The elephant in the interpretability room: Why use attention as explanation when we have saliency methods? In Afra Alishahi, Yonatan Belinkov, Grzegorz Chrupała, Dieuwke Hupkes, Yuval Pinter, and Hassan Sajjad, editors, Proceedings of the Third BlackboxNLP Workshop on Analyzing and Interpreting Neural Networks for NLP , pages 149–155, Online, November 2020. Association for Computational Linguistics. doi: 10.18653/v1/2020.blackboxnlp-1.14. URL https: //aclanthology.org/2020.blackboxnlp-1.14/ .[16] Mukund Sundararajan, Ankur Taly, and Qiqi Yan. Axiomatic attribution for deep networks. In 
+
+Proceedings of the 34th International Conference on Machine Learning , 2017. URL https://arxiv. org/abs/1703.01365 .[17] Toni J.B. Liu, Baran Zadeoğlu, Nicolas Boullé, Raphaël Sarfati, Gurbir Arora, and Christopher J. Earls. Jacobian scopes: token-level causal attributions in LLMs. arXiv preprint arXiv:2601.16407 , 2026. URL 
+
+https://arxiv.org/abs/2601.16407 .[18] Hanna Herasimchyk, Robin Labryga, Tomislav Prusina, and Sören Laue. A structural theory of position bias in transformers. arXiv preprint arXiv:2602.16837 , 2026. URL https://arxiv.org/abs/2602. 16837 .[19] Nelson F. Liu, Kevin Lin, John Hewitt, Ashwin Paranjape, Michele Bevilacqua, Fabio Petroni, and Percy Liang. Lost in the middle: How language models use long contexts. Transactions of the Association for Computational Linguistics , 2023. doi: 10.48550/arXiv.2307.03172. URL https://arxiv.org/abs/2307. 03172 .[20] Simeng Sun, Kalpesh Krishna, Andrew Mattarella-Micke, and Mohit Iyyer. Do long-range language models actually use long-range context? In Proceedings of the 2021 Conference on Empirical Methods 
+
+13 How Token Influence Decays with Distance: A Green-Function View of Trained Language Models A Preprint 
+
+in Natural Language Processing , pages 807–822. Association for Computational Linguistics, 2021. doi: 10.18653/v1/2021.emnlp-main.62. URL https://aclanthology.org/2021.emnlp-main.62/ .[21] Guangxuan Xiao, Yuandong Tian, Beidi Chen, Song Han, and Mike Lewis. Efficient streaming language models with attention sinks. In International Conference on Learning Representations , 2024. URL 
+
+https://openreview.net/forum?id=NG7sS51zVF .[22] Xinyi Wu, Yifei Wang, Stefanie Jegelka, and Ali Jadbabaie. On the emergence of position bias in transformers, 2025. URL https://arxiv.org/abs/2502.01951 .[23] Emmanuel Ameisen, Jack Lindsey, Adam Pearce, Wes Gurnee, Nicholas L. Turner, Brian Chen, Craig Citro, David Abrahams, Shan Carter, Basil Hosmer, Jonathan Marcus, Michael Sklar, Adly Temple-ton, Trenton Bricken, Callum McDougall, Hoagy Cunningham, Thomas Henighan, Adam Jermyn, Andy Jones, Andrew Persic, Zhenyi Qi, T. Ben Thompson, Sam Zimmerman, Kelley Rivoire, Thomas Conerly, Chris Olah, and Joshua Batson. Circuit tracing: Revealing computational graphs in lan-guage models. Transformer Circuits Thread , 2025. URL https://transformer-circuits.pub/2025/ attribution-graphs/methods.html .[24] Javier Ferrando and Elena Voita. Information flow routes: Automatically interpreting language models at scale. arXiv preprint arXiv:2403.00824 , 2024. doi: 10.48550/arXiv.2403.00824. URL https://arxiv. org/abs/2403.00824v2 .[25] Stella Biderman, Hailey Schoelkopf, Quentin Anthony, Herbie Bradley, Kyle O’Brien, Eric Hallahan, Mohammad Aflah Khan, Shivanshu Purohit, USVSN Sai Prashanth, Edward Raff, Aviya Skowron, Lintang Sutawika, and Oskar van der Wal. Pythia: A suite for analyzing large language models across training and scaling, 2023. URL https://arxiv.org/abs/2304.01373 .[26] An Yang, Baosong Yang, Beichen Zhang, Binyuan Hui, Bo Zheng, Bowen Yu, Chengyuan Li, Dayiheng Liu, Fei Huang, Haoran Wei, Huan Lin, Jian Yang, Jianhong Tu, Jianwei Zhang, Jianxin Yang, Jiaxi Yang, Jingren Zhou, Junyang Lin, Kai Dang, Keming Lu, Keqin Bao, Kexin Yang, Le Yu, Mei Li, Mingfeng Xue, Pei Zhang, Qin Zhu, Rui Men, Runji Lin, Tianhao Li, Tianyi Tang, Tingyu Xia, Xingzhang Ren, Xuancheng Ren, Yang Fan, Yang Su, Yichang Zhang, Yu Wan, Yuqiong Liu, Zeyu Cui, Zhenru Zhang, and Zihan Qiu. Qwen2.5 technical report, 2025. URL https://arxiv.org/abs/2412.15115 .[27] Stephen Merity, Caiming Xiong, James Bradbury, and Richard Socher. Pointer sentinel mixture models, 2016. URL https://arxiv.org/abs/1609.07843 .[28] Ali Doosthosseini, Jonathan Decker, Hendrik Nolte, and Julian Kunkel. SAIA: a seamless Slurm-native solution for HPC-based services. The Journal of Supercomputing , 82(7):403, May 2026. ISSN 1573-0484. doi: 10.1007/s11227-026-08508-3. URL https://doi.org/10.1007/s11227-026-08508-3 .14
