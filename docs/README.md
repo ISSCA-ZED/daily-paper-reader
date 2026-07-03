@@ -6,35 +6,35 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-07-02
-- 运行时间：2026-07-02 20:42:31 UTC
+- 最新运行日期：2026-07-03
+- 运行时间：2026-07-03 20:37:18 UTC
 - 运行状态：成功
 - 本次总论文数：5
-- 精读区：1
-- 速读区：4
+- 精读区：2
+- 速读区：3
 
 ### 今日简报（AI）
-今日聚焦Token影响衰减机制与LLM推理优化，精读9分论文揭示语言模型中间层权重函数视角下的距离衰减规律。重点推荐：精读论文发现Token影响随距离呈格林函数式衰减，为理解注意力机制提供新工具；速读中Coverage-Driven KV缓存淘汰策略（7分）值得关注，可提升推理效率。建议普通读者优先精读该篇理解模型行为，再结合KV缓存优化实践。
-- 详情：[/202607/02/README](/202607/02/README)
+今日精读两篇8分论文，核心围绕LLM推理轨迹的动态表示编辑与任务难度的几何谱特征展开。最值得关注的方向：一是通过表示编辑主动引导推理路径，二是利用图谱理论量化任务复杂度的新视角。建议后续结合谱分析方法评估推理模型的瓶颈，并尝试编辑策略来提升长链推理稳定性。
+- 详情：[/202607/03/README](/202607/03/README)
 
 ### 精读区论文标签
-1. [How Token Influence Decays with Distance: A Green-Function View of Trained Language Models](/202607/02/2606.29139v1-how-token-influence-decays-with-distance-a-green-function-view-of-trained-language-models)  
-   标签：评分：9.0/10、query:key-tokens
-   evidence：token影响衰减提供了token重要性度量
+1. [Search for Truth from Reasoning: A Dynamic Representation Editing Framework for Steering LLM Trajectories](/202607/03/2606.28589v2-search-for-truth-from-reasoning-a-dynamic-representation-editing-framework-for-steering-llm-trajectories)  
+   标签：评分：8.0/10、query:key-tokens
+   evidence：因果追踪推理轨迹中真实性的几何结构
+2. [Geometric Signatures of Reasoning: A Spectral Perspective on Task Hardness](/202607/03/2607.01571v1-geometric-signatures-of-reasoning-a-spectral-perspective-on-task-hardness)  
+   标签：评分：8.0/10、query:key-tokens
+   evidence：在隐藏状态空间中分析COT轨迹的几何特征，揭示推理标志
 
 ### 速读区论文标签
-1. [Coverage-Driven KV Cache Eviction for Efficient and Improved Inference of LLM](/202607/02/2606.29563v1-coverage-driven-kv-cache-eviction-for-efficient-and-improved-inference-of-llm)  
+1. [Bridging the Gap Between Latent and Explicit Reasoning with Looped Transformers](/202607/03/2606.31779v1-bridging-the-gap-between-latent-and-explicit-reasoning-with-looped-transformers)  
    标签：评分：7.0/10、query:key-tokens
-   evidence：覆盖驱动的缓存驱逐使用标记选择度量
-2. [Efficient and Trainable Language Model Test-Time Scaling via Local Branch Routing](/202607/02/2606.25354v2-efficient-and-trainable-language-model-test-time-scaling-via-local-branch-routing)  
+   evidence：分析循环transformer中隐藏状态推理以桥接潜在和显式思维链
+2. [DiscoLoop: Looping Discrete Embeddings and Continuous Hidden States for Multi-hop Reasoning](/202607/03/2607.00341v1-discoloop-looping-discrete-embeddings-and-continuous-hidden-states-for-multi-hop-reasoning)  
    标签：评分：6.0/10、query:key-tokens
-   evidence：利用隐藏状态进行令牌级路由，涉及推理令牌选择与分析
-3. [Know When to Stop: Segment-Level Credit Assignment for Reducing Overthinking](/202607/02/2607.00482v1-know-when-to-stop-segment-level-credit-assignment-for-reducing-overthinking)  
+   evidence：分析循环transformer在多跳推理中的隐藏状态
+3. [ReContext: Recursive Evidence Replay as LLM Harness for Long-Context Reasoning](/202607/03/2607.02509v1-recontext-recursive-evidence-replay-as-llm-harness-for-long-context-reasoning)  
    标签：评分：6.0/10、query:key-tokens
-   evidence：通过信用分配识别推理轨迹中无生产力的自我反思token
-4. [Prototype Language Models](/202607/02/2607.00510v1-prototype-language-models)  
-   标签：评分：6.0/10、query:key-tokens
-   evidence：基于原型的架构可追溯预测到训练样本，与因果追溯相关
+   evidence：使用模型内部相关性信号选择关键证据，类似关键token重要性
 
 
 <div class="dpr-home-promo-card">

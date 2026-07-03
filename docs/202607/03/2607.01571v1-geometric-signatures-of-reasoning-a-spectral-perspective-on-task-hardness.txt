@@ -1,0 +1,830 @@
+Title: Geometric Signatures of Reasoning: A Spectral Perspective on Task Hardness
+
+URL Source: https://arxiv.org/pdf/2607.01571v1
+
+Published Time: Fri, 03 Jul 2026 00:22:33 GMT
+
+Number of Pages: 15
+
+Markdown Content:
+# Geometric Signatures of Reasoning: A Spectral Perspective on Task Hardness 
+
+Aria Masoomi 1,* , Mahsa Bazzaz 1,* , Adel Javanmard 2,3 , and Vahab Mirrokni 31Northeastern University 
+
+> 2
+
+University of Southern California 
+
+> 3
+
+Google Research 
+
+Abstract 
+
+Chain-of-thought (CoT) reasoning enables large language models (LLMs) to solve complex problems by generating intermediate reasoning steps. While much attention has been paid to the length and content of these reasoning chains, far less is known about their internal geometry. We study the geometry of CoT trajectories in the hidden state space of transformer models, formalizing each reasoning chain as a discrete curve in Rd and characterizing it through spectral, positional, and kinematic geometric functionals. We introduce the effective dimension dρ as a measure of trajectory complexity and show theoretically that trajectories with flatter eigenvalue spectra correspond to harder tasks, as they explore more of the hidden dimensions. Lastly, we explore how kinematic features of the trajectory, mean position, positional dispersion, initial and current hidden states, mean velocity, mean speed, and speed dispersion, can be used to predict solution correctness before generation is complete, and may inform future early-stopping strategies. Experimentally, on mathematical reasoning problems from the MATH500 dataset, dρ achieves 0.93 AUC in distinguishing easy from hard problems, while kinematic features potentially can predict correctness from only the first 
+
+20% of generated tokens. These correctness signatures transfer across questions of varying difficulty, establishing that the shape of a model’s internal reasoning trajectory is a principled window into both task hardness and solution quality. 
+
+# 1 Introduction 
+
+Large language models (LLMs) have demonstrated remarkable reasoning capabilities through chain-of-thought (CoT) prompting, where models generate intermediate reasoning steps before producing final answers [Wei et al., 2022]. Recent systems such as OpenAI’s o1 and DeepSeek R1 have shown that scaling test-time compute, allowing models to “think longer”, can dramatically improve performance on complex reasoning tasks [OpenAI, 2024, Guo et al., 2025]. At the same time, it has been observed that simply increasing test-time computation can harm performance, a phenomenon known as overthinking: reasoning length does not directly convert to correct answers [Su et al., 2025]. In general, one expects a model to engage in more deliberate reasoning for harder tasks and less for easier ones. Recent theoretical work has further shown that, for transformers trained on an in-context weight prediction task for linear regression, increasing test-time compute can harm performance when the skills required to solve the downstream task are insufficiently represented in the training data [Javanmard et al., 2025]. Despite these theoretical and empirical advances, fundamental questions remain: What makes a task hard for a general LLM? How does task difficulty affect the model’s internal representations, and can we predict it from those representations alone? Can we identify promising reasoning paths early, before generation is complete? These questions have profound practical implications: 
+
+> ∗Equal contribution
+
+1
+
+> arXiv:2607.01571v1 [cs.LG] 2 Jul 2026
+
+Trajectories Question  LLM  Hardness Prediction            
+
+> Alice has 3 apples. She gives 2 to
+> Bob and buys 5 more. How many
+> apples does she have now?
+> Question (prompt)
+> Alice has 3Apples .She Answer is 6.... 321456... t-1 t
+> token position
+> Hidden-state trajectory in d
+
+Effective dimension d  
+
+> “ Solve Riemann
+> Hypothesis.”
+> Hard Question Trained
+> LLM
+
+Geometric Functionals  
+
+> Chain-of-thought (tokens)
+
+(A) CoT as a trajectory 
+
+in hidden-state space 
+
+(B) Effective Dimension 
+
+measures Hardness 
+
+(C) Correctness Prediction from 
+
+Early Trajectory Geometry  
+
+> CORRECT
+> INCORRECT
+> Early Trajectory (observed) Later Continuation (unobserved)
+
+(Effective Dimension) 
+
+x
+
+y
+
+z
+
+x
+
+z
+
+y
+
+z
+
+x
+
+y
+
+EASY  HARD 
+
+y y
+
+x
+
+z z
+
+xFigure 1: Overview of our framework. A question is fed to an LLM whose chain-of-thought generation traces a discrete curve γ = ( h1, . . . , h n) ∈ Rd in hidden-state space. (A) Each generated token produces a hidden state, forming a trajectory whose geometry we analyze. (B) Hard problems induce higher-dimensional trajectories than easy ones: the effective dimension dρ has mean ≈ 170 for hard problems versus ≈ 122 for easy ones, providing a geometric measure of task hardness. (C) Whether a reasoning chain will reach a correct answer is partially detectable from geometric functionals of the early trajectory: kinematic features extracted from only the first 20% of generated tokens predict solution correctness with high AUC before generation is complete. 
+
+when generating n candidate solutions to a problem (best-of-n sampling), can we prioritize which paths to pursue based on the geometry of their early trajectories? In this paper, we address these questions by studying the geometry of chain-of-thought trajectories in the hidden state space of transformer models. Our key insight is that as an LLM generates tokens during reasoning, the sequence of hidden states traces a discrete curve in Rd,and the geometric properties of this curve encode information about both task difficulty and solution quality. Our contributions are as follows: 
+
+• Formal Framework for CoT Geometry (Section 3): We formalize CoT reasoning as a discrete curve in Rd and introduce geometric functionals that extract spectral, positional, and kinematic properties of reasoning trajectories. 
+
+• Effective Dimension as Task Complexity (Section 4): We introduce a geometrical function capturing hardness of the task. More precisely, the effective dimension dρ of reasoning curves as a principled measure of task hardness. We further, characterize which curves attain the highest effective dimension, establishing them as geometric representatives of the hardest tasks. 
+
+• Hardness Prediction (Section 5.3): Using only effective dimension features, we achieve AUC 
+
+> 0.93 in predicting whether a mathematical problem is easy or hard. 2• Correctness Prediction (Section 5.2): Seven kinematic and positional features of the trajectory predict solution correctness with AUC = 0 .806 from only the first 20% of generated tokens, with promising implications for early-exit strategies and best-of-n ranking. 
+
+# 2 Related Work 
+
+Chain-of-thought prompting [Wei et al., 2022, Kojima et al., 2022] has emerged as a powerful technique for eliciting multi-step reasoning in LLMs. Recent work has explored scaling test-time compute [Snell et al., 2024, Welleck et al., 2024, Muennighoff et al., 2025], with systems like OpenAI o1 [OpenAI, 2024] and DeepSeek R1 [Guo et al., 2025] demonstrating strong performance through extended reasoning chains. A complementary line of work has observed that more reasoning is not always better: overthinking can degrade performance when the skills required for a task are underrepresented in training [Su et al., 2025]. Our work studies these phenomena from a geometric angle, asking not how long a chain is but what shape it traces in hidden state space. Javanmard et al. [2025] provide a theoretical analysis of test-time scaling for transformers trained on in-context weight prediction for linear regression. They characterize task hardness via the ratio of the trace with the minimum eigenvalue of the feature covariance matrix, showing that harder tasks require longer chains-of-thought to reach a given error level, and that insufficient task coverage in training can cause additional reasoning steps to hurt performance. Our work is complementary but distinct in two ways. First, we study task hardness empirically in a general LLM rather than deriving it from a tractable linear model. Second, and more fundamentally, we shift the unit of analysis from the output chain to the internal hidden state trajectory: we show that task hardness leaves a geometric signature in the model’s representation space, captured by the effective dimension dρ of the trajectory covariance, and that this quantity alone is highly predictive of problem difficulty Korbak et al. [2025] argue that chain-of-thought reasoning offers a unique safety opportunity because, for sufficiently hard tasks, transformers must externalize reasoning through the CoT in order to complete it, making that reasoning in principle observable. They focus on the content of the generated text as the monitoring signal and discuss conditions under which this signal may degrade. Our work operates at a different level: rather than reading the textual content of the chain, we read the geometry of the hidden states that produce it. The two perspectives are complementary, CoT text monitoring and hidden-state trajectory analysis can in principle be combined, but our approach is model-internal and does not rely on the model producing legible natural language reasoning. Sun et al. [2026] study LLM reasoning as a structured trajectory in representation space, extracting hidden states at explicit step boundaries (“Step 1:”, “Step 2:”, . . . ) and showing that these activations form linearly separable, step-specific subspaces that become more pronounced with layer depth. For correctness prediction, they achieve high AUC using late-step trajectory features, and explore inference-time interventions such as activation steering Turner et al. [2023] to correct deviating trajectories. Our work shares the trajectory perspective but pursues different goals. Rather than analyzing step-boundary activations, we treat the full token-level hidden state sequence as a continuous curve and characterize it through spectral and kinematic geometric functionals. This allows us to ask whether trajectory geometry encodes task difficulty. We show that the effective dimension dρ of the trajectory covariance, a spectral property of the curve as a whole, predicts whether a problem is easy or hard with high AUC, and we provide a theoretical account of why harder tasks necessarily induce higher-dimensional trajectories. We further show that kinematic features of the trajectory carry an early correctness signal that is detectable from only the first 20 percent of generated tokens, opening a practical route to early stopping and best-of-n ranking without waiting for generation to complete. Recent work also has proposed geometric frameworks for understanding how LLMs reason. Zhou et al. [2025] model reasoning as smooth flows in representation space, using the velocity and 3Menger curvature of the trajectory to show that logical structure, rather than surface semantics, governs the direction and magnitude of these flows. Their focus is on interpretability. Our work takes a complementary direction: we use geometric functionals of the hidden-state trajectory, specifically the spectral effective dimension and kinematic summaries, to predict task difficulty and solution correctness, connecting trajectory geometry directly to downstream performance. Lastly, Prasad et al. [2026] show that effective reasoning strategies reduce the intrinsic dimensionality of the learning objective, measured as the minimum number of LoRA parameters needed to fine-tune a model to a given accuracy threshold on GSM8K. They fix the model and vary the reasoning strategy, finding that lower intrinsic dimensionality correlates strongly with better generalization. While both their work and ours use notions of dimensionality to characterize reasoning, the two measures are conceptually distinct. Their intrinsic dimension is a property of the learning problem induced by a reasoning strategy, it requires fine-tuning experiments and measures how compressible a dataset of reasoning chains is. Our effective dimension dρ is a property of a single inference trajectory , it is computed from the covariance of hidden states produced during one forward pass and requires no training. This makes our measure applicable at inference time and enables per-instance predictions of task difficulty and solution correctness. 
+
+# 3 Problem Formulation 
+
+In this section we formalize Chain-of-Thought reasoning and develop a mathematical framework for characterizing its dynamics via Geometrical Functionals. Consider a transformer language model with L layers and hidden dimension d. Let V denote the finite vocabulary, and let 
+
+V∗ := S∞ 
+
+> n=0
+
+Vn denote the set of all finite sequences over V (the Kleene star of V). Let ∆( V)
+
+denote the simplex of probability measures over V. The model defines a map from finite token sequences to probability measures over the next token: 
+
+μ : V∗ → ∆( V), (x1, . . . , x t) 7 → μ(· | x1, . . . , x t). (1) As such for each layer ℓ ∈ { 1, . . . , L }, the model also produces a hidden state representation in Rd where d is the dimension of the latent representation, i.e.,: 
+
+f (ℓ) : V∗ → Rd, (x1, . . . , x t) 7 → H(ℓ) 
+
+> t
+
+∈ Rd. (2) When the layer ℓ is fixed or clear from context, we write Ht ≡ H(ℓ) 
+
+> t
+
+. Given the distribution 
+
+μ(· | x1, . . . , x t) ∈ ∆( V), the next token is selected according to a temperature parameter T ≥ 0.In particular, At temperature T > 0, we sample from a tempered distribution: 
+
+Xt+1 ∼ μT (· | x1, . . . , x t), where μT (x) ∝ μ(x)1/T . (3) At temperature T = 0 , the distribution concentrates on the mode: 
+
+Xt+1 = arg max  
+
+> x∈V
+
+μ(x | x1, . . . , x t). (4) This distinction is fundamental: at T = 0 , given a prompt, the generated sequence is unique; at 
+
+T > 0, the same prompt yields a distribution over sequences. 
+
+3.1 The Space of CoT Curves 
+
+At T = 0 , token selection is deterministic. Given a prompt, there is exactly one generated sequence of tokens, this motivates the following definition of the space of discrete curves, 
+
+Definition 1. Fix a maximum sequence length n ∈ N. The space of discrete curves of length n
+
+is Cn := ( Rd)n. An element γ ∈ C n is a tuple γ = ( h1, . . . , h n) where hi ∈ Rd.
+
+4We have a natural embedding of Cm ⊆ C n for m ≤ n by repeating the last element n − m
+
+times (in practice, we do not apply this padding but instead work directly with variable-length trajectories). Let P ⊂ V ∗ denote the space of input prompts. At T = 0 , the model defines a deterministic map from the set of prompts to the space of curves. In particular, we have: 
+
+H : P → C n, P 7 → (h1, . . . , h m, h m, . . . , h m), (5) where m is the generation length and the final state Hm is repeated to fill length n (stationary extension). As such we introduce the length n chain of thought as an element in the space of discrete curves of length n. In other words, given a ω ∈ V ∗ the length-n Chain-of-Thought curve is the element H(ω) = ( h1(ω), . . . , h n(ω)) ∈ C n produced by generation from ω, with stationary extension if necessary. We characterize CoT curves through real-or vector valued functionals, in particular: 
+
+Definition 2. A vector-valued Geometric Functional is a function φ : Cn → Rk that extracts geometric properties of curves. The composition φ ◦ H : V∗ → Rk characterizes how these properties vary across prompts. 
+
+As an example, for a curve γ = ( h1, . . . , h n) ∈ C n, define the centered curve with elements 
+
+¯ht = ht − 1
+
+> n
+
+Pni=1 hi and its trajectory covariance matrix, defined as C(γ) := 1
+
+> n
+
+Pnt=1 ¯ht¯h⊤ 
+
+> t
+
+= 
+
+> 1
+> n
+
+¯H⊤ ¯H ∈ Rd×d, where ¯H = [ ¯h1, . . . , ¯hn]⊤ ∈ Rn×d. As such C is a geometrical functional that takes a curve and produces an element in Rd2
+
+.Let ν1 ≥ ν2 ≥ · · · ≥ νd ≥ 0 be the eigenvalues of C(γ) ordered in a non-increasing order, then we introduce another such important geometrical functional as follows: 
+
+Definition 3. For ρ ∈ (0 , 1] , the Effective Dimension at threshold ρ is: 
+
+dρ(γ) := min 
+
+(
+
+k ∈ { 1, . . . , d } :
+
+Pki=1 νi
+
+tr( C(γ)) ≥ ρ
+
+)
+
+. (6) 
+
+This is the minimum number of principal components needed to capture at least ρ fraction of the total variance. 
+
+The effective dimension measures the intrinsic dimensionality of the reasoning trajectory. A low dρ indicates the trajectory lies near a low-dimensional subspace (simple, structured reasoning), while high dρ indicates the trajectory explores many directions (complex, multi-faceted reasoning). Lastly, we introduce seven additional geometric functionals, which we use in Section 5.2 for correctness prediction. Let γ = ( h1, . . . , h n) ∈ C n be a trajectory, and let P ∈ Rd×k denote the top-k PCA basis fitted on the training set. Define the projected trajectory with elements 
+
+˜ht = P ⊤ht ∈ Rk for t = 1 , . . . , n , and let ˜γ = ( ˜h1, . . . , ˜hn) be the projected curve. Note that to prevent data leakage, when a fraction α ∈ (0 , 1] of the trajectory is observed, we restrict to the window ˜γ(α) = ( ˜h1, . . . , ˜h⌊αn ⌋). Noting that our framework is more general and one can extract many other meaningful functional as needed, we define the following functionals φ : Cn → R5k+2 
+
+below. 
+
+Examples (Kinematic and Positional Geometric Functionals). Given a projected trajectory 
+
+˜γ = ( ˜h1, . . . , ˜hm) for some m ≤ n, define the velocity increments ∆t := ˜ht+1 − ˜ht ∈ Rk for 
+
+1 ≤ ∀ t ≤ m − 1. The seven geometric functionals are: 1. Mean position, defined as μ(˜ γ) = 1
+
+> m
+
+Pmt=1 ˜ht ∈ Rk.
+
+2. Positional dispersion, the coordinate-wise standard deviation: 
+
+σ(˜ γ) = 1
+
+m
+
+> m
+
+X
+
+> t=1
+
+ ˜ht − μ(˜ γ)⊙2
+
+!⊙1/2
+
+∈ Rk, (7) where ⊙ denotes elementwise operations. 53. Initial hidden state, the first token representation of the projected trajectory, i.e., ˜h1 ∈ Rk.
+
+4. Final hidden state, the last token representation of the projected trajectory, i.e., ˜hm ∈ Rk.
+
+5. Mean velocity, the average of successive differences: 
+
+¯v(˜ γ) = 1
+
+m − 1
+
+> m−1
+
+X
+
+> t=1
+
+∆t ∈ Rk. (8) 6. Mean speed, the average step-wise Euclidean norm: 
+
+¯s(˜ γ) = 1
+
+m − 1
+
+> m−1
+
+X
+
+> t=1
+
+∥∆t∥2 ∈ R. (9) 7. Speed dispersion, the standard deviation of step-wise speeds: 
+
+σs(˜ γ) = 1
+
+m − 1
+
+> m−1
+
+X
+
+> t=1
+
+ ∥∆t∥2 − ¯s(˜ γ)2
+
+!1/2
+
+∈ R. (10) The full feature vector is the concatenation 
+
+φ(˜ γ) = 
+
+
+
+μ, σ, ˜h1, ˜hm, ¯v, ¯s, σ s
+
+
+
+∈ R5k+2 . (11) Note that mean velocity telescopes to 1 
+
+> m−1
+
+( ˜hm − ˜h1), making it a linear function of the already-included initial and final states. We retain it for completeness and its natural connection to mean speed and speed dispersion. At temperature T > 0, the same prompt could yields different curves at each generation time. Our formulation can extend to this framework: 
+
+H : V∗ → ∆( Cn), (12) where ∆( Cn) denotes distributions over curves. The induced distribution arises from the autore-gressive measure: 
+
+PμT (v1, . . . , v n) = 
+
+> n
+
+Y
+
+> t=1
+
+μT (vt | x1, . . . , x k, v 1, . . . , v t−1). (13) 
+
+# 4 Effective Dimension as Task Complexity 
+
+This section develops the theoretical core of the paper. We prove general spectral bounds for any covariance matrix, showing via a majorization argument that flat spectra maximize effective dimension (§4.1) and provide finite-sample stability. All proofs are in Appendix A. 
+
+4.1 Spectral Bounds and the Role of Flatness 
+
+The effective dimension of any PSD matrix is controlled by its eigenvalue spread. These are purely linear-algebraic facts, independent of any dynamical model. 
+
+Proposition 1 (Spectral Bounds) . For any PSD matrix C with eigenvalues ν1 ≥ · · · ≥ νd ≥ 0,
+
+ν1 > 0:
+
+⌈ρ tr( C)/ν 1⌉ ≤ dρ(C) ≤ ⌈ ρ tr( C)/ν d⌉, (14) 
+
+the upper bound requiring νd > 0.
+
+6Proof sketch. Let r := dρ(C). The lower bound follows from ρtr (C) ≤ P 
+
+> j≤r
+
+νj ≤ rν 1, giving 
+
+r ≥ ⌈ ρtr (C)/ν 1⌉. The upper bound follows from P 
+
+> j≤r−1
+
+νj < ρ tr (C) and νj ≥ νd, giving 
+
+(r − 1) νd < ρ tr( C), hence r ≤ ⌈ ρtr( C)/ν d⌉.The complete argument is in Appendix A. The ratio T /ν d is similar (they used covariance of the data rather than the dynamic) to the hardness measure of Javanmard et al. [2025]; the upper bound shows it controls dρ, but loosely .When the spectrum is flat, the bounds coincide at ⌈ρd ⌉. Flatness is extremal in a stronger sense, captured by majorization. 
+
+Definition 4. For x, y ∈ Rd, we say x is majorized by y, written x ≺ y, if 
+
+> k
+
+X
+
+> i=1
+
+x[i] ≤
+
+> k
+
+X
+
+> i=1
+
+y[i] for all k = 1 , . . . , d − 1, and 
+
+> d
+
+X
+
+> i=1
+
+x[i] =
+
+> d
+
+X
+
+> i=1
+
+y[i], (15) 
+
+where x[1] ≥ · · · ≥ x[d] is the decreasing rearrangement of x. Informally: x’s mass is more “spread out” than y’s, but both have the same total Marshall et al. [2011]. 
+
+Majorization gives us a precise way to compare how “peaked” two spectra are. We use it to show that the flat spectrum ν⋆ is the most spread-out among all spectra with the same trace, and achieves the highest effective dimension. More formally we have: 
+
+Proposition 2 (Flat Spectrum Maximizes Effective Dimension) . Let C be PSD with eigenvalues 
+
+ν ∈ Rd and trace tr (C). Let ν⋆ := ( tr (C)/d, . . . , tr (C)/d ), the flat spectrum with the same total. Then: 1. ν⋆ ≺ ν: the flat spectrum is majorized by any other spectrum with the same total. 2. dρ(C) ≤ dρ(C⋆) = ⌈ρd ⌉.Proof sketch. We first show ν⋆ ≺ ν: since both vectors have total tr (C), this reduces to P 
+
+> i≤k
+
+νi ≥
+
+ktr (C)/d , i.e., the top-k average is at least the overall mean. If not, then νk (and hence every 
+
+νj with j > k , by decreasing order) is also below tr (C)/d , so tr (C) = P 
+
+> i
+
+νi < tr (C), a contradiction. The second one follows by definition and using part 1. The complete argument is in Appendix A. 
+
+4.2 Stability under small Perturbation 
+
+The following framework-independent and purely linear-algebraic result shows that if two co-variance matrices are ϵ-close in operator norm(which is ϵ-close in operator norm ( ∥ bC − C∥op := max ∥v∥=1 ∥( bC − C)v∥), their effective dimensions are also close. 
+
+Theorem 3. Let C, bC be PSD with ∥ bC − C∥op ≤ ϵ and tr (C) > 0. Assume dϵ ≤ tr (C)/2. Define 
+
+F (j) := P 
+
+> i≤j
+
+νi/tr( C) where νi are the decreasingly-sorted eigenvalues of C. Then 
+
+dρ( bC) − dρ(C) ≤ #
+
+n
+
+j ∈ { 1, . . . , d } : |F (j) − ρ| ≤ 4dϵ 
+
+> tr( C)
+
+o
+
+. (16) 
+
+In particular, if the cumulative mass function F crosses level ρ transversally (i.e., F has no index within distance 4dϵ/ tr( C) of ρ), then dρ( bC) = dρ(C).Proof sketch. The argument proceeds in three steps. First, recall Weyl’s inequality : for symmetric matrices A, B ∈ Rd×d with eigenvalues sorted in decreasing order, |λk(A + B) − λk(A)| ≤ ∥ B∥op 
+
+for every k. Applied with A = C and B = bC − C, this gives |ˆνk − νk| ≤ ϵ for all k: each eigenvalue of bC is within ϵ of the corresponding eigenvalue of C. Summing across k, we also get 
+
+|tr( bC) − tr( C)| ≤ dϵ , and similarly the partial sums Sj := P 
+
+> i≤j
+
+νi and bSj differ by at most dϵ .7Second, we propagate this to the cumulative-mass function F (j) := Sj /tr (C). Using the algebraic identity bSj tr (C) − Sj tr ( bC) = ( bSj − Sj ) tr (C) + Sj (tr (C) − tr ( bC)) and bounding each piece via the triangle inequality, we obtain | bF (j) − F (j)| ≤ 4dϵ/ tr( C) =: δ.Finally, since dρ is the first index at which F reaches ρ, and |F (j) − bF (j)| ≤ δ everywhere, the two effective dimensions can only disagree at indices where F (j) lies within δ of ρ: away from this band, F and bF agree on whether the threshold has been crossed. Counting such indices yields (16) . In particular, if F jumps past ρ transversally at a single index, with no j satisfying 
+
+|F (j) − ρ| ≤ δ, then dρ( bC) = dρ(C) exactly. The complete argument is in Appendix A. 
+
+# 5 Experiments 
+
+5.1 Experimental Setup 
+
+Model. We use Qwen2.5-0.5B-Instruct [Yang et al., 2024], a decoder-only transformer with 24 layers and hidden dimension 896. Despite its small size, it produces well-structured reasoning chains and allows us to extract hidden states at every layer and token position without prohibitive memory cost. 
+
+Dataset. We focus on three categories from the MATH500 dataset [Hendrycks et al., 2021]: Algebra and Counting & Probability and Precalculus. Problems in the MATH500 dataset are labeled with difficulty annotations ranging from 1-5. We consider the problems with annotations of 1, 3 and 5, which we respectively label as easy , medium and hard .We use a fixed set of 9 (probability had 2 easy question rather than 3) questions per category, drawn to ensure a balanced difficulty split. In the case of comparing effective dimension for task difficulty, we only use questions labeled as easy or hard (i.e. annotated as 1 or 5). 
+
+Trajectory Collection. For each problem, we generate 10 reasoning trajectories at temperature 
+
+T = 0 .7 using two chain-of-thought prompting styles (medium and long which, which are provided in the appendix), pooled for analysis. Each trajectory is generated autoregressively with a maximum of 800 tokens. We extract the hidden state h(ℓ) 
+
+> t
+
+∈ R896 at every generated token position t for all layers ℓ ∈ { 0, . . . , 23 }, yielding a trajectory matrix H(ℓ) per layer per run. Correctness is determined by a symbolic answer checker combining SymPy expression matching and string normalization against the ground-truth boxed answer. 
+
+Features for Correctness Prediction. For each trajectory, we project H(ℓ) onto the top 15 PCA components fitted on the training set, then extract seven kinematic and positional features from the windowed portion of the projected trajectory (which are defined in section 3.1): mean position, positional dispersion (standard deviation), initial hidden state, final hidden state of the truncated trajectories, mean velocity (mean of successive differences), mean speed (mean of step-wise norms), and speed dispersion. Features are standardized before classification. 
+
+Evaluation Protocol. For correctness prediction, we use a stratified question-level 80/20 train/test split, repeated over 5 random seeds, ensuring that all trajectories from a given question appear entirely in train or entirely in test. We report AUC-ROC (Area Under the Receiver Operating Characteristic curve) and AUPRC (Area Under the Precision–Recall Curve) with 
+
+± std across splits. For classifiers we use logistic regression (LR; ℓ2 regularization C = 0 .1), a two-layer MLP (hidden sizes 64 and 32, early stopping, ℓ2 regularization α = 0 .01 ), and a two-layer GRU (hidden dim 64). We highlight AUPRC because our central question is whether trajectory geometry can rank correct solutions above incorrect ones. AUPRC summarizes this ranking through precision (how many of the trajectories flagged as correct actually are) and recall (how many of the truly correct trajectories are recovered) across all thresholds. This directly 820 30 40 50 60 70 80 90 100                             
+
+> % of Trajectory Observed
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> AUPRC
+> (C) Early Correctness Prediction AUPRC
+> LR
+> MLP
+> GRU
+> 20 30 40 50 60 70 80 90 1
+> % of Trajectory Observed
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> AUC-ROC
+> (F) Early Correctness Prediction AUC-ROC
+> LR
+> MLP
+> GRU
+> Random ( 20 30 40 50 60 70 80 90 100
+> % of Trajectory Observed
+> 0 0
+> 0 2
+> 0 4
+> 0 6
+> 0 8
+> 1 0
+> AUPRC
+> (C) Early Correctness Prediction AUPRC
+> LR
+> MLP
+> GRU
+> 20 30 40 50 60 70 80 90 100
+> % of Trajectory Observed
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> AUC-ROC
+> (F) Early Correctness Prediction AUC-ROC
+> LR
+> MLP
+> GRU
+> Random (0.5)
+
+Figure 2: Correctness is detectable from early trajectory geometry. (Left) AUPRC as a function of the fraction of the trajectory observed. (Right) AUC-ROC as a function of the fraction of the trajectory observed. Kinematic and positional features extracted from a windowed prefix of the reasoning trajectory predict whether the trajectory will reach a correct answer before generation is complete. The train/test split is at the question level, using an 80/20 split across five seeds. 
+
+reflects our intended use, deciding which of the many candidate trajectories for a given question to continue, since a high-precision, high-recall score lets us concentrate on promising trajectories and potentially reach a correct solution faster. 
+
+5.2 Experiment 1: Correctness Prediction from Trajectory Geometry 
+
+We ask whether the geometry of a reasoning trajectory predicts whether it will reach a correct answer, and how early in generation this signal emerges. 
+
+Cross-question generalization. Figure 2 shows AUPRC and AUC-ROC results for correctness prediction as a function of the fraction of the trajectory observed, for the LR, MLP, and GRU classifiers, under a stratified question-level 80/20 split averaged over 5 seeds. LR achieves AUC = 0 .806 ± 0.132 at 20% observation and 0.839 ± 0.111 at 100% , with AUPRC remaining stable around 0.868 throughout. MLP reaches AUC = 0 .723 ± 0.154 at 20% , dips at 30% , then recovers to 0.828 ± 0.093 at 100% . The GRU behaves qualitatively differently: it achieves AUC 
+
+= 0 .641 ± 0.215 at 20% , peaks at 0.754 ± 0.078 at 70% , and then drops to 0.577 ± 0.144 at 100% ,barely above chance. 
+
+Within-question prediction. To understand the ceiling of the correctness signal, we also evaluate a setting where trajectories from the same question can appear in both train and test, while ensuring no trajectory is included in both (i.e. there is no data leakage, but rather leakage at the question level) with 5-fold cross-validation over the set of all pooled trajectories. Here LR achieves AUC ≈ 0.90 and MLP achieves AUC ≈ 0.91 using only 20% of the trajectory, with negligible improvement as more tokens are observed (Table 1). This confirms that the geometric signal for correctness is saturated very early, and that the gap between within-question ( 0.90 ) and cross-question ( 0.81 ) performance represents the portion of the signal that is question-specific rather than universally transferable, or that our sample size was not high enough to generalize to such an extent. 
+
+5.3 Experiment 2: Difficulty Prediction via Effective Dimension 
+
+We ask whether the effective dimension dρ of the hidden-state trajectory can predict whether a problem is easy or hard (MATH500 difficulty of 1 vs. 5), without any access to the answer or the model’s output. For each problem, at layer ℓ = 12 , we compute dρ(H(ℓ), ρ ) at ρ ∈ { 0.90 , 0.95 , 0.99 },9Table 1: Within-question correctness prediction (5-fold CV). AUC-ROC ± std. 
+
+Trajectory % Logistic Regression MLP AUC Std AUC Std 20% 0.902 0.012 0.912 0.023 50% 0.902 0.016 0.914 0.015 100% 0.919 0.017 0.909 0.022 200 220                    
+
+> 0.95)
+> ribution
+> Easy (n = 120)
+> Hard (n = 120)
+> Early Mid Late
+> 0510 15 20
+> Layer
+> 0.4
+> 0.5
+> 0.6
+> 0.7
+> 0.8
+> 0.9
+> 1.0
+> AUC  (Easy vs Hard)
+> (B) AUC Across Layers
+> LR
+> MLP
+> Best layer 21
+> Random (AUC = 0.5) 80 100 120 140 160 180 200 220
+> Effective Dimension d(= 0.95)
+> 0
+> 5
+> 10
+> 15
+> 20
+> 25
+> 30
+> Count
+> = 121.6 = 170.0
+> (A) Effective Dimension Distribution
+> Easy
+> Hard
+> Ear
+> 0
+> 0.4
+> 0.5
+> 0.6
+> 0.7
+> 0.8
+> 0.9
+> 1.0
+> AUC  (Easy vs Hard)
+
+Figure 3: Effective dimension predicts task difficulty. (Left) AUC for easy vs. hard difficulty prediction across all 24 layers. Effective dimension achieve AUC > 0.9 from layer 8 onward, peaking at 0.93 at layer 21. (Right) Distribution of dρ (ρ = 0 .95 ) at layer 21. Hard problems exhibit 40% higher effective dimension than easy ones ( p = 5 .79 × 10 −166 ). The spectral geometry of the hidden-state trajectory encodes task hardness across all layers, with the signal strengthening toward the final layers. 
+
+yielding a three-dimensional feature vector per trajectory. We then run leave-one-question-out cross-validation: for each test question, we train an LR or MLP classifier on the effective dimension features from all other questions, and predict whether the test question is easy or hard. 
+
+Results. Figure 3 (left) shows AUC-ROC as a function of layer for both classifiers. Effective dimension is predictive at every layer, with AUC rising from 0.81 at layer 0 to 0.93 at layer 21. Prediction is consistent and robust: even the earliest layers achieve AUC well above chance, and the signal strengthens through the network. The best layer is layer 21 (MLP AUC = 0 .93 ,accuracy = 86 .8% ). Figure 3 (right) shows the distribution of dρ at layer 21 ( ρ = 0 .95 ) for easy and hard problems. The separation is apparent: hard problems have mean effective dimension μ ≈ 170 versus μ = 121 .6 for easy problems, a 40% gap, with a t-test p-value of 
+
+5.79 × 10 −166 . Hard trajectories explore a substantially higher-dimensional subspace of the model’s representation space, providing strong evidence for the relationship between effective dimension and task hardness. 
+
+# 6 Conclusion 
+
+We study the geometry of chain-of-thought reasoning trajectories in transformer hidden state space. Formalizing each reasoning chain as a discrete curve in Rd, we introduced the effective dimension 
+
+dρ as a spectral measure of trajectory complexity and show theoretically that harder tasks necessarily induce higher-dimensional trajectories. Empirically, dρ predicts problem difficulty with AUC > 0.93 via leave-one-question-out cross-validation, with hard problems exhibiting 40% 
+
+higher effective dimension on average than easy ones. For correctness prediction, seven kinematic features of the trajectory achieve AUC = 0 .806 from only the first 20% of generated tokens under 10 a question-level split, with a simple logistic regression outperforming a GRU on the full sequence, suggesting there are interesting signal lies in coarse geometric structure. Together, these results establish trajectory geometry as a practical window into both task hardness and solution quality. 
+
+Limitations. Our experiments use a single small model and three MATH500 categories, so generalization to larger models and other domains remains open. Our theoretical analysis connects spectral flatness to effective dimension but does not fully explain how task difficulty induces this flatness in a trained transformer. Finally, our correctness prediction is evaluated in terms of AUC; translating this into concrete early-stopping or best-of-n gains is left for future work. 
+
+# Acknowledgments 
+
+AJ was supported in part by the NSF Award DMS-2311024, an Amazon Faculty Research Award, an Adobe Faculty Research Award, and an iORB grant form USC Marshall School of Business. 
+
+# References 
+
+Daya Guo, Dejian Yang, Haowei Zhang, Junxiao Song, Peiyi Wang, Qihao Zhu, Runxin Xu, Ruoyu Zhang, Shirong Ma, Xiao Bi, et al. Deepseek-r1: Incentivizing reasoning capability in llms via reinforcement learning. arXiv preprint arXiv:2501.12948 , 2025. Dan Hendrycks, Collin Burns, Saurav Kadavath, Akul Arora, Steven Basart, Eric Tang, Dawn Song, and Jacob Steinhardt. Measuring mathematical problem solving with the math dataset. In Advances in Neural Information Processing Systems , volume 34, 2021. Adel Javanmard, Baharan Mirzasoleiman, and Vahab Mirrokni. Understanding the role of training data in test-time scaling. arXiv preprint arXiv:2510.03605 , 2025. Takeshi Kojima, Shixiang Shane Gu, Machel Reid, Yutaka Matsuo, and Yusuke Iwasawa. Large language models are zero-shot reasoners. In Advances in Neural Information Processing Systems ,volume 35, 2022. Tomek Korbak, Mikita Balesni, Elizabeth Barnes, Yoshua Bengio, Joe Benton, Joseph Bloom, Mark Chen, Alan Cooney, Allan Dafoe, Anca Dragan, et al. Chain of thought monitorability: A new and fragile opportunity for ai safety. arXiv preprint arXiv:2507.11473 , 2025. Albert W. Marshall, Ingram Olkin, and Barry C. Arnold. Inequalities: Theory of Majorization and Its Applications . Springer Series in Statistics. Springer New York, 2 edition, 2011. ISBN 978-0-387-68276-1. doi: 10.1007/978-0-387-68276-1. Niklas Muennighoff, Zitong Yang, Weijia Shi, Xiang Lisa Li, Li Fei-Fei, Hannaneh Hajishirzi, Luke Zettlemoyer, Percy Liang, Emmanuel Candès, and Tatsunori B Hashimoto. s1: Simple test-time scaling. In Proceedings of the 2025 Conference on Empirical Methods in Natural Language Processing , pages 20286–20332, 2025. OpenAI. Learning to reason with llms, 2024. URL https://openai.com/index/ learning-to-reason-with-llms/ .Archiki Prasad, Mandar Joshi, Kenton Lee, Mohit Bansal, and Peter Shaw. Effective reasoning chains reduce intrinsic dimensionality. arXiv preprint arXiv:2602.09276 , 2026. Charlie Snell, Jaehoon Lee, Kelvin Xu, and Aviral Kumar. Scaling llm test-time compute optimally can be more effective than scaling model parameters. arXiv preprint , 2024. 11 Jinyan Su, Jennifer Healey, Preslav Nakov, and Claire Cardie. Between underthinking and overthinking: An empirical study of reasoning length and correctness in llms. arXiv preprint arXiv:2505.00127 , 2025. Lihao Sun, Hang Dong, Bo Qiao, Qingwei Lin, Dongmei Zhang, and Saravan Rajmohan. Llm reasoning as trajectories: Step-specific representation geometry and correctness signals. arXiv preprint arXiv:2604.05655 , 2026. Alexander Matt Turner, Lisa Thiergart, Gavin Leech, David Udell, Juan J Vazquez, Ulisse Mini, and Monte MacDiarmid. Steering language models with activation engineering. arXiv preprint arXiv:2308.10248 , 2023. Jason Wei, Xuezhi Wang, Dale Schuurmans, Maarten Bosma, Brian Ichter, Fei Xia, Ed Chi, Quoc V Le, and Denny Zhou. Chain-of-thought prompting elicits reasoning in large language models. In Advances in Neural Information Processing Systems , volume 35, 2022. Sean Welleck, Amanda Bertsch, Matthew Finlayson, Hailey Schoelkopf, Alex Xie, Graham Neubig, Ilia Kulikov, and Zaid Harchaoui. From decoding to meta-generation: Inference-time algorithms for large language models. arXiv preprint arXiv:2406.16838 , 2024. An Yang, Baosong Yang, Binyuan Hui, Bo Zheng, Bowen Yu, Chang Zhou, Chengpeng Li, Chengyuan Li, Dayiheng Liu, Fei Huang, et al. Qwen2 technical report. arXiv preprint arXiv:2407.10671 , 2024. Yufa Zhou, Yixiao Wang, Xunjian Yin, Shuyan Zhou, and Anru R Zhang. The geometry of reasoning: Flowing logics in representation space. arXiv preprint arXiv:2510.09782 , 2025. 
+
+# A Proofs 
+
+In the following proofs, for simplicity of the notations we used T := tr( C).
+
+A.1 Proof of Proposition 1 
+
+Proof. Let r := dρ(C). By definition of dρ, r is the smallest integer with Prj=1 νj ≥ ρT , so we have rX
+
+> j=1
+
+νj ≥ ρT and 
+
+> r−1
+
+X
+
+> j=1
+
+νj < ρT. (17) 
+
+Lower bound. Since the eigenvalues are sorted in decreasing order, νj ≤ ν1 for all j.Summing over j = 1 , . . . , r :
+
+ρT ≤
+
+> r
+
+X
+
+> j=1
+
+νj ≤ r · ν1.
+
+Dividing by ν1 > 0 gives r ≥ ρT /ν 1. Since r is a positive integer, r ≥ ⌈ ρT /ν 1⌉.
+
+Upper bound. Since νj ≥ νd for all j ≤ r − 1, summing: 
+
+(r − 1) · νd ≤
+
+> r−1
+
+X
+
+> j=1
+
+νj < ρT, 
+
+where the strict inequality is from (17) . Hence r − 1 < ρT /ν d, and integrality gives r ≤⌈ρT /ν d⌉.12 A.2 Proof of Proposition 2 
+
+Proof. (1) ν⋆ ≺ ν. Both vectors have the same total T , so the equality condition in Def. 4 holds. We must show Pki=1 ν⋆i ≤ Pki=1 νi for every k, i.e., kT /d ≤ Pki=1 νi. Equivalently, we must show the top-k average of ν is at least the overall average: 
+
+1
+
+k
+
+> k
+
+X
+
+> i=1
+
+νi ≥ Td .
+
+Suppose for contradiction that 1
+
+> k
+
+Pki=1 νi < T /d . Since ν is sorted decreasingly, νk ≤
+
+> 1
+> k
+
+Pki=1 νi < T /d and νj ≤ νk < T /d for all j ≥ k. Then 
+
+T =
+
+> k
+
+X
+
+> i=1
+
+νi
+
+| {z } 
+
+> <kT /d
+
++
+
+> d
+
+X
+
+> i=k+1
+
+νi
+
+| {z }
+
+> <(d−k)T /d
+
+< kT d + (d − k)Td = T, 
+
+a contradiction. Hence the top-k average is at least T /d , and ν⋆ ≺ ν.
+
+(2) dρ is maximized at the flat spectrum. Let r⋆ := dρ(C⋆) = ⌈ρd ⌉ (directly, since 
+
+Pr⋆ 
+
+> i=1
+
+ν⋆i = r⋆T /d ≥ ρT iff r⋆ ≥ ρd ). Applying part (1) at k = r⋆:
+
+> r⋆
+
+X
+
+> i=1
+
+νi ≥
+
+> r⋆
+
+X
+
+> i=1
+
+ν⋆i ≥ ρT. 
+
+By definition of dρ as the smallest such r, dρ(C) ≤ r⋆ = dρ(C⋆).
+
+Equality condition. Equality throughout requires ν⋆ ≺ ν to be an equality of partial sums at every k, forcing νi = T /d for all i, i.e., ν = ν⋆.
+
+A.3 Proof of Theorem 3 
+
+Proof. Before we prove this, we recall Weyl inequality which states, for any symmetric matrices 
+
+A, B ∈ Rd×d with eigenvalues sorted in decreasing order, 
+
+λk(A + B) − λk(A) ≤ ∥ B∥op for all k = 1 , . . . , d. 
+
+where ∥B∥op := max (|λ1(B)|, |λd(B)|). In particular, taking A = C and B = bC − C gives 
+
+|ˆνk − νk| ≤ ∥ bC − C∥op which we use shortly. Let ν1 ≥ · · · ≥ νd and ˆν1 ≥ · · · ≥ ˆνd be the decreasingly-sorted eigenvalues of C and bC. Weyl’s inequality for Hermitian matrices gives 
+
+|ˆνj − νj | ≤ ∥ bC − C∥op ≤ ϵ for every j. Summing: |tr ( bC) − tr (C)| = | P 
+
+> j
+
+( ˆνj − νj )| ≤ dϵ . Now, let Sj := Pji=1 νi and bSj := Pji=1 ˆνi. By Weyl again, | bSj − Sj | ≤ jϵ ≤ dϵ .Define F (j) := Sj /tr( C) and bF (j) := bSj /tr( bC). We compute 
+
+bF (j) − F (j) = bSj
+
+tr( bC) − Sj
+
+tr( C) = bSj tr( C) − Sj tr( bC)tr( bC)tr( C) .
+
+Using bSj tr( C) − Sj tr( bC) = ( bSj − Sj )tr( C) + Sj (tr( C) − tr( bC)) and the triangle inequality: 
+
+bF (j) − F (j) ≤ | bSj − Sj |
+
+tr( bC) + Sj · | tr( C) − tr( bC)|
+
+tr( bC)tr( C) ≤ dϵ 
+
+tr( bC) + dϵ · Sj
+
+tr( bC)tr( C) .
+
+Since Sj ≤ tr (C), the second term is at most dϵ/ tr ( bC). Also tr ( bC) ≥ tr (C) − dϵ ≥ tr (C)/2
+
+(using the assumption dϵ ≤ tr( C)/2). Therefore 
+
+bF (j) − F (j) ≤ 2dϵ 
+
+tr( bC) ≤ 4dϵ 
+
+tr( C) .
+
+13 By definition, dρ(C) = min {j : F (j) ≥ ρ} and similarly for bC. If F and bF differ by at most δ := 4 dϵ/ tr (C) at every index, then the two threshold-crossings can differ only at indices where F is within δ of ρ. (Formally: if |F (j) − ρ| > δ , then F (j) > ρ + δ ⇒ bF (j) > ρ , or 
+
+F (j) < ρ − δ ⇒ bF (j) < ρ ; either way F and bF agree on “reached threshold at j” at that index.) So the difference |dρ( bC) − dρ(C)| is bounded by the number of indices j within |F (j) − ρ| ≤ δ.
+
+# B Experimental Details 
+
+Hardware. Trajectory collection and analysis were run on NVIDIA A100 GPUs (40 GB HBM2) via a SLURM cluster. Collection jobs used 16 GB of CPU RAM per job; effective dimension analysis used 24 GB; correctness prediction ran on CPU-only nodes with 32 GB of RAM. 
+
+Hyperparameters. 
+
+• Temperature: T = 0 .7
+
+• Maximum tokens: 800 
+
+• Runs per question: 10–15 
+
+• Minimum tokens for valid trajectory: 30 
+
+• ρ values: {0.90 , 0.95 , 0.99 }
+
+Difficulty Prediction Classifier Details. 
+
+• Logistic Regression : C = 1 .0, max iterations = 1000 
+
+• MLP : Hidden layers (32 , 16) , early stopping with 15% validation, ℓ2 regularization α = 0 .01 
+
+Correctness Prediction Classifier Details. 
+
+• Logistic Regression : C = 0 .1, max iterations = 1000, balanced class weights 
+
+• MLP : Hidden layers (64 , 32) , early stopping with 15% validation, ℓ2 regularization α = 0 .01 ,balanced sample weights 
+
+• GRU : 2-layer, hidden dim 64, dropout 0.3, Adam optimizer (lr= 1e−3, weight decay= 1e−4), 30 epochs, batch size 32, BCE loss with positive class weighting, gradient clipping norm 1.0
+
+Prompts. We use three chain-of-thought prompting styles. The medium and long styles are pooled for all experiments reported in the main paper. The short style is included for completeness. 
+
+Short CoT Prompt 
+
+Go with your instinct. Write only the essential steps - no extra explanation. Answer in 
+
+\boxed{} .
+
+Medium CoT Prompt 
+
+Think step by step. Show your reasoning, then give the final answer in \boxed{} .
+
+14 Long CoT Prompt 
+
+Overthink this. Consider multiple approaches. Solve step by step, then second-guess yourself. Check your work using a different method. Ask: what could I be missing? What if I made an error? Keep thinking until you’re fully satisfied. Answer in \boxed{} .
+
+15
