@@ -1,0 +1,69 @@
+{
+  "label": "2026-07-04",
+  "date": "2026-07-04",
+  "generated_at": "2026-07-04T21:05:30",
+  "count": 4,
+  "papers": [
+    {
+      "paper_id": "202607/04/2607.01792v1-partrep-learning-what-to-repeat-for-decoder-only-llms",
+      "section": "deep",
+      "title_en": "PARTREP: Learning What to Repeat for Decoder-only LLMs",
+      "authors": "Andikawati P Widjaja, Yongjun Kim, Hyounghun Kim, Jaeho Lee",
+      "date": "2026-07-02",
+      "pdf": "https://arxiv.org/pdf/2607.01792v1",
+      "score": "9.0",
+      "evidence": "使用token级别的负对数似然作为选择信号，仅重复最具信息量的token",
+      "tldr": "Decoder-only LLMs的因果注意力导致前部token上下文不足，后部更丰富，提示重复可均衡分布但计算昂贵。PartRep仅重复信息量最大的token，利用负对数似然作为选择信号，并训练轻量门控从早期隐藏层预测高NLL token。在MMLU、GSM8K、RULER等八个基准和Qwen2.5、Llama3.2、Gemma4三个模型上，保留大部分性能提升，KV缓存仅全重复的59.4%，预填充FLOPs仅79.0%。为长上下文场景提供了高效且实用的提示重复方法。",
+      "tags": "query:key-tokens",
+      "abstract_en": "While decoder-only LLMs excel at a vast array of natural language tasks, it suffers from an asymmetric information flow induced by causal attention: later tokens are richer in contextual grounding than earlier ones. A simple and effective remedy is prompt repetition -- just appending a second copy of prompt before generation can redistribute grounding across positions and improve reasoning performance. However, full repetition of the original prompt doubles the KV cache footprint and quadruples attention cost during prefill, making it impractical for long-context settings. We propose PartRep, a selective augmentation method that appends only the most informative tokens -- rather than the entire prompt. We use token-wise negative log-likelihood (NLL) as a selection signal, motivated by the hypothesis that less predictable tokens are less recoverable from surrounding context and therefore benefit more from late-position repetition. To avoid the heavy cost of a full forward pass for scoring, we train a lightweight gate that predicts high-NLL tokens from early-layer hidden states, enabling token selection during mid-prefill via early exit. Across eight benchmarks (including MMLU, GSM8K, and RULER) and three model families (Qwen2.5, Llama3.2, Gemma4), PartRep retains most of the gains of full repetition while using only 59.4\\% of its KV cache and 79.0\\% of its prefill FLOPs.",
+      "source": "arxiv",
+      "selection_source": "fresh_fetch"
+    },
+    {
+      "paper_id": "202607/04/2606.28566v1-r2-searcher-calibrating-retrieval-and-reasoning-boundaries-for-agentic-search",
+      "section": "deep",
+      "title_en": "R$^2$-Searcher: Calibrating Retrieval and Reasoning Boundaries for Agentic Search",
+      "authors": "Sheng Zhang, Junyi Li, Wenlin Zhang, Xiaowei Qian, Yichao Wang, Yingyi Zhang, Maolin Wang, Yong Liu, Xiangyu Zhao",
+      "date": "2026-06-26",
+      "pdf": "https://arxiv.org/pdf/2606.28566v1",
+      "score": "8.0",
+      "evidence": "利用查询token语义指导细粒度证据建模，强调推理中关键token的重要性",
+      "tldr": "针对多跳推理搜索智能体在检索与推理边界偏移的问题，提出R²-Searcher框架。通过基于查询token语义的细粒度事实提取构建推理上下文，结合后检索反思机制纠正边界偏差，并采用端到端的推理反思引导强化学习算法R²PO联合优化两个边界。在七个复杂多跳问答基准上显著优于现有方法，消融实验证实边界校准的关键作用。",
+      "tags": "query:key-tokens",
+      "abstract_en": "Recent search agents for multi-hop reasoning often fail by either retrieving incomplete evidence or reasoning over irrelevant portions of the retrieved content, leading to a retrieval-reasoning boundary shift. We propose R$^2$-Searcher, a novel framework that explicitly explores and calibrates the retrieval and reasoning boundaries via fine-grained, query-token-guided evidence modeling and post-retrieval reflection. Specifically, R$^2$-Searcher: (1) constructs fine-grained reasoning contexts by extracting precise facts from retrieved content based on query token semantics (e.g., subjects, actions, temporal markers, and degree modifiers), thereby guiding the attention of search agent; (2) introduces a retrieval reflection mechanism that evaluates and corrects boundary deviations after each retrieval step, guiding the generation of improved queries grounded in the extracted reasoning contexts; and (3) employs an end-to-end reasoning-reflection-guided reinforcement learning algorithm, R$^2$PO, which jointly optimizes both boundaries through a tree-based exploration of reasoning regions and reflections. Our method significantly enhances the quality of both retrieval and reasoning, establishing an iterative loop where retrieval and reasoning mutually enhance each other. Extensive experiments on seven complex multi-hop QA benchmarks demonstrate that R$^2$-Searcher significantly outperforms state-of-the-art agentic search methods in answer accuracy and retrieval-reasoning quality. Ablation studies further confirm the critical role of retrieval-reasoning boundary calibration.",
+      "source": "arxiv",
+      "selection_source": "fresh_fetch"
+    },
+    {
+      "paper_id": "202607/04/2606.29067v1-thinkprobe-beyond-accuracy----structural-profiling-of-open-ended-llm-reasoning-traces-via-non-generative-thought-graphs",
+      "section": "quick",
+      "title_en": "ThinkProbe: Beyond Accuracy -- Structural Profiling of Open-Ended LLM Reasoning Traces via Non-Generative Thought Graphs",
+      "authors": "Mohamed Amine Kerkouri, Simon D. Hernandez, Marouane Tliba, Yann Dauxais, Maha Ben-Fares, Pierre Holat",
+      "date": "2026-06-27",
+      "pdf": "https://arxiv.org/pdf/2606.29067v1",
+      "score": "6.0",
+      "evidence": "通过思维图对LLM推理轨迹进行结构分析，支持推理序列分析",
+      "tldr": "现有评估指标只关注LLM推理的正确性，忽略了其思考过程的结构特性。ThinkProbe将推理轨迹转换为包含循环、8种节点和6种边类型的有向图，并通过规则分割和判别语义链接提取五维认知特征。在7个模型、4200条轨迹的分析中，发现推理结构是模型本身的稳定属性，且结构维度对问题领域敏感。这项工作揭示了准确率之外、无法被传统指标捕获的认知模式。",
+      "tags": "query:key-tokens",
+      "abstract_en": "We present ThinkProbe, a framework for structural analysis of LLM reasoning traces. ThinkProbe converts each trace into a Thought Graph a directed graph with cycles, 8 node types, and 6 edge types and derives a 19-metric five-dimensional cognitive profile (5D-CP: Breadth, Depth, Structure, Metacognitive, Efficiency) through a fully non-generative pipeline combining rule-based segmentation and discriminative semantic linking. Applied to 4{,}200 traces from 7 native reasoning models across 200 open-ended questions and 10 cognitive domains, ThinkProbe reveals that reasoning structure is a stable, model-level property: between-model variance exceeds between-domain variance by up to fourfold across four of five cognitive dimensions, with Structure showing genuine sensitivity to question domain, exposing qualitatively distinct cognitive profiles invisible to accuracy-based evaluation.",
+      "source": "arxiv",
+      "selection_source": "fresh_fetch"
+    },
+    {
+      "paper_id": "202607/04/2607.00447v1-understanding-why-language-models-hallucinate-testing-reasoning-against-priors",
+      "section": "quick",
+      "title_en": "Understanding Why Language Models Hallucinate: Testing Reasoning Against Priors",
+      "authors": "Yangfan Hu, Xuhan Tong, Haoyue Bai, Xi Ding, Shashank Muralidhar Bharadwaj, Siyang Cao, Robert Nowak, Jiawei Zhang",
+      "date": "2026-07-01",
+      "pdf": "https://arxiv.org/pdf/2607.00447v1",
+      "score": "6.0",
+      "evidence": "模型预测关键选择偏差作为失败模式，即模型选择了错误的显著token",
+      "tldr": "大语言模型常产生违反提示约束的幻觉，这可能源于推理错位而非知识缺失。本文提出潜在关键任务模型，解释预训练频率不平衡导致捷径路径主导约束路径。通过ScientistQA和Real-Life Constrained QA测试集验证，发现任务检索偏差和关键选择偏差两种失败模式。研究表明幻觉源于有偏潜在推理，而不仅仅是知识缺乏。",
+      "tags": "query:key-tokens",
+      "abstract_en": "Large language models often produce hallucinated answers that violate prompt-level constraints. A key diagnostic question is whether these failures reflect missing knowledge, or whether the model has the relevant information but follows the wrong inference path. We study this phenomenon as inference misalignment: a mismatch between the answer supported by the prompt and the answer favored by statistically salient latent associations. We formalize this view with a latent key-task model, in which pretraining-frequency imbalance can cause a shortcut path to dominate the constraint-sensitive path and induce positive inference loss. The framework predicts two failure modes: task-retrieval bias in entity disambiguation and key-selection bias in action choice. We introduce TrapQA, a controlled diagnostic testbed with two components. ScientistQA tests disambiguation among similar scientists with supplementary factual probes, while Real-Life Constrained QA tests everyday constraint following under salient shortcuts. Our results show that hallucination can arise from biased latent inference rather than absent knowledge alone.",
+      "source": "arxiv",
+      "selection_source": "fresh_fetch"
+    }
+  ],
+  "errors": []
+}

@@ -6,35 +6,34 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-07-03
-- 运行时间：2026-07-03 20:37:18 UTC
+- 最新运行日期：2026-07-04
+- 运行时间：2026-07-04 21:05:22 UTC
 - 运行状态：成功
-- 本次总论文数：5
+- 本次总论文数：4
 - 精读区：2
-- 速读区：3
+- 速读区：2
 
 ### 今日简报（AI）
-今日精读两篇8分论文，核心围绕LLM推理轨迹的动态表示编辑与任务难度的几何谱特征展开。最值得关注的方向：一是通过表示编辑主动引导推理路径，二是利用图谱理论量化任务复杂度的新视角。建议后续结合谱分析方法评估推理模型的瓶颈，并尝试编辑策略来提升长链推理稳定性。
-- 详情：[/202607/03/README](/202607/03/README)
+1) 今日精选4篇论文，精读2篇分别聚焦大模型重复学习策略与代理搜索的检索推理校准，得分高达9.0和8.0。  
+2) 最值得关注的是《PARTREP》中解码器LLM的重复学习机制，以及《R²-Searcher》对搜索代理的边界校准方法，均为前沿实用方向。  
+3) 建议优先精读这两篇高分论文，深入理解其架构设计，对优化模型训练和搜索系统有直接参考价值。
+- 详情：[/202607/04/README](/202607/04/README)
 
 ### 精读区论文标签
-1. [Search for Truth from Reasoning: A Dynamic Representation Editing Framework for Steering LLM Trajectories](/202607/03/2606.28589v2-search-for-truth-from-reasoning-a-dynamic-representation-editing-framework-for-steering-llm-trajectories)  
+1. [PARTREP: Learning What to Repeat for Decoder-only LLMs](/202607/04/2607.01792v1-partrep-learning-what-to-repeat-for-decoder-only-llms)  
+   标签：评分：9.0/10、query:key-tokens
+   evidence：使用token级别的负对数似然作为选择信号，仅重复最具信息量的token
+2. [R$^2$-Searcher: Calibrating Retrieval and Reasoning Boundaries for Agentic Search](/202607/04/2606.28566v1-r2-searcher-calibrating-retrieval-and-reasoning-boundaries-for-agentic-search)  
    标签：评分：8.0/10、query:key-tokens
-   evidence：因果追踪推理轨迹中真实性的几何结构
-2. [Geometric Signatures of Reasoning: A Spectral Perspective on Task Hardness](/202607/03/2607.01571v1-geometric-signatures-of-reasoning-a-spectral-perspective-on-task-hardness)  
-   标签：评分：8.0/10、query:key-tokens
-   evidence：在隐藏状态空间中分析COT轨迹的几何特征，揭示推理标志
+   evidence：利用查询token语义指导细粒度证据建模，强调推理中关键token的重要性
 
 ### 速读区论文标签
-1. [Bridging the Gap Between Latent and Explicit Reasoning with Looped Transformers](/202607/03/2606.31779v1-bridging-the-gap-between-latent-and-explicit-reasoning-with-looped-transformers)  
-   标签：评分：7.0/10、query:key-tokens
-   evidence：分析循环transformer中隐藏状态推理以桥接潜在和显式思维链
-2. [DiscoLoop: Looping Discrete Embeddings and Continuous Hidden States for Multi-hop Reasoning](/202607/03/2607.00341v1-discoloop-looping-discrete-embeddings-and-continuous-hidden-states-for-multi-hop-reasoning)  
+1. [ThinkProbe: Beyond Accuracy -- Structural Profiling of Open-Ended LLM Reasoning Traces via Non-Generative Thought Graphs](/202607/04/2606.29067v1-thinkprobe-beyond-accuracy----structural-profiling-of-open-ended-llm-reasoning-traces-via-non-generative-thought-graphs)  
    标签：评分：6.0/10、query:key-tokens
-   evidence：分析循环transformer在多跳推理中的隐藏状态
-3. [ReContext: Recursive Evidence Replay as LLM Harness for Long-Context Reasoning](/202607/03/2607.02509v1-recontext-recursive-evidence-replay-as-llm-harness-for-long-context-reasoning)  
+   evidence：通过思维图对LLM推理轨迹进行结构分析，支持推理序列分析
+2. [Understanding Why Language Models Hallucinate: Testing Reasoning Against Priors](/202607/04/2607.00447v1-understanding-why-language-models-hallucinate-testing-reasoning-against-priors)  
    标签：评分：6.0/10、query:key-tokens
-   evidence：使用模型内部相关性信号选择关键证据，类似关键token重要性
+   evidence：模型预测关键选择偏差作为失败模式，即模型选择了错误的显著token
 
 
 <div class="dpr-home-promo-card">
