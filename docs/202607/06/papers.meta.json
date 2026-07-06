@@ -1,0 +1,69 @@
+{
+  "label": "2026-07-06",
+  "date": "2026-07-06",
+  "generated_at": "2026-07-06T21:24:23",
+  "count": 4,
+  "papers": [
+    {
+      "paper_id": "202607/06/2606.32029v1-when-llms-read-tables-carelessly-measuring-and-reducing-data-referencing-errors",
+      "section": "quick",
+      "title_en": "When LLMs Read Tables Carelessly: Measuring and Reducing Data Referencing Errors",
+      "authors": "Yuqing Yang, Qi Zhu, Zhen Han, Boran Han, Zhengyuan Shen, Shuai Wang, Vassilis N. Ioannidis, Huzefa Rangwala",
+      "date": "2026-06-30",
+      "pdf": "https://arxiv.org/pdf/2606.32029v1",
+      "score": "7.0",
+      "evidence": "系统研究表格推理中的数据引用错误，强调正确引用关键token的重要性",
+      "tldr": "大型语言模型在处理表格数据时，常出现数据引用错误（DREs），即错误引用或遗漏表格值，直接损害推理正确性。本文首次系统评估1.7B-20B参数的多种模型，发现所有模型均存在DREs。通过将数据引用作为批评信号进行过滤和拒绝采样，答案准确率提升12.0%。训练4B参数批评模型，平均F1达78.2%，有效检测DREs并协助推理。研究首次量化了DRE问题并提供实用方案。",
+      "tags": "query:key-tokens",
+      "abstract_en": "While large language models (LLMs) perform well on table tasks, they still make data referencing errors (DREs), i.e., incorrectly citing or omitting table values, despite understanding the table structure. Beyond final-answer accuracy, DREs directly compromise the correctness and reliability of intermediate reasoning steps. Yet prior studies have only offered limited, small-scale analyses. In this work, we present the first systematic evaluation of tabular data referencing errors across different models and tasks. Our results show that DREs occur across all tested models (1.7B to 20B parameters). Furthermore, we demonstrate that incorporating data referencing as a critic significantly improves answer accuracy up to 12.0%, through critic-based filtering and rejection sampling. Finally, we trained a lightweight 4B-parameter critic model that achieves an average F1 score of 78.2% in detecting both in-distribution and out-of-distribution DREs, and effectively assists inference for larger models.",
+      "source": "arxiv",
+      "selection_source": "fresh_fetch"
+    },
+    {
+      "paper_id": "202607/06/2607.02073v1-evidence-state-rewards-for-long-context-reasoning",
+      "section": "quick",
+      "title_en": "Evidence-State Rewards for Long-Context Reasoning",
+      "authors": "Ya Gao, Pekka Marttinen",
+      "date": "2026-07-02",
+      "pdf": "https://arxiv.org/pdf/2607.02073v1",
+      "score": "7.0",
+      "evidence": "基于证据状态奖励的长上下文推理关键token定位与修改",
+      "tldr": "长上下文推理中现有强化学习方法仅奖励最终答案或静态证据提取，缺乏对中间动作反馈。提出Maven框架，通过可编辑证据记忆和答案条件证据状态值，为添加、链接、删除动作分别赋予边际增益、事后贡献、协同、改进支持等奖励，并整合进GRPO。在多个长上下文基准上，Maven优于仅结果RL和证据识别基线，生成更充分的证据集并减少干扰保留。结果表明长上下文RL受益于优化状态化的证据导航，而非一次性提取。",
+      "tags": "query:key-tokens",
+      "abstract_en": "Long-context reasoning requires models to locate, revise, and synthesize evidence distributed across lengthy inputs. Existing long-context RL methods usually reward final answers or static evidence extraction, offering little feedback on how intermediate actions change the model's evidence state. We propose Maven, a reinforcement learning framework with an editable evidence memory. Maven defines an answer-conditioned evidence-state value and rewards action-level state transitions: add actions are credited by marginal gain and hindsight contribution, link actions by evidence synergy, and drop actions by improved answer support after removing misleading evidence. These rewards are assigned to the corresponding action spans in GRPO. Across Llama and Qwen models on LongBench v2, LongReason, and RULER, Maven outperforms outcome-only RL and evidence-identification baselines, producing more sufficient evidence sets and lower distractor retention. Our results show that long-context RL benefits from optimizing stateful evidence navigation rather than one-shot evidence extraction.",
+      "source": "arxiv",
+      "selection_source": "fresh_fetch"
+    },
+    {
+      "paper_id": "202607/06/2606.29278v1-the-complexity-ceiling-benchmark-a-multi-domain-evaluation-of-sequential-reasoning-under-depth-scaling",
+      "section": "quick",
+      "title_en": "The Complexity Ceiling Benchmark: A Multi-Domain Evaluation of Sequential Reasoning Under Depth Scaling",
+      "authors": "Shubh Chapra, Dhruv Kumar, Murari Mandal, Yash Sinha",
+      "date": "2026-06-28",
+      "pdf": "https://arxiv.org/pdf/2606.29278v1",
+      "score": "6.0",
+      "evidence": "评估不同领域推理序列随步数衰减的规律",
+      "tldr": "针对语言模型长程推理随步骤数增加而退化的问题，提出复杂度上限基准(CCB)，固定语义内容仅改变深度N∈[5,50]，覆盖三个不同结构领域。在6000次试验中，五个前沿及开放权重模型呈现一致的几何衰减模式，但领域上限差异显著：前两个领域最强模型在N=50时仍保持pd>0.92，而传递关系推理领域所有模型在N=5时即崩溃，最佳模型50%成功步数H0.5仅约4.7步。14.5%的正确回答经由错误的中间推理达成，强制显式状态追踪未能改变上限。首个推理分歧步骤k*可更好预测域内准确性。CCB与几何衰减模型将长程推理轮廓压缩为每个任务族的一个可解释数值。",
+      "tags": "query:key-tokens",
+      "abstract_en": "We introduce the Complexity Ceiling Benchmark (CCB), a controlled evaluation of how language-model reasoning decays as the number of required sequential steps grows. CCB fixes the semantic content of a task and varies only its depth N in {5,...,50} across three structurally distinct regimes: grounded spatial state-tracking, abstract symbolic pointer manipulation, and transitive relational inference. Across 6,000 trials over five frontier and open-weight LLMs we find a consistent pattern of geometric per-step decay with widely separated domain ceilings: on the first two regimes the strongest models retain pd>0.92 across N=50; on the third every model collapses by N=5, with the best model's 50%-success horizon at H0.5~4.7 steps despite pd=0.863. A trace-level metric (TFBC) shows that 14.5% of correct answers across the benchmark are reached via incorrect intermediate reasoning. Forced verbose state-tracking does not move the ceiling (McNemar p=1.000), and the mean step at which reasoning first diverges, k*, predicts within-domain accuracy better than parameter count. CCB and the geometric decay model together reduce a model's long-horizon reasoning profile to one interpretable number per task family.",
+      "source": "arxiv",
+      "selection_source": "fresh_fetch"
+    },
+    {
+      "paper_id": "202607/06/2606.31599v1-token-sparse-medical-multimodal-reasoning-via-dual-stream-reinforcement-learning",
+      "section": "quick",
+      "title_en": "Token-Sparse Medical Multimodal Reasoning via Dual-Stream Reinforcement Learning",
+      "authors": "Kaitao Chen, Weiqian Zhao, Jiamin Wu, Qihao Zheng, Shangquan Sun, Chunfeng Song, Xiaosong Wang, Mu Zhou, Mianxin Liu",
+      "date": "2026-06-30",
+      "pdf": "https://arxiv.org/pdf/2606.31599v1",
+      "score": "6.0",
+      "evidence": "基于token重要性的剪枝；通过强化学习学习token重要性度量",
+      "tldr": "医学图像视觉证据稀疏，现有视觉语言模型在临床推理中效果不佳。本文提出双流强化学习框架ViToS，通过接地分支定位关键区域并剪枝无关视觉token，再经推理分支实现token稀疏推理。采用交叉反馈顺序优化解决策略耦合问题。在7个医学基准上，ViToS将视觉token减少至原长的77%，同时在Lingshu-7B和HuatuoGPT-Vision-7B上取得108.27%和104.16%的相对性能提升，显著加速推理并建立高效医学多模态推理新范式。",
+      "tags": "query:key-tokens",
+      "abstract_en": "Vision-language models (VLMs) combining reinforcement learning (RL) ignite remarkable progress in multimodal reasoning, yet still struggle with medical images, which typically exhibit extremely sparse visual evidence to inform clinical decision-making. We recognize that pruning visual tokens outside the grounding region greatly enhances medical reasoning. However, a united RL framework for active visual token pruning (VTP) and medical multimodal reasoning remains unestablished. Here, we propose a dual-stream RL framework, ViToS, to fulfill token pruning and question answering. ViToS trains one policy model with two task branches, where one focuses on grounding while the other conducts token-sparse reasoning after VTP. Furthermore, we solve the coupled policy learning problem by introducing the cross-feedback sequential optimization, avoiding gradient conflict and facilitating convergence of the shared policy model. Evaluated on seven medical benchmarks, our method reduces visual tokens to 77% of the original sequence length while achieving a 108.27% relative performance on Lingshu-7B and 104.16% relative performance on HuatuoGPT-Vision-7B. Overall, ViToS delivers superior performance and inference speedup, establishing an efficient paradigm for medical multimodal reasoning.",
+      "source": "arxiv",
+      "selection_source": "fresh_fetch"
+    }
+  ],
+  "errors": []
+}
