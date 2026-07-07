@@ -1,0 +1,69 @@
+{
+  "label": "2026-07-07",
+  "date": "2026-07-07",
+  "generated_at": "2026-07-07T20:55:12",
+  "count": 4,
+  "papers": [
+    {
+      "paper_id": "202607/07/2607.03502v1-reading-between-the-dots-decoding-hidden-computation-across-filler-tokens",
+      "section": "deep",
+      "title_en": "Reading Between the Dots: Decoding Hidden Computation across Filler Tokens",
+      "authors": "Kaley Brauer, Claudio Mayrink Verdun, Samuel Marks",
+      "date": "2026-07-03",
+      "pdf": "https://arxiv.org/pdf/2607.03502v1",
+      "score": "9.0",
+      "evidence": "通过logit-lens和注意力路由解码填充令牌上的隐藏计算",
+      "tldr": "大型语言模型可在无内容的填充令牌（如点号）上进行多步推理，表面行为监控失效。本文在DeepSeek V3和Kimi K2两个开源模型上发现，填充令牌上的计算是结构化、可读的：注意力机制将问题通过填充区域路由到答案，logit lens显示事实早现并后期组合，KV-cache移植可因果交换输出。提出无监督解码管道，仅以隐藏状态为输入，恢复中间值准确率80-95%。结果表明隐藏推理可直接从残差流读取，模型完整计算轨迹具有可监控性。",
+      "tags": "query:key-tokens",
+      "abstract_en": "Frontier LLMs can perform multi-step reasoning over content-free filler tokens like dots or counting sequences, producing correct answers with no visible chain-of-thought (CoT). This is a limit case for behavioral oversight, where surface tokens carry no information about the underlying reasoning. But hidden from the output is not the same as hidden from us. On four task families (fact retrieval, parallel numeric composition, string manipulation, and in-context computation), two open-weights frontier models (DeepSeek V3, Kimi K2) compute over filler tokens in a structured, legible way: attention routes the question through the filler region to the answer, logit-lens readouts show retrieved facts emerging early and their composition crystallizing in late layers, and KV-cache transplants at filler positions causally swap outputs between examples. We introduce an unsupervised decoding pipeline that takes only hidden states as input and recovers intermediate values with 80-95% accuracy (best LLM judge) across both models and all four tasks, without ground-truth labels or training. Hidden computation that defeats behavioral CoT monitoring is, on these tasks, directly readable from the residual stream, suggesting monitorability is a property of the model's full computational trace, not just its surface tokens.",
+      "source": "arxiv",
+      "selection_source": "fresh_fetch"
+    },
+    {
+      "paper_id": "202607/07/2606.31986v2-colt-teaching-multi-modal-models-to-think-with-chain-of-latent-thoughts",
+      "section": "quick",
+      "title_en": "CoLT: Teaching Multi-Modal Models to Think with Chain of Latent Thoughts",
+      "authors": "Lianyu Hu, Shengqian Qin, Zeqin Liao, Qing Guo, Liang Wan, Wei Feng, Yang Liu",
+      "date": "2026-06-30",
+      "pdf": "https://arxiv.org/pdf/2606.31986v2",
+      "score": "6.0",
+      "evidence": "通过潜在思维链进行推理",
+      "tldr": "多模态大模型在视觉推理中常依赖文本链式思维，生成冗长中间步骤导致推理缓慢且受限于语言表达力。本文提出CoLT框架，用少量潜在思维步骤替代文本推理，通过外部解码器提供前向与后向步骤级监督，并加入内部监督保证潜在状态连贯性，推理时移除附加模块以保持高效。实验表明CoLT在八个基准上超越现有潜在推理方法，推理时间减少10倍以上。",
+      "tags": "query:key-tokens",
+      "abstract_en": "Chain-of-thought (CoT) reasoning has enabled multi-modal large language models (MLLMs) to tackle complex visual reasoning tasks by generating explicit intermediate reasoning steps in natural language. However, this text-based reasoning paradigm is inherently slow at inference time with even thousands of tokens and fundamentally constrained by the expressiveness of natural language. In this paper, we propose CoLT, (Chain of Latent Thoughts), a novel framework that teaches multi-modal models to reason through a chain of latent thought representations instead of verbose text tokens, which can perform thinking with as few as 3 steps. Naively forcing the model to think with latent states easily produces meaningless semantics and makes training unstable. To effectively regulate the latent reasoning process, we introduce a lightweight external decoder that provides step-level supervision for each latent reasoning step in two complementary directions: a forward mode that decodes latent thoughts into the textual reasoning of the next step, and a backward mode that aligns decoder hidden states with the model's latent thoughts given preceding textual context. We further incorporate internal supervision that encourages coherent step-by-step latent transitions. The decoder and internal supervision are removed during inference to maintain high efficiency of latent reasoning. Extensive experiments on eight benchmarks demonstrate that CoLT not only outperforms existing latent reasoning methods such as CODI and SIM-CoT, but also surpasses latent visual reasoning approaches that rely on auxiliary images with costly annotation requirements. Compared to text CoT methods, CoLT can notably reduce the inference time by 10.1$\\times$ and text decoding time by 22.6$\\times$. Code is released at https://github.com/hulianyuyy/CoLT.",
+      "source": "arxiv",
+      "selection_source": "fresh_fetch"
+    },
+    {
+      "paper_id": "202607/07/2607.04222v1-unsupervised-features-mining-via-activation-geometry",
+      "section": "quick",
+      "title_en": "Unsupervised Features Mining via Activation Geometry",
+      "authors": "Amit LeVi, Elad David, Max Fomin",
+      "date": "2026-07-05",
+      "pdf": "https://arxiv.org/pdf/2607.04222v1",
+      "score": "6.0",
+      "evidence": "通过激活几何进行推理特征的隐藏状态分析",
+      "tldr": "现有解释性方法依赖人工标注概念，可能引入偏见。本文提出MAG无监督框架，通过在每个输入前添加相同指令，对比激活差异提取推理特征。发现特征可近似为单一方向，通过激活引导改变模型决策。基于RFD相似性选择训练数据，分类器达到94.7% Top-1和100% Top-2准确率。",
+      "tags": "query:key-tokens",
+      "abstract_en": "Interpretability methods aim to reveal the features represented inside large language models (LLMs). Many existing methods begin with labeled examples of a human-defined concept that may reflect human biases, and then identify how that concept is represented within the model, for example in its activation space or through other decomposition methods. We introduce \\emph{Mining via Activation Geometry} (MAG), a simple unsupervised framework for extracting reasoning features from model activations by prepending the same natural-language instruction $Q$ to every input $p$, where $Q$ defines the reasoning feature of interest, such as ``Can this object be found in the desert?'' or ``Is this prompt malicious?'' We measure how the instruction changes the model's internal representation using $m(Q \\mid p) - m(p)$ at a single readout point. We explore eight different MAGs. The extracted reasoning features predict the models' own world understanding and judgment, can be approximated into a single activation direction, we found that some features are more linearly represented and some less, this linear representation, which is vector steering, can change the LLMs' decisions through activation steering by injecting reasoning features. Finally, we use the same method to select the best training datasets for prompt-injection classifier probes: while similarity between ordinary activations is almost unrelated to downstream performance, RFD-based similarity achieves $94.7\\%$ Top-1 and $100\\%$ Top-2 accuracy.",
+      "source": "arxiv",
+      "selection_source": "fresh_fetch"
+    },
+    {
+      "paper_id": "202607/07/2607.05013v1-knowledge-knows-verbalization-tells-disentangling-latent-directions-for-mathematical-solvability-in-llms",
+      "section": "quick",
+      "title_en": "Knowledge Knows, Verbalization Tells: Disentangling Latent Directions for Mathematical Solvability in LLMs",
+      "authors": "Nikolaos Xiros, Maria-Eleni Zoumpoulidi, Georgios Paraskevopoulos",
+      "date": "2026-07-06",
+      "pdf": "https://arxiv.org/pdf/2607.05013v1",
+      "score": "6.0",
+      "evidence": "针对可解性知识与语言化的隐藏状态分析",
+      "tldr": "LLMs在判断数学问题可解性时，内部知识表示与口头表述常不一致。本文通过分别探测可解性知识和言语化的隐藏状态表示，将两者分离，发现知识和言语化编码为不同的线性可解表示，伪造主要由言语化变化引起而非知识。激活操控可机制性地操纵这些表示，有效提高模型弃权能力。",
+      "tags": "query:key-tokens",
+      "abstract_en": "Although LLMs have made significant progress in mathematical reasoning, determining whether a mathematical problem is solvable remains a fundamental yet challenging capability. While recent studies have probed internal representations of model solvability beliefs, verbalization has primarily been studied behaviorally rather than as an internal representation, limiting its analysis and manipulation. We address this gap by separately probing representations of solvability knowledge and verbalization, allowing us to disentangle the two within model hidden states. Across multiple LLMs, we show that knowledge and verbalization are encoded as distinct, linearly decodable representations and that fabrication is primarily associated with changes in verbalization rather than the underlying knowledge. Prompting with unsolvability cues reduces fabrication primarily by shifting verbalization, while activation steering demonstrates that these representations can be echanistically manipulated to improve model abstention.",
+      "source": "arxiv",
+      "selection_source": "fresh_fetch"
+    }
+  ],
+  "errors": []
+}

@@ -6,33 +6,34 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-07-06
-- 运行时间：2026-07-06 21:24:16 UTC
+- 最新运行日期：2026-07-07
+- 运行时间：2026-07-07 20:55:05 UTC
 - 运行状态：成功
 - 本次总论文数：4
-- 精读区：0
-- 速读区：4
+- 精读区：1
+- 速读区：3
 
 ### 今日简报（AI）
-今天速读4篇论文，重点聚焦LLM表格引用错误、长上下文推理奖励机制及顺序推理复杂度基准。最值得关注的两项研究：一是《When LLMs Read Tables Carelessly》提出的减少数据引用错误的方法，二是《Evidence-State Rewards》对长上下文推理的改进效果。建议后续深入阅读这两篇论文的代码与实验设计，以便实际应用其策略。
-- 详情：[/202607/06/README](/202607/06/README)
+1) 今日精读高分论文发现填充token中存在隐藏计算，速读三篇分别聚焦多模态思维链、无监督特征挖掘与数学可解性分析。  
+2) 最值得关注方向：填充token的隐性推理机制（9.0分），以及多模态模型潜在思维链训练（6.0分）。  
+3) 建议优先精读《Reading Between the Dots》以理解大模型计算边界，再结合速读论文拓展多模态与解释性视角。
+- 详情：[/202607/07/README](/202607/07/README)
 
 ### 精读区论文标签
-- 本次无精读推荐。
+1. [Reading Between the Dots: Decoding Hidden Computation across Filler Tokens](/202607/07/2607.03502v1-reading-between-the-dots-decoding-hidden-computation-across-filler-tokens)  
+   标签：评分：9.0/10、query:key-tokens
+   evidence：通过logit-lens和注意力路由解码填充令牌上的隐藏计算
 
 ### 速读区论文标签
-1. [When LLMs Read Tables Carelessly: Measuring and Reducing Data Referencing Errors](/202607/06/2606.32029v1-when-llms-read-tables-carelessly-measuring-and-reducing-data-referencing-errors)  
-   标签：评分：7.0/10、query:key-tokens
-   evidence：系统研究表格推理中的数据引用错误，强调正确引用关键token的重要性
-2. [Evidence-State Rewards for Long-Context Reasoning](/202607/06/2607.02073v1-evidence-state-rewards-for-long-context-reasoning)  
-   标签：评分：7.0/10、query:key-tokens
-   evidence：基于证据状态奖励的长上下文推理关键token定位与修改
-3. [The Complexity Ceiling Benchmark: A Multi-Domain Evaluation of Sequential Reasoning Under Depth Scaling](/202607/06/2606.29278v1-the-complexity-ceiling-benchmark-a-multi-domain-evaluation-of-sequential-reasoning-under-depth-scaling)  
+1. [CoLT: Teaching Multi-Modal Models to Think with Chain of Latent Thoughts](/202607/07/2606.31986v2-colt-teaching-multi-modal-models-to-think-with-chain-of-latent-thoughts)  
    标签：评分：6.0/10、query:key-tokens
-   evidence：评估不同领域推理序列随步数衰减的规律
-4. [Token-Sparse Medical Multimodal Reasoning via Dual-Stream Reinforcement Learning](/202607/06/2606.31599v1-token-sparse-medical-multimodal-reasoning-via-dual-stream-reinforcement-learning)  
+   evidence：通过潜在思维链进行推理
+2. [Unsupervised Features Mining via Activation Geometry](/202607/07/2607.04222v1-unsupervised-features-mining-via-activation-geometry)  
    标签：评分：6.0/10、query:key-tokens
-   evidence：基于token重要性的剪枝；通过强化学习学习token重要性度量
+   evidence：通过激活几何进行推理特征的隐藏状态分析
+3. [Knowledge Knows, Verbalization Tells: Disentangling Latent Directions for Mathematical Solvability in LLMs](/202607/07/2607.05013v1-knowledge-knows-verbalization-tells-disentangling-latent-directions-for-mathematical-solvability-in-llms)  
+   标签：评分：6.0/10、query:key-tokens
+   evidence：针对可解性知识与语言化的隐藏状态分析
 
 
 <div class="dpr-home-promo-card">
