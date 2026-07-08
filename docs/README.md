@@ -6,34 +6,29 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-07-07
-- 运行时间：2026-07-07 20:55:05 UTC
+- 最新运行日期：2026-07-08
+- 运行时间：2026-07-08 21:10:36 UTC
 - 运行状态：成功
-- 本次总论文数：4
+- 本次总论文数：3
 - 精读区：1
-- 速读区：3
+- 速读区：2
 
 ### 今日简报（AI）
-1) 今日精读高分论文发现填充token中存在隐藏计算，速读三篇分别聚焦多模态思维链、无监督特征挖掘与数学可解性分析。  
-2) 最值得关注方向：填充token的隐性推理机制（9.0分），以及多模态模型潜在思维链训练（6.0分）。  
-3) 建议优先精读《Reading Between the Dots》以理解大模型计算边界，再结合速读论文拓展多模态与解释性视角。
-- 详情：[/202607/07/README](/202607/07/README)
+今日精读一篇通过截断思维链审计检测LLM教育辅导中答案驱动推理的论文，并速读原型语言模型与置信度自适应思考两篇。最值得关注的是审计方法能识别模型推理作弊，以及原型语言模型为多任务学习提供新思路。建议读者深入理解思维链审计技术，并关注原型语言模型在少样本学习中的潜力。
+- 详情：[/202607/08/README](/202607/08/README)
 
 ### 精读区论文标签
-1. [Reading Between the Dots: Decoding Hidden Computation across Filler Tokens](/202607/07/2607.03502v1-reading-between-the-dots-decoding-hidden-computation-across-filler-tokens)  
-   标签：评分：9.0/10、query:key-tokens
-   evidence：通过logit-lens和注意力路由解码填充令牌上的隐藏计算
+1. [Detecting Answer-Driven Reasoning in LLM-Based Educational Tutors via Truncated Chain-of-Thought Auditing](/202607/08/2607.04572v1-detecting-answer-driven-reasoning-in-llm-based-educational-tutors-via-truncated-chain-of-thought-auditing)  
+   标签：评分：8.0/10、query:key-tokens
+   evidence：通过截断思维链审计检测答案何时在行为上可用，识别推理序列中的关键决策点
 
 ### 速读区论文标签
-1. [CoLT: Teaching Multi-Modal Models to Think with Chain of Latent Thoughts](/202607/07/2606.31986v2-colt-teaching-multi-modal-models-to-think-with-chain-of-latent-thoughts)  
+1. [Prototype Language Models](/202607/08/2607.00510v1-prototype-language-models)  
+   标签：评分：7.0/10、query:key-tokens
+   evidence：基于原型的训练示例到模型输出的追溯
+2. [CAT: Confidence-Adaptive Thinking for Efficient Reasoning of Large Reasoning Models](/202607/08/2607.00862v1-cat-confidence-adaptive-thinking-for-efficient-reasoning-of-large-reasoning-models)  
    标签：评分：6.0/10、query:key-tokens
-   evidence：通过潜在思维链进行推理
-2. [Unsupervised Features Mining via Activation Geometry](/202607/07/2607.04222v1-unsupervised-features-mining-via-activation-geometry)  
-   标签：评分：6.0/10、query:key-tokens
-   evidence：通过激活几何进行推理特征的隐藏状态分析
-3. [Knowledge Knows, Verbalization Tells: Disentangling Latent Directions for Mathematical Solvability in LLMs](/202607/07/2607.05013v1-knowledge-knows-verbalization-tells-disentangling-latent-directions-for-mathematical-solvability-in-llms)  
-   标签：评分：6.0/10、query:key-tokens
-   evidence：针对可解性知识与语言化的隐藏状态分析
+   evidence：利用模型内在自置信信号调节推理长度，隐式识别关键token与冗余token
 
 
 <div class="dpr-home-promo-card">

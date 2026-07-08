@@ -1,0 +1,54 @@
+{
+  "label": "2026-07-08",
+  "date": "2026-07-08",
+  "generated_at": "2026-07-08T21:10:44",
+  "count": 3,
+  "papers": [
+    {
+      "paper_id": "202607/08/2607.04572v1-detecting-answer-driven-reasoning-in-llm-based-educational-tutors-via-truncated-chain-of-thought-auditing",
+      "section": "deep",
+      "title_en": "Detecting Answer-Driven Reasoning in LLM-Based Educational Tutors via Truncated Chain-of-Thought Auditing",
+      "authors": "Bonan Shen, Dingyan Shang, Youting Wang, Tao Ning",
+      "date": "2026-07-06",
+      "pdf": "https://arxiv.org/pdf/2607.04572v1",
+      "score": "8.0",
+      "evidence": "通过截断思维链审计检测答案何时在行为上可用，识别推理序列中的关键决策点",
+      "tldr": "大型语言模型辅导系统可能利用答案信息驱动解释生成，而非真正推理。本文提出截断思维链审计方法TRACE，通过检查推理前缀能否提前通过验证器，检测解释是否为答案驱动。在GSM8K数学题测试中，访问答案密钥使TRACE AUC中位数从0.375升至0.900，且997/1000例在10%前缀即给出正确答案。该方法可作为轻量级过程诊断工具。",
+      "tags": "query:key-tokens",
+      "abstract_en": "Large language model (LLM) tutors often produce fluent step-by-step explanations, but a correct and pedagogically formatted response does not guarantee that the answer was derived from the student-facing problem. In realistic tutoring systems, the model may also have access to teacher notes, answer keys, rubrics, or retrieved solution artifacts. We study whether such private answer information can make tutor explanations answer-driven: the final answer is behaviorally available before the written explanation has justified it. Using Truncated Reasoning AUC Evaluation (TRACE), which probes how early a chain-of-thought prefix can pass a verifier, we evaluate 1000 GSM8K test problems under three paired tutoring contexts: question-only, correct answer-key, and wrong answer-key. At fixed fractions of each generated explanation, we force the model to answer immediately and verify the response against the gold numeric answer. With Qwen2.5-3B-Instruct, answer-key access raises median TRACE AUC from 0.375 to 0.900 and makes the gold answer available at the first 10% prefix in 997 of 1000 cases. The effect remains strong on the 746 examples where both question-only and answer-key explanations end with the correct answer. These results support truncated CoT auditing as a lightweight process-level diagnostic for answer-driven reasoning in math tutoring explanations.",
+      "source": "arxiv",
+      "selection_source": "fresh_fetch"
+    },
+    {
+      "paper_id": "202607/08/2607.00510v1-prototype-language-models",
+      "section": "quick",
+      "title_en": "Prototype Language Models",
+      "authors": "Dan Ley, Giang Nguyen, Himabindu Lakkaraju, Julius Adebayo",
+      "date": "2026-07-01",
+      "pdf": "https://arxiv.org/pdf/2607.00510v1",
+      "score": "7.0",
+      "evidence": "基于原型的训练示例到模型输出的追溯",
+      "tldr": "现有大语言模型难以追溯训练数据对输出的影响，归因方法昂贵且事后。本文提出原型语言模型架构PRISM，通过稀疏非负混合学习到的原型进行预测，每个原型锚定到训练样本簇。在130M至1.6B参数规模上，性能与密集基线相当或略优，数据归因速度提升约500倍。通过校准原型控制器可提升精度约3点，抑制原型可移除行为而无需微调，实现了高效可追溯的模型修正。",
+      "tags": "query:key-tokens",
+      "abstract_en": "Knowing which training examples drive outputs is fundamental to auditing, correcting, and understanding language models, yet for modern LLMs this remains expensive, approximate, and largely post-hoc. Standard language models generate tokens through a dense network pathway, causing training data's influence to be distributed across parameters rather than organized along explicit, traceable components. We introduce a prototype language model architecture, Prototypes for Interpretable Sequence Modeling (PRISM), that forms each prediction via a sparse, non-negative mixture of learned prototypes, trained with clustering objectives that anchor each prototype to coherent neighborhoods of training examples. Across architectures from 130M to 1.6B parameters trained on up to 50B tokens, prototype language models either surpass or remain within 2.5 percentage points on average downstream accuracy of matched dense baselines. We show that sparse prototype structure localizes curvature in the loss landscape, yielding a more tractable Hessian and enabling training data attribution that is ~500x faster than post hoc baselines when consuming equivalent memory. Calibrating linear prototype controllers can improve downstream accuracy by roughly 3 points while tracing those corrections back to training neighborhoods, and targeted prototype suppression can remove model behaviors without finetuning or measurable loss in generation quality.",
+      "source": "arxiv",
+      "selection_source": "fresh_fetch"
+    },
+    {
+      "paper_id": "202607/08/2607.00862v1-cat-confidence-adaptive-thinking-for-efficient-reasoning-of-large-reasoning-models",
+      "section": "quick",
+      "title_en": "CAT: Confidence-Adaptive Thinking for Efficient Reasoning of Large Reasoning Models",
+      "authors": "Qizhi Jiang, Shuo Wang, Pei Ke, Yuhang Song, Ke Qin",
+      "date": "2026-07-01",
+      "pdf": "https://arxiv.org/pdf/2607.00862v1",
+      "score": "6.0",
+      "evidence": "利用模型内在自置信信号调节推理长度，隐式识别关键token与冗余token",
+      "tldr": "大型推理模型（LRM）在简单查询上常有过思考导致效率低下，现有压缩方法统一缩减或粗估难度易导致难问题性能下降。本文提出置信自适应思考（CAT），利用模型内在自确信信号作为置信度融入偏好优化，自主调节推理长度。实验表明，CAT在多个基准测试中准确率优于基线，能有效压缩自信响应并深入思考不确定问题，实现准确性与延迟的平衡。",
+      "tags": "query:key-tokens",
+      "abstract_en": "Large Reasoning Models (LRMs) have achieved remarkable success on complex tasks by leveraging long chain-of-thought (CoT) trajectories, yet they frequently exhibit overthinking on simple queries, resulting in significant token overhead and reduced inference efficiency. However, existing compression methods predominantly apply uniform length reduction or rely on coarse-grained difficulty estimation, often leading to performance degradation on difficult problems. To address this limitation, we propose Confidence-Adaptive Thinking (CAT), a framework that incorporates the model's intrinsic self-certainty signals as confidence into the preference optimization process, which autonomously modulates reasoning lengths based on problem difficulty. Experimental results show that CAT consistently outperforms state-of-the-art baselines on reasoning accuracy across multiple benchmarks on different base models. Our work enables LRMs to effectively compress confident responses while deliberating on uncertain ones, offering a potentially robust solution for balancing accuracy and latency in practical industrial scenarios.",
+      "source": "arxiv",
+      "selection_source": "fresh_fetch"
+    }
+  ],
+  "errors": []
+}

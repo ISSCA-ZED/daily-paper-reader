@@ -1,0 +1,184 @@
+Title: Detecting Answer-Driven Reasoning in LLM-Based Educational Tutors via Truncated Chain-of-Thought Auditing
+
+URL Source: https://arxiv.org/pdf/2607.04572v1
+
+Published Time: Tue, 07 Jul 2026 03:03:34 GMT
+
+Number of Pages: 5
+
+Markdown Content:
+# Detecting Answer-Driven Reasoning in LLM-Based Educational Tutors via Truncated Chain-of-Thought Auditing 
+
+Bonan Shen 
+
+Independent Researcher 
+
+United States shenbonan2@gmail.com 
+
+Dingyan Shang 
+
+Independent Researcher 
+
+United States dingyanshang@gmail.com 
+
+Youting Wang 
+
+Northeastern University 
+
+Boston, MA, USA ginkoin613@gmail.com 
+
+Tao Ning 
+
+Syracuse University 
+
+Syracuse, NY, USA ntgd1102@gmail.com 
+
+Abstract —Large language model (LLM) tutors often produce fluent step-by-step explanations, but a correct and pedagogically formatted response does not guarantee that the answer was derived from the student-facing problem. In realistic tutoring systems, the model may also have access to teacher notes, answer keys, rubrics, or retrieved solution artifacts. We study whether such private answer information can make tutor explanations answer-driven: the final answer is behaviorally available before the written explanation has justified it. Using Truncated Rea-soning AUC Evaluation (TRACE), which probes how early a chain-of-thought prefix can pass a verifier, we evaluate 1000 GSM8K test problems under three paired tutoring contexts: question-only, correct answer-key, and wrong answer-key. At fixed fractions of each generated explanation, we force the model to answer immediately and verify the response against the gold numeric answer. With Qwen2.5-3B-Instruct, answer-key access raises median TRACE AUC from 0.375 to 0.900 and makes the gold answer available at the first 10% prefix in 997 of 1000 cases. The effect remains strong on the 746 examples where both question-only and answer-key explanations end with the correct answer. These results support truncated CoT auditing as a lightweight process-level diagnostic for answer-driven reasoning in math tutoring explanations. 
+
+Index Terms —AI tutoring, chain-of-thought auditing, answer leakage, educational AI, large language models 
+
+I. I NTRODUCTION 
+
+LLM tutors are increasingly asked to provide step-by-step help rather than only final answers. This pedagogical format creates a subtle reliability problem: a response can look like a derivation even when it is anchored by private answer-key information. Existing answer-leakage evaluations mainly ask whether the tutor reveals the solution to the learner. We ask a process-level counterpart: does the tutor’s explanation rely on answer information before the written reasoning has earned it? Consider a GSM8K word problem about sunscreen: Pamela uses one ounce per outside hour, spends 4 hours outside per day for 8 days, and has 8-ounce bottles. In the question-only condition, the model eventually gives the correct answer, 4, but forced answers from the first 10%, 25%, 50%, and 75% of its explanation all fail the verifier; the gold answer appears only at the full explanation. When a private teacher-only answer key is added, the visible explanation remains a step-by-step derivation, yet the forced answer is correct from the first 10% 
+
+TABLE I MOTIVATING EXAMPLES FROM THE GSM8K RUN . E ACH CELL REPORTS THE FORCED ANSWER AFTER A COT PREFIX ; GREEN CHECKMARKED CELLS MATCH THE GOLD ANSWER , AND RED CELLS FAIL . A BRIDGED PROBLEM STATEMENTS ARE SHOWN FOR SPACE .
+
+Context Final AUC Forced answer at CoT prefix 10% 25% 50% 75% 100% 
+
+Sunscreen, gold = 4 . Abridged: Pamela uses one ounce of sunscreen per outside hour. She will be outside 4 hours per day for 8 days, and bottles contain 8 ounces. Question-only 4 0.125 – 8 2 5 4 ✓
+
+Answer-key 4 0.900 4 ✓ 4 ✓ 4 ✓ 4 ✓ 4 ✓
+
+Wrong-key 5 0.000 5 5 5 5 5
+
+Flower soil, gold = 3 . Abridged: Artemis has 30 pounds of soil. Sunflowers need 3 pounds each, carnations need 1.5 pounds each, and roses need 1 pound each. They plant 4 sunflowers and 10 carnations. Question-only 3 0.125 10 12 11 9 3 ✓
+
+Answer-key 3 0.900 3 ✓ 3 ✓ 3 ✓ 3 ✓ 3 ✓
+
+Wrong-key 4 0.250 4 4 3 ✓ 4 4
+
+Checks/year, gold = 52 . Abridged: Buford writes monthly electric and gas checks, two church checks per month, and quarterly pest/lawn service checks. Question-only 52 0.125 18 18 54 48 52 ✓
+
+Answer-key 52 0.900 52 ✓ 52 ✓ 52 ✓ 52 ✓ 52 ✓
+
+Wrong-key 52 0.125 53 53 53 53 52 ✓
+
+prefix onward. In a counterfactual wrong-key condition, the model is pulled to the wrong final answer, 5. This example motivates our central question: can we audit whether tutor-style reasoning is derived from the problem statement, or already answer-driven? We adapt TRACE-style truncated reasoning evaluation [1] to educational math tutoring. TRACE measures when a rea-soning prefix becomes sufficient to pass a verifier. We use TRACE as a measurement primitive rather than proposing a new truncation metric; our contribution is a paired educational audit for answer-key dependence in tutor explanations. In our setting, the verifier is exact match to the GSM8K gold answer, and the shortcut is access to teacher-only answer information. The method does not judge whether the prose sounds pedagogical; it measures when the answer becomes behaviorally available. This paper makes three contributions. First, we define answer-driven reasoning as a process-level failure mode for 
+
+> arXiv:2607.04572v1 [cs.AI] 6 Jul 2026
+
+LLM tutors, distinct from explicit answer leakage. Second, we introduce a paired evaluation protocol with question-only, answer-key, and wrong-key tutoring contexts. Third, we report a 1000-problem GSM8K study showing that answer-key access makes the correct answer recoverable from very short prefixes, even when final-answer correctness is held fixed. II. M ETHOD 
+
+Let xi be a math word problem with gold answer yi.For each problem, we generate tutor explanations under three conditions:  
+
+> •
+
+Question-only : the model sees only the student-facing problem.  
+
+> •
+
+Answer-key : the model sees the problem plus a teacher-only note containing the correct final answer.  
+
+> •
+
+Wrong-key : the model sees the problem plus a teacher-only note containing a deterministic wrong answer, yi +1 .All prompts ask the model to explain step by step and conclude with a boxed integer answer. The answer-key and wrong-key conditions instruct the model to use the key only as private context and write the explanation as if deriving the answer from the problem. For a generated explanation containing T tokens, we eval-uate prefixes at fractions 
+
+F = {0.10 , 0.25 , 0.50 , 0.75 , 1.00 }.
+
+At each prefix f T , we append a forced-answer tag asking the model to stop reasoning and give only the final answer. Let 
+
+p(f ) be the verifier pass rate: the fraction of forced answers that equal the gold answer after integer normalization. In the main 1000-problem run, we use one deterministic forced answer per prefix, so p(f ) ∈ { 0, 1}. These forced-prefix pass rates are distinct from original full-response accuracy: even at 
+
+f = 1 .00 , the probe asks for a fresh forced answer appended after the generated explanation, so the TRACE curve is not constrained to be monotone or identical to the original final answer. An early pass therefore indicates that the answer is recoverable from that prefix, not that all longer prefixes will preserve the same answer. We report three scalar summaries. TRACE AUC is the trapezoidal area under the curve p(f ) over F. Pass@10 is 
+
+p(0 .10) , the earliest-prefix pass indicator. First-pass is the first prefix fraction where p(f ) ≥ 0.5, or 1.0 if no earlier prefix passes. Higher TRACE AUC and Pass@10 indicate earlier gold-answer availability; lower first-pass indicates earlier first recoverability. III. E XPERIMENTAL SETUP 
+
+Dataset. We use 1000 examples from the GSM8K test split [2]. GSM8K is suitable because it contains grade-school word problems with short numeric answers and natural solution structure. We use exact integer answer matching after comma and decimal normalization. 
+
+Model and inference. All experiments use Qwen2.5-3B-Instruct [3] in 4-bit MLX format on an Apple M1 Max with 64 GB memory. Full explanations are greedily generated                                 
+
+> TABLE II MAIN 1000-PROBLEM RESULTS . O RIG . A CC .IS THE ACCURACY OF THE UNMODIFIED FULL TUTOR RESPONSE . AUC 50 AND FIRST 50 ARE MEDIANS FROM FORCED -PREFIX PROBES ; P ASS @10 IS THE MEAN 10%
+> PREFIX PASS RATE ACROSS PROBLEMS . H IGHER AUC AND PASS @10
+> MEAN EARLIER GOLD -ANSWER AVAILABILITY ;LOWER FIRST MEANS EARLIER FIRST VERIFIER PASS .Condition nOrig. Acc. AUC 50 Pass@10 First 50
+> Question-only 1000 0.782 0.375 0.113 0.750 Answer-key 1000 0.891 0.900 0.997 0.100 Wrong-key 1000 0.613 0.125 0.051 1.000
+
+with a maximum of 768 tokens. Forced prefix answers use deterministic decoding with a maximum of 8 tokens. The run covers 1000 problems and 3 prompt conditions, yielding 3000 rows. A CUDA/Hugging Face runner was also prepared for replication, but the reported results use the local MLX run. 
+
+Evaluation. The unit of comparison is paired by problem. We compare the answer-key condition against the question-only condition for the same problem, controlling for problem difficulty and answer value. We also report a final-answer correct subset in which both conditions produce the correct final answer, isolating process-level differences from final-answer accuracy. IV. R ESULTS 
+
+A. Motivating Case Studies 
+
+Table I shows three representative paired problems. In the sunscreen and flower-soil examples, question-only and answer-key explanations both end with the correct answer, but the prefix behavior is qualitatively different: question-only passes only at the full explanation, whereas answer-key passes from the first measured prefix. The wrong-key condition is pulled to the wrong final answer in both cases, showing that private answer artifacts can affect not only prefix behavior but also the final tutoring response. The checks-per-year example isolates the process-level nature of the metric: all three conditions end correctly, but only the answer-key explanation makes the answer available at 10% of the CoT. Table II shows a large separation between question-only and answer-key tutoring contexts. The question-only median TRACE AUC is 0.375, while the answer-key median is 0.900. Mean Pass@10 rises from 0.113 to 0.997, and the median first-pass point moves from 0.750 of the explanation to 0.100. Thus, when the answer key is visible, the gold answer is usually recoverable from the first measured prefix. Figure 1 visualizes the same effect at the curve level. Answer-key pass rates are near ceiling from the first 10% prefix. Question-only curves rise later, consistent with the answer being derived over the explanation. Wrong-key runs have lower gold-answer pass rates and lower final accuracy, indicating that private answer artifacts can also misanchor the tutor. 0.2 0.4 0.6 0.8 1.0 
+
+CoT prefix fraction 
+
+0.0 
+
+0.2 
+
+0.4 
+
+0.6 
+
+0.8 
+
+1.0 
+
+> Gold-answer pass rate
+> Question-only
+> Answer-key
+> Wrong-key Fig. 1. Mean forced-answer verifier pass curves over 1000 GSM8K problems. Answer-key contexts make the gold answer available at very short prefixes, while question-only explanations usually require substantially more generated reasoning. Curves need not be monotone because each prefix is followed by a fresh forced-answer completion. Shaded regions show approximate 95% confidence bands for the mean pass rate across problems.
+
+B. Why Can Prefix Curves Dip? 
+
+TRACE curves are not logical monotonicity tests. Each point is a new forced-answer completion conditioned on a different prefix. A short answer-key prefix can make the gold answer recoverable, while a longer prefix can contain a self-generated arithmetic error that the forced-answer probe then follows. In the answer-key condition, 884 of 1000 examples pass at all five prefix fractions, but 80 examples pass at 10% and fail at the 100% forced probe. One representative answer-key example is a glass-buying problem whose gold answer is 64. The problem states that one glass costs $5 and every second glass costs 60% of that price, so the correct calculation is eight full-price glasses and eight discounted glasses: 8 · 5 + 8 · 3 = 64 . The trace passes at 10%, 25%, 50%, and 75%, showing that the gold answer is recoverable early. However, the generated explanation later changes the discount pattern into “$5, $5, $3, $3, ...” and then says that every third glass is discounted. It consequently counts five $5 glasses and eleven $3 glasses, ending with the wrong boxed answer 58. The 100% forced-answer probe is appended after this explicit wrong conclusion, so it follows the recent erroneous derivation rather than the earlier answer-key signal. This is why we interpret early passes as answer recoverability, not as a guarantee that later self-generated reasoning will preserve the answer. The paired analysis in Table III confirms that the effect is not driven by a few outliers. Answer-key TRACE AUC exceeds question-only TRACE AUC in 94.8% of paired problems, with only 0.4% losses. The same pattern holds when final-answer correctness is controlled: among final-answer correct pairs, answer-key has higher AUC in 93.4% of cases and lower AUC in only 0.1%. Even among the 109 problems where the answer-key response ends with an incorrect final answer,                                        
+
+> TABLE III PAIRED ANSWER -KEY (AK) VERSUS QUESTION -ONLY (Q) COMPARISONS .AK >Q, T IE ,AND AK <QREPORT THE PERCENTAGE OF PROBLEMS WHERE ANSWER -KEY TRACE AUC IS HIGHER THAN ,EQUAL TO ,OR LOWER THAN QUESTION -ONLY TRACE AUC. “F INAL -ANSWER CORRECT ”KEEPS ONLY PROBLEMS WHERE BOTH CONDITIONS PRODUCE THE CORRECT FINAL ANSWER ; “AK FINAL INCORRECT ”KEEPS PROBLEMS WHERE THE ANSWER -KEY RESPONSE ENDS INCORRECTLY .
+> Subset nAK >QTie AK <Q∆AUC 50 AUROC All problems 1000 94.8 4.8 0.4 0.525 0.9663 Final-answer correct 746 93.4 6.4 0.1 0.525 0.9655 AK final incorrect 109 98.2 0.0 1.8 0.775 0.9892
+
+0.25 0.00 0.25 0.50 0.75 
+
+TRACE AUC (answer-key question-only) 
+
+0
+
+100 
+
+200 
+
+300 
+
+> Problem count
+> Fig. 2. Distribution of paired TRACE AUC differences. Positive values mean answer-key explanations make the gold answer available earlier than question-only explanations for the same problem. The black vertical line marks zero difference; the red dashed line marks the median paired difference.
+
+answer-key AUC is higher in 98.2% of cases, consistent with early answer recoverability followed by later reasoning drift. The AUROC for distinguishing answer-key from question-only traces by TRACE AUC is 0.9663 in the full setting and 0.9655 in the final-answer correct setting. The early-prefix statistics are especially sharp. In 997 of 1000 answer-key runs, the 10% prefix already passes the gold-answer verifier. In contrast, 887 of 1000 question-only runs fail at the 10% prefix. In 884 paired problems, answer-key passes at 10% while question-only does not. These results directly support the answer-driven reasoning hypothesis. 
+
+C. Correctness Confounding 
+
+A natural alternative explanation is that the probe merely detects whether the model will eventually answer correctly. The results do not support that interpretation. Answer-key access does improve full-response accuracy, from 0.782 in the question-only condition to 0.891. However, the key compar-ison is the final-answer correct subset: 746 problems where both conditions end with the same correct gold answer. In this subset, final-answer correctness is fixed, yet the answer-key median TRACE AUC remains 0.900 while the question-only median remains 0.375. Answer-key traces win 697 of 746 paired comparisons. Thus the diagnostic is not simply separating correct from incorrect generations; it is measuring when the correct answer becomes available within the gener-ated explanation. This distinction matters for tutoring. A teacher or automated evaluator who inspects only the final answer would treat both members of a final-answer correct pair as successful. A conventional answer-leakage detector might also accept both if neither response directly exposes the private key. Prefix auditing reveals an additional property: whether the explanation trajectory itself behaves as if the answer was known from the start. 
+
+D. Wrong-Key Counterfactual 
+
+The wrong-key condition is not intended as a realistic tutoring policy. It is a counterfactual anchoring test. If teacher-only answer artifacts are irrelevant to generation, replacing the key with a nearby wrong value should have little effect. In our run, wrong-key final accuracy drops to 0.613, and 387 of 1000 wrong-key explanations end with an incorrect answer. The median wrong-key TRACE AUC is 0.125, much closer to question-only than answer-key for gold-answer availability, because the private key often directs the model away from the gold answer. The wrong-key results should be interpreted carefully. A model can sometimes override an incorrect key through its own arithmetic, and a wrong-key trace can occasionally still pass the gold verifier at later prefixes. Therefore wrong-key failure is not a necessary condition for answer-driven reasoning. Its role is evidential: it shows that the same private channel used for correct answer keys can materially shape the tutor’s explanation and final answer. V. D ISCUSSION 
+
+The experiment suggests that answer-key access can change not only final accuracy but also the temporal structure of a tutoring explanation. A tutor response may be correct and formatted as a derivation, yet prefix probing can show that the answer was available before the written explanation estab-lished it. This makes answer-driven reasoning a useful process-level complement to answer leakage: leakage concerns what the tutor reveals, while answer-driven reasoning concerns what the tutor relies on. 
+
+A. Audit Workflow 
+
+The proposed audit can be used as a lightweight diagnostic layer for educational LLM systems: sample tutor explanations, probe a fixed grid of prefixes with forced-answer prompts, compute early-pass metrics against an available verifier, and compare the curves against a baseline without answer-key or solution-artifact access. Traces with unusually high Pass@10 or TRACE AUC can be flagged for manual review, prompt redesign, or retrieval filtering. This workflow is not a replacement for pedagogical eval-uation. It does not score whether an explanation is clear, supportive, or appropriately scaffolded. Instead, it detects a narrower dependency failure: the answer appears behaviorally available before the written explanation has established it. That narrowness is useful in deployment because it produces a quantitative artifact that can be compared across prompts, models, and retrieval policies. 
+
+Limitations. The study is controlled and should not be overgeneralized. We use one 3B model, one short-answer math dataset, and deterministic forced-answer sampling. Open-ended tutoring, multi-turn dialogue, rubric-based grading, and nonnumeric answers require more complex verifiers. The method also assumes that forced-answer behavior is informa-tive about the original explanation, which is plausible but not equivalent to observing hidden model computation. VI. R ELATED WORK 
+
+Chain-of-thought reasoning and faithfulness. Trans-former language models [4] can be prompted to produce explicit reasoning traces, and chain-of-thought prompting im-proves performance on arithmetic and symbolic tasks [5], [6]. Decoding and decomposition methods such as self-consistency and program-aided reasoning further improve reasoning relia-bility [7], [8]. However, generated explanations are not guar-anteed to be faithful to the model’s actual decision process. Prior work formalizes faithfulness concerns [9], shows that CoT can rationalize biased or shortcut-driven answers [10], and proposes intervention-based, information-flow, unlearning, counterfactual, and instance-level tests for faithfulness [11]– [19]. Our work is aligned with this concern but focuses on a concrete educational setting where private answer artifacts may be present. 
+
+Verification and truncated reasoning audits. Mathemati-cal reasoning benchmarks and verifiers have made it practical to evaluate not only final answers but also reasoning processes [2], [20]. Process-supervision work similarly emphasizes in-termediate reasoning quality rather than outcome accuracy alone [21], [22]. TRACE detects implicit reward hacking by truncating reasoning traces and measuring how early a prefix can pass a verifier [1]. Recent computational-graph evaluations likewise emphasize that CoT can expose process-level properties not visible from final outputs alone [23]. We use the same basic observation: shortcut use should reduce the amount of written reasoning needed before an answer passes verification. Our target differs from reward hacking. We study tutor explanations conditioned on answer-key access and ask whether they make the answer available earlier than question-only explanations. 
+
+AI tutor safety and leakage. Recent tutoring evaluations study answer over-disclosure, scaffolding failures, pedagogi-cal alignment, collaborative feedback, and robustness against adversarial students who try to extract answers [24]–[28]. These works evaluate what the tutor reveals or how safely it teaches. We instead evaluate what the explanation appears to rely on. A tutor can avoid explicit over-disclosure and still be answer-driven if the answer shapes the explanation before the reasoning justifies it. 
+
+Alignment and shortcut use. Our setting is also related to broader concerns about proxy objectives and reward gaming [29]. Empirical work on reward overoptimization shows how optimizing proxy feedback can degrade true task quality [30]. We study a simpler educational analogue: the visible explanation may satisfy surface expectations while relying on an unintended answer source. VII. C ONCLUSION 
+
+We introduced an educational adaptation of truncated CoT auditing for detecting answer-driven reasoning in LLM tutor explanations. On 1000 GSM8K problems, answer-key access made the gold answer recoverable from very short explanation prefixes, even when final-answer correctness was held fixed. The result shows that correct tutor-style explanations can con-ceal answer-driven generation, and that TRACE-style prefix probing is a lightweight way to audit this failure mode. GENERATIVE AI D ECLARATION 
+
+In compliance with the ICAISF 2026 generative AI policy, the authors disclose limited use of OpenAI generative AI tools for experimental coding assistance and language polishing. The authors reviewed and take full responsibility for the final manuscript. REFERENCES [1] X. Wang, N. Joshi, B. Plank, R. Angell, and H. He, “Is it thinking or cheating? detecting implicit reward hacking by measuring reasoning effort,” in International Conference on Learning Representations , 2026. [2] K. Cobbe, V. Kosaraju, M. Bavarian, M. Chen, H. Jun, L. Kaiser, M. Plappert, J. Tworek, J. Hilton, R. Nakano, C. Hesse, and J. Schul-man, “Training verifiers to solve math word problems,” arXiv preprint arXiv:2110.14168 , 2021. [3] Q. Team, “Qwen2.5 technical report,” arXiv preprint arXiv:2412.15115 ,2025. [4] A. Vaswani, N. Shazeer, N. Parmar, J. Uszkoreit, L. Jones, A. N. Gomez, L. Kaiser, and I. Polosukhin, “Attention is all you need,” in Advances in Neural Information Processing Systems , 2017. [5] J. Wei, X. Wang, D. Schuurmans, M. Bosma, B. Ichter, F. Xia, E. Chi, Q. Le, and D. Zhou, “Chain-of-thought prompting elicits reasoning in large language models,” in Advances in Neural Information Processing Systems , 2022. [6] T. Kojima, S. S. Gu, M. Reid, Y. Matsuo, and Y. Iwasawa, “Large language models are zero-shot reasoners,” in Advances in Neural Infor-mation Processing Systems , 2022. [7] X. Wang, J. Wei, D. Schuurmans, Q. Le, E. Chi, S. Narang, A. Chowdh-ery, and D. Zhou, “Self-consistency improves chain of thought reasoning in language models,” in International Conference on Learning Repre-sentations , 2023. [8] L. Gao, A. Madaan, S. Zhou, U. Alon, P. Liu, Y. Yang, J. Callan, and G. Neubig, “Pal: Program-aided language models,” in International Conference on Machine Learning , 2023. [9] A. Jacovi and Y. Goldberg, “Towards faithfully interpretable nlp systems: How should we define and evaluate faithfulness?” in Annual Meeting of the Association for Computational Linguistics , 2020. [10] M. Turpin, J. Michael, E. Perez, and S. R. Bowman, “Language models don’t always say what they think: Unfaithful explanations in chain-of-thought prompting,” in Advances in Neural Information Processing Systems , 2023. [11] T. Lanham, A. Chen, A. Radhakrishnan, B. Steiner, C. Denison, D. Her-nandez, D. Li, E. Durmus, E. Hubinger, J. Kernion, K. Lukoˇ si¯ ut˙ e, N. Nguyen, N. Cheng, N. Joseph, N. Schiefer, O. Rausch, R. Lar-son, S. McCandlish, S. Kundu, S. Kadavath, S. Yang, T. Henighan, T. Maxwell, T. Telleen-Lawton, Z. Hatfield-Dodds, J. Kaplan, J. Brauner, S. R. Bowman, and E. Perez, “Measuring faithfulness in chain-of-thought reasoning,” arXiv preprint arXiv:2307.13702 , 2023. [12] D. Paul, R. West, A. Bosselut, and B. Faltings, “Making reasoning matter: Measuring and improving faithfulness of chain-of-thought rea-soning,” in Findings of the Association for Computational Linguistics: EMNLP , 2024, pp. 15 012–15 032. [13] J. Li, P. Cao, Y. Chen, J. Xu, H. Li, X. Jiang, K. Liu, and J. Zhao, “Towards better chain-of-thought: A reflection on effectiveness and faith-fulness,” in Findings of the Association for Computational Linguistics: ACL , 2025, pp. 10 747–10 765. [14] M. Tutek, F. Hashemi Chaleshtori, A. Marasovic, and Y. Belinkov, “Measuring chain of thought faithfulness by unlearning reasoning steps,” in Proceedings of the 2025 Conference on Empirical Methods in Natural Language Processing , 2025, pp. 9935–9960. [15] S. Balasubramanian, S. Basu, and S. Feizi, “A closer look at bias and chain-of-thought faithfulness of large (vision) language models,” in Findings of the Association for Computational Linguistics: EMNLP ,2025, pp. 13 406–13 439. [16] I. Arcuschin, J. Janiak, R. Krzyzanowski, S. Rajamanoharan, N. Nanda, and A. Conmy, “Chain-of-thought reasoning in the wild is not always faithful,” arXiv preprint arXiv:2503.08679 , 2025. [17] Y. Han, Y. Lee, and J. Do, “Rfeval: Benchmarking reasoning faithfulness under counterfactual reasoning intervention in large reasoning models,” in International Conference on Learning Representations , 2026. [18] X. Shen, S. Wang, Z. Tan, L. Yao, X. Zhao, K. Xu, X. Wang, and T. Chen, “Faithcot-bench: Benchmarking instance-level faithfulness of chain-of-thought reasoning,” arXiv preprint arXiv:2510.04040 , 2025. [19] X. Shen, Z. Tan, S. Wang, P. Hong, R. Miao, X. Wang, and T. Chen, “De-tecting unfaithful chain-of-thought via circuit-guided internal-external discrepancy,” arXiv preprint arXiv:2605.25603 , 2026. [20] D. Hendrycks, C. Burns, S. Kadavath, A. Arora, S. Basart, E. Tang, D. Song, and J. Steinhardt, “Measuring mathematical problem solving with the math dataset,” in NeurIPS Datasets and Benchmarks Track ,2021. [21] J. Uesato, N. Kushman, R. Kumar, F. Song, N. Siegel, L. Wang, A. Creswell, G. Irving, and I. Higgins, “Solving math word prob-lems with process- and outcome-based feedback,” arXiv preprint arXiv:2211.14275 , 2022. [22] H. Lightman, V. Kosaraju, Y. Burda, H. Edwards, B. Baker, T. Lee, J. Leike, J. Schulman, I. Sutskever, and K. Cobbe, “Let’s verify step by step,” in International Conference on Learning Representations , 2024. [23] Z. Zhao, Y. Koishekenov, X. Yang, N. Murray, and N. Cancedda, “Verifying chain-of-thought reasoning via its computational graph,” in 
+
+International Conference on Learning Representations , 2026. [24] J. Macina, N. Daheim, I. Hakimi, M. Kapur, I. Gurevych, and M. Sachan, “Mathtutorbench: A benchmark for measuring open-ended pedagogical capabilities of llm tutors,” in Proceedings of the 2025 Conference on Empirical Methods in Natural Language Processing , 2025, pp. 204– 221. [25] D. Dinucu-Jianu, J. Macina, N. Daheim, I. Hakimi, I. Gurevych, and M. Sachan, “From problem-solving to teaching problem-solving: Align-ing llms with pedagogy using reinforcement learning,” in Proceedings of the 2025 Conference on Empirical Methods in Natural Language Processing , 2025, pp. 272–292. [26] Q. Yang, Y. Yang, S. An, T. Hao, and G. Xu, “Llm-based collaborative agents with pedagogy-guided interaction modeling for timely instructive feedback generation in task-oriented group discussions,” in Proceedings of the Thirty-Fourth International Joint Conference on Artificial Intelli-gence , 2025, pp. 9972–9980. [27] J. Zhao, M. Kneˇ zevi´ c, and T. K¨ aser, “Evaluating answer leakage robust-ness of llm tutors against adversarial student attacks,” arXiv preprint arXiv:2604.18660 , 2026. [28] R. Hazra, B. Ghuku, I. Marchenko, Y. Tokarieva, S. Layek, S. Banerjee, J. Stoyanovich, and M. Pechenizkiy, “Safetutors: Benchmarking peda-gogical safety in ai tutoring systems,” arXiv preprint arXiv:2603.17373 ,2026. [29] J. M. V. Skalse, N. H. R. Howe, D. Krasheninnikov, and D. Krueger, “Defining and characterizing reward gaming,” in Advances in Neural Information Processing Systems , 2022. [30] L. Gao, J. Schulman, and J. Hilton, “Scaling laws for reward model overoptimization,” in International Conference on Machine Learning ,2023.
