@@ -1,0 +1,563 @@
+Title: OmniFocus: Query-Guided Modality-Balanced Token Compression for Omni-Modal Large Language Models
+
+URL Source: https://arxiv.org/pdf/2607.03050v1
+
+Published Time: Tue, 07 Jul 2026 00:36:10 GMT
+
+Number of Pages: 24
+
+Markdown Content:
+# OmniFocus: Query-Guided Modality-Balanced Token Compression for Omni-Modal Large Language Models 
+
+Shijie Cao 1,2 , Qingyu Zhang 2, Boxi Yu 3, Yuzhong Zhang 4,Boxi Cao 2, Yaojie Lu 2, Hongyu Lin 2, Xianpei Han 2, Le Sun 2,
+
+> 1
+
+School of Advanced Interdisciplinary Sciences, University of Chinese Academy of Sciences, 
+
+> 2
+
+Chinese Information Processing Laboratory, Institute of Software, Chinese Academy of Sciences 
+
+> 3
+
+University of Limerick 4CUHK, Shenzhen 
+
+{boxi2020, luyaojie, hongyu, xianpei, sunle}@iscas.ac.cn caoshijie22@mails.ucas.ac.cn boxiyu@link.cuhk.edu.cn 123090848@link.cuhk.edu.cn 
+
+## Abstract 
+
+Omni modal large language models (OmniLLMs) have attracted wide attention for their ability to jointly process audio and video, but they generate large token sequences under audio-visual inputs, leading to substantial inference cost. Existing audio-visual token compression methods often rely on unimodal guidance, over-looking the temporal locality of query-relevant evidence in audio-visual inputs and implicitly assuming that the two modalities share a temporally aligned information density distribution. We propose OmniFocus , a training-free query-guided token compression method for OmniLLMs that performs independent importance esti-mation for video and audio, enabling a modality-symmetric compression design that preserves modality-specific salient evidence while maintaining audio-visual alignment, thereby mitigating the modality bias issue that can arise from unimodal-guided compression. Experiments on the Qwen2.5-Omni model family across four audio-visual benchmarks show that OmniFocus maintains strong compressed performance at low token retention ratios and outperforms existing baselines on several major benchmark scores at 25% token retention. On DailyOmni with Qwen2.5-Omni-7B at 25% token retention, OmniFocus maintains 59.40 accuracy while delivering up to 1.38 × prefill speedup relative to the full-token baseline, highlighting a favorable practical accuracy-efficiency trade-off. 
+
+## 1 Introduction 
+
+Omni-modal large language models (OmniLLMs) extend language models to joint audio-visual understanding, showing broad potential across tasks such as audio-visual understanding [ 19 ], social and empathetic understanding [ 23 , 33 , 31 ], and audio captioning [ 36 , 4]. However, audio-visual inputs generate large token sequences, which limits the applicability of OmniLLMs in long-form audio-visual settings and resource-constrained environments. Token compression as a method to reduce inference cost has been widely used in vision, audio, and long-text settings [ 39 , 24 , 28 , 15 , 22 , 26 ]. By removing redundant tokens while preserving key evidence, token compression can improve inference efficiency and reduce GPU memory usage without sacrificing much performance. Unlike unimodal compression, token compression in OmniLLMs must preserve audio evidence, visual evidence, and cross-modal alignment simultaneously, which poses unique challenges for compression design.      
+
+> Preprint.
+> arXiv:2607.03050v1 [cs.LG] 3 Jul 2026 Vision Encoder Audio Encoder
+> Compression Module
+> Audio -guided compression
+> Audio Event
+> Density
+> Video token
+> Query -guided compression
+> Query
+> LLM
+> Visual
+> Audio -Visual
+> Audio
+> Visual
+> Audio
+
+Figure 1: Illustration of the limitation of unimodal-guided audio-visual token compression. Audio-guided compression preserves audio-centric performance relatively well, but degrades more noticeably on visual and joint audio-visual understanding tasks, motivating a query-guided and modality-balanced compression strategy. The modality-type labeling protocol is described in Appendix B. In previous work, researchers typically use one modality as a guiding modality to assess the density of event information, and design asymmetric compression strategies for the two modalities based on this signal [ 29 , 7, 18 ]. This unimodal-guided asymmetric compression strategy has two limitations: (1) it overlooks the temporal locality of query-relevant evidence, and (2) it implicitly assumes that the two modalities share a temporally aligned information density distribution. As illustrated in Figure 1, audio-guided compression preserves audio-centric performance relatively well, but degrades more noticeably on visual and joint audio-visual understanding tasks. This suggests that using a single modality as the compression guide can lead to overfitting to evidence in that modality while overlooking potentially important information in the other modality. To bridge this gap, we propose OmniFocus 1, a training-free query-guided token compression method for OmniLLMs. OmniFocus assesses the importance of different temporal chunks by computing query-token similarity, addressing the previous methods’ neglect of temporal locality and giving higher retention to important temporal chunks. Performing separate importance estimation for video and audio allows OmniFocus to be a symmetric compression method that avoids over-reliance on one modality and mitigates the modality bias issue that can arise from unimodal-guided compression. Specifically, OmniFocus computes modality-specific chunk importance from query-token similarity, converts these scores into chunk-wise local drop ratios, and selects retained tokens using complemen-tary inter-modal association and intra-modal peak scores. This design preserves both audio-visual correspondence and modality-specific salient evidence in compressed settings. Experiments on the Qwen2.5-Omni model family across four audio-visual benchmarks show that Om-niFocus achieves a favorable accuracy-efficiency trade-off and reaches best or tied-best compressed results on several benchmark scores. These results suggest that query-guided modality-symmetric compression is a more reliable design choice for long-form audio-visual understanding than single-modality-guided token budgeting. For example, on DailyOmni with Qwen2.5-Omni-7B at 25% token retention, OmniFocus achieves 59.40 accuracy while delivering 1.38 × prefill speedup and 1.32 ×
+
+end-to-end speedup relative to the full-token baseline. Our contributions are summarized as follows: • We identify and empirically validate the modality-bias limitation of unimodal-guided audio-visual token compression in OmniLLMs. • We propose OmniFocus, a training-free query-guided token compression method that performs modality-symmetric compression and preserves both inter-modal association and intra-modal peak evidence under low token retention ratios. • Extensive experiments on the Qwen2.5-Omni model family across multiple audio-visual benchmarks show that OmniFocus achieves a favorable accuracy-efficiency trade-off and reaches best or tied-best compressed results on several benchmark scores. 
+
+> 1https://github.com/icip-cas/OmniFocus
+
+22 Related Works 
+
+2.1 Omni-Modal Large Language Models 
+
+Omni-modal large language models (OmniLLMs) unify visual, auditory, and textual understanding within a single backbone [ 16 , 34 – 36 , 30 , 20 , 31 , 12 , 38 ]. Representative proprietary and open-source systems, including GPT-4o, Gemini [ 5], Qwen-Omni [ 36 , 30 ], Baichuan-Omni [ 21 ], Mini-Omni [ 34 , 35 ], and InteractiveOmni [ 32 ], show that joint audio-visual reasoning can be integrated into a general multimodal model. Although these systems share the goal of unified audio-visual reasoning, they differ in how audio and video representations are organized before entering the language backbone. Some OmniLLMs organize audio and video tokens into temporally aligned windows to strengthen cross-modal correspondence, while others use more direct audio-visual fusion before the language backbone. Despite these design differences, long audio-visual inputs still produce large multimodal token sequences and substantially increase inference cost. Recent benchmarks further require long-form audio-visual reasoning in daily-life videos [ 41 ], real-world synchronized omnimodal perception [ 14 ], synergistic audio-visual reasoning [ 19 ], and video question answering across different time scales [ 8, 10 , 9 ]. These demands make efficient yet modality-faithful audio-visual processing an important problem. 
+
+2.2 Token Compression for Multimodal Models 
+
+Token compression reduces inference cost by removing redundant tokens while preserving task-relevant information. Prior work has explored visual token reduction [ 1, 2, 13 , 40 , 39 , 15 , 25 , 37 ], speech or audio token pruning [ 22 , 17 ], and multimodal token compression for large multimodal models [ 24 , 28 , 11 ], enabling efficient inference without retraining the backbone. Related efficiency work on long-video understanding also reduces temporal redundancy through adaptive visual selection or event-focused compression [27, 3, 6]. Compared with unimodal or vision-language settings, token compression in OmniLLMs must preserve audio evidence, visual evidence, and cross-modal alignment simultaneously. OmniZip [ 29 ] is the closest prior method in this setting: it estimates temporal importance from audio-side attention and uses that signal to guide audio-visual token budgets. This mechanism is efficient, but it can introduce modality bias when query-relevant evidence is sparse, modality-specific, or temporally misaligned across audio and video. OmniFocus differs by estimating query relevance separately for audio and video and performing modality-symmetric compression, rather than using one modality as the compression guide for the other. 
+
+## 3 Method 
+
+In this section, we first introduce the audio-video token organization in OmniLLMs, and then present the overall pipeline of OmniFocus, including query-aware modality scoring, chunk-wise budget allocation, and token selection. 
+
+3.1 Preliminary 
+
+Given an audio-visual input [V, A ], where V denotes the video stream and A denotes the audio stream, an OmniLLM first maps the two modalities into token sequences using modality-specific encoders: 
+
+xa = Encoder a(A), xv = Encoder v (V ) (1) where xa ∈ RNa×D and xv ∈ RNv ×D , with Na and Nv denoting the number of audio and video tokens, respectively. The model partitions both streams into aligned temporal windows and arranges the tokens from the same window sequentially. This yields an interleaved token sequence Xav =[xv1 , x a1 , x v2 , x a2 , . . . , x vT , x aT ], where xvi and xai denote the video and audio tokens in temporal chunk i. OmniFocus operates on Xav before the tokens are consumed by the LLM backbone. 3LLMs   
+
+> Audio Encoder Video Encoder
+
+... ... 
+
+> Time
+> OmniFocus
+
+...  
+
+> Chunk 1 Chunk 2
+
+...    
+
+> Text Visual Audio
+> Average
+> Pooling
+> Step 1. Chunk -wise query relevance score
+> Step 3. Inter & Intra saliency token selection
+> Max
+> Sim
+
+... 
+
+> Audio / Video chunk tokens
+> Text Query
+
+... ...           
+
+> Chunk -wise
+> Softmax
+> S!(t)
+> S"(t)
+> S!(0)=0.3S!(1)=0.2
+> S"(0)=0.1S"(1)=0.5
+
+... 
+
+...       
+
+> Modality
+> Dependent
+> Score
+> Average
+> Pooling
+> Sim intra video
+> tokens
+> Sim intra audio
+> tokens
+> Average
+> Pooling
+> Sim
+> Sim
+> inter video
+> tokens
+> inter audio
+> tokens
+> Step 2. Chunk -wise
+> video / audio token drop
+> Answer: C
+
+...           
+
+> What visual change occurred as the speaker cited 'the consultancy' data following
+> the statement 'but they are, we are not necessarily making it to the top'?
+> Text input
+> D!0=10%
+> Da (0)=20%
+> D!1=5%
+> Da (1)=40%
+
+...      
+
+> D!t=10 %
+> Da (t)=35 %
+
+Figure 2: Overview of OmniFocus. Given a textual query and temporally aligned audio-video chunks, OmniFocus estimates modality-specific query relevance, allocates chunk-wise local drop ratios under calibrated global modality budgets, and selects retained tokens using inter-modal association and intra-modal peak scores before feeding the compressed sequence into the LLM backbone. 
+
+3.2 OmniFocus 
+
+Given a textual query q and the interleaved audio-visual token sequence Xav organized into T
+
+temporal chunks, OmniFocus compresses audio and video tokens before they are fed into the LLM backbone. The method is training-free and does not modify the underlying OmniLLM. As shown in Figure 2, OmniFocus has three stages: (1) estimate query-aware importance for each modality in each chunk, (2) convert these importance scores into chunk-wise drop ratios under global modality budgets, and (3) retain tokens using both inter-modal association and intra-modal saliency. 
+
+Query relevance-based modality importance scoring. Because query-relevant evidence is often concentrated in a few temporal chunks and may appear in different modalities, OmniFocus estimates modality-specific relevance for each audio-video chunk with respect to the textual query. We extract the query tokens from the LLM token embedding layer, as in standard LLM input processing, so the query tokens are represented in the same input embedding space as the audio and video tokens consumed by the LLM. Let q = {q1, q 2, . . . , q L} ∈ RL×D denote the embedded query features. We obtain a single query representation by mean-pooling ℓ2-normalized query tokens and normalizing the result: 
+
+¯q = Normalize 1
+
+L
+
+LX
+
+l=1 
+
+ˆql
+
+!
+
+, ˆql = ql
+
+∥ql∥2
+
+(2) For each temporal chunk i ∈ { 1, . . . , T }, OmniFocus measures query relevance independently for video and audio. Let xvi = {x1
+
+vi , . . . , x niv
+
+vi } and xai = {x1
+
+ai , . . . , x nia
+
+ai } denote the video and audio tokens in chunk i. The chunk-level relevance scores are 
+
+siv = max 
+
+j ˆxjvi · ¯q, sia = max 
+
+j ˆxjai · ¯q (3) where ˆx denotes an ℓ2-normalized token feature. The max operation captures sparse query-matching evidence: a chunk receives a high score if at least one token in that modality is strongly related to the query. We then convert these relevance scores into compression scores via: 
+
+civ = 1 − Softmax( sv )i, cia = 1 − Softmax( sa)i (4) where sv = [ s1
+
+v , . . . , s Tv ] and sa = [ s1
+
+a, . . . , s Ta ]. Higher relevance therefore produces a lower compression score, so query-relevant chunks receive a larger token budget. 4Chunk-wise local drop ratio calculation. To enable content-adaptive compression while keeping the global retained ratio fixed, OmniFocus maps relevance scores to chunk-wise local drop ratios under modality-specific budget constraints. Given a global drop ratio rm 
+
+> global
+
+for modality m ∈ { v, a },OmniFocus assigns a local drop ratio to each chunk. We set rmin = 0 .35 and rmax = 0 .75 in all experiments, and linearly map the compression scores to this allowable range. When max j cjm =min j cjm, we skip the linear mapping and set ˜rim = rm 
+
+> global
+
+for all chunks. Otherwise, we compute 
+
+˜rim = rmin + cim − min j cjm
+
+max j cjm − min j cjm
+
+· (rmax − rmin ). (5) This mapping gives larger local drop ratios to less query-relevant chunks. To match the global token budget in the continuous ratio space, we apply a calibration offset δ obtained by binary search: 
+
+rim = clamp  ˜rim + δ, r min , r max 
+
+ , s.t. 
+
+> T
+
+X
+
+> i=1
+
+rim · nim = rm 
+
+> global
+
+· Nm (6) where nim is the number of modality-m tokens in chunk i, and Nm = P 
+
+> i
+
+nim is the total number of modality-m tokens. This allocation keeps the target retention ratio fixed while allowing different temporal chunks and modalities to receive different local budgets. In practice, the global modality-specific budgets are calibrated for each benchmark to ensure fair comparison across compression baselines. We first follow the OmniZip protocol to determine the benchmark-level compression setting, and then adjust the global drop ratios accordingly. The chunk-wise allocation of OmniFocus is still determined by the query-aware relevance scores above. 
+
+Dual-score token selection. After determining the retained budget for each chunk, OmniFocus uses a dual-score criterion to preserve tokens that capture both audio-video correspondence and modality-specific salient evidence. The criterion consists of two complementary scores: inter-modal association scores and intra-modal peak scores . The association score preserves tokens that are aligned with the other modality, whereas the peak score preserves tokens that are distinctive within their own modality. We use mean-pooled normalized tokens as lightweight reference vectors, which keeps the compression procedure training-free and avoids additional attention computation. 
+
+Inter-modal association scores. For each video token in chunk i, we compute its cosine similarity to the mean representation of the audio tokens in the same chunk: 
+
+aj 
+
+> assoc ,v i
+
+= ˆ xjvi · ¯xai , ¯xai = Normalize 
+
+ 1
+
+nianiaX
+
+> k=1
+
+ˆxkai
+
+ . (7) High-association video tokens preserve audio-visual correspondence within the same temporal window. Audio tokens are scored symmetrically using the video mean ¯xvi :
+
+aj 
+
+> assoc ,a i
+
+= ˆ xjai · ¯xvi , ¯xvi = Normalize 
+
+ 1
+
+nivnivX
+
+> k=1
+
+ˆxkvi
+
+ . (8) 
+
+Intra-modal peak scores. Inter-modal association alone can miss evidence that appears primarily in one modality. We therefore also score tokens by their distinctiveness within their own modality: 
+
+aj 
+
+> peak ,v i
+
+= 1 − ˆxjvi · ¯xvi , aj 
+
+> peak ,a i
+
+= 1 − ˆxjai · ¯xai . (9) High peak scores indicate tokens that are distinctive relative to the local modality context, which helps preserve modality-specific evidence that may be missed by inter-modal association alone. Given the keep count kim = nim − ⌊ rim · nim⌋ for modality m in chunk i, we select ⌊kim/2⌋ tokens with the highest association scores and the remaining ⌈kim/2⌉ tokens with the highest peak scores, excluding tokens that have already been selected. We use this equal split as a simple parameter-free default to balance audio-visual alignment and modality-specific saliency. Finally, OmniFocus masks out the dropped tokens and feeds the compressed interleaved sequence to the LLM backbone. Overall, OmniFocus combines query-aware modality scoring, content-adaptive budget allocation, and complementary token selection to preserve both cross-modal correspondence and modality-specific evidence under a fixed token budget. Because the method is training-free and operates entirely before the LLM backbone, it can be applied to existing OmniLLMs without parameter updates while providing a favorable balance between compression efficiency and audio-visual fidelity. 5Table 1: DailyOmni results. Category-wise performance on DailyOmni for Qwen2.5-Omni-7B and Qwen2.5-Omni-3B under 35% and 25% token retention. “Full Tokens” denotes the uncompressed model. The best compressed result in each column is highlighted in bold.                                                                                                                                                       
+
+> Method Retained Ratio (%) AV Event Alignment ( ↑)Comparative ( ↑)Context Understanding ( ↑)Event Sequence ( ↑)Inference ( ↑)Reasoning ( ↑)Average ( ↑)Qwen2.5-Omni-7B Full Tokens 100 48.32 69.47 59.59 57.52 75.32 73.14 61.90 Random 35 42.86 70.23 53.89 52.61 72.08 72.57 58.23 DyCoke 35 43.02 62.77 57.25 56.64 68.48 71.84 57.57 OmniZip 35 43.28 67.94 52.85 53.59 79.22 73.71 59.23 Ours 35 48.32 68.70 55.96 52.61 78.57 72.57 60.32
+> Random 25 40.76 69.47 54.92 53.59 75.32 68.57 57.98 DyCoke 25 38.82 55.57 59.35 55.54 65.88 68.04 54.37 OmniZip 25 42.02 67.94 51.81 51.63 75.97 72.57 57.73 Ours 25 46.64 69.47 54.92 52.29 75.32 72.57 59.40
+> Qwen2.5-Omni-3B Full Tokens 100 51.68 69.47 53.37 53.59 74.68 70.86 60.15 Random 35 44.96 64.12 51.30 46.41 74.03 64.00 54.97 DyCoke 35 48.22 57.48 54.49 55.68 73.87 67.24 56.15 OmniZip 35 44.54 63.36 52.33 47.71 75.32 66.67 55.85 Ours 35 47.90 66.41 51.30 48.04 75.97 69.14 57.23
+> Random 25 43.70 64.12 48.70 45.10 71.43 64.57 53.72 DyCoke 25 46.92 59.58 49.99 53.98 71.77 64.24 54.65 OmniZip 25 46.22 61.83 49.22 48.37 74.68 66.09 55.52 Ours 25 47.90 64.12 50.78 48.04 72.73 66.86 56.14
+
+## 4 Experiment 
+
+4.1 Evaluation setting Models. We evaluate OmniFocus on Qwen2.5-Omni-3B and Qwen2.5-Omni-7B. Both models use a default temporal window of 2 seconds to organize audio and video tokens. Video frames are encoded by the Qwen2.5-VL vision encoder, while audio signals are encoded by the Whisper-based audio encoder. The visual and audio tokens within each temporal window are then concatenated to form the interleaved multimodal input sequence. 
+
+Baselines. We compare OmniFocus with three compression baselines. First, we adopt OmniZip [ 29 ]as the primary omni-modal compression baseline, which estimates event density from audio-side attention and uses it to determine temporal token budgets. Second, following the baseline setting in OmniZip, we include DyCoke [ 28 ] as a representative vision-language token compression method and use its TTM component for token reduction. Since full-context attention-based compression can cause out-of-memory errors on long audio-visual inputs, we apply the same DyCoke-style token reduction rule to audio and video tokens under the target token budget. Third, we include a random retention baseline, which uniformly samples tokens under the same token retention ratio. 
+
+Benchmarks. We evaluate on four audio-visual benchmarks. DailyOmni [ 41 ] evaluates audio-visual question answering with an emphasis on cross-modal temporal reasoning in daily-life videos. WorldSense [ 14 ] assesses real-world omnimodal understanding over synchronized visual, audio, and textual inputs across diverse scenarios. OmniVideoBench [ 19 ] focuses on synergistic audio-visual reasoning with modality complementarity and logical consistency. VideoMME [ 8 ] evaluates video question answering across short, medium, and long videos. We follow the official evaluation protocol of each benchmark and report the corresponding accuracy or benchmark score. 
+
+Implementation Details. All experiments are conducted on NVIDIA A100 (80 GB) GPUs, and “Full Tokens” denotes the original Qwen2.5-Omni inference without token compression. Unless otherwise specified, OmniFocus uses rmin = 0 .35 and rmax = 0 .75 and reports results under the 35% and 25% compression settings. We calibrate benchmark-level audio/video budgets for fair comparison across methods; details are provided in Appendix A. 6Table 2: Results on WorldSense, OmniVideoBench, and VideoMME. Performance of Qwen2.5-Omni under 35% and 25% token retention. “Full Tokens” denotes the uncompressed model. The best compressed result in each column is highlighted in bold.                                                                                                                                     
+
+> Method Retained Ratio (%) WorldSense ( ↑)OmniVideo ( ↑)Bench VideoMME ( ↑)Short Medium Long Avg. Qwen2.5-Omni-7B Full Tokens 100 45.81 35.31 76.00 68.33 64.89 69.74 Random 35 44.14 33.20 72.11 65.00 65.67 67.59 DyCoke 35 43.28 32.30 73.01 64.33 65.33 67.99 OmniZip 35 44.55 31.49 73.67 66.00 64.33 68.00 Ours 35 44.77 34.10 74.78 68.00 65.44 69.41
+> Random 25 43.82 32.20 71.44 65.22 65.33 67.33 DyCoke 25 43.25 32.19 72.01 63.33 64.33 66.99 OmniZip 25 43.69 32.30 72.89 66.33 64.67 67.96 Ours 25 44.23 32.70 73.22 66.89 64.56 68.22
+> Qwen2.5-Omni-3B Full Tokens 100 45.21 31.09 74.11 65.56 60.11 66.59 Random 35 43.44 32.00 67.89 62.56 59.56 63.33 DyCoke 35 43.32 31.29 67.89 62.56 59.56 63.33 OmniZip 35 43.88 32.30 70.56 63.67 59.89 64.70 Ours 35 44.51 32.40 71.89 62.56 60.00 64.81
+> Random 25 42.78 31.19 67.67 63.22 59.78 63.56 DyCoke 25 43.25 31.19 70.01 62.10 59.78 64.00 OmniZip 25 43.06 32.10 70.56 63.22 59.78 64.52 Ours 25 44.10 32.10 71.22 62.89 61.00 65.04
+
+4.2 Main Results Category-wise performance Table 1 provides a category-level breakdown on DailyOmni. Relative to OmniZip, the most consistent gains appear on AV Event Alignment . On Qwen2.5-Omni-7B, OmniFocus improves over OmniZip by 5.04 and 4.62 points at 35% and 25% retention, respectively; on Qwen2.5-Omni-3B, the corresponding gains are 3.36 and 1.68 points. The larger gains on 7B suggest that stronger OmniLLMs can make better use of preserved aligned audio-visual cues under compression. Other categories are more mixed: Comparative and Context Understanding show gains in several settings, while Event Sequence, Inference, and Reasoning remain closer to the baseline. This pattern indicates that the main benefit of OmniFocus is concentrated on alignment-sensitive questions rather than uniformly distributed across all reasoning types. 
+
+Results on audio-video benchmarks Table 2 summarizes the performance under different token retention ratios. Across compressed settings, OmniFocus maintains strong performance on all three audio-video benchmarks, with the clearest consistency on WorldSense and VideoMME average scores. On WorldSense, OmniFocus achieves the strongest compressed result in all four model-budget settings, outperforming OmniZip by 0.22 and 0.54 points on Qwen2.5-Omni-7B at 35% and 25% retention, respectively, and by 0.63 and 1.04 points on Qwen2.5-Omni-3B. This result suggests that query-guided modality-balanced compression is particularly helpful when the benchmark requires synchronized real-world perception. On VideoMME, OmniFocus also achieves the best compressed average score in all four settings, indicating that preserving query-relevant audio-visual evidence remains beneficial across video question answering scenarios with different temporal ranges. On OmniVideoBench, the gains are smaller but still stable: OmniFocus achieves the best compressed score in three settings and ties the remaining one, showing that the method remains competitive even when benchmark gains are more modest. Overall, these results suggest that the main advantage of OmniFocus comes from preserving cross-modal evidence where compression decisions matter most, rather than from uniformly improving 7Table 3: Efficiency analysis on DailyOmni. We report accuracy, peak GPU memory, and relative prefill and end-to-end speedups over the corresponding full-token inference baseline. The left and right subtables report Qwen2.5-Omni-7B and Qwen2.5-Omni-3B results, respectively.                                                       
+
+> Method Target (%) Acc. GPU Mem. (GB) Prefill Spd. E2E Spd. Full Tokens 100 61.90 19 1.00x 1.00x OmniZip 35 58.98 18 1.31x 1.24x OmniZip 25 56.98 18 1.34x 1.27x
+> OmniFocus 35 60.32 18 1.35x 1.29x OmniFocus 25 59.40 18 1.38x 1.32x
+> Method Target (%) Acc. GPU Mem. (GB) Prefill Spd. E2E Spd. Full Tokens 100 60.15 11 1.00x 1.00x OmniZip 35 55.56 10 1.15x 1.15x OmniZip 25 54.72 10 1.09x 1.08x
+> OmniFocus 35 57.23 10 1.19x 1.17x OmniFocus 25 56.14 10 1.20x 1.19x
+
+every benchmark or question type. This pattern is especially clear on DailyOmni alignment-sensitive categories, where the gains are larger on Qwen2.5-Omni-7B than on Qwen2.5-Omni-3B. This is consistent with the view that smaller OmniLLMs may be less effective at exploiting preserved cross-modal cues under compression, even when the compressor retains them. Appendix D.1 further analyzes how different global audio-video budget allocations affect perfor-mance. 
+
+4.3 Efficiency Analysis 
+
+We further evaluate the accuracy-efficiency trade-off on DailyOmni. In Table 3, we report DailyOmni accuracy, peak GPU memory, and relative speedups for prefill time and end-to-end latency. All speedups are computed against the corresponding full-token inference baseline, so larger values indicate better efficiency. Table 3 shows that OmniFocus improves the accuracy-efficiency trade-off over the compressed baseline. On Qwen2.5-Omni-7B, OmniFocus improves DailyOmni accuracy by 1.34 and 2.42 points over OmniZip at 35% and 25% target retention, respectively, while also providing higher prefill and end-to-end speedups. On Qwen2.5-Omni-3B, OmniFocus similarly improves accuracy by 1.67 and 1.42 points and achieves stronger prefill and end-to-end speedups than OmniZip. Although OmniFo-cus uses slightly more peak GPU memory than OmniZip, both compressed methods substantially reduce memory relative to full-token inference. 
+
+4.4 Ablation Study 
+
+We conduct ablation studies on DailyOmni to examine the main design choices of OmniFocus. Table 4 reports chunk relevance scoring and drop-ratio allocation, and score transformation ablations on Qwen2.5-Omni-7B, while Figure 3 evaluates inter-/intra-modal token selection for both model sizes. Table 5 further compares audio-only, video-only, and modality-balanced chunk scoring. Unless otherwise specified, the default configuration uses max-similarity relevance scoring, score-based allocation, softmax score transformation, hybrid inter+intra token selection, and balanced audio-video relevance estimation. 
+
+Chunk relevance scoring. Max-similarity scoring outperforms average similarity on Qwen2.5-Omni-7B, improving the average score by 0.59 points at 35% retention and 0.50 points at 25% retention. This supports the intuition that query-relevant evidence can be sparse within a temporal chunk and is better captured by the most responsive token than by mean aggregation. 
+
+Drop-ratio allocation. Score-based allocation achieves the best average scores under both retention ratios, reaching 60.32 at 35% and 59.40 at 25%. Compared with random and uniform allocation, adaptive chunk-wise compression better preserves informative temporal segments under a fixed token budget. 
+
+Score transformation. Softmax and sigmoid produce very similar average performance, with both reaching 60.32 at 35% retention. At 25% retention, softmax is slightly better than sigmoid (59.40 vs. 59.31), so we use softmax as the default transformation. 8Table 4: Ablation study on Qwen2.5-Omni-7B. We report the effects of chunk relevance scoring, drop ratio allocation, and score trans-formation on DailyOmni under 35% and 25% token retention. The best result within each ablation group is highlighted in bold.                       
+
+> Component Variant 35% 25%
+> Chunk relevance scoring Average similarity 59.73 58.90 Max similarity (Ours) 60.32 59.40
+> Drop ratio allocation Random 58.81 57.31 Uniform 59.82 59.06 Score-based (Ours) 60.32 59.40
+> Score transformation Sigmoid 60.32 59.31 Softmax (Ours) 60.32 59.40 3B 7B
+> 45
+> 50
+> 55
+> 60
+> Accuracy (%)  57.27
+> 60.23
+> 48.20
+> 50.13
+> 57.07
+> 59.31
+> Inter+Intra Inter Intra
+
+Figure 3: Impact of inter- and intra-modal to-ken selection. We compare inter-modal only, intra-modal only, and the hybrid inter+intra strategy un-der 35% token retention for 3B and 7B models. Table 5: Average ablation of modality-guided chunk scoring on DailyOmni. We compare audio-only, video-only, and modality-balanced chunk scoring under 35% and 25% token retention. The left and right subtables report Qwen2.5-Omni-7B and Qwen2.5-Omni-3B results, respectively. Detailed category-wise results are provided in Appendix D.2.                             
+
+> Scoring Strategy Retained Ratio (%) Average ( ↑)Audio-only 35 60.14 Video-only 35 60.07 Balanced (Ours) 35 60.32
+> Audio-only 25 59.05 Video-only 25 58.65 Balanced (Ours) 25 59.40
+> Scoring Strategy Retained Ratio (%) Average ( ↑)Audio-only 35 56.06 Video-only 35 56.98 Balanced (Ours) 35 57.23
+> Audio-only 25 55.72 Video-only 25 56.10 Balanced (Ours) 25 56.14
+
+Inter- and intra-modal token selection. The hybrid inter+intra strategy achieves the best result for both model sizes in Figure 3. Inter-modal association alone loses important modality-specific evidence, while intra-modal selection recovers most of the performance; combining both cues therefore provides a better balance between audio-visual correspondence and within-modality saliency. A sensitivity analysis of the inter/intra keep-count split is provided in Appendix D.3. 
+
+Modality-guided chunk scoring. Balanced scoring achieves the highest average score in all four model-budget settings, indicating that query-relevant chunk importance is more reliably estimated when audio and video are considered jointly rather than in isolation. This suggests that neither modality alone can consistently capture the evidence distribution required for compressing the other modality. As detailed in Appendix D.2, single-modality variants can still perform better on some individual categories, but their overall performance is less stable than that of modality-balanced scoring. 
+
+## 5 Conclusion 
+
+We introduced OmniFocus, a training-free query-guided token compression method for reducing the inference cost of omni-modal large language models on long audio-visual inputs. By estimating query relevance separately for audio and video and selecting tokens with both inter-modal association and intra-modal peak evidence, OmniFocus reduces the modality bias of unimodal-guided compres-sion. Experiments on Qwen2.5-Omni-3B and Qwen2.5-Omni-7B show that OmniFocus achieves a favorable accuracy-efficiency trade-off across audio-visual benchmarks, while ablations validate the contribution of its core design choices. 96 Limitations 
+
+OmniFocus relies on query-token similarity in the frozen input embedding space and is currently evaluated mainly on the Qwen2.5-Omni family. Detailed limitations are discussed in Appendix E. 
+
+## References 
+
+[1] Daniel Bolya, Cheng-Yang Fu, Xiaoliang Dai, Peizhao Zhang, Christoph Feichtenhofer, and Judy Hoffman. Token merging: Your vit but faster. arXiv preprint arXiv:2210.09461 , 2022. [2] Liang Chen, Haozhe Zhao, Tianyu Liu, Shuai Bai, Junyang Lin, Chang Zhou, and Baobao Chang. An image is worth 1/2 tokens after layer 2: Plug-and-play inference acceleration for large vision-language models. In European Conference on Computer Vision , pages 19–35. Springer, 2024. [3] Wang Chen, Yongdong Luo, Yuhui Zeng, Luojun Lin, Tianyu Xie, Fei Chao, Rongrong Ji, and Xiawu Zheng. Event-anchored frame selection for effective long-video understanding. arXiv preprint arXiv:2603.00983 , 2026. [4] Xinlong Chen, Yue Ding, Weihong Lin, Jingyun Hua, Linli Yao, Yang Shi, Bozhou Li, Yuanxing Zhang, Qiang Liu, Pengfei Wan, et al. Avocado: An audiovisual video captioner driven by temporal orchestration. arXiv preprint arXiv:2510.10395 , 2025. [5] Gheorghe Comanici, Eric Bieber, Mike Schaekermann, Ice Pasupat, Noveen Sachdeva, Inderjit Dhillon, Marcel Blistein, Ori Ram, Dan Zhang, Evan Rosen, et al. Gemini 2.5: Pushing the frontier with advanced reasoning, multimodality, long context, and next generation agentic capabilities. arXiv preprint arXiv:2507.06261 , 2025. [6] Shangzhe Di, Zhelun Yu, Guanghao Zhang, Haoyuan Li, Tao Zhong, Hao Cheng, Bolin Li, Wanggui He, Fangxun Shu, and Hao Jiang. Streaming video question-answering with in-context video kv-cache retrieval. arXiv preprint arXiv:2503.00540 , 2025. [7] Yue Ding, Yiyan Ji, Jungang Li, Xuyang Liu, Xinlong Chen, Junfei Wu, Bozhou Li, Bohan Zeng, Yang Shi, Yushuo Guan, et al. Omnisift: Modality-asymmetric token compression for efficient omni-modal large language models. arXiv preprint arXiv:2602.04804 , 2026. [8] Chaoyou Fu, Yuhan Dai, Yongdong Luo, Lei Li, Shuhuai Ren, Renrui Zhang, Zihan Wang, Chenyu Zhou, Yunhang Shen, Mengdan Zhang, et al. Video-mme: The first-ever comprehensive evaluation benchmark of multi-modal llms in video analysis. In Proceedings of the IEEE/CVF conference on computer vision and pattern recognition , pages 24108–24118, 2025. [9] Tiantian Geng, Jinrui Zhang, Qingni Wang, Teng Wang, Jinming Duan, and Feng Zheng. Longvale: Vision-audio-language-event benchmark towards time-aware omni-modal perception of long videos. In Proceedings of the Computer Vision and Pattern Recognition Conference ,pages 18959–18969, 2025. [10] Arushi Goel, Sreyan Ghosh, Vatsal Agarwal, Nishit Anand, Kaousheik Jayakumar, Lasha Koroshinadze, Yao Xu, Katie Lyons, James Case, Karan Sapra, et al. Mmou: A massive multi-task omni understanding and reasoning benchmark for long and complex real-world videos. arXiv preprint arXiv:2603.14145 , 2026. [11] Chao Gong, Depeng Wang, Zhipeng Wei, Ya Guo, Huijia Zhu, and Jingjing Chen. Echoing-pixels: Cross-modal adaptive token reduction for efficient audio-visual llms. arXiv preprint arXiv:2512.10324 , 2025. [12] Yiran Guan, Sifan Tu, Dingkang Liang, Linghao Zhu, Jianzhong Ju, Zhenbo Luo, Jian Luan, Yuliang Liu, and Xiang Bai. Thinkomni: Lifting textual reasoning to omni-modal scenarios via guidance decoding. arXiv preprint arXiv:2602.23306 , 2026. [13] Yefei He, Feng Chen, Jing Liu, Wenqi Shao, Hong Zhou, Kaipeng Zhang, and Bohan Zhuang. Zipvl: Efficient large vision-language models with dynamic token sparsification. arXiv preprint arXiv:2410.08584 , 2024. 10 [14] Jack Hong, Shilin Yan, Jiayin Cai, Xiaolong Jiang, Yao Hu, and Weidi Xie. Worldsense: Evaluat-ing real-world omnimodal understanding for multimodal llms. arXiv preprint arXiv:2502.04326 ,2025. [15] Xiaohu Huang, Hao Zhou, and Kai Han. Prunevid: Visual token pruning for efficient video large language models. In Findings of the Association for Computational Linguistics: ACL 2025 , pages 19959–19973, 2025. [16] Shixin Jiang, Jiafeng Liang, Jiyuan Wang, Xuan Dong, Heng Chang, Weijiang Yu, Jinhua Du, Ming Liu, and Bing Qin. From specific-mllms to omni-mllms: a survey on mllms aligned with multi-modalities. In Findings of the Association for Computational Linguistics: ACL 2025 ,pages 8617–8652, 2025. [17] Taehan Lee and Hyukjun Lee. Token pruning in audio transformers: Optimizing performance and decoding patch importance. arXiv preprint arXiv:2504.01690 , 2025. [18] Bingzhou Li and Tao Huang. Dash: Dynamic audio-driven semantic chunking for efficient omnimodal token compression. arXiv preprint arXiv:2603.15685 , 2026. [19] Caorui Li, Yu Chen, Yiyan Ji, Jin Xu, Zhenyu Cui, Shihao Li, Yuanxing Zhang, Wentao Wang, Zhenghao Song, Dingling Zhang, et al. Omnivideobench: Towards audio-visual understanding evaluation for omni mllms. arXiv preprint arXiv:2510.10689 , 2025. [20] Xiaoxi Li, Wenxiang Jiao, Jiarui Jin, Shijian Wang, Guanting Dong, Jiajie Jin, Hao Wang, Yinuo Wang, Ji-Rong Wen, Yuan Lu, et al. Omnigaia: Towards native omni-modal ai agents. 
+
+arXiv preprint arXiv:2602.22897 , 2026. [21] Yadong Li, Jun Liu, Tao Zhang, Song Chen, Tianpeng Li, Zehuan Li, Lijun Liu, Lingfeng Ming, Guosheng Dong, Da Pan, et al. Baichuan-omni-1.5 technical report. arXiv preprint arXiv:2501.15368 , 2025. [22] Yueqian Lin, Yuzhe Fu, Jingyang Zhang, Yudong Liu, Jianyi Zhang, Jingwei Sun, Hai Helen Li, and Yiran Chen. Speechprune: Context-aware token pruning for speech information retrieval. In 2025 IEEE International Conference on Multimedia and Expo (ICME) , pages 1–6. IEEE, 2025. [23] Zheng Qin, Ruobing Zheng, Yabing Wang, Tianqi Li, Yi Yuan, Jingdong Chen, and Le Wang. Humansense: From multimodal perception to empathetic context-aware responses through reasoning mllms. In Proceedings of the AAAI Conference on Artificial Intelligence , volume 40, pages 24973–24981, 2026. [24] Yuzhang Shang, Mu Cai, Bingxin Xu, Yong Jae Lee, and Yan Yan. Llava-prumerge: Adaptive token reduction for efficient large multimodal models. In Proceedings of the IEEE/CVF International Conference on Computer Vision , pages 22857–22867, 2025. [25] Kele Shao, Keda Tao, Can Qin, Haoxuan You, Yang Sui, and Huan Wang. Holitom: Holistic token merging for fast video large language models. arXiv preprint arXiv:2505.21334 , 2025. [26] Kele Shao, Keda Tao, Kejia Zhang, Sicheng Feng, Mu Cai, Yuzhang Shang, Haoxuan You, Can Qin, Yang Sui, and Huan Wang. When tokens talk too much: A survey of multimodal long-context token compression across images, videos, and audios. arXiv preprint arXiv:2507.20198 ,2025. [27] Xi Tang, Jihao Qiu, Lingxi Xie, Yunjie Tian, Jianbin Jiao, and Qixiang Ye. Adaptive keyframe sampling for long video understanding. In Proceedings of the Computer Vision and Pattern Recognition Conference , pages 29118–29128, 2025. [28] Keda Tao, Can Qin, Haoxuan You, Yang Sui, and Huan Wang. Dycoke: Dynamic compression of tokens for fast video large language models. In Proceedings of the Computer Vision and Pattern Recognition Conference , pages 18992–19001, 2025. [29] Keda Tao, Kele Shao, Bohan Yu, Weiqiang Wang, Huan Wang, et al. Omnizip: Audio-guided dynamic token compression for fast omnimodal large language models. arXiv preprint arXiv:2511.14582 , 2025. 11 [30] Qwen Team. Qwen3. 5-omni technical report. arXiv preprint arXiv:2604.15804 , 2026. [31] Wenjie Tian, Zhixian Zhao, Jingbin Hu, Huakang Chen, Haohe Liu, Binshen Mu, and Lei Xie. Emoomni: Bridging emotional understanding and expression in omni-modal llms. arXiv preprint arXiv:2602.21900 , 2026. [32] Wenwen Tong, Hewei Guo, Dongchuan Ran, Jiangnan Chen, Jiefan Lu, Kaibin Wang, Keqiang Li, Xiaoxu Zhu, Jiakui Li, Kehan Li, et al. Interactiveomni: A unified omni-modal model for audio-visual multi-turn dialogue. arXiv preprint arXiv:2510.13747 , 2025. [33] Tianyu Xie, Jinfa Huang, Yuexiao Ma, Rongfang Luo, Yan Yang, Wang Chen, Yuhui Zeng, Ruize Fang, Yixuan Zou, Xiawu Zheng, et al. Socialomni: Benchmarking audio-visual social interactivity in omni models. arXiv preprint arXiv:2603.16859 , 2026. [34] Zhifei Xie and Changqiao Wu. Mini-omni: Language models can hear, talk while thinking in streaming. arXiv preprint arXiv:2408.16725 , 2024. [35] Zhifei Xie and Changqiao Wu. Mini-omni2: Towards open-source gpt-4o with vision, speech and duplex capabilities. arXiv preprint arXiv:2410.11190 , 2024. [36] Jin Xu, Zhifang Guo, Hangrui Hu, Yunfei Chu, Xiong Wang, Jinzheng He, Yuxuan Wang, Xian Shi, Ting He, Xinfa Zhu, et al. Qwen3-omni technical report. arXiv preprint arXiv:2509.17765 ,2025. [37] Cheng Yang, Yang Sui, Jinqi Xiao, Lingyi Huang, Yu Gong, Chendi Li, Jinghua Yan, Yu Bai, Ponnuswamy Sadayappan, Xia Hu, et al. Topv: Compatible token pruning with inference time optimization for fast and low-memory multimodal vision language model. In Proceedings of the Computer Vision and Pattern Recognition Conference , pages 19803–19813, 2025. [38] Dongchao Yang, Songxiang Liu, Disong Wang, Yuanyuan Wang, Guanglu Wan, and Helen Meng. Omni-autothink: Adaptive multimodal reasoning via reinforcement learning. arXiv preprint arXiv:2512.03783 , 2025. [39] Senqiao Yang, Yukang Chen, Zhuotao Tian, Chengyao Wang, Jingyao Li, Bei Yu, and Jiaya Jia. Visionzip: Longer is better but not necessary in vision language models. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition , pages 19792–19802, 2025. [40] Weihao Ye, Qiong Wu, Wenhao Lin, and Yiyi Zhou. Fit and prune: Fast and training-free visual token pruning for multi-modal large language models. In Proceedings of the AAAI Conference on Artificial Intelligence , volume 39, pages 22128–22136, 2025. [41] Ziwei Zhou, Rui Wang, Zuxuan Wu, and Yu-Gang Jiang. Daily-omni: Towards audio-visual reasoning with temporal alignment across modalities. arXiv preprint arXiv:2505.17862 , 2025. 12 A Implementation Details 
+
+This section provides additional implementation details omitted from the main text, with an emphasis on the budget calibration protocol and default hyperparameter settings. OmniFocus is training-free: all token compression operations are performed before the LLM back-bone, and no model parameters are updated during evaluation. We use the same Qwen2.5-Omni input organization as the full-token setting, where audio and video tokens are grouped by the default 2-second temporal window before compression. “Full Tokens” denotes the original Qwen2.5-Omni inference path without any token dropping. For fair comparison, we calibrate compression budgets separately for each benchmark. We first follow the OmniZip protocol to determine the benchmark-level compression setting and then adjust the global modality-specific drop ratios for audio and video accordingly. This benchmark-level calibration is used consistently across methods. Unless otherwise specified, OmniFocus uses rmin = 0 .35 and rmax = 0 .75 as the local drop-ratio range. Within each chunk and modality, the retained tokens are selected with a 1:1 split between inter-modal association scores and intra-modal peak scores. 
+
+## B Modality-Type Analysis Protocol 
+
+To analyze whether compression errors are concentrated on questions requiring specific modality information, we use Qwen3-32B to classify each multiple-choice video question into one of three modality types: video , audio , or video-audio .The classifier only receives the question and answer options, without access to the video, audio, model prediction, or ground-truth answer. Therefore, this analysis does not leak evaluation labels and is independent of the prediction results of the evaluated OmniLLMs. We use the following prompt for question-type classification and require the model to return exactly one label:      
+
+> You are classifying what modality information is required to answer a multiple-choice video question. You must choose exactly one label from: video, audio, video-audio. Definitions: - video: the question can be answered from visual information alone. - audio: the question can be answered from audio information alone. - video-audio: the question requires both visual and audio information. Return only one label: video or audio or video-audio. Question: {question} Options: {options_text}
+
+After obtaining the modality-type labels, we group evaluation examples by their predicted modality requirement and compute the error distribution of each compression method within these groups. This allows us to examine whether a compression strategy disproportionately harms visual evidence, audio evidence, or joint audio-visual evidence. 
+
+## C Additional Efficiency Analysis 
+
+We further analyze efficiency on WorldSense by grouping QA examples according to the duration of their source video. Each example is assigned to a 100-second bucket based on the actual video length measured by ffprobe , and we report results for the 0–600s range. Figure 4 shows that the relative efficiency gains of OmniFocus on WorldSense generally increase with video duration and then become more stable after roughly the 300s bucket. On Qwen2.5-Omni-3B, GPU memory reduction grows from 15.25% to 18.59% at 35% retention and from 16.37% to 20.90% 13 Video Duration Bucket (s)            
+
+> 10
+> 15
+> 20
+> GPU Mem. Reduction (%)
+> Qwen2.5-Omni-3B
+> Video Duration Bucket (s)
+> 14
+> 16
+> 18
+> 20
+> 22
+> E2E Time Reduction (%)
+> Qwen2.5-Omni-3B
+> 0-100 100-200 200-300 300-400 400-500 500-600
+> Video Duration Bucket (s)
+> 10
+> 15
+> 20
+> GPU Mem. Reduction (%)
+> Qwen2.5-Omni-7B
+> 0-100 100-200 200-300 300-400 400-500 500-600
+> Video Duration Bucket (s)
+> 15
+> 20
+> 25
+> 30
+> E2E Time Reduction (%)
+> Qwen2.5-Omni-7B
+> Ours 35% Ours 25%
+
+Figure 4: Efficiency gains by video duration on WorldSense. We group QA examples into 100-second video-duration buckets and report GPU memory reduction and end-to-end time reduction relative to the same-model full-token baseline. Longer videos generally yield larger relative savings, and the stronger compression setting (25%) provides the largest gains. at 25% retention, while the corresponding end-to-end time reduction rises from 14.84% to 18.07% and from 16.29% to 21.14%. On Qwen2.5-Omni-7B, the GPU memory reduction is smaller in magnitude but still increases with duration, reaching 12.68% at 35% retention and 14.26% at 25% retention, whereas the end-to-end time reduction is more pronounced, reaching 25.81% and 28.70% in the longest bucket. These results suggest that compression becomes increasingly valuable on longer WorldSense videos, especially for stronger compression settings and larger models in end-to-end latency. 
+
+## D Additional Ablation Results 
+
+D.1 Sensitivity to Modality-Specific Budgets 
+
+We further analyze the sensitivity of OmniFocus to different modality-specific retention budgets on DailyOmni. Figure 5 varies the audio retention ratio with a fixed video ratio and varies the video retention ratio with a fixed audio ratio. Figure 5 shows that moderate audio-video budget choices preserve stable performance, whereas overly aggressive compression of either modality can remove necessary modality-specific evidence. This supports the use of calibrated global modality-specific budgets instead of a single fixed unimodal compression rule. 
+
+D.2 Detailed Modality-Guided Chunk Scoring Results 
+
+Table 6 provides the category-wise results omitted from the average-only summary in Table 5. 14 0.2 0.4 0.6 0.8 
+
+Audio Ratio 
+
+56 
+
+58 
+
+60 
+
+> Accuracy (%)
+
+Video = 0.6 
+
+Video = 0.7 
+
+0.2 0.4 0.6 0.8 
+
+Video Ratio 
+
+Audio = 0.4 
+
+Audio = 0.5 Figure 5: Sensitivity to modality-specific retention ratios. We vary the audio retention ratio while fixing the video ratio (left), and vary the video retention ratio while fixing the audio ratio (right). OmniFocus is robust around moderate modality budgets, while overly aggressive compression of either modality degrades DailyOmni performance. Table 6: Detailed ablation of modality-guided chunk scoring on DailyOmni. We compare audio-only, video-only, and modality-balanced chunk scoring under 35% and 25% token retention. The best result within each model-budget group is highlighted in bold.                                                                                                       
+
+> Scoring Strategy Retained Ratio (%) AV Event Alignment ( ↑)Comparative ( ↑)Context Understanding ( ↑)Event Sequence ( ↑)Inference ( ↑)Reasoning ( ↑)Average ( ↑)Qwen2.5-Omni-7B Audio-only 35 49.16 67.94 55.44 54.90 75.32 74.29 60.14 Video-only 35 47.90 68.70 53.89 52.94 78.57 73.14 60.07 Balanced (Ours) 35 48.32 68.70 55.96 52.61 78.57 72.57 60.32
+> Audio-only 25 44.96 67.94 56.99 54.58 74.03 72.57 59.05 Video-only 25 46.22 67.94 52.33 50.98 76.62 73.14 58.65 Balanced (Ours) 25 46.64 69.47 54.92 52.29 75.32 72.57 59.40
+> Qwen2.5-Omni-3B Audio-only 35 46.64 66.41 51.30 47.39 73.38 66.29 56.06 Video-only 35 48.32 64.89 51.30 49.67 74.03 66.86 56.98 Balanced (Ours) 35 47.90 66.41 51.30 48.04 75.97 69.14 57.23
+> Audio-only 25 46.64 64.12 49.22 48.37 72.73 66.86 55.72 Video-only 25 47.06 64.12 51.30 49.67 73.38 67.43 56.10 Balanced (Ours) 25 47.90 64.12 50.78 48.04 72.73 66.86 56.14
+
+D.3 Sensitivity to Inter/Intra Token-Selection Split 
+
+We further analyze the keep-count split between inter-modal association tokens and intra-modal peak tokens. This ablation only changes the inter/intra split while keeping the other DailyOmni settings unchanged. Figure 6 shows that intra-heavy splits generally outperform inter-heavy splits on Qwen2.5-Omni-7B, suggesting that modality-internal peak evidence is particularly useful for token selection on DailyOmni. The default 1:1 split is best at 35% retention and remains close to the best configuration at 25% retention. We therefore keep the symmetric 1:1 split as the default. 
+
+D.4 Robustness of Reference Vector Estimation 
+
+Table 7 further tests whether the reference vectors used by inter-modal and intra-modal token selection require more robust centroid estimation. This ablation only changes the reference vector strategy, while the chunk-level query relevance score still uses max similarity. Table 7 shows that the default mean centroid achieves the highest average score under both retention ratios. Trimmed-mean and query-weighted centroids do not improve robustness in this setting, suggesting that the simple mean reference vector is already sufficiently stable for the normalized token features used by OmniFocus. This also keeps the token selection module lightweight and avoids introducing an additional robust-estimation hyperparameter beyond the compression budget. 15 1:1 1:2 1:3 2:1 3:1 
+
+Inter:Intra Split 
+
+54 
+
+56 
+
+58 
+
+60  
+
+> Accuracy (%)
+> 60.32
+> 58.98
+> 59.82
+> 58.31 58.31
+
+Qwen2.5-Omni-7B, 35% 
+
+1:1 1:2 1:3 2:1 3:1 
+
+Inter:Intra Split  
+
+> 59.40
+> 58.90 58.65
+> 57.89
+> 56.64
+
+Qwen2.5-Omni-7B, 25%   
+
+> Default 1:1 Best Accuracy
+
+Figure 6: Sensitivity to the inter/intra token-selection split on DailyOmni for Qwen2.5-Omni-7B. 
+
+We report average accuracy under different keep-count splits between inter-modal association scores and intra-modal peak scores at 35% and 25% token retention. The default 1:1 split is highlighted, and the best point in each retention setting is marked. Table 7: Robust reference vector ablation on DailyOmni. We compare mean, trimmed-mean, and query-weighted reference vectors for inter-/intra-modal token selection on Qwen2.5-Omni-7B. Only the reference vector estimation is changed; chunk-level query relevance still uses max similarity. The best average score within each retention group is highlighted in bold.                                                      
+
+> Reference Strategy Retained Ratio (%) AV Event Alignment ( ↑)Comparative ( ↑)Context Understanding ( ↑)Event Sequence ( ↑)Inference ( ↑)Reasoning ( ↑)Average ( ↑)Qwen2.5-Omni-7B Mean (Ours) 35 48.32 68.70 55.96 52.61 78.57 72.57 60.32
+> Trimmed Mean 35 44.96 68.70 54.40 52.61 77.27 73.14 59.31 Query Weighted 35 46.64 67.18 53.37 51.96 73.38 72.00 58.48 Mean (Ours) 25 46.64 69.47 54.92 52.29 75.32 72.57 59.40
+> Trimmed Mean 25 44.12 68.70 53.89 51.31 77.27 71.43 58.48 Query Weighted 25 45.80 67.18 52.85 50.65 70.13 71.43 57.39
+
+D.5 Sensitivity to Query Representation 
+
+We further test whether chunk-level query relevance scoring is sensitive to how the textual query is aggregated into a single representation. Specifically, we compare the default setting, which averages normalized query-token embeddings, with mean pooling over the raw query-token embed-dings. Table 8 shows that the two variants are overall comparable, while mean-normalized query representations are more consistent across model sizes and retention settings. The default mean-normalized query representation is better in three of the four settings and remains close to the best variant in the remaining case. We therefore keep it as the default because it provides slightly more consistent performance while staying well aligned with the cosine-similarity scoring used throughout OmniFocus. 
+
+D.6 Sensitivity to Local Drop-Ratio Range 
+
+We further analyze the sensitivity of OmniFocus to the local drop-ratio range [rmin , r max ] on Daily-Omni. Table 9 compares the default range [0 .35 , 0.75] with a lower range [0 .25 , 0.65] and a higher range [0 .45 , 0.85] .Table 9 shows that an overly high drop-ratio range degrades the average score for both model sizes, suggesting that overly aggressive local compression can remove useful audio-visual evidence. The default range [0 .35 , 0.75] performs best on Qwen2.5-Omni-7B, while the lower range [0 .25 , 0.65] 
+
+16 Table 8: Sensitivity to query representation on DailyOmni. We compare the default mean-normalized query representation with mean pooling over raw query-token embeddings. The default setting is shaded, and the best score within each model/retention pair is highlighted in bold. 
+
+Query Representation Retained Ratio (%) Qwen2.5-Omni-7B Qwen2.5-Omni-3B Mean normalized (default) 35 60.32 57.23 
+
+Mean raw 35 59.82 57.14 Mean normalized (default) 25 59.40 56.14 
+
+Mean raw 25 59.00 56.06 
+
+Table 9: Sensitivity to the local drop-ratio range on DailyOmni. We report category-wise results for Qwen2.5-Omni-7B and Qwen2.5-Omni-3B. The default range used in our main experiments is shaded, and the best average score within each model group is highlighted in bold.                                                      
+
+> Local Drop-Ratio Range AV Event Alignment ( ↑)Comparative ( ↑)Context Understanding ( ↑)Event Sequence ( ↑)Inference ( ↑)Reasoning ( ↑)Average ( ↑)Qwen2.5-Omni-7B
+> [0 .35 ,0.75] 48.32 68.70 55.96 52.61 78.57 72.57 60.32
+> [0 .25 ,0.65] 47.48 69.47 54.92 53.27 76.62 71.43 59.82
+> [0 .45 ,0.85] 47.90 66.41 53.37 52.29 74.68 72.00 58.90 Qwen2.5-Omni-3B
+> [0 .35 ,0.75] 47.90 66.41 51.30 48.04 75.97 69.14 57.23
+> [0 .25 ,0.65] 50.42 64.89 50.26 50.65 75.97 68.00 57.89
+> [0 .45 ,0.85] 48.32 64.12 51.30 49.67 74.03 66.29 56.81
+
+performs best on Qwen2.5-Omni-3B. We use [0 .35 , 0.75] as the default setting because it provides the strongest 7B performance and avoids the clear degradation observed with the higher range. 
+
+## E Limitations 
+
+OmniFocus relies on similarity in the frozen input embedding space to perform query-guided compression. This design keeps the method training-free and easy to apply, but the resulting relevance estimates may be less precise for fine-grained events or semantically ambiguous questions where the initial token embeddings do not fully capture the intent of the query. Our experiments are mainly conducted on the Qwen2.5-Omni model family. Although OmniFocus does not depend on model-specific parameter updates, its generality should be further evaluated on more OmniLLM architectures and under more challenging audio-visual conditions, such as noisy audio, visual occlusion, rapid scene changes, or temporal misalignment between audio and video. This work uses benchmark-level budget calibration to ensure comparable token retention across compression methods. While this protocol supports fair evaluation, it does not dynamically adapt the global audio and video budgets to the difficulty or modality requirements of each individual example. A promising extension is to develop instance-adaptive budget allocation while maintaining a controlled retained-token ratio. The training-free design makes OmniFocus lightweight and broadly applicable, but it also limits the ability of the compression policy to optimize directly for downstream task objectives. Future work could combine query-aware compression with lightweight adaptation, calibration data, or internal attention signals from the OmniLLM to further improve task-specific retention. 17 NeurIPS Paper Checklist 
+
+1. Claims 
+
+Question: Do the main claims made in the abstract and introduction accurately reflect the paper’s contributions and scope? Answer: [Yes] Justification: The abstract and introduction state the scope of OmniFocus as a training-free query-guided token compression method for OmniLLMs. The claims have been revised to reflect the experimental results accurately, including competitive rather than uniformly superior performance on all benchmarks. Guidelines: • The answer [N/A] means that the abstract and introduction do not include the claims made in the paper. • The abstract and/or introduction should clearly state the claims made, including the contributions made in the paper and important assumptions and limitations. A [No] or [N/A] answer to this question will not be perceived well by the reviewers. • The claims made should match theoretical and experimental results, and reflect how much the results can be expected to generalize to other settings. • It is fine to include aspirational goals as motivation as long as it is clear that these goals are not attained by the paper. 2. Limitations 
+
+Question: Does the paper discuss the limitations of the work performed by the authors? Answer: [Yes] Justification: The paper includes a brief dedicated Limitations section in the main text, and a more detailed discussion of limitations is provided in Appendix E. Guidelines: • The answer [N/A] means that the paper has no limitation while the answer [No] means that the paper has limitations, but those are not discussed in the paper. • The authors are encouraged to create a separate “Limitations” section in their paper. • The paper should point out any strong assumptions and how robust the results are to violations of these assumptions (e.g., independence assumptions, noiseless settings, model well-specification, asymptotic approximations only holding locally). The authors should reflect on how these assumptions might be violated in practice and what the implications would be. • The authors should reflect on the scope of the claims made, e.g., if the approach was only tested on a few datasets or with a few runs. In general, empirical results often depend on implicit assumptions, which should be articulated. • The authors should reflect on the factors that influence the performance of the approach. For example, a facial recognition algorithm may perform poorly when image resolution is low or images are taken in low lighting. Or a speech-to-text system might not be used reliably to provide closed captions for online lectures because it fails to handle technical jargon. • The authors should discuss the computational efficiency of the proposed algorithms and how they scale with dataset size. • If applicable, the authors should discuss possible limitations of their approach to address problems of privacy and fairness. • While the authors might fear that complete honesty about limitations might be used by reviewers as grounds for rejection, a worse outcome might be that reviewers discover limitations that aren’t acknowledged in the paper. The authors should use their best judgment and recognize that individual actions in favor of transparency play an impor-tant role in developing norms that preserve the integrity of the community. Reviewers will be specifically instructed to not penalize honesty concerning limitations. 3. Theory assumptions and proofs 
+
+18 Question: For each theoretical result, does the paper provide the full set of assumptions and a complete (and correct) proof? Answer: [N/A] Justification: The paper does not present theoretical theorems or formal proof-based results. The proposed method is evaluated empirically. Guidelines: • The answer [N/A] means that the paper does not include theoretical results. • All the theorems, formulas, and proofs in the paper should be numbered and cross-referenced. • All assumptions should be clearly stated or referenced in the statement of any theorems. • The proofs can either appear in the main paper or the supplemental material, but if they appear in the supplemental material, the authors are encouraged to provide a short proof sketch to provide intuition. • Inversely, any informal proof provided in the core of the paper should be complemented by formal proofs provided in appendix or supplemental material. • Theorems and Lemmas that the proof relies upon should be properly referenced. 4. Experimental result reproducibility 
+
+Question: Does the paper fully disclose all the information needed to reproduce the main ex-perimental results of the paper to the extent that it affects the main claims and/or conclusions of the paper (regardless of whether the code and data are provided or not)? Answer: [Yes] Justification: The paper describes the model family, benchmarks, baselines, token retention settings, budget calibration protocol, local drop-ratio range, and evaluation metrics. The method is training-free, and its scoring, allocation, and token selection procedures are specified in the Method section. Guidelines: • The answer [N/A] means that the paper does not include experiments. • If the paper includes experiments, a [No] answer to this question will not be perceived well by the reviewers: Making the paper reproducible is important, regardless of whether the code and data are provided or not. • If the contribution is a dataset and/or model, the authors should describe the steps taken to make their results reproducible or verifiable. • Depending on the contribution, reproducibility can be accomplished in various ways. For example, if the contribution is a novel architecture, describing the architecture fully might suffice, or if the contribution is a specific model and empirical evaluation, it may be necessary to either make it possible for others to replicate the model with the same dataset, or provide access to the model. In general. releasing code and data is often one good way to accomplish this, but reproducibility can also be provided via detailed instructions for how to replicate the results, access to a hosted model (e.g., in the case of a large language model), releasing of a model checkpoint, or other means that are appropriate to the research performed. • While NeurIPS does not require releasing code, the conference does require all submis-sions to provide some reasonable avenue for reproducibility, which may depend on the nature of the contribution. For example (a) If the contribution is primarily a new algorithm, the paper should make it clear how to reproduce that algorithm. (b) If the contribution is primarily a new model architecture, the paper should describe the architecture clearly and fully. (c) If the contribution is a new model (e.g., a large language model), then there should either be a way to access this model for reproducing the results or a way to reproduce the model (e.g., with an open-source dataset or instructions for how to construct the dataset). 19 (d) We recognize that reproducibility may be tricky in some cases, in which case authors are welcome to describe the particular way they provide for reproducibility. In the case of closed-source models, it may be that access to the model is limited in some way (e.g., to registered users), but it should be possible for other researchers to have some path to reproducing or verifying the results. 5. Open access to data and code 
+
+Question: Does the paper provide open access to the data and code, with sufficient instruc-tions to faithfully reproduce the main experimental results, as described in supplemental material? Answer: [No] Justification: The current submission does not provide an open-source code release or detailed reproduction scripts. The experiments use publicly described benchmarks and open model families, and the paper provides methodological and evaluation details for reproducibility. Guidelines: • The answer [N/A] means that paper does not include experiments requiring code. • Please see the NeurIPS code and data submission guidelines ( https://neurips.cc/ public/guides/CodeSubmissionPolicy ) for more details. • While we encourage the release of code and data, we understand that this might not be possible, so [No] is an acceptable answer. Papers cannot be rejected simply for not including code, unless this is central to the contribution (e.g., for a new open-source benchmark). • The instructions should contain the exact command and environment needed to run to reproduce the results. See the NeurIPS code and data submission guidelines ( https: //neurips.cc/public/guides/CodeSubmissionPolicy ) for more details. • The authors should provide instructions on data access and preparation, including how to access the raw data, preprocessed data, intermediate data, and generated data, etc. • The authors should provide scripts to reproduce all experimental results for the new proposed method and baselines. If only a subset of experiments are reproducible, they should state which ones are omitted from the script and why. • At submission time, to preserve anonymity, the authors should release anonymized versions (if applicable). • Providing as much information as possible in supplemental material (appended to the paper) is recommended, but including URLs to data and code is permitted. 6. Experimental setting/details 
+
+Question: Does the paper specify all the training and test details (e.g., data splits, hyperpa-rameters, how they were chosen, type of optimizer) necessary to understand the results? Answer: [Yes] Justification: The paper specifies the evaluated Qwen2.5-Omni model variants, benchmarks, baselines, 35% and 25% token retention settings, global budget calibration protocol, local drop-ratio range, and hardware setup. Since OmniFocus is training-free, no optimizer or training hyperparameters are required. Guidelines: • The answer [N/A] means that the paper does not include experiments. • The experimental setting should be presented in the core of the paper to a level of detail that is necessary to appreciate the results and make sense of them. • The full details can be provided either with the code, in appendix, or as supplemental material. 7. Experiment statistical significance 
+
+Question: Does the paper report error bars suitably and correctly defined or other appropriate information about the statistical significance of the experiments? Answer: [No] 20 Justification: The current experiments report single-run benchmark scores without error bars, confidence intervals, or statistical significance tests. This is mainly due to the high cost of repeated evaluation on long audio-visual benchmarks and large OmniLLM backbones. Guidelines: • The answer [N/A] means that the paper does not include experiments. • The authors should answer [Yes] if the results are accompanied by error bars, confidence intervals, or statistical significance tests, at least for the experiments that support the main claims of the paper. • The factors of variability that the error bars are capturing should be clearly stated (for example, train/test split, initialization, random drawing of some parameter, or overall run with given experimental conditions). • The method for calculating the error bars should be explained (closed form formula, call to a library function, bootstrap, etc.) • The assumptions made should be given (e.g., Normally distributed errors). • It should be clear whether the error bar is the standard deviation or the standard error of the mean. • It is OK to report 1-sigma error bars, but one should state it. The authors should preferably report a 2-sigma error bar than state that they have a 96% CI, if the hypothesis of Normality of errors is not verified. • For asymmetric distributions, the authors should be careful not to show in tables or figures symmetric error bars that would yield results that are out of range (e.g., negative error rates). • If error bars are reported in tables or plots, the authors should explain in the text how they were calculated and reference the corresponding figures or tables in the text. 8. Experiments compute resources 
+
+Question: For each experiment, does the paper provide sufficient information on the com-puter resources (type of compute workers, memory, time of execution) needed to reproduce the experiments? Answer: [No] Justification: The paper reports that experiments are conducted on NVIDIA A100 80GB GPUs and provides runtime and memory profiling for DailyOmni. However, it does not fully report the total compute time required for every benchmark and ablation experiment. Guidelines: • The answer [N/A] means that the paper does not include experiments. • The paper should indicate the type of compute workers CPU or GPU, internal cluster, or cloud provider, including relevant memory and storage. • The paper should provide the amount of compute required for each of the individual experimental runs as well as estimate the total compute. • The paper should disclose whether the full research project required more compute than the experiments reported in the paper (e.g., preliminary or failed experiments that didn’t make it into the paper). 9. Code of ethics 
+
+Question: Does the research conducted in the paper conform, in every respect, with the NeurIPS Code of Ethics https://neurips.cc/public/EthicsGuidelines ?Answer: [Yes] Justification: The work focuses on training-free token compression for existing OmniLLMs and evaluates on existing public benchmarks. We are not aware of any deviation from the NeurIPS Code of Ethics. Guidelines: • The answer [N/A] means that the authors have not reviewed the NeurIPS Code of Ethics. • If the authors answer [No], they should explain the special circumstances that require a deviation from the Code of Ethics. 21 • The authors should make sure to preserve anonymity (e.g., if there is a special consid-eration due to laws or regulations in their jurisdiction). 10. Broader impacts 
+
+Question: Does the paper discuss both potential positive societal impacts and negative societal impacts of the work performed? Answer: [No] Justification: The current paper does not include a dedicated broader impacts discussion. The work may have positive impacts by reducing the computational cost of long audio-visual inference, but more efficient OmniLLM inference could also lower the cost of misuse in surveillance or multimedia analysis applications. Guidelines: • The answer [N/A] means that there is no societal impact of the work performed. • If the authors answer [N/A] or [No], they should explain why their work has no societal impact or why the paper does not address societal impact. • Examples of negative societal impacts include potential malicious or unintended uses (e.g., disinformation, generating fake profiles, surveillance), fairness considerations (e.g., deployment of technologies that could make decisions that unfairly impact specific groups), privacy considerations, and security considerations. • The conference expects that many papers will be foundational research and not tied to particular applications, let alone deployments. However, if there is a direct path to any negative applications, the authors should point it out. For example, it is legitimate to point out that an improvement in the quality of generative models could be used to generate Deepfakes for disinformation. On the other hand, it is not needed to point out that a generic algorithm for optimizing neural networks could enable people to train models that generate Deepfakes faster. • The authors should consider possible harms that could arise when the technology is being used as intended and functioning correctly, harms that could arise when the technology is being used as intended but gives incorrect results, and harms following from (intentional or unintentional) misuse of the technology. • If there are negative societal impacts, the authors could also discuss possible mitigation strategies (e.g., gated release of models, providing defenses in addition to attacks, mechanisms for monitoring misuse, mechanisms to monitor how a system learns from feedback over time, improving the efficiency and accessibility of ML). 11. Safeguards 
+
+Question: Does the paper describe safeguards that have been put in place for responsible release of data or models that have a high risk for misuse (e.g., pre-trained language models, image generators, or scraped datasets)? Answer: [N/A] Justification: The paper does not release a new pretrained model, scraped dataset, or other high-risk asset. It proposes a training-free compression method evaluated on existing models and benchmarks. Guidelines: • The answer [N/A] means that the paper poses no such risks. • Released models that have a high risk for misuse or dual-use should be released with necessary safeguards to allow for controlled use of the model, for example by requiring that users adhere to usage guidelines or restrictions to access the model or implementing safety filters. • Datasets that have been scraped from the Internet could pose safety risks. The authors should describe how they avoided releasing unsafe images. • We recognize that providing effective safeguards is challenging, and many papers do not require this, but we encourage authors to take this into account and make a best faith effort. 12. Licenses for existing assets 
+
+22 Question: Are the creators or original owners of assets (e.g., code, data, models), used in the paper, properly credited and are the license and terms of use explicitly mentioned and properly respected? Answer: [No] Justification: The paper cites the existing models, baselines, and benchmarks used in the experiments, but the current draft does not explicitly list their licenses or terms of use. Guidelines: • The answer [N/A] means that the paper does not use existing assets. • The authors should cite the original paper that produced the code package or dataset. • The authors should state which version of the asset is used and, if possible, include a URL. • The name of the license (e.g., CC-BY 4.0) should be included for each asset. • For scraped data from a particular source (e.g., website), the copyright and terms of service of that source should be provided. • If assets are released, the license, copyright information, and terms of use in the package should be provided. For popular datasets, paperswithcode.com/datasets 
+
+has curated licenses for some datasets. Their licensing guide can help determine the license of a dataset. • For existing datasets that are re-packaged, both the original license and the license of the derived asset (if it has changed) should be provided. • If this information is not available online, the authors are encouraged to reach out to the asset’s creators. 13. New assets 
+
+Question: Are new assets introduced in the paper well documented and is the documentation provided alongside the assets? Answer: [N/A] Justification: The paper does not introduce or release a new dataset, model checkpoint, or benchmark asset. The contribution is a training-free token compression method. Guidelines: • The answer [N/A] means that the paper does not release new assets. • Researchers should communicate the details of the dataset/code/model as part of their submissions via structured templates. This includes details about training, license, limitations, etc. • The paper should discuss whether and how consent was obtained from people whose asset is used. • At submission time, remember to anonymize your assets (if applicable). You can either create an anonymized URL or include an anonymized zip file. 14. Crowdsourcing and research with human subjects 
+
+Question: For crowdsourcing experiments and research with human subjects, does the paper include the full text of instructions given to participants and screenshots, if applicable, as well as details about compensation (if any)? Answer: [N/A] Justification: The paper does not involve crowdsourcing experiments or research with human subjects. Guidelines: • The answer [N/A] means that the paper does not involve crowdsourcing nor research with human subjects. • Including this information in the supplemental material is fine, but if the main contribu-tion of the paper involves human subjects, then as much detail as possible should be included in the main paper. 23 • According to the NeurIPS Code of Ethics, workers involved in data collection, curation, or other labor should be paid at least the minimum wage in the country of the data collector. 15. Institutional review board (IRB) approvals or equivalent for research with human subjects 
+
+Question: Does the paper describe potential risks incurred by study participants, whether such risks were disclosed to the subjects, and whether Institutional Review Board (IRB) approvals (or an equivalent approval/review based on the requirements of your country or institution) were obtained? Answer: [N/A] Justification: The paper does not involve crowdsourcing experiments or human-subject research, so IRB approval is not applicable. Guidelines: • The answer [N/A] means that the paper does not involve crowdsourcing nor research with human subjects. • Depending on the country in which research is conducted, IRB approval (or equivalent) may be required for any human subjects research. If you obtained IRB approval, you should clearly state this in the paper. • We recognize that the procedures for this may vary significantly between institutions and locations, and we expect authors to adhere to the NeurIPS Code of Ethics and the guidelines for their institution. • For initial submissions, do not include any information that would break anonymity (if applicable), such as the institution conducting the review. 16. Declaration of LLM usage 
+
+Question: Does the paper describe the usage of LLMs if it is an important, original, or non-standard component of the core methods in this research? Note that if the LLM is used only for writing, editing, or formatting purposes and does not impact the core methodology, scientific rigor, or originality of the research, declaration is not required. Answer: [Yes] Justification: The paper explicitly studies token compression for OmniLLMs and evaluates the method on Qwen2.5-Omni-3B and Qwen2.5-Omni-7B. The role of the LLM backbone and the placement of OmniFocus before the LLM backbone are described in the Method and Experiment sections. Guidelines: • The answer [N/A] means that the core method development in this research does not involve LLMs as any important, original, or non-standard components. • Please refer to our LLM policy in the NeurIPS handbook for what should or should not be described. 24
