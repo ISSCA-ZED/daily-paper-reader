@@ -1,0 +1,1730 @@
+Title: Can We Trust LLM's Logic? Quantifying Uncertainty, Coherence, and Robustness via a Graph-Based Framework
+
+URL Source: https://arxiv.org/pdf/2607.08017v1
+
+Published Time: Fri, 10 Jul 2026 00:19:03 GMT
+
+Number of Pages: 42
+
+Markdown Content:
+Under review as a conference paper at COLM 2026 
+
+# Can We Trust LLM’s Logic? Quantifying Uncertainty, Coher-ence, and Robustness via a Graph-Based Framework 
+
+Riccardo Revalor ¶, Jalees Rehman ‡, Debjit Pal ¶
+
+> ¶
+
+Department of Electrical and Computer Engineering 
+
+> ‡
+
+Department of Biochemistry and Molecular Genetics University of Illinois Chicago Chicago, IL 60607, USA 
+
+{rreva, jalees, dpal2}@uic.edu 
+
+## Abstract 
+
+Large-Language Models (LLMs) can be prone to flawed and unfaithful reasoning that decoding strategies like Self-Consistency (SC) fail to detect as they evaluate only final-answer agreement while ignoring the logical validity of intermediate steps. This raises three fundamental questions: How can we reliably quantify uncertainty in LLM reasoning? Can se-mantic, structural, and causal awareness select more faithful reasoning compared to naïve majority voting? and How robust is reasoning topology under adversarial conditions? To address these questions, we introduce GRAPH EVAL , a graph-based reasoning framework that re-frames uncer-tainty quantification (UQ) as a holistic reasoning fidelity problem. We propose a novel UQ metric, Graph Reasoning Coherence Score (GRCS), that quanti-fies semantic-structural consensus of the reasoning space and captures pathological mode collapse and confident hallucinations . We find that GRCS is the only met-ric that is consistently negatively correlated with reasoning faithfulness 
+
+across both more capable and smaller models. Additionally, we introduce Graph Self-Consistency (GSC), a medoid-based decoding strategy that 
+
+trades nominal accuracy for reasoning fidelity , exposing the degree to which SC is inflated by unfaithful lucky guesses in smaller models, while preserving or improving accuracy in more capable ones. Finally, through adversarial medoid ablation, we demonstrate that the GSC-selected path acts as a “load-bearing path” and forcing models away from it degrades reasoning faithfulness and, in targeted cases, causes drops in accuracy. 
+
+## 1 Introduction 
+
+In recent years, Large-Language Models (LLMs) have achieved remarkable success across different domains through a single model, often generalizing to new tasks in zero-shot and few-shot settings (Brown et al., 2020; Zhao et al., 2023). Nevertheless, their trustworthiness is limited by their tendency to produce plausible but fabricated reasoning , colloquially known as hallucinations , often doing so with high statistical confidence (Ji et al., 2023). Such a lack of trustworthiness have severely restricted their deployment in mission-critical environments (Huang et al., 2020). To increase LLMs performance, Chain-of-Thought (CoT) prompting was introduced (Wei et al., 2022), with the goal of enabling them to decompose complex problems into intermediate steps, and articulate reasoning in a human-like additive way (Kahneman, 2011; Ziabari et al., 2025; de Varda et al., 2025). Decoding strategies that mimic human-like reasoning, e.g. , Self Consistency (SC) (Wang et al., 2023b), have been widely used to sample LLM answers. SC samples multiple reasoning paths and selects the most frequent final answer, assuming that reasoning agreement ultimately leads to correctness. However, SC applies majority voting to the final output, marginalizing the different CoTs, making it highly vulnerable to unfaithful reasoning. In certain cases, hallucinations actively contribute to the “lucky guess”, in which a LLM may follow flawed, illogical, or even contradictory reasoning processes, yet yield the correct answer. While 1arXiv:2607.08017v1 [cs.CL] 9 Jul 2026 Under review as a conference paper at COLM 2026 the answer may be correct, the unreliability of this process fundamentally threatens the model’s trustworthiness and robustness. In mission critical settings where errors can lead to catastrophic physical (Shen et al., 2023), financial (Chen & Hu, 2025), or legal (Linna & Linna, 2026) consequences, empirical performance alone is insufficient (Morey et al., 2025). We hypothesize that quantifying reasoning coherence and uncertainty in LLMs is essential to guarantee true model trustworthiness . Recent pioneering work, such as Topo-UQ (Da et al., 2025), has significantly advanced the field by mapping CoTs to topological graphs for Uncertainty Quantification (UQ). However, simple topological dispersion often fails to capture the nuanced ways in which models hallucinate. Severe mode collapse in compact architectures, where identical flawed reasoning shortcuts are confidently repeated, remains especially problematic (Ding et al., 2024; Lin et al., 2025). To address these challenges, we propose a graph-based reasoning framework, GRAPH EVAL ,our vision that shifts the evaluation paradigm from final-answer consensus to holistic reasoning fidelity . Achieving this vision requires exploration and effective solutions to the following three research questions (RQs): RQ1: How can we reliably quantify uncertainty 
+
+in LLM reasoning processes across diverse tasks of increasing cognitive complexity? RQ2: 
+
+Does structural and causal awareness improve upon naïve majority voting to systematically 
+
+filter out the unfaithful “lucky guesses” that artificially inflate standard accuracy? RQ3: 
+
+How robust is the reasoning topology under adversarial conditions, and how do LLMs of varying representational capacities respond when their dominant reasoning paths are adversarially ablated? To answer these RQs, as our key contributions, we design, develop, and rigorously test the following three components of GRAPH EVAL (Section 3) on a broad spectrum of pro-gressively complex tasks. A Novel UQ Metric: We introduce a distributional uncertainty metric, Graph Reasoning Coherence Score (GRCS), based on Structural-Semantic Graph Edit Distance (SS-GED). GRCS is the only evaluated metric that consistently shows a neg-ative correlation with reasoning faithfulness across all model scales, effectively capturing hidden uncertainty in flawed reasoning paths ( RQ1 , Section 5.1). GSC Decoding: We propose Graph Self Consistency (GSC), a structural decoding strategy that explicitly filters out unfaithful reasoning. We empirically demonstrate that GSC effectively isolates the “lucky guesses” that artificially inflates SC accuracy ( RQ2 , Sections 5.2 and 5.3). Probing Reasoning Robustness via Adversarial Ablation: We study how robustly models reason by removing their primary reasoning topology (the medoid ). In smaller LLMs, ablation reveals a high negative correlation where apparent accuracy gains systematically mask reasoning collapse, empirically exposing “lucky guesses”. While more capable models preserve their original accuracy through alternative paths, they still exhibit drops in reasoning fidelity. This suggests that the medoid functions as a load-bearing structure for reliable deduction (RQ3 , Section 5.4). 
+
+## 2 Background and Preliminaries 
+
+Uncertainty Quantification (UQ) and LLMs . Traditional UQ in Machine Learning (ML) uses predicted probability as a confidence metric in classification tasks. For a given input x and output class y, the confidence in a multiclass problem is typically generalized by the class with the maximum probability, formulated as bp(x) = max c p(y = c | x) (Guo et al., 2017). This leads to the standard Maximum Probability uncertainty measure: UMP (x) = 1 − bp(x).There are two types of uncertainty: Epistemic uncertainty relates to the model’s lack of knowledge and Aleatoric uncertainty stems from noise in the data, that confuses the model (Kendall & Gal, 2017). With more input data to the model, one can reduce the first but not the latter. The main challenge in LLMs is that Epistemic and Aleatoric measures fail to quantify the variability and structural collapse of multi-step reasoning (Kadavath et al., 2022; Liu et al., 2025). To address this, UQ in LLMs must be extended beyond the token level to evaluate the integrity of the entire reasoning manifold (Duan et al., 2025). 
+
+Sequence Level Decoding . To quantify the accuracy of the LLMs output, we decode the sequences they generate. Greedy decoding builds a single sequence by selecting the token with the maximum conditional probability at each time step t (Wei et al., 2022). 2Under review as a conference paper at COLM 2026 While computationally efficient, Greedy approach rigidly locks the model into a single logical trajectory. If Epistemic uncertainty arises early in generation, errors compound over subsequent steps can lead to suboptimal reasoning paths. To mitigate these issues, SC (Wang et al., 2023b) leverages the intuition that a robust reasoning problem allows for multiple distinct logical pathways that nonetheless converge on the same correct conclusion. SC thus generates a diverse set of N intermediate reasoning paths and their corresponding final answers. It then outputs the final answer by applying a majority vote on the sampled reasoning paths. The set of sampled paths exposes the structure of the model’s reasoning space, enabling analysis beyond single-token probabilities (Zhang et al., 2024b). 
+
+Reasoning Diversity and Adversarial Vulnerability . Analyzing the variance of the interme-diate reasoning manifold provides a critical signal for uncertainty quantification (Farquhar et al., 2024). The distribution of sampled reasoning paths {z1, . . . , zN } exhibits varying degrees of structural (Yao et al., 2023) and logical (Wang et al., 2023b) spread, which we refer to as reasoning diversity and quantify it using the entropy of the distribution (Shannon, 1948). LLMs with low entropy can be affected by mode collapse , repeatedly proposing only a small subset of possible reasoning paths (Hamilton, 2024), whereas models with high entropy exhibit a more diverse and creative reasoning (Wang et al., 2025). We resort to adversarial prompting techniques to test if the generated CoTs are logically robust (Zhu et al., 2024) .Next, we will define a few terminologies that we will use in Section 3. 
+
+Definition 1 (Coherence and Divergence). Let G1, . . . , GN be reasoning graphs sampled for a given question q , and let d : G × G → R≥0 be a graph distance function. The pairwise distance set is defined as D(q) = {d(Gi, Gj) | 1 ≤ i < j ≤ N}. We define divergence , D(q), as the expected pairwise distance across the reasoning manifold: D(q) = 2 
+
+> N(N−1)
+
+∑1≤i<j≤N d(Gi, Gj). Conversely, we define coherence , C(q), as the degree of structural and semantic consensus within the sample. We quantify this by mapping the divergence to a bounded similarity measure: C(q) = 11+D(q) .
+
+Definition 2 (Heterogeneity). Given the pairwise distance set D(q), we quantify heterogeneity through two complementary summaries of D(q): its dispersion, Heterogeneity σ(q) = σD(q), and its entropy, Heterogeneity H (q) = H(D(q)) = − ∑kb=1 pb log pb, where pb is the empirical mass in bin b under a fixed discretization of D(q). Intuitively, heterogeneity captures whether a model produces meaningfully different reasoning paths rather than superficial variation. 
+
+## 3 Methodology Question q
+
+> GLLM
+> N CoTs with
+> causal
+> dependencies
+> SS-GED Matrix
+> D(q)
+> GRCS
+> Computation
+> GSC
+> Decoding
+> Final
+> Answer
+> UQ
+> Adversarial
+> Attacks
+> DLLM
+> Ablated
+> Prompt
+> DAGs
+> ●
+> ●
+
+Figure 1: GRAPH EVAL Methodology . GLLM’s CoTs are decomposed into causal DAGs to construct a SS-GED distance ma-trix. This shared reasoning topology drives three core evaluations: (1) GRCS com-putation for uncertainty quantification, (2) GSC de-coding to select the most faithful medoid reasoning path, and (3) adversarial medoid ablation to assess medoid importance. In this section, we detail the multi-stage pipeline of GRAPH EVAL that transforms raw text generations into analyzable topologies, thereby bringing the definitions of coherence and heterogeneity to fruition. The pipeline consists of (i) Causal Fact Decomposition and DAG Construction , (ii) Semantic-Structural Distance Computation , (iii) Graph Reasoning Coherence Score , (iv) Consensus Context Synthesis , and (v) Faithfulness Evaluation via Adversarial Medoid Ablation . Figure 1 provides a high-level overview of our methodology. 3Under review as a conference paper at COLM 2026 
+
+Causal Fact Decomposition and DAG Construction . The goal of this step is to trans-form raw, textual LLM responses into structured, mathematically analyzable formats. For each question q, the Generator LLM (GLLM) is prompted to generate N CoTs at a high temperature T to capture its reasoning diversity. Each CoT is limited to a minimum of nl
+
+and maximum of nh declarative steps. The GLLM needs to explicitly declare the causal structure of its reasoning by annotating each step with its direct logical antecedents, e.g. ,[depends_on: 0, 1], where steps 0 and 1 are the logical antecedents of the current step. To mitigate inductive bias from self-evaluation, we use a distinct Decomposer LLM (DLLM), operating at deterministic temperature ( T = 0.0). Following prior work, the DLLM breaks coarse reasoning steps into granular Subject–Verb–Object atomic facts (Min et al., 2023; Zhang et al., 2024a). DLLM must preserve the original causal dependencies , refining granularity without altering the GLLM’s reasoning. Prompts for GLLMs and DLLM are provided in Ap-pendix B.1. The DLLM’s output is mapped into a DAG G = ( V, E), where v ∈ V are atomic facts embedded with an embedding Transformer and e ∈ E encode causal dependencies. 
+
+Semantic-Structural Distance Computation . To quantify the structural and semantic con-sistency across a q’s reasoning manifold, i.e. , set of elicited CoTs, we compute pairwise distances d(Gi, Gj) over all (N 
+
+> 2
+
+) DAG pairs. A coherent GLLM should yield low pairwise distances between CoTs reaching the same conclusion, whereas high distances across the 
+
+N samples may indicate reasoning heterogeneity. To compute this distance, we extend GED (Riesen & Bunke, 2009) with semantic awareness and optimized bipartite matching. A formulation of GED is available at Appendix B.2. We determine the optimal matching between nodes and edges in O(m3) (where m ≈ (|Vi| + |Vj|) for graphs Gi and Gj) time using the computationally efficient Hungarian algorithm rather than NP-hard A* search baselines (Korsah et al., 2007). The substitution cost in GED while matching is the cosine distance, 1 − cos (θ), where θ is the angle between node or edge embedding vectors. We make two key improvements to address limitations of topological GED. First , we introduce 
+
+Fair Normalization , scaling the edit cost by the average graph size (|Vi| + |Vj|)/ 2, so that the comparison scale depends only on the graphs Gi and Gj under consideration. Second ,we introduce Semantic-Structural Blending to account for cases where two graphs share similar topology but reach different conclusions. Semantic-Structural GED (SS-GED) there-fore combines structural similarity with the semantic similarity (Salton & McGill, 1983) of terminal nodes, computed by averaging the embeddings of all nodes with out-degree zero. The resulting similarity is S(Gi, Gj) = β · Sconc + ( 1 − β) · exp (−γ · nGED 2) where Sconc is cosine similarity of terminal-node, γ = 5.0 controls the Radial Basis Function (RBF) kernel (Schölkopf & Smola, 2002) spread for structural similarity, and β = 0.4 weights semantic similarity. The final distance is d(Gi, Gj) = 1 − S(Gi, Gj). For an analytical definition of SS-GED and the rationale behind the RBF kernel, see Appendices B.3 and B.4. For the sensitivity analysis for the SS-GED hhyperpameters, see Section C.5. 
+
+Graph Reasoning Coherence Score . To provide a holistic measure of the GLLM’s reasoning stability, this step aggregates the pairwise SS-GED distances into a single distributional uncertainty metric, Graph Reasoning Coherence Score (GRCS). First, we use D(q) (Def-inition 1) to create a pairwise SS-GED matrix containing distances among all N elicited CoTs for each q. Building upon D(q), we instantiate our formal definition of coherence ( c.f. Section 2), defining the GRCS using the mean pairwise distance, μ(D(q)) , across the reasoning manifold: GRCS = 1 /(1 + μ(D(q))) . GRCS quantifies the semantic-structural consensus of the reasoning space and captures pathological mode collapse and confident hallucinations. Mode collapse occurs when a GLLM repeatedly proposes a narrow sub-set of identical and often flawed reasoning shortcuts rather than exploring a diverse and robust reasoning manifold. Confident hallucinations happen when a GLLM generates multipe CoTs relying on fabricated atomic facts or disconnected conclusions. If a GLLM exhibits these behaviors, the semantic penalty within SS-GED increases the average pairwise distance. Conversely, the structural penalty penalizes the “lucky guesses”, because the topological variation stemming from highly divergent facts inflates the distance. 
+
+Consensus Context Synthesis . To transition from graph analysis to practical downstream decoding, this step introduces Graph Self-Consistency (GSC). SC uses majority voting over sampled outputs (Wang et al., 2023b), but this can reward correct yet unfaithful answers, 4Under review as a conference paper at COLM 2026 termed lucky guesses . GSC, among all GLLM’s sampled CoTs, selects the medoid CoT , i.e. ,the CoT that is most central and supported in the semantic-structural graph manifold at the step level by the rest of the pool. With pairwise SS-GED similarities S(Gi, Gj) = 
+
+1 − d(Gi, Gj), we define Structural Centrality for each Gi as C(Gi) = ∑j̸ =i S(Gi, Gj). To measure the cross-graph support, let c(v) denote the fraction of other graphs containing at least one semantically similar node to v (cosine similarity ≥ 0.9). We then define graph-level consensus score ( i.e. , support of graph Gi among its peers) P(Gi) = ∑v∈Vi w(v) c(v)  
+
+> ∑v∈Viw(v)
+
+,where w(v) = 2 for terminal nodes and w(v) = 1 otherwise as terminal nodes are more critical, as they more directly determine the final answer. The selected medoid is z∗ =
+
+arg max Gi
+
+h
+
+α C(Gi )   
+
+> max jC(Gj)
+
++ ( 1 − α)P(Gi)
+
+i
+
+, where α denotes the trade-off between centrality and support in the medoid selection. See Appendices B.5 and C.6 for full GSC definition and α sensitivity analysis. 
+
+Faithfulness Evaluation via Adversarial Medoid Ablation . To assess the importance of the medoid CoT selected by GSC, we design a prompt-poisoning attack that directly suppresses it. For each question q, let xq be the original prompt and z⋆ 
+
+> q
+
+the medoid CoT selected by GSC. We build an adversarial perturbation δablate (z⋆ 
+
+> q
+
+) that presents z⋆ 
+
+> q
+
+in full and explicitly forbids reusing any of its reasoning steps or conclusions (Zou et al., 2023; Wang et al., 2023a). The resulting poisoned prompt, x′ 
+
+> q
+
+= xq ∪ δablate (z⋆ 
+
+> q
+
+), forces the GLLM to produce a fully alternative CoT. The adversarial prompt details are described in Appendix B.1.3. We use two complementary attack protocols. The broad population-level adversarial medoid ablation 
+
+attacks all qs composing the datasets, sampling N alternative CoTs at temperature T. Due to page limit, we defer the targeted adversarial medoid ablation , which operates on qswhere GSC succeeds and SC fails, to Appendix Section C.10. In both protocols, alternative paths are evaluated along three dimensions: ablated accuracy , ablated faithfulness , and medoid distance (normalized sequence dissimilarity between the ablated medoid and the generated alternative). See Appendix B.6 for formal definitions of all three evaluation dimensions. 
+
+## 4 Experimental Setup 
+
+Datasets . We evaluate across reasoning tasks of increasing cognitive complexity: 1) GSM8K 
+
+(Cobbe et al., 2021): grade-school arithmetic problems; 2) BoolQ (Clark et al., 2019): yes/no reading-comprehension; 3) StrategyQA (Geva et al., 2021): open-domain commonsense questions; 4) MedQA USMLE (Jin et al., 2021): clinical reasoning benchmark from U.S. med-ical licensing exams; 100 randomly sampled questions (seed 42); 5) GPQA Diamond (Rein et al., 2024): challenging graduate-level biology, chemistry, and physics benchmark. For additional evaluations on much longer horizon reasoning benchmarks, refer to Sections C.1 and C.2. 
+
+Hyperparameters . We elicit N = 20 CoTs per question, at T = 0.7, to provide a statistically robust sample of GLLMs’ reasoning manifold without incurring prohibitive computational overhead. We use the same parameters for our adversarial experiments. Each CoT contains 
+
+[nl , nh] = [ 3, 6 ] declarative steps, to ensure consistency and avoid verbosity. In GSC medoid selection, We set α = 0.8 to prioritize structural centrality while letting path consensus penalize centrally located but weakly supported steps. The framework is quantitatively stable across nearby values of α (Section C.6). 
+
+Models . We study three GLLMs: Llama 3.1 8B (Grattafiori et al., 2024), Phi-4 (14B) (Abdin et al., 2024), and DeepSeek R1 (Distill-Llama-70B) (Guo et al., 2025; DeepSeek AI, 2025), spanning general-purpose, reasoning-specialized, and distilled RL-enhanced paradigms, respectively. While we rely on open-source GLLMs to ensure the transparency and re-producibility, we use OpenAI’s GPT-4o (OpenAI, 2024) as DLLM to achieve high-fidelity decomposition. For a complete ablation study on the DLLM, refer to Section C.4. We use Qwen3-Embedding-0.6B (Yang et al., 2025) as embedding Transformer, choosing a distinct model family to ensure architectural independence with GLLMs/DLLM. 5Under review as a conference paper at COLM 2026 GSM8K      
+
+> BoolQ
+> StratQA
+> MedQA
+> GPQA 0.5
+> 0.4
+> 0.3
+> 0.2
+> 0.1
+> 0.0
+> 0.1
+> 0.2
+> Correlation
+> LLaMA 3.1 8B
+> GSM8K
+> BoolQ
+> StratQA
+> MedQA
+> GPQA
+> Correlation
+> Phi-4
+> GSM8K
+> BoolQ
+> StratQA
+> MedQA
+> GPQA
+> Correlation
+> DeepSeek R1
+> Dispersion Entropy GRCS (ours) CoTA Topo-UQ
+
+Figure 2: UQ Analysis . A stronger negative correlation indicates a better uncertainty metric. Baselines exhibit strong but regime-specific performance, whereas GRCS yields the strongest negative correlation in 8 of the 15 configurations and remains negatively correlated with faithfulness in 14 out of 15 (93%), establishing it as the most reliable indicator across scales. 
+
+Baseline Methods and Metrics . For UQ, we benchmark against CoTA (Tanneru et al., 2024), Topo-UQ (Da et al., 2025), and two statistical metrics adapted to our topological space: dispersion and entropy (used in Catak & Kuzlu (2024); Rajamohan et al. (2025)). Dispersion ( σ(D(q)) ) is the standard deviation of the pairwise SS-GED distances, capturing overall spread. Entropy ( H(D(q)) ) is the Shannon entropy (Shannon, 1948) of the distance distribution (bins determined via the Freedman–Diaconis rule (Freedman & Diaconis, 1981)), capturing distributional complexity. For task accuracy, we compare GSC against SC (Wang et al., 2023b) to test if it improves reasoning fidelity beyond majority voting. 
+
+Medoid Faithfulness via Early Answering To determine whether GRCS captures true model uncertainty, we evaluate it against ground-truth faithfulness (Lanham et al., 2023; Turpin et al., 2023). We apply Early Answering (Tanneru et al., 2024), iteratively prompting GLLMs with expanding medoid CoT facts. Reasoning is unfaithful if the answer emerges prematurely. It is faithful if the full CoTs is required. We compute Pearson Correlation Coefficient (PCC), Spearman Rank Correlation (SRC), and Kendall Rank Correlation (KRC) between the evaluated uncertainty metric and the faithfulness scores (Pearson, 1895; Spear-man, 1904; Kendall, 1938). Because an ideal uncertainty metric should increase when a model’s reasoning faithfulness decreases, a strong negative correlation indicates an accurate UQ metric (Tanneru et al., 2024; Da et al., 2025). To minimize sampling bias, all correlations are estimated via 1,000 bootstrap resamples per dataset (20 questions, 10 responses each). Refer to Section C.3 for an alternative method to evaluate faithfulness using Counterfactual Editing (Pearl, 2009; Halpern & Pearl, 2001). 
+
+Decoding Evaluation and Hybrid Audit . We evaluate GSC against SC in two stages. First, we measure the task accuracy differences, ∆(GSC − SC ). Second, we assess reasoning fidelity by auditing disagreement cases ( SC-only vs. GSC-only wins ) to determine effectivity of GSC as a filter via a human annotator and Gemini 3 Pro (Gemini Team, 2025) as LLM judge (Gu et al., 2026). For both stages, we perform test for statistical significance. 
+
+## 5 Experimental Results 
+
+To address the RQs in Section 1, we evaluate our graph-based framework for UQ (Sec-tion 5.1), decoding (Sections 5.2 and 5.3), and adversarial robustness (Section 5.4). 
+
+5.1 Effectiveness of G RAPH EVAL for Uncertainty Quantification 
+
+To evaluate the effectiveness of the UQ framework of GRAPH EVAL and its applicability across diverse cognitive domains of increasing complexity , we compare our proposed GRCS metric against baselines across five diverse cognitive domains ( c.f. , Section 4). Figure 2 reports the PCC of these metrics against reasoning faithfulness across three GLLMs. Due to the page limit, SRC and KRC results are shown in Appendix C.7. Stronger negative correlations indicate better uncertainty estimation, meaning the metric more accurately quantifies unfaithful reasoning (Da et al., 2025). For multiple GLLM–dataset pairs, dispersion and entropy exhibit weak, inconsistent, or even positive correlations ( e.g. , they yield positive correlations on 6Under review as a conference paper at COLM 2026 GSM8K/BoolQ for Llama 3.1 8B and on GSM8K/StrategyQA for DeepSeek R1), suggesting that dispersion and entropy mistake repetitive but flawed reasoning for confidence. This may occur especially when models collapse onto near-identical invalid reasoning (See Appendix C.8 for details on topological mapping). Topo-UQ demonstrates strong negative correlations on specific foundational tasks for Llama 3.1 8B and DeepSeek R1 on GSM8K and BoolQ (reaching approximately -0.25 and -0.30, respectively). However, it struggles in more complex domains and different architectures ( e.g. , it yields distinctly positive or almost-zero correlations for Phi-4 on all tasks, and flips to positive for Llama 3.1 8B on StrategyQA, MedQA, and GPQA). Because it measures purely structural spread, repeated erroneous derivations on these challenging tasks yield artificially low uncertainty. CoTA demonstrates highly effective performance on the more capable DeepSeek R1 for mathematical reasoning (achieving -0.40 on GSM8K), but degrades on more complex domains, yielding positive correlations on GPQA for both Llama 3.1 8B and DeepSeek R1. In contrast, GRCS jointly evaluates semantic coherence and structural similarity, making it more sensitive to confident but logically unfaithful reasoning. GRCS yields the strongest negative correlation among all evaluated metrics in 8 out of the 15 ⟨GLLM–dataset ⟩ configurations and remains negatively correlated with faithfulness in 14 out of 15 (93.3%) configurations. We note that GRCS correlations weaken on DeepSeek R1. More capable models exhibit greater reasoning heterogeneity under uncertainty (Section C.8), reducing the rigid mode collapse that GRCS most effectively detects. These results highlight GRCS as the most robust of the evaluated metrics for flagging unfaithful reasoning across both bigger and smaller GLLMs .
+
+5.2 Testing for Real and Faithful Accuracy Leveraging Structural and Causal Awareness Llama 3.1 8B                                
+
+> Phi-4
+> DeepSeek R1
+> GSM8K
+> BoolQ
+> StratQA
+> MedQA
+> GPQA
+> 88.9 94.3 93.8
+> 69.0 70.0 76.0
+> 75.1 77.2 77.7
+> 61.0 77.0 90.9
+> 24.4 34.8 52.4
+> SC Accuracy (%)
+> Llama 3.1 8B
+> Phi-4
+> DeepSeek R1
+> 81.3 91.3 96.9
+> 68.0 72.5 77.0
+> 71.6 76.7 78.2
+> 52.0 79.0 91.9
+> 19.3 32.8 53.4
+> GSC Accuracy (%)
+> Llama 3.1 8B
+> Phi-4
+> DeepSeek R1
+> -7.6 -3.0 ++3.1
+> -1.0 ++2.5 ++1.0
+> -3.5 -0.5 ++0.4
+> -9.0 ++2.0 ++1.0
+> -5.1 -2.0 ++1.1
+> (GSC SC)
+> 10.0
+> 7.5
+> 5.0
+> 2.5
+> 0.0
+> 2.5
+> 5.0
+> 7.5
+> 10.0
+> Accuracy (pp)
+
+Figure 3: Testing for Real, Faithful Accuracy . The rightmost panel displays the performance difference ( ∆
+
+GSC − SC). Smaller models ( e.g. , LLaMA 3.1 8B) show accuracy drops revealing reliance on SC-rewarded lucky guesses. As reasoning capability increases (Phi-4, DeepSeek R1), the gap narrows and turns positive with DeepSeek R1 improving in all settings. 
+
+To assess the impact of shifting the de-coding paradigm from outcome-based frequency to semantic-structural rea-soning consensus we compare Self-Consistency (SC) with Graph Self-Consistency (GSC). Figure 3 re-ports the outcome-based SC accu-racy, SS-GED-based GSC accuracy, and the performance difference (∆(GSC − SC)) across the same LLMs and datasets of increasing complexity ( c.f. , Section 4). These results are crucial for raw accuracy maximization and filter for reason-ing fidelity in mission critical set-tings . SC selects the most frequent answer, which can reward cases where incorrect or unfaithful rea-soning paths happen to converge on the correct output. GSC instead routes through the medoid reasoning graph, favoring answers supported by the structurally central and se-mantically coherent CoT. The tradeoff between nominal SC accuracy and reasoning fidelity is most pronounced for the smallest model, Llama 3.1 8B, which shows significant drops across all datasets, including −7.6 points on GSM8K and −9.0 on MedQA. This gap suggests that many apparent SC successes in smaller models are supported by unstable or unfaithful reasoning paths. GSC removes these cases, revealing a lower but more faithful measure of the model’s reasoning ability. Interestingly, This penalty largely disappears for more capable models. For Phi-4, drops are minimal on StrategyQA (-0.5) and GPQA (-2.0), and performance even improves on BoolQ (+2.5) and MedQA (+2.0). This pattern continues with DeepSeek R1, which maintains or slightly improves accuracy across all datasets. These behaviors suggest that for more capable models, the structurally central path selected by GSC is more likely to align with the correct answer, reducing the tension between fidelity and accuracy. While the accuracy reductions in compact settings (Llama 3.1 8B across tasks, Phi-4 on GSM8K) are statistically significant ( p < 0.05, McNemar’s test (McNemar, 1947)), the accuracy differences for DeepSeek R1 are not. This confirms that GSC can filter out unfaithful reasoning in smaller GLLMs without degrading the base capabilities of capable 7Under review as a conference paper at COLM 2026 GSM8K BoolQ StratQA MedQA GPQA                
+
+> 0
+> 20
+> 40
+> 60
+> 80
+> 100
+> 120
+> Win Composition (%)
+> SC
+> GSC
+> SC
+> GSC
+> SC
+> GSC
+> SC
+> GSC
+> SC
+> GSC
+> Llama 3.1 8B
+> GSM8K BoolQ StratQA MedQA GPQA
+> SC
+> GSC
+> SC
+> GSC
+> SC
+> GSC
+> SC
+> GSC
+> SC
+> GSC
+> Phi-4
+> GSM8K BoolQ StratQA MedQA GPQA
+> SC
+> GSC
+> SC
+> GSC
+> SC
+> GSC
+> SC
+> GSC
+> SC
+> GSC
+> DeepSeek R1
+> SC Faithful SC Spurious GSC Faithful GSC Spurious
+
+Figure 4: Question-level audit of SC–GSC disagreement cases. Each stacked bar shows the fraction of faithful (green) and spurious (red) wins within that disagreement cell. SC-only wins are often less faithful than GSC-only wins, though the gap varies by model and dataset. Overall, across 13 comparable disagreement settings ( i.e. , with both SC-only and GSC-only wins), GSC has a higher faithful share in 7, ties in 3, and is lower in 3. ones. This dynamic suggest GSC acts as a decoding filter by significantly reducing the unfaithful “lucky guesses” which inflate SC’s accuracy . In mission-critical domains ( e.g. ,MedQA), this reasoning fidelity fundamentally outweighs the gains of a flawed majority vote. 
+
+5.3 Decoding Evaluation and Hybrid Audit 
+
+To determine whether GSC improves reasoning fidelity and serves as an effective decoding filter , we audit the subset of questions on which SC and GSC disagree, partitioning them into SC-only wins and GSC-only wins . A SC prediction is classified as faithful if the majority of paths supporting its vote are logically sound. A GSC prediction is faithful if the selected medoid is logically sound. This disagreement set is especially informative because it captures the precise decisions introduced by the decoding rule itself (see Appendices C.9 and D for path level analysis and qualitative case studies). We annotate sampled disagreement traces with both a human reviewer and Gemini 3 Pro (Gemini Team, 2025) as LLM judge (Gu et al., 2026). The two annotators achieve strong agreement, with Cohen’s κ = 0.913 (Cohen, 1960), supporting the reliability of the audit performed with the LLM judge. Figure 4 visualizes the percentage of wins that are faithful versus spurious for each disagreement cell: green denotes faithful wins and red denotes spurious wins. For Llama 3.1 8B, many SC-only wins are not supported by faithful reasoning, especially on harder tasks. On MedQA, only 40% of SC-only wins are faithful, while 60% are spurious. In contrast, 100% of GSC-only wins are faithful. On GPQA, SC-only wins are entirely spurious, whereas GSC recovers 25%. BoolQ also shows severe SC spuriousness at 18%, which GSC significantly improves to 56%. This suggests that a substantial fraction of SC’s apparent advantage in smaller models comes from answer-level success without reasoning fidelity. For Phi-4, SC and GSC are much closer on easier benchmarks, indicating that as reasoning capacity improves, the gap between spurious and faithful accuracy narrows. On GPQA, the faithful share rises from 24% for SC-only wins to 45% for GSC-only wins, reducing the spurious fraction from 76% to 55%. For DeepSeek R1, on StrategyQA, only 25% of SC-only wins are faithful, compared with 100% of GSC-only wins. For GSM8K and MedQA, SC produces no unique wins, so the comparison reduces to whether GSC’s unique wins are faithful, which they are at 75% and 100%, respectively. BoolQ is an exception, where both Phi-4 and DeepSeek R1 achieve comparable fidelity, consistent with the task being less demanding for larger models. By using structural centrality and path consensus (Section 3), GSC favors reasoning paths that are more structurally and semantically consistent along the complete reasoning process. 
+
+These results indicate that when the two decoding rules disagree, GSC typically selects the more trustworthy answer, particularly in more complex domains (MedQA, GPQA), where unfaithful majority voting is most costly . Averaged across all disagreement cells, GSC achieves 79.5% faithful wins versus 57.6% for SC ( +21.9 pp, p < 0.05, Wilcoxon signed-rank test (Wilcoxon, 1945)). 8Under review as a conference paper at COLM 2026 
+
+5.4 Broad Population-Level Adversarial Medoid Ablation 
+
+To assess the population-level robustness of the GSC-selected medoid , we conduct an adversarial medoid ablation across all questions ( c.f. , Section 3). Figure 5 shows StrategyQA results. Other datasets and the targeted medoid ablation are deferred to Appendices C.10 and C.11. 
+
+∆Accuracy and ∆Faithfulness are computed as ablated minus original . Across GLLMs, the vast majority of ablated CoTs do not change accuracy. However, a significant fraction of these paths distributes below ∆Faithfulness = 0 ( 43.2% of all evaluated points for Llama, 55.0% 
+
+for Phi-4, and 15.2% for DeepSeek R1). For Llama 3.1 8B and Phi-4, the fitted least-squares lines are significantly negative ( p = 0.011 and p = 0.010, respectively). The high negative slope indicates that instances of accuracy improvement under ablation ( ∆Accuracy > 0) are coupled with drops in reasoning faithfulness ( ∆Faithfulness < 0). This empirically captures the “lucky guess” phenomenon . When forced off its primary load-bearing path, the GLLM may still reach the correct answer, but mainly through flawed or hallucinated intermediate reasoning rather than a valid alternative deduction. By contrast, DeepSeek R1 shows no significant linear association ( r = −0.01, p = 0.856). However, 15.2% of points still cluster near ∆Accuracy = 0 while distributing across negative ∆Faithfulness values (dropping as low as −1.0), suggesting mild faithfulness loss without systematic accuracy degradation. This is consistent with Appendix C.8, where this GLLM exhibits a broader, high-entropy reasoning topology. These results show that the GSC medoid often acts as a load-bearing path, particularly for smaller GLLMs, where the negative correlation shows that accuracy gains are associated with faithfulness drops, empirically revealing lucky guesses. 
+
+## 6 Related Work 1.0 0.5 0.0 0.5 1.0         
+
+> 1.0
+> 0.5
+> 0.0
+> 0.5
+> 1.0
+> Faithfulness  r = -0.17, p = 0.011
+> Llama-3.1 8B
+> 1.0 0.5 0.0 0.5 1.0
+> r = -0.18, p = 0.010
+> Phi-4
+> 1.0 0.5 0.0 0.5 1.0
+> r = -0.01, p = 0.856
+> DeepSeek R1
+> Accuracy
+
+Figure 5: Population-Level Ablation for StrategyQA . Medoid ablation often leaves accuracy unchanged ( ∆Accuracy = 0) while degrading faithfulness for all GLLMs. In smaller GLLMs, high negative correlations show that accuracy gains often reflect unfaithful “lucky guesses” rather than valid recovery. As LLMs are deployed across diverse tasks, UQ has become essential for trustworthy use, espe-cially in safety-critical settings. In this context, Kuhn et al. (2023) intro-duced Semantic Entropy ,which estimates semantic likelihoods and whether different outputs express the same answer. Far-quhar et al. (2024) builds up on this concept and shows that semantic en-tropy is an effective tool for hallucination detection , by clustering multiple generations accord-ing to meaning and measuring uncertainty over those semantic clusters. Lin et al. (2024) studies output uncertainty with graph Laplacian eigenvalues, using spectral properties of semantic similarity graphs built from sampled responses. However, all these approaches quantify uncertainity at the level of the final output, discarding the reasoning topology leading to each answer. Among reasoning frameworks, Tree of Thoughts (Yao et al., 2023) searches over multiple reasoning branches, while graph-based reasoning can capture richer dependencies than chains or trees (Besta et al., 2024). However, these methods are designed to guide inference, not to model sampled CoTs, quantify uncertainty across them, or decode from their structure. Refer to Appendix E for a more detailed related work discussion. 
+
+## 7 Conclusion 
+
+We argue that LLM trustworthiness cannot be judged by answer agreement alone. By modeling sampled CoTs as DAGs, we show that reasoning structure reveals signals of uncertainty, faithfulness, and robustness. GRCS emerges as a strong uncertainty metric, 9Under review as a conference paper at COLM 2026 GSC as a more faithful alternative to SC, and the medoid as a load-bearing reasoning path. These findings motivate a shift to reasoning-level analysis in mission-critical settings. 
+
+Limitations: GRAPH EVAL has a higher time complexity ( O(N2 · m3); N: CoTs, m: DAG nodes) than SC ( O(N)), though it matches baselines like Topo-UQ. Also, as demonstrated in our experiments ( c.f. , Sections 5.1 and 5.4), the statistical strength of GRAPH EVAL di-minishes on larger, more capable GLLMs ( e.g. , DeepSeek R1). Thus, GRAPH EVAL excels when paired with smaller GLLMs, where actively filtering out mode collapse and unfaithful “lucky guesses” remains critical for trustworthy deployment. Finally, by limiting reasoning to at most nh = 6 steps, we primarily focus on short-horizon benchmarks. Its scalability to long-context, highly compositional tasks remains an open question for future work. 10 Under review as a conference paper at COLM 2026 
+
+## 8 Ethics Statement 
+
+This work uses public benchmark data and model-generated reasoning traces, without human subjects or private information. We do not identify direct ethical concerns specific to our experimental setting, beyond the broader risks associated with the use of LLMs. 
+
+## References 
+
+Marah Abdin, Jyoti Aneja, Harkirat Behl, Sébastien Bubeck, Ronen Eldan, Suriya Gunasekar, Michael Harrison, Russell J. Hewett, Mojan Javaheripi, Piero Kauffmann, James R. Lee, Yin Tat Lee, Yuanzhi Li, Weishung Liu, Caio C. T. Mendes, Anh Nguyen, Eric Price, Gustavo de Rosa, Olli Saarikivi, and Yi ... Zhang. Phi-4 technical report. arXiv preprint arXiv:2412.08905 , 2024. doi: 10.48550/arXiv.2412.08905. URL https://arxiv.org/abs/ 2412.08905 .Maciej Besta, Nils Blach, Ales Kubicek, Robert Gerstenberger, Michal Podstawski, Lukas Gianinazzi, Joanna Gajda, Tomasz Lehmann, Hubert Niewiadomski, Piotr Nyczyk, and Torsten Hoefler. Graph of thoughts: Solving elaborate problems with large language models. Proceedings of the AAAI Conference on Artificial Intelligence , 38(16):17682–17690, March 2024. ISSN 2159-5399. doi: 10.1609/aaai.v38i16.29720. Tom B. Brown, Benjamin Mann, Nick Ryder, Melanie Subbiah, Jared D. Kaplan, Prafulla Dhariwal, Arvind Neelakantan, Pranav Shyam, Girish Sastry, Amanda Askell, Sandhini Agarwal, Ariel Herbert-Voss, Gretchen Krueger, Tom Henighan, Rewon Child, Aditya Ramesh, Daniel Ziegler, Jeffrey Wu, Clemens Winter, Chris Hesse, Mark Chen, Eric Sigler, Mateusz Litwin, Scott Gray, Benjamin Chess, Jack Clark, Christopher Berner, Sam McCan-dlish, Alec Radford, Ilya Sutskever, and Dario Amodei. Language models are few-shot learners. In Hugo Larochelle, Marc’Aurelio Ranzato, Raia Hadsell, Maria-Florina Balcan, and Hsuan-Tien Lin (eds.), Advances in Neural Information Processing Systems , volume 33, pp. 1877–1901. Curran Associates, Inc., 2020. URL https://proceedings.neurips.cc/ paper_files/paper/2020/file/1457c0d6bfcb4967418bfb8ac142f64a-Paper.pdf .F. O. Catak and M. Kuzlu. Uncertainty quantification in large language models through convex hull analysis. Discover Artificial Intelligence , 4:90, 2024. doi: 10.1007/ s44163-024-00200-w. URL https://doi.org/10.1007/s44163-024-00200-w .Quancheng Chen and Xuemei Hu. Tort liability for the application risk of generative artificial intelligence technology in the circular economy and financial industry: Evidence from china. Humanities and Social Sciences Communications , 12:1042, 2025. doi: 10.1057/ s41599-025-05419-1. Christopher Clark, Kenton Lee, Ming-Wei Chang, Tom Kwiatkowski, Michael Collins, and Kristina Toutanova. Boolq: Exploring the surprising difficulty of natural yes/no questions. In Jill Burstein, Christy Doran, and Thamar Solorio (eds.), Proceedings of the 2019 Conference of the North American Chapter of the Association for Computational Linguistics: Human Language Technologies, Volume 1 (Long and Short Papers) , pp. 2924–2936, Minneapolis, MN, June 2019. Association for Computational Linguistics. doi: 10.18653/v1/N19-1300. URL https://aclanthology.org/N19-1300/ .Karl Cobbe, Vineet Kosaraju, Mohammad Bavarian, Mark Chen, Heewoo Jun, Lukasz Kaiser, Matthias Plappert, Jerry Tworek, Jacob Hilton, Reiichiro Nakano, Christopher Hesse, and John Schulman. Training verifiers to solve math word problems. arXiv preprint arXiv:2110.14168 , 2021. doi: 10.48550/arXiv.2110.14168. Jacob Cohen. A coefficient of agreement for nominal scales. Educational and Psychological Measurement , 20(1):37–46, 1960. doi: 10.1177/001316446002000104. URL https://doi. org/10.1177/001316446002000104 .Longchao Da, Xiaoou Liu, Jiaxin Dai, Lu Cheng, Yaqing Wang, and Hua Wei. Understanding the uncertainty of LLM explanations: A perspective based on reasoning topology. In 
+
+Proceedings of the Second Conference on Language Modeling , 2025. URL https://openreview. net/forum?id=p4wZfBFgyI .11 Under review as a conference paper at COLM 2026 A. G. de Varda, F. P. D’Elia, H. Kean, A. Lampinen, and E. Fedorenko. The cost of thinking is similar between large reasoning models and humans. Proceedings of the National Academy of Sciences of the United States of America , 122(47):e2520077122, 2025. doi: 10.1073/pnas. 2520077122. URL https://doi.org/10.1073/pnas.2520077122 .DeepSeek AI. Deepseek-r1 and distilled variants overview. https://deepseek-usa.ai/ models/deepseek-r1/ , 2025. J. Dekoninck, N. Jovanovi´ c, T. Gehrunger, K. Rögnvaldsson, I. Petrov, C. Sun, and M. Vechev. Beyond benchmarks: Matharena as an evaluation platform for mathematics with llms. 
+
+arXiv preprint arXiv:2605.00674 , 2026. Mengru Ding, Hanmeng Liu, Zhizhang Fu, Jian Song, Wenbo Xie, and Yue Zhang. Break the chain: Large language models can be shortcut reasoners, 2024. URL https://arxiv. org/abs/2406.06580 . arXiv preprint. Jinhao Duan, James Diffenderfer, Sandeep Madireddy, Tianlong Chen, Bhavya Kailkhura, and Kaidi Xu. Uprop: Investigating the uncertainty propagation of llms in multi-step agentic decision-making, 2025. URL https://arxiv.org/abs/2506.17419 .Sebastian Farquhar, Jannik Kossen, Lorenz Kuhn, and Yarin Gal. Detecting hallucinations in large language models using semantic entropy. Nature , 630:625–630, 2024. doi: 10.1038/ s41586-024-07421-0. David Freedman and Persi Diaconis. On the histogram as a density estimator: L2 theory. 
+
+Zeitschrift für Wahrscheinlichkeitstheorie und Verwandte Gebiete , 57(4):453–476, 1981. doi: 10.1007/BF01025868. Gemini Team. Gemini: A family of highly capable multimodal models, 2025. URL https: //arxiv.org/abs/2312.11805 .Mor Geva, Daniel Khashabi, Elad Segal, Tushar Khot, Dan Roth, and Jonathan Berant. Did aristotle use a laptop? a question answering benchmark with implicit reasoning strategies. Transactions of the Association for Computational Linguistics , 9:346–361, 2021. doi: 10.1162/tacl_a_00370. Aaron Grattafiori, Abhimanyu Dubey, Abhinav Jauhri, Abhinav Pandey, Abhishek Kadian, Ahmad Al-Dahle, Aiesha Letman, Akhil Mathur, Alan Schelten, Alex Vaughan, Amy Yang, Angela Fan, Anirudh Goyal, Anthony Hartshorn, et al. The llama 3 herd of models. arXiv preprint arXiv:2407.21783 , 2024. doi: 10.48550/arXiv.2407.21783. URL 
+
+https://doi.org/10.48550/arXiv.2407.21783 .Jiawei Gu, Xuhui Jiang, Zhichao Shi, Hexiang Tan, Xuehao Zhai, Chengjin Xu, Wei Li, Yinghan Shen, Shengjie Ma, Honghao Liu, Saizhuo Wang, Kun Zhang, Zhouchi Lin, Bowen Zhang, Lionel Ni, Wen Gao, Yuanzhuo Wang, and Jian Guo. A survey on llm-as-a-judge. The Innovation , pp. 101253, 2026. ISSN 2666-6758. doi: 10.1016/j.xinn.2025.101253. URL https://doi.org/10.1016/j.xinn.2025.101253 .Chuan Guo, Geoff Pleiss, Yu Sun, and Kilian Q. Weinberger. On calibration of modern neural networks. In Proceedings of the 34th International Conference on Machine Learning ,volume 70 of Proceedings of Machine Learning Research , pp. 1321–1330, Sydney, Australia, 2017. PMLR. Daya Guo, Dejian Yang, Haowei Zhang, Junxiao Song, Peiyi Wang, Qihao Zhu, Runxin Xu, Ruoyu Zhang, Shirong Ma, Xiao Bi, Xiaokang Zhang, Xingkai Yu, Yu Wu, Z. F. Wu, Zhibin Gou, Zhihong Shao, Zhuoshu Li, Ziyi Gao, Aixin Liu, and Zhongyu ... Zhang. Deepseek-r1 incentivizes reasoning in llms through reinforcement learning. Nature , 645 (8081):633–638, September 2025. doi: 10.1038/s41586-025-09422-z. URL http://dx.doi. org/10.1038/s41586-025-09422-z .Joseph Y. Halpern and Judea Pearl. Causes and explanations: A structural-model approach— part 1: Causes. In Proceedings of the Seventeenth Conference on Uncertainty in Artificial Intelligence (UAI) , 2001. 12 Under review as a conference paper at COLM 2026 Sil Hamilton. Detecting mode collapse in language models via narration. arXiv , 2024. doi: 10.48550/arXiv.2402.04477. Peter E. Hart, Nils J. Nilsson, and Bertram Raphael. A formal basis for the heuristic determination of minimum cost paths. IEEE Transactions on Systems Science and Cybernetics ,4(2):100–107, 1968. doi: 10.1109/TSSC.1968.300136. URL https://doi.org/10.1109/TSSC. 1968.300136 .Xiaowei Huang, Daniel Kroening, Wenjie Ruan, James Sharp, Youcheng Sun, Emese Thamo, Min Wu, and Xinping Yi. A survey of safety and trustworthiness of deep neural networks: Verification, testing, adversarial attack and defence, and interpretability. Computer Science Review , 37:100270, 2020. ISSN 1574-0137. doi: 10.1016/j.cosrev.2020.100270. Ziwei Ji, Nayeon Lee, Rita Frieske, Tiezheng Yu, Dan Su, Yan Xu, Etsuko Ishii, Ye Jin Bang, Andrea Madotto, and Pascale Fung. Survey of hallucination in natural language generation. ACM Computing Surveys , 55(12):248, 2023. doi: 10.1145/3571730. Di Jin, Enrui Pan, Nabeel Oufattole, Wei-Hung Weng, Hui Fang, and Peter Szolovits. What disease does this patient have? a large-scale open domain question answering dataset from medical exams. Applied Sciences , 11(14):6421, 2021. doi: 10.3390/app11146421. Saurav Kadavath, Tom Conerly, Amanda Askell, Tom Henighan, Dawn Drain, Ethan Perez, Nicholas Schiefer, Zac Hatfield-Dodds, Nova DasSarma, Eli Tran-Johnson, Scott Johnston, Sheer El-Showk, Andy Jones, Nelson Elhage, Tristan Hume, Anna Chen, Yuntao Bai, Sam Bowman, Stanislav Fort, Deep Ganguli, Danny Hernandez, Josh Jacobson, Jackson Kernion, Shauna Kravec, Liane Lovitt, Kamal Ndousse, Catherine Olsson, Sam Ringer, Dario Amodei, Tom Brown, Jack Clark, Nicholas Joseph, Ben Mann, Sam McCandlish, Chris Olah, and Jared Kaplan. Language models (mostly) know what they know, 2022. URL https://arxiv.org/abs/2207.05221 .Daniel Kahneman. Thinking, fast and slow . Macmillan, 2011. Alex Kendall and Yarin Gal. What uncertainties do we need in bayesian deep learning for computer vision? In Isabelle Guyon, Ulrike Von Luxburg, Samy Bengio, Hanna Wallach, Rob Fergus, S. V. N. Vishwanathan, and Roman Garnett (eds.), Advances in Neural Information Processing Systems , volume 30. Curran Asso-ciates, Inc., 2017. URL https://proceedings.neurips.cc/paper_files/paper/2017/ file/2650d6089a6d640c5e85b2b88265dc2b-Paper.pdf .Maurice G. Kendall. A new measure of rank correlation. Biometrika , 30(1/2):81–93, 1938. doi: 10.1093/biomet/30.1-2.81. G. Ayorkor Korsah, Anthony Stentz, and M. Bernardine Dias. The dynamic hungarian algorithm for the assignment problem with changing costs. Technical Report CMU-RI-TR-07-27, Carnegie Mellon University, Pittsburgh, PA, July 2007. Lorenz Kuhn, Yarin Gal, and Sebastian Farquhar. Semantic uncertainty: Linguistic invariances for uncertainty estimation in natural language generation, 2023. URL 
+
+https://arxiv.org/abs/2302.09664 .Tamera Lanham, Anna Chen, Ansh Radhakrishnan, Benoit Steiner, Carson Denison, Danny Hernandez, Dustin Li, Esin Durmus, Evan Hubinger, Jackson Kernion, et al. Measuring faithfulness in chain-of-thought reasoning. arXiv preprint arXiv:2307.13702 , 2023. doi: 10.48550/arXiv.2307.13702. URL https://doi.org/10.48550/arXiv.2307.13702 .Tianhe Lin, Jian Xie, Siyu Yuan, and Deqing Yang. Implicit reasoning in transformers is reasoning through shortcuts, 2025. URL https://arxiv.org/abs/2503.07604 . arXiv preprint. Zhen Lin, Shubhendu Trivedi, and Jimeng Sun. Generating with confidence: Uncertainty quantification for black-box large language models. Transactions on Machine Learning Research , 2024. ISSN 2835-8856. URL https://openreview.net/forum?id=DWkJCSxKU5 .13 Under review as a conference paper at COLM 2026 Eljas Linna and Tuula Linna. Challenges for generative ai in legal reasoning. Discover Artificial Intelligence , 6:170, 2026. doi: 10.1007/s44163-026-00902-3. Xiaoou Liu, Tiejin Chen, Longchao Da, Chacha Chen, Zhen Lin, and Hua Wei. Uncertainty quantification and confidence calibration in large language models: A survey. In Proceed-ings of the 31st ACM SIGKDD Conference on Knowledge Discovery and Data Mining (KDD ’25) , pp. 6107–6117, New York, NY, USA, 2025. Association for Computing Machinery. doi: 10.1145/3711896.3736569. URL https://doi.org/10.1145/3711896.3736569 .Quinn McNemar. Note on the sampling error of the difference between correlated propor-tions or percentages. Psychometrika , 12(2):153–157, 1947. doi: 10.1007/BF02295996. Marina Meil˘ a and Hanyu Zhang. Manifold learning: What, how, and why. An-nual Review of Statistics and Its Application , 11:393–417, 2024. doi: 10.1146/ annurev-statistics-040522-115238. Sewon Min, Kalpesh Krishna, Xinxi Lyu, Mike Lewis, Wen-tau Yih, Pang Wei Koh, Mohit Iyyer, Luke Zettlemoyer, and Hannaneh Hajishirzi. FACTScore: Fine-grained atomic evaluation of factual precision in long-form text generation. In Proceedings of the 2023 Conference on Empirical Methods in Natural Language Processing , pp. 12076–12100, Singapore, 2023. Association for Computational Linguistics. doi: 10.18653/v1/2023.emnlp-main.741. URL https://aclanthology.org/2023.emnlp-main.741/ .Dane A. Morey, Michael F. Rayo, and David D. Woods. Empirically derived evaluation requirements for responsible deployments of ai in safety-critical settings. npj Digital Medicine , 8:374, 2025. doi: 10.1038/s41746-025-01784-y. MSD Manual Consumer Version. Nosebleeds. https://www.msdmanuals.com/ home/ear-nose-and-throat-disorders/symptoms-of-nose-and-throat-disorders/ nosebleeds , 2025. Accessed March 31, 2026. OpenAI. Gpt-4o system card, 2024. URL https://arxiv.org/abs/2410.21276 .Judea Pearl. Causality: Models, Reasoning, and Inference . Cambridge University Press, 2009. Karl Pearson. Note on regression and inheritance in the case of two parents. Proceedings of the Royal Society of London , 58:240–242, 1895. doi: 10.1098/rspl.1895.0041. Srijith Rajamohan, Ahmed Salhin, Josh Frazier, Rohit Kumar, Yu-Cheng Tsai, and Todd Cook. Ensemble based approach to quantifying uncertainty of llm based classifications. 
+
+arXiv preprint arXiv:2502.08631 , 2025. URL https://arxiv.org/abs/2502.08631 .David Rein, Betty Li Hou, Asa Cooper Stickland, Jackson Petty, Richard Yuanzhe Pang, Julien Dirani, Julian Michael, and Samuel R. Bowman. GPQA: A graduate-level google-proof q&a benchmark. In Proceedings of the First Conference on Language Modeling , 2024. URL https://openreview.net/forum?id=Ti67584b98 .Kaspar Riesen and Horst Bunke. Approximate graph edit distance computation by means of bipartite graph matching. Image and Vision Computing , 27(7):950–959, 2009. doi: 10. 1016/j.imavis.2008.04.004. Gerard Salton and Michael J. McGill. Introduction to Modern Information Retrieval . McGraw-Hill, 1983. Alberto Sanfeliu and King-Sun Fu. A distance measure between attributed relational graphs for pattern recognition. IEEE Transactions on Systems, Man, and Cybernetics , SMC-13(3): 353–362, 1983. doi: 10.1109/TSMC.1983.6313167. URL https://doi.org/10.1109/TSMC. 1983.6313167 .Bernhard Schölkopf and Alexander J. Smola. Learning with Kernels . MIT Press, 2002. Claude E. Shannon. A mathematical theory of communication. Bell System Technical Journal ,27:379–423, 1948. doi: 10.1002/j.1538-7305.1948.tb01338.x. 14 Under review as a conference paper at COLM 2026 Yiqiu Shen, Laura Heacock, Jonathan Elias, Keith D. Hentel, Beatriu Reig, George Shih, and Linda Moy. Chatgpt and other large language models are double-edged swords. 
+
+Radiology , 307(2):e230163, 2023. doi: https://doi.org/10.1148/radiol.230163. Charles Spearman. The proof and measurement of association between two things. The American Journal of Psychology , 15(1):72–101, 1904. doi: 10.2307/1412159. Sree Harsha Tanneru, Chirag Agarwal, and Himabindu Lakkaraju. Quantifying uncertainty in natural language explanations of large language models. In Proceedings of the 27th International Conference on Artificial Intelligence and Statistics (AISTATS) , pp. 1072–1080. PMLR, 2024. Katherine Tian, Eric Mitchell, Allan Zhou, Archit Sharma, Rafael Rafailov, Huaxiu Yao, Chelsea Finn, and Christopher D. Manning. Just ask for calibration: Strategies for eliciting calibrated confidence scores from language models fine-tuned with human feedback. In 
+
+Proceedings of the 2023 Conference on Empirical Methods in Natural Language Processing , pp. 5433–5442, Singapore, 2023. Association for Computational Linguistics. doi: 10.18653/ v1/2023.emnlp-main.330. URL https://aclanthology.org/2023.emnlp-main.330/ .Miles Turpin, Julian Michael, Ethan Perez, and Samuel R. Bowman. Language models don’t always say what they think: Unfaithful explanations in chain-of-thought prompting. In Proceedings of the 37th International Conference on Neural Information Processing Systems (NeurIPS) , 2023. Jiongxiao Wang, Zichen Liu, Keun Hee Park, Zhuojun Jiang, Zhaoheng Zheng, Zhuofeng Wu, Muhao Chen, and Chaowei Xiao. Adversarial demonstration attacks on large lan-guage models. arXiv , 2023a. doi: 10.48550/arXiv.2305.14950. Shenzhi Wang, Le Yu, Chang Gao, Chujie Zheng, Shixuan Liu, Rui Lu, Kai Dang, Xiong-Hui Chen, Jianxin Yang, Zhenru Zhang, Yuqiong Liu, An Yang, Andrew Zhao, Yang Yue, Shiji Song, Bowen Yu, Gao Huang, and Junyang Lin. Beyond the 80/20 rule: High-entropy minority tokens drive effective reinforcement learning for llm reasoning. In Advances in Neural Information Processing Systems , 2025. URL https://openreview.net/forum?id= yfcpdY4gMP .Xuezhi Wang, Jason Wei, Dale Schuurmans, Quoc V. Le, Ed H. Chi, Sharan Narang, Aakanksha Chowdhery, and Denny Zhou. Self-consistency improves chain of thought reasoning in language models. In Proceedings of the Eleventh International Conference on Learning Representations , 2023b. URL https://openreview.net/forum?id=1PL1NIMMrw .Jason Wei, Xuezhi Wang, Dale Schuurmans, Maarten Bosma, Brian Ichter, Fei Xia, Ed H. Chi, Quoc V. Le, and Denny Zhou. Chain-of-thought prompting elicits reasoning in large language models. In Advances in Neural Information Processing Systems , volume 35. Curran Associates, Inc., 2022. URL https://papers.neurips.cc/paper_files/paper/2022/hash/ 9d5609613524ecf4f15af0f7b31abca4-Abstract-Conference.html .Frank Wilcoxon. Individual comparisons by ranking methods. Biometrics Bulletin , 1(6):80–83, 1945. doi: 10.2307/3001968. An Yang, Anfeng Li, Baosong Yang, Beichen Zhang, Binyuan Hui, Bo Zheng, Bowen Yu, Chang Gao, Chengen Huang, Chenxu Lv, et al. Qwen3 technical report, 2025. URL 
+
+https://arxiv.org/abs/2505.09388 .Shunyu Yao, Dian Yu, Jeffrey Zhao, Izhak Shafran, Thomas L. Griffiths, Yuan Cao, and Karthik Narasimhan. Tree of thoughts: Deliberate problem solving with large language models. arXiv preprint arXiv:2305.10601 , 2023. doi: 10.48550/arXiv.2305.10601. Caiqi Zhang, Fangyu Liu, Marco Basaldella, and Nigel Collier. LUQ: Long-text uncertainty quantification for LLMs, 2024a. URL https://arxiv.org/abs/2403.20279 .Ziqi Zhang, Cunxiang Wang, Xiong Xiao, Yue Zhang, and Donglin Wang. Nash cot: Multi-path inference with preference equilibrium, 2024b. URL https://arxiv.org/abs/2407. 07099 .15 Under review as a conference paper at COLM 2026 Wayne Xin Zhao, Kun Zhou, Junyi Li, Tianyi Tang, Xiaolei Wang, Yupeng Hou, Yingqian Min, Beichen Zhang, Junjie Zhang, Zican Dong, Yifan Du, Chen Yang, Yushuo Chen, Zhipeng Chen, Jinhao Jiang, Ruiyang Ren, Yifan Li, Xinyu Tang, Zikang Liu, Peiyu Liu, Jian-Yun Nie, and Ji-Rong Wen. A survey of large language models. arXiv preprint arXiv:2303.18223 , 2023. doi: 10.48550/arXiv.2303.18223. URL https://arxiv.org/abs/ 2303.18223 .Kaijie Zhu, Jindong Wang, Jiaheng Zhou, Zichen Wang, Hao Chen, Yidong Wang, Linyi Yang, Wei Ye, Yue Zhang, Neil Gong, and Xing Xie. Promptrobust: Towards evaluating the robustness of large language models on adversarial prompts. In Proceedings of the 1st ACM Workshop on Large AI Systems and Models with Privacy and Safety Analysis (LAMPS ’24) , pp. 57–68, New York, NY, USA, 2024. Association for Computing Machinery. doi: 10.1145/3689217.3690621. URL https://doi.org/10.1145/3689217.3690621 .Alireza S. Ziabari, Nona Ghazizadeh, Zhivar Sourati, Farzan Karimi-Malekabadi, Payam Piray, and Morteza Dehghani. Reasoning on a spectrum: Aligning llms to system 1 and system 2 thinking. arXiv preprint arXiv:2502.12470 , 2025. doi: 10.48550/arXiv.2502.12470. URL https://arxiv.org/abs/2502.12470 .Andy Zou, Zifan Wang, Nicholas Carlini, Milad Nasr, J. Zico Kolter, and Matt Fredrikson. Universal and transferable adversarial attacks on aligned language models, 2023. URL 
+
+https://doi.org/10.48550/arXiv.2307.15043 .16 Under review as a conference paper at COLM 2026 
+
+## A Notation Table 
+
+In this section, we provide a comprehensive list of notations and acronyms that we have used in this work as shown in Table 1. 
+
+Acronym/Notation Explanation 
+
+LLM Large-Language Model CoT Chain of thought UQ Uncertainty Quantification SC Self Consistency GRCS Graph Reasoning Coherence Score GSC Graph Self Consistency GED Graph Edit Distance SS-GED Structural-Semantic Graph Edit Distance GLLM Generator LLM DLLM Decomposer LLM RBF Radial Basis Function 
+
+q A question 
+
+D(q) Pairwise distance set 
+
+D(q) Divergence 
+
+C(q) Convergence 
+
+σD(q) Dispersion 
+
+H(D(q)) Entropy 
+
+G = ( V, E) Causal dependency graph 
+
+β Semantic similarity weight 
+
+γ RBF Controller 
+
+α trade-off between centrality and support 
+
+C(Gi) Structural centrality 
+
+P(Gi) Graph-level consensus score 
+
+z⋆ medoid CoT 
+
+xq Original GLLM prompt 
+
+z⋆ 
+
+> q
+
+medoid CoT selected by GSC 
+
+δablate Adversartial perturbation 
+
+x′ Poisoned prompt Table 1: Notations and Acronyms used in this work. 
+
+## B Various Prompts and Mathematical Analysis 
+
+B.1 Prompts Used in the Pipeline 
+
+This appendix reports the prompts used in the final pipeline. For each stage, we first summarize the prompt’s role and then provide the exact text. 
+
+B.1.1 GLLM Reasoning Generation Prompt 
+
+This prompt is fed to the GLLM and it’s used to generate structured reasoning traces. It instructs the model to produce a concise sequence of reasoning steps (from nl = 3 to nh = 6), where each step is defined as a single declarative sentence stating one fact or conclusion. The steps need to be numbered and annotated with their direct causal dependencies . At the end of its reasoning, the model needs to output the final answer to the question following a precise, structured format. This format allows the reasoning path to be translated into a graph representation. Listing 1: GLLM Reasoning Generation Prompt    
+
+> You are a careful and logical reasoner.
+> Given aquestion , produce a step-by-step reasoning chain that leads to an answer .
+
+17 Under review as a conference paper at COLM 2026 
+
+Guidelines :- Output a number of steps that is between 3 and 6, depending on the complexity of the 
+
+question . Avoid excessive verbosity or unnecessary steps. Be straightforward and concise, but ensure the reasoning is complete and clear. - Each step is a single declarative sentence stating one fact or conclusion. - Number each step starting from 0. - After each step, on the same line, write [ depends_on : N, M, ...] listing the indices of ALL prior steps this step directly requires to be derived. 
+
+If the step is a new premise requiring no prior steps, write [ depends_on : none]. - Do not include titles, headers, or any extra text. - Do not use XML tags or hidden-thought markers such as <think>, </think>, <reasoning>, or similar. - Do not repeat the question .- Do not output lists or bullet points beyond the numbered steps. - At the end, on its own line, write: \"The final answer is: [ answer ]\" 
+
+Question : {QUESTION} 
+
+B.1.2 DLLM Atomic Decomposition Prompt 
+
+This prompt is fed to the DLLM to decompose each reasoning step into atomic Subject–Verb– Object facts. Crucially, it preserves the original step index and dependency annotations, ensuring that graph granularity is refined without altering the logical structure of the original reasoning trace. The DLLM is also given a decomposition example, following the 
+
+Few Shots Prompting technique (Brown et al., 2020). Listing 2: DLLM Atomic Decomposition Prompt 
+
+You are a precise sentence decomposer. You will receive a numbered reasoning chain with [ depends_on : ...] annotations. Decompose each step into atomic facts while preserving its step index and dependency annotation. 
+
+Rules :- Each atomic fact must express one independent fact in subject-verb-object form. - Every fact from step N must keep [ step : N, depends_on : ...] exactly as given. - DO NOT CHANGE OR INFER DEPENDENCIES .- Prefix each fact with ###. - Replace pronouns with the original subject. - Do not repeat, rephrase, or invent facts. - Output ONLY annotated atomic facts. 
+
+Example input :0. A standard matchbox has internal dimensions of approximately 1.5 x 0.75 x 0.5 inches. [ depends_on : none] 1. A nickel has a diameter of 0.835 inches and a thickness of 0.077 inches. [ 
+
+depends_on : none] 2. The nickel fits within the matchbox dimensions. [ depends_on : 0, 1] 
+
+Example output :### A standard matchbox has an internal length of approximately 1.5 inches. [ step : 0, 
+
+depends_on : none] ### A standard matchbox has an internal width of approximately 0.75 inches. [ step : 0, 
+
+depends_on : none] ### A standard matchbox has an internal height of approximately 0.5 inches. [ step : 0, 
+
+depends_on : none] ### A nickel has a diameter of 0.835 inches. [ step : 1, depends_on : none] ### A nickel has a thickness of 0.077 inches. [ step : 1, depends_on : none] ### The nickel fits within the matchbox dimensions. [ step : 2, depends_on : 0, 1] 
+
+Now decompose this reasoning chain: 
+
+18 Under review as a conference paper at COLM 2026 
+
+> {REASONING_PATH}
+
+B.1.3 GLLM Adversarial Attack Prompt 
+
+This prompt is used in the adversarial medoid ablation experiment to test whether the GSC-selected medoid is a load-bearing reasoning path. It requires the GLLM to answer the same question while explicitly avoiding the medoid’s logic, allowing us to measure whether accuracy and reasoning faithfulness deteriorate when that path is removed. As in the standard generation stage, the output must follow the same structured reasoning format. Listing 3: GLLM Adversarial Attack Prompt                   
+
+> You are a careful and logical reasoner. Given a question, produce a step-by-step reasoning chain that leads to an answer .
+> CRITICAL CONSTRAINT : You are strictly forbidden from using the following
+> reasoning path or logical steps: <forbidden_reasoning> {MEDOID_TEXT} </forbidden_reasoning> You must find a completely alternative , valid way to reason through the problem from scratch. Do not copy the logic of the forbidden reasoning .
+> Guidelines :- Output between 3 and 6 steps. - Each step is a single declarative sentence. - Number each step starting from 0. - After each step, write [ depends_on : N, M, ...] listing the prior steps. If the step relies on no prior steps, write [ depends_on : none]. -Do not include headers, bullet points, or extra text. -Do not use XML tags or hidden-thought markers such as <think>, </think>, < reasoning >, or similar. - Clearly display the reasoning in the final response. - At the end, on its own line, write: "The final answer is: [ answer ]"
+> Question : {QUESTION}
+
+B.2 GED Formulation 
+
+The Graph Edit Distance (GED), theorized by (Sanfeliu & Fu, 1983) and further expanded by (Riesen & Bunke, 2009), measures the similarity between two graphs, Gi (source graph ) and 
+
+Gj (target graph ), by computing the minimum cost of modifications required to transform 
+
+Gi into Gj. The transformation is achieved through edit operations , that are typically user defined and encompass the insertion, deletion, and substitution of both nodes and edges. Let an edit path be a sequence of edit operations (e1, . . . , ek) that completely transforms Gi
+
+into Gj. GED is defined as the minimum total cost among all possible edit sequences: 
+
+GED (Gi, Gj) = min    
+
+> (e1,..., ek)∈Υ(Gi,Gj)
+> k
+
+# ∑
+
+> x=1
+
+c(ex )
+
+where Υ(Gi, Gj) denotes the set of all valid edit sequences transforming Gi into Gj, and 
+
+c(ex ) represents the non-negative cost associated with a specific edit operation ex. The exact computation of GED relies on combinatorial search algorithms (such as A∗ search (Hart et al., 1968)), it is computationally prohibitive when we need to study deep graphs, because its complexity scales exponentially with the number of nodes. Let m = max (|Vi|, |Vj|)
+
+denote the maximum node count between the two evaluated graphs. The exact computation 19 Under review as a conference paper at COLM 2026 of GED has thus a time complexity of O(|Vj||Vi |), which scales exponentially as O(mm)
+
+in the worst case. To overcome this NP-hard bottleneck, our framework leverages the Hungarian algorithm, introduced by (Korsah et al., 2007), which approximates this task to an optimal bipartite matching problem. Refer to Section B.3 for the detailed explanation of our approach. 
+
+B.3 Detailed SS-GED Definition 
+
+For each question q, we obtain a set of N reasoning graphs {G1, . . . , GN } and compute pairwise distances between all graph pairs. Let Gi = ( Vi, Ei) and Gj = ( Vj, Ej) denote two DAGs derived from sampled reasoning chains. Our goal is to quantify both structural divergence and semantic disagreement between them. 
+
+Node and Edge Matching. We first construct a bipartite cost matrix between graph elements and solve the assignment problem with the Hungarian algorithm (Korsah et al., 2007). Rather than exploring all possible edit sequences, we decouple the matching process into independent assignments for nodes and edges. For any two matched elements (either nodes or edges) a and b, the substitution cost is defined by cosine distance: 
+
+csub (a, b) = 1 − ⟨za, zb⟩∥za∥∥ zb∥ ,where za and zb are the corresponding embedding vectors. Insertions and deletions are assigned unit cost. This yields a raw semantic-aware edit cost, denoted Cedit (Gi, Gj), that is computed as the sum of the optimal substitution costs (the summation over matched pairs) and the unit insertion/deletion costs for any unmatched elements (the absolute difference in graph cardinalities): 
+
+Cost V = ∑
+
+> (u,v)∈P∗
+> V
+
+csub (u, v) + |Vi| − | Vj|
+
+Cost E = ∑  
+
+> (ei,ej)∈P∗
+> E
+
+csub (ei, ej) + |Ei| − | Ej|
+
+Cedit (Gi, Gj) = Cost V + Cost E
+
+In the worst case, our approach, leveraging the bipartite mathcing, operates with a time complexity of O(m3), where m = max (|Vi|, |Vj|). This reduction from exponential to cubic complexity makes the evaluation of deep graphs computationally feasible (c.f., Figure 6). 1 2 3 4 5 6 7 8 9 10 10 0  
+
+> 10 1
+> 10 2
+> 10 3
+> 10 4
+> 10 5
+> 10 6
+> 10 7
+> 10 8
+> 10 9
+> 10 10
+> 10 11
+> Maximum node count ( m)
+> Computational Operations (log scale)  Bipartite Matching O(m3)
+> GED O(mm)
+
+Figure 6: Worst-case theoretical time complexity comparison between GED ( O(mm)) and the bipartite matching approximation ( O(m3)) used in our approach, as a function of the maximum node count m.20 Under review as a conference paper at COLM 2026 
+
+Fair Normalization. Because reasoning graphs can differ substantially in length, we nor-malize the raw edit cost by the average graph size rather than by a single graph alone: nGED (Gi, Gj) = Cedit (Gi, Gj)  
+
+> |Vi|+|Vj|
+> 2
+
+.This makes the comparison scale depend symmetrically on both graphs and avoids over-penalizing pairs in which one chain is much longer than the other. 
+
+Terminal Semantic Agreement. Topology alone is insufficient, since two reasoning chains may share similar structure but reach different conclusions. To capture this, we compute a terminal semantic score from the terminal nodes of each DAG. Let 
+
+Ti = {v ∈ Vi : outdeg (v) = 0}, Tj = {v ∈ Vj : outdeg (v) = 0},be the terminal-node sets. Their aggregate embeddings are ¯ti = 1
+
+|Ti| ∑
+
+> v∈Ti
+
+zv, ¯tj = 1
+
+|Tj| ∑
+
+> v∈Tj
+
+zv.We then define terminal semantic similarity as 
+
+Sterm (Gi, Gj) = ⟨¯ti, ¯ tj⟩∥¯ti∥∥ ¯tj∥ .
+
+Semantic-Structural Blending. We convert normalized edit distance into a bounded struc-tural similarity through an RBF (Schölkopf & Smola, 2002) transform: 
+
+Sstruct (Gi, Gj) = exp  −γ nGED (Gi, Gj)2,where γ > 0 controls how sharply similarity decays as structural divergence increases. The final SS-GED similarity is then defined as 
+
+SSS-GED (Gi, Gj) = β Sterm (Gi, Gj) + ( 1 − β) Sstruct (Gi, Gj),where β ∈ [0, 1 ] controls the trade-off between semantic outcome agreement and internal structural consistency. The final distance is 
+
+dSS-GED (Gi, Gj) = 1 − SSS-GED (Gi, Gj).
+
+Hyperparameter Choice. We use a single global configuration across all experiments, fixing 
+
+β = 0.4 and γ = 5.0. The choice β = 0.4 places slightly greater emphasis on structural consistency while still allowing conclusion-level semantic agreement to affect the score. This weighting is specifically designed to counteract the "lucky guess" phenomenon, where fragmented or hallucinated paths accidentally converge on a correct final label. The choice 
+
+γ = 5.0 yields a moderately sharp RBF decay, so that small structural differences are not over-amplified while clearly distinct graphs remain well separated. These values are kept fixed across all models and datasets, with no per-task hyperparameter tuning. 
+
+B.4 Mathematical Justification for the RBF Kernel in SS-GED 
+
+In our SS-GED computation, we map the normalized Graph Edit Distance ( nGED ) to a bounded similarity measure [0, 1 ] using a Radial Basis Function (RBF) kernel, also known as a Gaussian kernel (Schölkopf & Smola, 2002): 
+
+Sstruct (Gi, Gj) = exp (−γ · nGED (Gi, Gj)2)
+
+where Gi and Gj represent a pair of DAGs. The choice of an RBF kernel over a linear decay (e.g. , 1 − nGED ) is motivated by the nature of LLMs’ reasoning paths. In high-dimensional reasoning spaces, structural variation may be non-linear rather than well captured by simple Euclidean scaling (Meil˘ a & Zhang, 2024). As result, we choose to use an RBF transform to 21 Under review as a conference paper at COLM 2026 0.0 0.2 0.4 0.6 0.8 1.0    
+
+> Normalized Graph Edit Distance ( nGED )
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> Similarity Score
+> Linear Decay ( 1nGED )
+> RBF Kernel ( e5nGED 2
+> )
+> High-Fidelity Plateau
+> Accelerated Penalty Zone
+
+Figure 7: Comparison of similarity decay mod-els. The RBF kernel establishes a High-Fidelity Plateau to tolerate minor structural variations and an Accelerated Penalty Zone to mathemat-ically isolate significantly divergent reasoning paths. In the chart, γ = 5.0, coherently with our main methodology. convert nGED to a bounded similarity measure by smoothly separating more distant graphs. As shown in Figure 7, a linear decay model treats every unit of edit distance with equal weight. Under such a regime, a reasoning path that is 50% structurally different would still retain 0.5 similarity. However, in complex tasks like clinical ( e.g. MedQA) or expert reasoning ( e.g. , GPQA), a 50% divergence in causal nodes typically indicates a significant departure from the established logical manifold, that is not accurately captured by linear representations. By contrast, the RBF kernel with γ = 5.0 establishes a High-Fidelity Plateau 
+
+at low nGED values ( < 0.1), where its relatively flat Gaussian curve ensures that minor decomposition artifacts do not fragment the structural consensus. This offer an advantage compare to linear decay, which over-penalizes very close structural variations. As nGED increases, the RBF kernel enters an Accelerated Penalty Zone , where squared exponent drives similarity toward zero far more aggressively than a linear model. In this region, the RBF kernel more clearly separates significantly different reasoning paths . The parameter γ sets the width of the Gaussian kernel. The choice of γ = 5.0 is a middle ground between two extremes. A low γ (e.g., 0.1) is too permissive, failing to penalize major structural differences and allowing incompatible paths to score highly. In contrast, a high γ (e.g., 20.0) is too sensitive, where small, non-semantic differences push similarity toward zero, fragmenting consensus.. 
+
+B.5 Detailed GSC Definition Detailed GSC Scoring. Given the set of N = 20 reasoning graphs for a query, we first compute the full pairwise SS-GED distance matrix and convert it to a similarity matrix, 
+
+S(Gi, Gj) = 1 − dSS-GED (Gi, Gj).
+
+Structural Centrality. We define the global centrality of a graph Gi as its total similarity to the rest of the pool: 
+
+C(Gi) = ∑ 
+
+> j̸=i
+
+S(Gi, Gj).Graphs with high C(Gi) lie near the center of the reasoning manifold and therefore represent dominant semantic-structural patterns shared across samples. 
+
+Node-Level Support. Centrality alone is not sufficient, since a graph may be globally typical while still containing isolated hallucinated steps. To capture local support, we compute a node-level consensus score. For each node v ∈ Gi, let zv be its embedding. We define 
+
+c(v) = 1
+
+N − 1 ∑ 
+
+> j̸=i
+
+1
+
+"
+
+max 
+
+> u∈Gj
+
+cos (zv, zu) ≥ τ
+
+#
+
+,where τ = 0.9 is the semantic support threshold and 1[·] is the indicator function. Thus, c(v)
+
+measures the fraction of other graphs containing at least one highly semantically related node. 22 Under review as a conference paper at COLM 2026 
+
+Path Consensus. We aggregate node support into a graph-level consensus score, 
+
+P(Gi) = ∑v∈Vi w(v) c(v)
+
+∑v∈Vi w(v) ,where 
+
+w(v) = 
+
+2.0, if outdeg (v) = 0, 1.0, otherwise. Terminal nodes are upweighted because they encode the final conclusion of the reasoning chain. An unsupported terminal claim can make the entire CoT incorrect even if earlier intermediate steps are locally plausible. In contrast, unsupported intermediate nodes may be less critical if later steps do not rely on them directly. 
+
+Final Medoid Selection. The final GSC score combines normalized global centrality with local path consensus: Score (Gi) = α C(Gi)
+
+max k C(Gk) + ( 1 − α) P(Gi).We then select 
+
+G⋆ = arg max 
+
+> Gi
+
+Score (Gi),as the final medoid path, and return the final answer associated with G⋆, considered as the GSC’s final prediction. In all experiments, we fix α = 0.8, prioritizing structural centrality while allowing path consensus to filter out centrally located but weakly supported traces. We found the framework to be qualitatively stable across nearby values of α.
+
+B.6 Detailed Adversarial Medoid Ablation Protocol 
+
+For each question q, let xq denote the original prompt presented to each GLLM (as defined in Listing 1). Let zq denote a generic CoT sampled from the GLLM given xq, and let z⋆
+
+> q
+
+denote the GSC-selected medoid CoT. We design a prompt that directly suppresses the medoid’s logic. Let δablate (z⋆ 
+
+> q
+
+) denote an adversarial perturbation instruction constructed from z⋆ 
+
+> q
+
+. It is a natural-language instruction that (i) presents z⋆ 
+
+> q
+
+in full, (ii) explicitly forbids the model from reusing any of its reasoning steps or conclusions, and (iii) instructs the model to produce a completely alternative CoT from scratch. We can then formalize the adversarial prompt as: 
+
+x′ 
+
+> q
+
+= xq ∪ δablate (z⋆ 
+
+> q
+
+)
+
+where ∪ denotes prompt concatenation. Refer to Listing 3 for the detailed adversarial prompt used in our experiments. By construction, x′ 
+
+> q
+
+steers the model away from z⋆ 
+
+> q
+
+. As result, it restricts the reasoning space from which the alternative CoTs are sampled. We instantiate this attack under two complementary protocols. 
+
+Broad Population-Level Medoid Ablation. The broad setting applies the same attack to all datasets questions. For each question q, we sample N adversarial alternative CoTs: 
+
+Zadv  
+
+> q
+
+= {zadv  
+
+> q,1
+
+, . . . , zadv  
+
+> q,N
+
+}
+
+at temperature T (in practice, we use N = 20 and T = 7, to capture the GLLM’s reasoning diversity, as we did within the original pipeline), and aggregate them into stable per-question estimates. For MedQA, we follow the main evaluation protocol and use a fixed random subsample of 100 questions (seed 42). This broad protocol estimates the average causal effect of medoid ablation at the dataset level rather than only on the narrow disagreement subset. 
+
+Targeted Medoid Ablation. The targeted setting operates on the subset of questions where GSC is correct and SC is incorrect. For each such question, we generate N adversarial alternative CoTs at temperature T (in practice, we resort to N = 20 and T = 7 to follow the main paper experiments). This isolates the causal importance of the selected medoid 23 Under review as a conference paper at COLM 2026 precisely in the regime where GSC provides a decoding advantage over SC. Due to page limit, this experiment is deferred to Appendix C.11. In both protocols, alternative paths are evaluated along three dimensions: ablated accuracy ,
+
+ablated faithfulness , and medoid distance .
+
+Ablated Accuracy. Given a gold answer yq, the accuracy of an adversarial alternative CoT 
+
+zadv  
+
+> q,k
+
+is 
+
+Aadv  
+
+> q,k
+
+= 1
+
+h
+
+ˆy(zadv  
+
+> q,k
+
+) = yq
+
+i
+
+,where ˆy(·) extracts the final answer from the generated CoT and 1 is the indicator function. In both protocols, we average across the N alternatives: 
+
+Aadv  
+
+> q
+
+= 1
+
+N
+
+> N
+
+# ∑
+
+> k=1
+
+Aadv  
+
+> q,k
+
+.For comparison, the baseline medoid accuracy is 
+
+A⋆ 
+
+> q
+
+= 1
+
+h
+
+ˆy(z⋆ 
+
+> q
+
+) = yq
+
+i
+
+,and the accuracy drop under ablation is 
+
+∆Aq = Aadv  
+
+> q
+
+− A⋆ 
+
+> q
+
+.
+
+Ablated Faithfulness. Faithfulness is evaluated with the same Early Answering procedure used in the main evaluation protocol. Let fq,k,1 , . . . , fq,k,nq,k be the atomic facts obtained by decomposing zadv  
+
+> q,k
+
+. For each prefix fq,k,1: i, we reprompt the model to answer using only that partial context. If the correct answer is already recoverable from an early prefix, the chain is treated as less faithful. Formally, 
+
+mq,k,i = 1
+
+h
+
+ˆy EA (q, fq,k,1: i) = yq
+
+i
+
+,and the adversarial faithfulness of zadv  
+
+> q,k
+
+is 
+
+Fadv  
+
+> q,k
+
+= 1 − 1
+
+nq,knq,k
+
+# ∑
+
+> i=1
+
+mq,k,i.In both protocols, we average across the N alternatives: 
+
+Fadv  
+
+> q
+
+= 1
+
+N
+
+> N
+
+# ∑
+
+> k=1
+
+Fadv  
+
+> q,k
+
+.We compare against the baseline medoid faithfulness F⋆ 
+
+> q
+
+, computed via the same Early Answering procedure applied to z⋆ 
+
+> q
+
+, and define 
+
+∆Fq = Fadv  
+
+> q
+
+− F⋆ 
+
+> q
+
+.
+
+Medoid Distance. To quantify how far each adversarial alternative CoT zadv  
+
+> q,k
+
+is from the medoid z⋆ 
+
+> q
+
+, we compute normalized sequence dissimilarity: 
+
+Dmed  
+
+> q,k
+
+= 1 − sim 
+
+
+
+z⋆ 
+
+> q
+
+, zadv 
+
+> q,k
+
+
+
+,where sim (·, ·) ∈ [0, 1 ] is a normalized sequence similarity measure between two CoT texts. In practice, it is the longest-common-subsequence ratio on lowercased text. We deliberately use a lightweight, model-free surface measure here rather than SS-GED, to perform an unbiased, graph-independent evaluation. Thus Dmed  
+
+> q,k
+
+= 0 indicates identical texts, while larger values reflect greater deviation from the forbidden medoid logic. We report the per-question average 
+
+Dmed  
+
+> q
+
+= 1
+
+N
+
+> N
+
+# ∑
+
+> k=1
+
+Dmed  
+
+> q,k
+
+,which serves as an empirical check that x′ 
+
+> q
+
+successfully steers GLLMs’ reasoning away from 
+
+z⋆ 
+
+> q
+
+.24 Under review as a conference paper at COLM 2026 
+
+## C Auxiliary Experimental Results 
+
+C.1 Evaluation on Long-Horizon Reasoning 
+
+To test our pipeline on a much longer, multi-hop reasoning mathematical dataset, we evaluated on AIME-2026 Dekoninck et al. (2026). We specifically chose this benchmark because, unlike GPQA which spans diverse and highly distinct scientific domains, AIME focuses exclusively on advanced mathematical reasoning. This provides a domain-consistent yet highly cognitively demanding environment, making it an ideal testbed to observe how well uncertainty metrics scale to deeper, multi-step reasoning traces without being confounded by cross-domain variance. In Table 2 we compare the Pearson Correlation Coefficient (PCC) between Faithfulness and GRCS (ours), CoTA, Topo-UQ, Dispersion, and Entropy. As detailed in our paper, a stronger negative correlation indicates a better uncertainty metric (Section 4). Table 2: Pearson Correlation Coefficient (PCC) between Faithfulness and various uncertainty metrics on the AIME-2026 dataset.                     
+
+> GLLM PCC - GRCS (ours) PCC - Topo-UQ PCC - CoTA PCC - Dispersion PCC - Entropy
+> Llama 3.1 0.04 0.16 0.05 -0.22 -0.22
+> Phi-4 -0.25 0.07 0.01 0.08 0.10 DeepSeek R1 -0.54 0.25 0.12 -0.05 -0.24
+
+We observe that GRCS provides a better uncertainty metric when evaluating AIME-2026 in 2 out of 3 GLLMs, and outperforms CoTA/Topo-UQ in all possible cases. 
+
+C.2 Scalability to Longer Reasoning Traces 
+
+To test the scalability of our pipeline, in Table 3 where we set the number of reasoning steps to 10–20 (i.e., more than 3x the number of steps we set in the main paper). We observe an increase in volume of the atomic facts. On average, we observe a 2x–3x increase in graph sizes. On the GPQA dataset, for example, DeepSeek goes from ≈ 30 to ≈ 80 fact nodes per DAG. For LLama 3.1 8B, the median fact count increases from ≈ 30 to roughly ≈ 50, and the maximum outlier range expands significantly, growing from ≈ 600 to nearly ≈ 1, 000 facts. However, the GRAPH EVAL pipeline remains stable. Given that the pipeline complexity is 
+
+O(N2 · m3) (where m is the node count), larger graphs increase computation time as expected. However, our key finding regarding the robustness question raised by the reviewer is that the evaluation remains tractable without correctness violation, as the pipeline gets fully executed without issues. The graph alignment uses the Hungarian algorithm (complexity: 
+
+O(m3), where m = max (|Vi|, |Vj|) and Vi, Vj denote the node sets of graphs Gi and Gj,respectively.), which operates on bipartite graphs of arbitrary size and scales to larger DAGs containing hundreds of nodes. We validate this stability by comparing the SS-GED for the elicited CoT having 10–20 steps. In Table 3, we report the average GED and SS-GED for Baseline (i.e., 3–6 reasoning steps per CoT) and Extended (i.e., 10–20 reasoning steps per CoT) runs. While GED increased proportionally with graph size by roughly 2x to 3x across our benchmarks (this behavior is expected, with GED being a raw distance measure, applied on bigger graphs), the normalized SS-GED remained remarkably consistent. This cancels out length bias between the CoTs. 
+
+C.3 Validation via Counterfactual Editing 
+
+To rigorously isolate the causal impact of individual reasoning steps and validate our faithfulness metric through an independent intervention beyond Early Answering, we introduce a counterfactual editing protocol. We intervene (Pearl, 2009; Halpern & Pearl, 2001) on each intermediate step (i.e., excluding the terminal conclusion) of the reasoning path by prompting Mistral-Large 2512 to generate a counterfactual (CF) for that step, 25 Under review as a conference paper at COLM 2026 Table 3: Comparison of average GED and SS-GED between Baseline (3–6 steps) and Ex-tended (10–20 steps) reasoning traces.                                                   
+
+> Dataset GLLM Avg GED - Baseline Avg GED - Extended Avg SS-GED - Baseline Avg SS-GED - Extended
+> GPQA Llama 3.1 5.19 9.69 (1.87x) 0.09 0.09 (Stable) GPQA Phi-4 4.92 8.57 (1.74x) 0.32 0.35 (Stable) GPQA DeepSeek R1 3.02 10.11 (3.35x) 0.34 0.23 (Stable) MedQA Llama 3.1 7.22 16.23 (2.25x) 0.33 0.40 (Stable) MedQA Phi-4 13.50 25.10 (1.86x) 0.32 0.32 (Stable) MedQA DeepSeek R1 5.69 11.55 (2.03x) 0.30 0.29 (Stable) StratQA Llama 3.1 6.72 12.97 (1.93x) 0.32 0.34 (Stable) StratQA Phi-4 7.03 14.22 (2x) 0.30 0.32 (Stable) StratQA DeepSeek R1 4.17 10.11 (2.42x) 0.34 0.23 (Stable)
+
+while keeping all other steps fixed. We perturbed one step per iteration, and rotated the perturbation across all intermediate steps. This follows the view of counterfactual reasoning formalized by Pearl et al., where causal relevance is assessed by modifying one variable at a time and observing its effect on the outcome (Pearl, 2009; Halpern & Pearl, 2001). Prior to the full evaluation, we validated the quality of the generated counterfactuals by having one of the authors manually assess 50 randomly sampled counterfactual steps (seed 42) on whether they were plausible but factually distinct from the original step. We then evaluated the same subset using an “LLM-as-judge” (Claude 3.6 Sonnet), achieving a Co-hen’s Kappa of 0.81 with the human evaluation, proving the reliability of the counterfactuals generation. A step is counted as faithful if altering it changes the final answer (the model accounted for it in its decision making) and unfaithful if the answer is unchanged (the model did not account for it during its decision making). The per-question CF faithfulness score is the fraction of intermediate steps that are faithful. These scores are then correlated with GRCS using the same 1,000-bootstrap PCC procedure as Early Answering (EA), defined in the main paper. Table 4 shows the PCC for Early Answering (PCC-EA), for Counterfactual Editing (PCC-CF), and the difference ∆(CF − EA ) for all GLLMs, across GPQA, MedQA and StrategyQA datasets. Table 4: Comparison of Pearson Correlation Coefficients using Early Answering (PCC-EA) and Counterfactual Editing (PCC-CF) as faithfulness measures. 
+
+# Dataset GLLM PCC-EA PCC-CF ∆(CF − EA )
+
+# GPQA Llama 3.1 0.006 -0.004 -0.010 GPQA Phi-4 -0.109 -0.129 -0.020 GPQA DeepSeek R1 -0.023 -0.0198 +0.003 MedQA Llama 3.1 -0.280 -0.320 -0.040 MedQA Phi-4 -0.240 -0.233 +0.007 MedQA DeepSeek R1 -0.105 -0.111 -0.006 StrategyQA Llama 3.1 -0.210 -0.101 +0.109 StrategyQA Phi-4 -0.071 -0.233 -0.162 StrategyQA DeepSeek R1 -0.182 -0.240 -0.058 
+
+C.4 Ablation Study on DLLMs 
+
+To evaluate the robustness of the factual decomposition step and ensure our framework is not overly reliant on a single DLLM, we conducted an ablation study using multiple different DLLMs. We compared our primary DLLM (GPT-4o, Section 3) with two open-weight, frontier-class LLMs (Mistral-Large-2512 and GPT-OSS-120b) and one commercial frontier-26 Under review as a conference paper at COLM 2026 Table 5: Decomposition Quality across different Decomposer LLMs. 
+
+DLLM Atomicity Absence of Hallucination Dependency Validity 
+
+GPT-4o 94.2% 95.6% 74.1% Mistral-Large-2512 97.8% 95.8% 77.0% GPT-OSS-120b 88.0% 97.5% 73.5% Gemini 3 Flash 98.7% 96.0% 68.8% class LLM (Google Gemini 3 Flash). To evaluate the correctness of the decomposition, one of the authors manually evaluated 50 randomly sampled reasoning graphs (seed 42, used to ensure reproducibility) across GPQA, MedQA, and StrategyQA on three criteria: Atomicity (ability of the DLLM to isolate independent claims), Absence of Hallucinations, and Dependency Validity (accurate preservation and mapping of causal topological edges). We then evaluated this same subset using an “LLM-as-judge” (Claude 3.6 Sonnet, (Gu et al., 2026)) which achieved a Cohen’s Kappa (Cohen, 1960) of 0.82 with the human evaluation (we used a different LLM than the DLLMs under study to avoid self-evaluation biases). We then extended the automated evaluation to 1,500 randomly sampled reasoning graphs across GPQA, MedQA, and StrategyQA (seed 42, used to ensure reproducibility). With 1,500 samples, the reported percentages are statistically stable across random seeds: by the normal approximation to sample proportions, i.e., the de Moivre–Laplace/Central Limit Theorem, the worst-case standard error is minimal. Because the goal is to assess decomposition quality rather than dataset-level task performance, we aggregate results across datasets. For each CoT and its corresponding reasoning graph, we evaluate the atomic facts produced by the DLLM against the original CoT and report the percentage of graph-CoT pairs satisfying each criterion, averaged over the 1,500 graphs from the three datasets (Table 5). We observe that the pipeline is robust and sufficiently decomposer-agnostic. Absence of Hallucinations is consistently > 95% across evaluated DLLMs. Atomicity is consistently more than 88%. This confirms that the evaluated DLLMs are suitable to break reasoning traces into atomic, independent facts. The Dependency Validity scores are lower because occasionally, DLLMs tend to skip transitive logical edges in complex answers. To assess if our methodology is overly sensitive to the choice of the DLLM, we also executed an Inter-DLLM agreement study, computing the average fact nodes per CoT, and average edges per CoT on GPQA, MedQA and StrategyQA (Table 6). Table 6: Inter-DLLM agreement study on graph dimensions across datasets. 
+
+Dataset Decomposer LLM Avg Fact Nodes per CoT Avg Edges per Fact 
+
+GPQA GPT-4o 24.29 0.83 GPQA Mistral-Large-2512 22.30 1.01 GPQA GPT-OSS-120b 15.27 0.99 GPQA Gemini 3 Flash 19.00 0.91 MedQA GPT-4o 14.24 0.77 MedQA Mistral-Large-2512 17.31 0.90 MedQA GPT-OSS-120b 14.18 0.88 MedQA Gemini 3 Flash 15.95 0.94 StrategyQA GPT-4o 10.45 0.80 StrategyQA Mistral-Large-2512 9.84 0.84 StrategyQA GPT-OSS-120b 7.96 0.83 StrategyQA Gemini 3 Flash 9.20 0.82 We observe that the average number of facts per CoT and the average number of edges per fact remain consistent with the characteristics of the datasets (GPQA, which is the hardest, requires more facts per CoT on average, followed by MedQA and StrategyQA) and are comparable across the different DLLMs. 27 Under review as a conference paper at COLM 2026 Furthermore, fixing the GLLM to Llama-3.1 8B, we report the Pearson Correlation Coefficient (PCC) between the final GRCS score assigned using the baseline GPT-4o DLLM (the DLLM used in the main paper) and the GRCS scores assigned by the three additional DLLMs (Table 7): Table 7: Pearson Correlation Coefficient (PCC) of alternative DLLMs with respect to the baseline GPT-4o. 
+
+Dataset Decomposer LLM PCC wrt GPT-4o 
+
+GPQA Mistral-Large-2512 0.77 GPQA GPT-OSS-120b 0.73 GPQA Gemini 3 Flash 0.72 MedQA Mistral-Large-2512 0.86 MedQA GPT-OSS-120b 0.87 MedQA Gemini 3 Flash 0.94 (highest) StrategyQA Mistral-Large-2512 0.66 StrategyQA GPT-OSS-120b 0.57 (lowest) StrategyQA Gemini 3 Flash 0.74 These high correlations entail that the pipeline is stable across different DLLMs. The low-est agreement occurs for GPT-OSS-120B on StrategyQA (PCC = 0.57) and reflects that StrategyQA is the most challenging dataset for atomic decomposition. Its open-domain commonsense questions rely on informal reasoning that is harder to decompose into clean Subject-Verb-Object atomic facts compared to MedQA and GPQA, which are more struc-tured. MedQA consistently yields the highest correlations (up to 0.94), likely because clinical reasoning follows a highly structured format (e.g., symptoms, diagnosis, treatment) that sys-tematically maps onto atomic Subject-Verb-Object facts with clear causal dependencies. In practice, we find that more capable frontier-class LLMs tend to yield cleaner decompositions and more reliable graph construction. 
+
+C.5 Sensitivity to SS-GED Hyperparameters 
+
+To validate sensitivity of GraphEVAL with respect to β and γ hyperparameters (Section 3) , we vary β between 0 and 1.0 with a step size of 0.2 and γ ∈ { 0.5, 1.0, 2.5, 5.0, 10.0, 20.0 }. We conducted the analysis on GPQA, MedQA and StrategyQA datasets, sampling 50 questions from each dataset (seed 42). Table 8 reports β sensitivity with γ = 5 fixed, while Table 9 reports γ sensitivity with β = 0.4 fixed. In both tables, each cell reports PCC / GSC accuracy. 
+
+GRCS Correlation results: when γ = 5.0 (the value we used in the main paper) and varying 
+
+β ∈ { 0.0, 0.2, 0.4, 0.6, 0.8, 1.0 }, the Pearson correlation between GRCS and faithfulness (PCC) is very consistent. When β = 0.4 (the value we used in the main paper) and varying 
+
+γ ∈ { 0.5, 1.0, 2.5, 5.0, 10.0, 20.0 }, correlations are similarly stable, with some statistical shifts only at extreme boundary values (e.g., γ = 20.0) where the RBF kernel becomes excessively sharp. 
+
+GSC Accuracy results: when fixing γ = 5.0 (the value we used in the main paper) and varying β ∈ { 0.0, 0.2, 0.4, 0.6, 0.8, 1.0 }, GSC accuracy slightly dropped at the extremes (i.e., β = 0.0 or β = 1.0). This observation confirms that as long as the pipeline uses a blend of both structural and semantic similarities, downstream decoding is highly stable. When fixing β = 0.4 (the value we used in the main paper) and varying 
+
+γ ∈ { 0.5, 1.0, 2.5, 5.0, 10.0, 20.0 }, GSC accuracy remains practically unchanged. 28 Under review as a conference paper at COLM 2026 Table 8: β sensitivity with γ = 5.0 fixed. Each cell reports PCC / GSC accuracy.    
+
+> Dataset Model β
+
+= 0.0 β = 0.2 β = 0.4 β = 0.6 β = 0.8 β = 1.0                                                                
+
+> GPQA Llama 3.1 0.043 / 20.7% 0.020 / 17.3% 0.006 / 19.3% 0.021 / 19.3% -0.010 / 23.3% -0.042 / 20.7% GPQA Phi-4 -0.122 / 31.8% -0.059 / 36.8% -0.100 / 32.8% -0.053 / 32.8% -0.077 / 32.8% -0.054 / 27.9% GPQA DeepSeek-R1 -0.009 / 51.8% -0.017 / 53.4% -0.020 / 53.4% -0.060 / 53.4% -0.049 / 53.4% -0.038 / 51.8% MedQA Llama 3.1 -0.262 / 52.4% -0.273 / 54.0% -0.280 / 52.0% -0.266 / 52.0% -0.257 / 52.0% -0.273 / 50.4% MedQA Phi-4 -0.258 / 74.7% -0.231 / 79.0% -0.240 / 79.0% -0.246 / 79.0% -0.248 / 77.0% -0.242 / 74.7% MedQA DeepSeek-R1 -0.096 / 89.1% -0.107 / 91.9% -0.110 / 91.9% -0.150 / 91.9% -0.139 / 91.9% -0.126 / 89.1% StrategyQA Llama 3.1 -0.194 / 71.4% -0.203 / 73.6% -0.210 / 71.6% -0.196 / 71.6% -0.187 / 71.6% -0.205 / 69.5% StrategyQA Phi-4 -0.093 / 72.5% -0.061 / 76.7% -0.070 / 76.7% -0.076 / 76.7% -0.078 / 74.7% -0.077 / 72.5% StrategyQA DeepSeek-R1 -0.164 / 75.9% -0.177 / 78.2% -0.180 / 78.2% -0.220 / 78.2% -0.209 / 78.2% -0.194 / 75.9%
+
+Table 9: γ sensitivity with β = 0.4 fixed. Each cell reports PCC / GSC accuracy.    
+
+> Dataset Model γ
+
+= 0.5 γ = 1 γ = 2.5 γ = 5 γ = 10 γ = 20                                                                
+
+> GPQA Llama 3.1 0.012 / 19.3% -0.003 / 17.3% 0.012 / 15.3% 0.006 / 19.3% 0.057 / 19.3% 0.031 / 17.3% GPQA Phi-4 -0.059 / 28.8% -0.090 / 32.8% -0.076 / 32.8% -0.100 / 32.8% -0.049 / 30.8% -0.013 / 32.8% GPQA DeepSeek R1 -0.052 / 53.4% -0.018 / 53.4% -0.027 / 53.4% -0.020 / 53.4% -0.101 / 53.4% -0.122 / 53.4% MedQA Llama 3.1 -0.278 / 52.0% -0.266 / 52.0% -0.270 / 52.0% -0.280 / 52.0% -0.269 / 54.0% -0.250 / 52.0% MedQA Phi-4 -0.262 / 77.0% -0.245 / 79.0% -0.232 / 79.0% -0.240 / 79.0% -0.234 / 77.0% -0.286 / 77.0% MedQA DeepSeek R1 -0.142 / 91.9% -0.108 / 91.9% -0.117 / 91.9% -0.110 / 91.9% -0.191 / 91.9% -0.212 / 91.9% StrategyQA Llama 3.1 -0.208 / 71.6% -0.196 / 71.6% -0.200 / 71.6% -0.210 / 71.6% -0.199 / 73.6% -0.180 / 71.6% StrategyQA Phi-4 -0.092 / 74.7% -0.075 / 76.7% -0.062 / 76.7% -0.070 / 76.7% -0.064 / 74.7% -0.116 / 74.7% StrategyQA DeepSeek R1 -0.212 / 78.2% -0.178 / 78.2% -0.187 / 78.2% -0.180 / 78.2% -0.261 / 78.2% -0.282 / 78.2%
+
+C.6 Sensitivity Analysis of α in GSC Medoid Selection Dataset Model GSC ∆ accuracy (pp) vs. α=0.8 
+
+@ α=0.8 α=0.0 α=0.2 α=0.5 α=0.7 α=1.0 StratQA Llama 3.1 8B 71.6 +2.2 0.0 0.0 0.0 0.0 Phi-4 76.7 −4.6 0.0 0.0 0.0 0.0 DeepSeek R1 78.2 −1.8 −1.3 +0.8 +0.8 +0.8 MedQA Llama 3.1 8B 52.0 +10.0 0.0 0.0 0.0 0.0 Phi-4 79.0 −3.0 −2.0 0.0 0.0 −2.0 DeepSeek R1 91.9 −1.0 −2.0 −1.0 0.0 −1.0 GPQA Llama 3.1 8B 19.3 −1.0 0.0 0.0 0.0 0.0 Phi-4 32.8 +3.6 0.0 0.0 0.0 0.0 DeepSeek R1 52.4 0.0 0.0 −2.1 +0.5 0.0 Table 10: Sensitivity of Graph-SC medoid selection to the trade-off parameter α. Each cell reports ∆ accuracy (pp) relative to α=0.8 (our default). Accuracy is stable across 
+
+α ∈ [0.2, 1.0 ], with differences of at most ±2 pp in most settings. α = 0.0 shows substantially higher empirical variance across configurations, reflecting the instability of medoid selection when the primary structural criterion is removed. We study the sensitivity of α, the GSC to the trade-off parameter in GSC medoid selection ( c.f. , Sections B.5 and 3). Recall that α balances structural graph centrality against node-level consensus. We evaluate α ∈ { 0.0, 0.2, 0.5, 0.7, 0.8, 1.0 } across three datasets (GPQA, MedQA, StrategyQA) and all three models, reporting accuracy change relative to our default 
+
+α = 0.8. Table 10 shows that accuracy is stable across α ∈ [0.2, 1.0 ], with differences of at most 
+
+±2% in most configurations. The degenerate case α = 0.0 (pure node-consensus scoring, ignoring graph centrality) introduces higher variance across datasets and models, reflecting the instability of medoid selection when the structural criterion is completely removed. 
+
+C.7 Effectiveness of G RAPH EVAL for Uncertainty Quantification - SRC & KRC Correlations 
+
+To extend the analysis of Section 5.1 beyond PCC , we also report rank-based results using Spearman Rank (SRC) and Kendall Rank (KRC) coefficients in Figure 8. These results 29 Under review as a conference paper at COLM 2026 GSM8K           
+
+> BoolQ
+> StratQA
+> MedQA
+> GPQA 0.5
+> 0.4
+> 0.3
+> 0.2
+> 0.1
+> 0.0
+> 0.1
+> 0.2
+> Correlation
+> LLaMA 3.1 8B
+> GSM8K
+> BoolQ
+> StratQA
+> MedQA
+> GPQA
+> Correlation
+> Phi-4
+> GSM8K
+> BoolQ
+> StratQA
+> MedQA
+> GPQA
+> Correlation
+> DeepSeek R1
+> Dispersion Entropy GRCS (ours) CoTA Topo-UQ GSM8K
+> BoolQ
+> StratQA
+> MedQA
+> GPQA
+> 0.3
+> 0.2
+> 0.1
+> 0.0
+> 0.1
+> 0.2
+> Correlation
+> LLaMA 3.1 8B
+> GSM8K
+> BoolQ
+> StratQA
+> MedQA
+> GPQA
+> Correlation
+> Phi-4
+> GSM8K
+> BoolQ
+> StratQA
+> MedQA
+> GPQA
+> Correlation
+> DeepSeek R1
+> Dispersion Entropy GRCS (ours) CoTA Topo-UQ
+
+Figure 8: UQ Analysis (SRC & KRC) . A stronger negative correlation indicates a better uncertainty metric. GRCS is negatively correlated with faithfulness in ∼ 87% of the (GLLM, dataset) pairs and outperforms all baselines in 7 out of 15 cases. In the hardest setting (GPQA), GRCS, CoTA, and Topo-UQ frequently yield weak or positive correlations. confirm the same GRCS behavior analyzed in the main section. Across almost all datasets and models, GRCS is consistently negatively correlated with faithfulness (in 13 cases out of 15, ∼ 87%). For LLaMA 3.1 8B, GRCS outperforms the baselines on GSM8K, StrategyQA, and MedQA, with attenuation appearing only on GPQA, the hardest setting. For Phi-4, GRCS strongly outperforms baselines on BoolQ ( e.g. achieving a KRC of -0.27, when all baselines correlations are weakly negative or positive), and shows competitive results in all the other settings. As noted in Section 5.1, GRCS strength attenutes for DeepSeek R1. While it is still negatively correlated on GSM8K, BoolQ, and MedQA, it only definitively outperforms all baselines on StrategyQA. GPQA remains the hardest benchmark. For both LLaMA 3.1 8B and DeepSeek R1, GRCS flips to a positive correlation ( > 0) in both KRC and SRC. Topo-UQ and CoTA yield weak or entirely positive signals as well. In this setting, dispersion and entropy are the only metrics exhibiting relatively strong negative correlations. 
+
+Overall, the rank-based correlation results reinforce the main conclusion (Section 5.1) that GRCS is a robust metric for flagging unfaithful reasoning. 
+
+C.8 Global Topological Mapping 
+
+To visually quantify the models’ propensity for reasoning heterogeneity before perturbation , we map the natural topology of their reasoning spaces. As Figure 9 shows, we analyze StrategyQA and GPQA by plotting the GLLMs’ elicited CoTs for each question q in a two-dimensional space defined by structural incoherence (Divergence) and generation heterogeneity (En-tropy). For each question, we compute these quantities over the same N = 20 CoTs used in prior experiments, yielding a single point that summarizes the structure and variability of the model’s reasoning. Scatter plots capture query-level behavior, while Kernel Density Estimations (KDEs) reveal the global density landscape. We divide this space into four regimes using the baseline LLaMA-3.1 mean as the reference origin. Confident corresponds to low Divergence and low Entropy, indicating stable and structurally coherent reasoning. 
+
+Multi-Path combines low Divergence with high Entropy, reflecting coherent exploration of multiple reasoning trajectories. Noisy denotes high Divergence but low Entropy, suggesting consistently fractured reasoning with little diversity. Confused captures simultaneously high Divergence and high Entropy, indicating both structural inconsistency and broad variability. On StrategyQA, DeepSeek R1 occupies the broadest high-entropy region, spanning both 30 Under review as a conference paper at COLM 2026 the Multi-Path and Confused quadrants (mean μ = ( 0.33, 1.03 )), and its KDE forms a wide, diffuse basin rather than a single attractor. This suggests that, when uncertain, it explores a larger reasoning manifold: some paths remain mutually coherent, while others drift sub-stantially. Phi-4 lies between the two extremes, while LLaMA 3.1 8B remains concentrated in lower-entropy regions with sharper density peaks, consistent with more rigid reasoning dynamics and stronger mode collapse. GPQA preserves this same qualitative ordering, but under an overall compression of the entropy axis. This happens because this tasks is expert reasoning harder and more constraining than open domain reasoning. All three models shift downward, yet their relative structure remains stable: DeepSeek R1 still sustains the widest spread and continues to populate the Multi-Path and Confused regions, Phi-4 again acts as an intermediate regime, and LLaMA 3.1 8B collapses even more strongly toward the low-variance Confident quadrant. This analysis reveal distinct reasoning regimes across scales: from a more rigid mode collapse in smaller models to broad multi-path exploration in more capable ones. This topological difference motivates the necessity to adversarially ablate these primary reasoning paths and test whether they are genuinely essential. 
+
+C.9 Decoding Evaluation and Hybrid Audit at the Path Level 
+
+To assess reasoning fidelity at the path level and characterize the nature of unfaithful reasoning within each decoding rule , we extend the decoding audit of Section 5.3. While our main paper audit classified an SC answer as robust if the paths supporting its majority vote were predominantly faithful, here we execute a more granular analysis by evaluating each individual CoT independently . We distinguish between faithful paths (where every inferential step follows logically from its antecedents) and unfaithful paths (which reach the correct answer through a demonstrably flawed mechanism). Figure 10 reports the percentage of paths within SC and GSC winning clusters that are faithful versus unfaithful, for the same models and datasets used in the main paper. These results validate the question-level analysis performed in Section 5.3. For LLaMA 3.1 8B, unfaithful paths constitute a substantial fraction of SC winning clusters on harder benchmarks. On GPQA, 87% of SC consensus paths are faithful, yet the remaining 13% are unfaithful, while GSC retains 92% faithful paths with only 8% unfaithful. On MedQA, 50% of SC paths are unfaithful, versus 0% selected by GSC. On GSM8K, both methods perform comparably well, with SC at 90% and GSC at 92% faithful paths. For Phi-4, path-level fidelity is generally higher across all benchmarks, mirroring the question-level trend. Here, GSC achieves a higher path faithfulness across all complex benchmarks (89% vs 86% on StrategyQA, 100% vs 84% on MedQA, 45% vs 42% on GPQA). For DeepSeek R1-Distill 70B, the path-level picture is the sharpest. In this case, GSC path level faithfulness is always > 70% across all benchmarks ,while SC never goes beyond 44% ( p < 0.05, Wilcoxon signed-rank test (Wilcoxon, 1945)). 
+
+C.10 Broad Population-Level Medoid Ablation - Additional Results 
+
+To extend the broad medoid ablation attacks performed in Section 5.4 across diverse reasoning domains ,we repeat the same population-level protocol on GSM8K, MedQA, BoolQ, and GPQA (Figure 11). The results on MedQA and GSM8K closely mirror the dynamic observed in the main paper. On GSM8K, both Llama 3.1 8B ( r = −0.18, p = 0.010) and Phi-4 ( r = −0.17, 
+
+p = 0.015) exhibit significant negative linear correlations. On MedQA, Phi-4 shows a highly significant trend ( r = −0.38, p < 0.001), with Llama 3.1 8B exhibiting a marginally significant negative slope ( r = −0.17, p = 0.088). This confirms that in rigid deductive tasks and complex clinical reasoning, accuracy gains under ablation ( ∆Accuracy > 0) are coupled with drops in reasoning faithfulness ( ∆Faithfulness < 0), empirically capturing the “lucky guess” phenomenon. DeepSeek R1, consistent with its broader reasoning topology (c.f. Section C.8) and our findings in Section 5.4, remains decoupled across both datasets ( e.g. ,
+
+r = −0.01, p = 0.856 on GSM8K). However, the linear relationship between ∆Accuracy and ∆Faithfulness attenuates on BoolQ and GPQA. On BoolQ, only Llama 3.1 8B shows a significant negative slope ( r = −0.14, p = 0.041), while Phi-4 and DeepSeek R1 show very weak or no significant linear association. On GPQA, no models exhibit significant correlations. As shown in our main results in Section 5.2, initial GSC accuracy on GPQA is extremely low ( e.g. , 19.3% for Llama 3.1 8B). With so few initially correct reasoning paths 31 Under review as a conference paper at COLM 2026 
+
+(a) StrategyQA: Reasoning topology 0.0 0.2 0.4 0.6 
+
+> Divergence
+> 0.0
+> 0.5
+> 1.0
+> 1.5
+> Entropy
+
+MULTI-PATH CONFUSED 
+
+CONFIDENT NOISY    
+
+> DeepSeek R1 Llama 3.1 8B Phi-4
+
+(b) StrategyQA: DeepSeek R1 KDE 0.0 0.2 0.4 0.6 
+
+Divergence 
+
+0.0 
+
+0.5 
+
+1.0 
+
+1.5  
+
+> Entropy
+> =(0.325, 1.032) =(0.075, 0.221)
+> peak (0.376, 1.207)
+
+0
+
+3
+
+6
+
+9
+
+12 
+
+15 
+
+> Density
+
+(c) StrategyQA: Phi-4 KDE 0.0 0.2 0.4 0.6 
+
+Divergence 
+
+0.0 
+
+0.5 
+
+1.0 
+
+1.5  
+
+> Entropy
+> =(0.301, 0.748) =(0.063, 0.204)
+> peak (0.289, 0.718)
+
+0
+
+4
+
+8
+
+12 
+
+16 
+
+20  
+
+> Density
+
+(d) StrategyQA: Llama-3.1-8B KDE 0.0 0.2 0.4 0.6 
+
+Divergence 
+
+0.0 
+
+0.5 
+
+1.0 
+
+1.5  
+
+> Entropy
+> =(0.310, 0.854) =(0.056, 0.146)
+> peak (0.287, 0.947)
+
+0
+
+4
+
+8
+
+12 
+
+16 
+
+20 
+
+24 
+
+28 
+
+32 
+
+36 
+
+> Density
+
+(e) GPQA: Reasoning topology 0.0 0.2 0.4 0.6 0.8 1.0      
+
+> Divergence
+> 0.00
+> 0.25
+> 0.50
+> 0.75
+> 1.00
+> 1.25
+> 1.50
+> Entropy
+> MULTI-PATH CONFUSED
+> CONFIDENT NOISY
+> DeepSeek R1 Llama 3.1 8B Phi-4
+
+(f) GPQA: DeepSeek R1 KDE 0.00 0.25 0.50 0.75 1.00  
+
+> Divergence
+> 0.00
+> 0.25
+> 0.50
+> 0.75
+> 1.00
+> 1.25
+> 1.50
+> Entropy
+> =(0.33, 0.69) =(0.10, 0.26)
+> peak (0.355, 0.712)
+> 0.0
+> 1.5
+> 3.0
+> 4.5
+> 6.0
+> 7.5
+> 9.0
+> 10.5
+> 12.0
+> Density
+
+(g) GPQA: Phi-4 KDE 0.00 0.25 0.50 0.75 1.00 
+
+Divergence 
+
+0.00 
+
+0.25 
+
+0.50 
+
+0.75 
+
+1.00 
+
+1.25 
+
+1.50   
+
+> Entropy
+> =(0.34, 0.61) =(0.05, 0.22)
+> peak (0.361, 0.652)
+> 0
+> 2
+> 4
+> 6
+> 8
+> 10
+> 12
+> 14
+> 16
+> 18
+> Density
+
+(h) GPQA: Llama-3.1-8B KDE 0.00 0.25 0.50 0.75 1.00 
+
+Divergence 
+
+0.00 
+
+0.25 
+
+0.50 
+
+0.75 
+
+1.00 
+
+1.25 
+
+1.50   
+
+> Entropy
+> =(0.38, 0.30) =(0.04, 0.17)
+> peak (0.361, 0.226) 0
+> 4
+> 8
+> 12
+> 16
+> 20
+> 24
+> 28
+> 32
+> 36
+> Density
+
+Figure 9: Reasoning topology on StrategyQA and GPQA in the (Divergence , Entropy )
+
+space. Each question q is plotted by its mean Divergence ( x; coherence) and Entropy ( y;heterogeneity) across N = 20 paths. (a–d) StrategyQA: Anchored by the Llama 3.1 8B mean as the reference center, DeepSeek R1 exhibits the broadest, highest-entropy exploration, while Llama 3.1 8B and Phi-4 cluster tightly at lower entropy levels. (e–h) GPQA: Overall entropy drops across all models on this harder dataset, but the relative ordering is preserved. DeepSeek R1 consistently sustains the highest diversity into the Multi-Path and Confused 
+
+quadrants, Phi-4 acts as a middle ground, and Llama 3.1 8B collapses almost entirely into the low-variance Confident regime. to ablate, the potential for accuracy degradation ( ∆Accuracy < 0) is strictly constrained, resulting in noisy variance rather than linear degradation. Crucially, across all domains, a dense cluster of points distributes along the ∆Accuracy = 0 axis while extending deeply into negative ∆Faithfulness. This dynamic is strongly quantified in MedQA. While ablation 32 Under review as a conference paper at COLM 2026 GSM8K StrategyQA MedQA GPQA              
+
+> 0
+> 20
+> 40
+> 60
+> 80
+> 100
+> 120
+> Composition of Paths (%)
+> SC
+> GSC
+> SC
+> GSC
+> SC
+> GSC
+> SC
+> GSC
+> Llama 3.1 8B
+> GSM8K StrategyQA MedQA GPQA
+> SC
+> GSC
+> SC
+> GSC
+> SC
+> GSC
+> SC
+> GSC
+> Phi-4
+> GSM8K StrategyQA MedQA GPQA
+> SC
+> GSC
+> SC
+> GSC
+> SC
+> GSC
+> SC
+> GSC
+> DeepSeek R1
+> SC Faithful SC Spurious GSC Faithful GSC Spurious
+
+Figure 10: Granular Path-level audit of SC–GSC disagreement cases. Each stacked bar shows the fraction of faithful (green) and spurious (red) paths within that disagreement cell. SC-only paths are often less faithful than GSC-only paths, though the gap varies by model and dataset. Overall, across 13 comparable disagreement settings ( i.e. , with both SC-only and GSC-only wins), GSC has a higher faithful share in 7, ties in 1, and is lower in 3. preserves accuracy in the vast majority of cases (77.0% for Llama 3.1 8B, 94.0% for Phi-4, and 95.7% for DeepSeek R1), a significant portion of these exact points suffers a simultaneous drop in faithfulness (34.0%, 24.0%, and 16.1% of all evaluated points, respectively). These results strengthen our primary findings: across 3 of the 5 evaluated benchmarks, ablating the GSC medoid induces a significant negative correlation between accuracy and faithfulness for smaller GLLMs. Crucially, across all datasets and GLLM scales, the faithfulness degradation at ∆Accuracy = 0 suggests that the medoid acts as a load-bearing path. 
+
+C.11 Targeted Adversarial Medoid Ablation 
+
+Dataset Model N AA AF OF MD 
+
+GSM8K Llama 3.1 8B 16 0.000 1.000 0.510 0.576 GSM8K Phi-4 14 0.000 1.000 0.597 0.712 GSM8K DeepSeek R1 7 0.000 0.857 0.551 0.784 
+
+BoolQ Llama 3.1 8B 9 0.559 0.530 0.542 0.769 BoolQ Phi-4 7 0.438 0.459 0.264 0.681 BoolQ DeepSeek R1 3 0.333 0.705 0.274 0.838 
+
+StratQA Llama 3.1 8B 5 0.507 0.364 0.657 0.745 StratQA Phi-4 8 0.500 0.499 0.402 0.778 StratQA DeepSeek R1 5 0.387 0.597 0.153 0.935 
+
+MedQA Llama 3.1 8B 1 0.700 0.874 0.769 0.681 MedQA Phi-4 3 0.678 0.543 0.484 0.693 MedQA DeepSeek R1 1 1.000 0.000 0.333 0.995 
+
+GPQA Llama 3.1 8B 16 0.438 0.614 0.556 0.758 
+
+GPQA Phi-4 14 0.462 0.472 0.522 0.712 GPQA DeepSeek R1 6 0.500 0.333 0.551 0.751 
+
+Table 11: Results per dataset and model. Bold denotes the best value per dataset block. Alt. = alternative (adversarial); Faith. = faithfulness; Medoid Dist. = average medoid distance. 
+
+To test whether the medoid identified by GSC is functionally important , we perform an adver-sarial ablation on the small subset of questions where only GSC is correct and SC is not. Therefore, this experiment is a stress test, complementary to the population-level ablation of Section 5.4. Following Section 3, we evaluate the resulting alternative N = 20 CoTs across four dimensions: Ablated Accuracy (AA), Ablated Faithfulness (AF) (via Early-Answering truncation), Original Faithfulness (OF) of the initial medoid, and Medoid Distance (MD, nor-malized sequence dissimilarity). Because this subset is defined by GSC’s only wins, the original accuracy is 1.00 across all configurations. Table 11 summarizes our findings across (dataset, GLLM) pairs. These results highlights different behaviors. First, in all but one case 33 Under review as a conference paper at COLM 2026 1.0 0.5 0.0 0.5 1.0 
+
+> 1.0
+> 0.5
+> 0.0
+> 0.5
+> 1.0
+> Faithfulness
+
+r = -0.18, p = 0.010 
+
+Llama-3.1 8B     
+
+> 1.0 0.5 0.0 0.5 1.0
+
+r = -0.17, p = 0.015 
+
+Phi-4     
+
+> 1.0 0.5 0.0 0.5 1.0
+
+r = -0.01, p = 0.856 
+
+DeepSeek R1 
+
+Accuracy 
+
+(a) GSM8K 1.0 0.5 0.0 0.5 1.0 
+
+> 1.0
+> 0.5
+> 0.0
+> 0.5
+> 1.0
+> Faithfulness
+
+r = -0.14, p = 0.041 
+
+Llama-3.1 8B     
+
+> 1.0 0.5 0.0 0.5 1.0
+
+r = -0.09, p = 0.210 
+
+Phi-4     
+
+> 1.0 0.5 0.0 0.5 1.0
+
+r = 0.11, p = 0.129 
+
+DeepSeek R1 
+
+Accuracy 
+
+(b) BoolQ 1.0 0.5 0.0 0.5 1.0 
+
+> 1.0
+> 0.5
+> 0.0
+> 0.5
+> 1.0
+> Faithfulness
+
+r = -0.17, p = 0.088 
+
+Llama-3.1 8B     
+
+> 1.0 0.5 0.0 0.5 1.0
+
+r = -0.38, p = <0.001 
+
+Phi-4     
+
+> 1.0 0.5 0.0 0.5 1.0
+
+r = 0.08, p = 0.470 
+
+DeepSeek R1 
+
+Accuracy 
+
+(c) MedQA 1.0 0.5 0.0 0.5 1.0 
+
+> 1.0
+> 0.5
+> 0.0
+> 0.5
+> 1.0
+> Faithfulness
+
+r = 0.03, p = 0.717 
+
+Llama-3.1 8B     
+
+> 1.0 0.5 0.0 0.5 1.0
+
+r = -0.05, p = 0.488 
+
+Phi-4     
+
+> 1.0 0.5 0.0 0.5 1.0
+
+r = -0.08, p = 0.276 
+
+DeepSeek R1 
+
+Accuracy 
+
+(d) GPQA 
+
+Figure 11: Population-Level Medoid Ablation Across Diverse Domains . For smaller GLLMs, accuracy gains couple with faithfulness drops on MedQA and GSM8K (the “lucky guess” phenomenon), but weaken on BoolQ and GPQA. Crucially, all datasets show a dense cluster at ∆Accuracy = 0 with negative ∆Faithfulness, proving medoid ablation degrades reasoning even when accuracy is preserved. 34 Under review as a conference paper at COLM 2026 (i.e. DeepSeek R1 on MedQA), the GLLMs’ ability to reach the correct final answer drops substantially, when it’s forced to deviate from the GSC-selected medoid. Across BoolQ, GPQA, and StratQA, AA falls to between 0.333 and 0.559 for all GLLMs. Second, high MDs confirm that the accuracy drop does not happen because GLLMs fails to follow the attack prompt. Across almost all datasets, MDs range from 0.576 to 0.995. This suggests that, under adversarial conditions, all GLLMs are able to generate CoTs that are diverse from the ablated medoid. DeepSeek R1 consistently produces the highest MD (peaking at 0.995 on MedQA and 0.935 on StratQA), indicating it explores the most heterogenous paths when restricted (this validates our findings in Section C.8 from an adversarial point of view). Third, in contrast to the almost uniform collapse in accuracy, the relationship between AF and OF depends on the GLLM and the domain. In general, AF exhibits high volatility. For instance, Llama 3.1 8B on StratQA drops from an OF of 0.657 to an AF of 0.364, while DeepSeek R1 on BoolQ rises from 0.274 to 0.705. This volatility is a direct consequence of the targeted nature of this subset. As noted in Section 5.4, faithfulness drops are strongly coupled with instances where models gain or preserve nominal accuracy (the "lucky guess" phenomenon). Although this dynamic is statistically more significant in smaller GLLMs (c.f. Section 5.4), in this experiment it is clearly captured by DeepSeek R1 on MedQA, where accuracy is entirely preserved (AA = 1.000) but there is a complete loss of faithfulness (AF = 0.000). However, because the ablation in this specific subset significantly lowers GLLM’ accuracy, the resulting AF scores reflect fragmented, unsuccessful reasoning paths rather than the uniform downward trend seen when accuracy remains close to its original values. 
+
+While population-level ablation primarily exposes faithfulness drops ( c.f. , Section 5.4), this targeted test shows severe accuracy degradation and high faithfulness variance, confirming the GSC medoid acts as a load-bearing path. 
+
+## D Case Studies 
+
+D.1 Overview - Where GSC Catches Hallucinations and SC Fails 
+
+This appendix details concrete cases where GSC successfully identifies correct answers supported by faithful reasoning paths, while standard SC selects answers produced by hallucinating or logically flawed reasoning chains. These cases illustrate three critical failure modes of majority voting: (1) shallow consensus on unfaithful reasoning , (2) conflation of logical validity with numerical agreement , and (3) fragmented answer space exploited by low-quality paths .
+
+D.2 Case Study 1: The Hallucination Detection Case (Question: StrategyQA, bdaf032b5e375aeb9bfa) 
+
+This question is extrapolated from the StrategyQA common reasoning benchmark and its ID is bdaf032b5e375aeb9bfa. As Listing 4 shows, it asks if Bobby Jindal’s high school mascot would eat kibble. The correct answer is true : Bobby Jindal attended Baton Rouge Magnet High School, whose mascot is the Bulldog , and a bulldog is a dog, which would eat kibble. Listing 4: StrategyQA, Question ID bdaf032b5e375aeb9bfa         
+
+> "Would Bobby Jindal 's high school mascot eat kibble?" For the final answer after your reasoning ,answer either 'true 'or 'false '
+> GOLD VALUE: true
+
+We analyze and study the reasoning paths elicited using DeepSeek R1 as GLLM. In this example, the N = 20 CoTs produce 12 final false answers and 8 final true answers, so SC majority voting selects false . GSC, however, selects true , identifying a reasoning path that is more semantically and structurally coherent. SC fails because it blindly selects the most frequent answer, but that majority is not supported by a consistent underlying rationale. Instead, the false CoTs are highly fragmented, as they converge on the same final label through mutually inconsistent hallucinated intermediate facts, including different schools and different mascots. As Table 12 shows, across the false cluster, the model assigns different 35 Under review as a conference paper at COLM 2026                                          
+
+> CoT Hallucinated school Hallucinated mascot GLLM Final Answer
+> CoT 2 Louisiana generic Alligator false CoT 3 Baton Rouge High Tiger false CoT 5 Baton Rouge High Panthers false CoT 9 Baton Rouge Magnet Panthers false CoT 11 Louisiana generic Wildcats false CoT 12 Unknown Tiger / Eagle false CoT 14 Louisiana generic Unknown false CoT 15 Unknown Symbol, not animal false CoT 18 Catholic school Saints false CoT 19 Baton Rouge Magnet Tigers false CoT 20 Baton Rouge Magnet Eagles false CoT 4 Baton Rouge High Bulldog →but mascot is a symbol false
+
+Table 12: Incorrect false CoTs and their hallucinated intermediate facts. The correct school and mascot, when mentioned, are highlighted in bold. Even when the correct pair is partially recovered, the reasoning may still derail, illustrating the internal inconsistency of the false 
+
+cluster. schools and different mascots, including Panthers , Tigers , Wildcats , Alligators , Eagles , and 
+
+Saints . Thus, these traces agree only on the final label, while diverging sharply in the crucial, causal facts used to justify it. Their apparent consensus is therefore accidental and unfaithful 
+
+rather than evidence of a stable underlying rationale. By contrast, the true cluster exhibits a highly consistent reasoning pattern. These traces repeatedly follow the same chain: Baton Rouge High → Bulldogs → dogs eat kibble → true . In graph terms, they induce nearly identical reasoning structures, with high overlap in both nodes and edges. This makes the true cluster internally coherent, even though it is numerically smaller than the false cluster. To make the basis of medoid selection explicit, recall that GSC identifies the medoid by maximizing the GSC Score: arg max 
+
+> Gi
+
+"
+
+α C(Gi)
+
+max j C(Gj) + ( 1 − α)P(Gi)
+
+#
+
+,Listing 5 shows the medoid CoT selected by GSC , and provides a clear illustration of why GSC succeeds in this case. Unlike the hallucinated false traces, this reasoning path is not only locally valid, but also collectively supported by the broader sample of true CoTs. It follows the correct causal chain – Baton Rouge High School → Bulldog → dog → kibble →
+
+true – and this same semantic and structural pattern is repeatedly recovered across the 
+
+true cluster. Quantitatively, the selected medoid (CoT 01) achieves a total graph similarity of 12.4739, a path consensus of 0.5877, and the highest GSC score of 0.9527. As Figure 12 shows, other faithful true traces receive similarly high scores, including CoT 08 (0.9519), CoT 07 (0.9470), CoT 10 (0.9440), and CoT 17 (0.9339), confirming that the correct answer is supported by a dense and internally consistent neighborhood of reasoning paths. Listing 6 shows a case of a confident hallucination (CoT 09), in which the reasoning chain is locally coherent but globally false. Each step follows plausibly from the previous one, yet the entire argument is anchored in the hallucinated intermediate facts (the wrong mascot). As a result, the trace appears structurally valid while still producing an incorrect final answer. GSC rejects this trace because its reasoning coherence is only local, not collective : although CoT 09 is internally smooth, it is not supported by a stable cluster of semantically aligned causal reasomning facts. The surrounding false traces reach the same answer through incompatible mascots and schools, yielding low pairwise similarity of the crucial, causal facts and a weak medoid. In fact, the hallucinated CoT 09 attains a substantially lower path consensus of 0.3421 and a lower combined score of 0.7795, reflecting that its apparent coherence is only local and is not shared by the broader false cluster. In other words, GSC wins here not because it prefers a minority answer per se, but because it identifies that the minority answer is supported by the most internally coherent and reproducible reasoning structure in the sample. In contrast, the faithful true traces repeatedly share the same core graph, so GSC promotes that cluster and suppresses this hallucinated one. This case highlights 
+
+36 Under review as a conference paper at COLM 2026 
+
+the core advantage of GSC over standard SC. Majority voting is misled by coincidental agreement among diverse hallucinations, whereas GSC exploits structural and semantic similarity across reasoning traces. As a result, it discounts the fragmented false cluster and instead selects the medoid of the coherent true cluster, recovering the correct answer. 
+
+Listing 5: StrategyQA, Question ID bdaf032b5e375aeb9bfa, CoT 01 (Medoid CoT) 
+
+0. Bobby Jindal attended Baton Rouge High School. [ depends_on : none] 1. The mascot of Baton Rouge High School is the Bulldog. [ depends_on : 0] 2. Bulldogs are dogs. [ depends_on : 1] 3. Dogs typically eat kibble. [ depends_on : 2] 4. Therefore, Bobby Jindal 's high school mascot would eat kibble. [ depends_on : 3] 
+
+The final answer is: true 
+
+Listing 6: StrategyQA, Question ID bdaf032b5e375aeb9bfa, CoT 09 
+
+0. Bobby Jindal attended Baton Rouge Magnet High School. [ depends_on : none] 1. The mascot of Baton Rouge Magnet High School is the Panthers. [ depends_on : 0] 2. Panthers are wild big cats and do not eat kibble. [ depends_on : 1] 3. Therefore, Bobby Jindal 's high school mascot would not eat kibble. [ depends_on : 2] 
+
+The final answer is: false 01 
+
+> 16
+> 08
+> 07
+> 10
+> 17
+> 13
+> 05
+> 19
+> 04
+> 20
+> 09
+> 06
+> 18
+> 14
+> 15
+> 12
+> 03
+> 11
+> 02
+> CoT Index
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> GSC Score
+> Correct (true)
+> Incorrect (false)
+> GSC Medoid
+
+Figure 12: Combined medoid objective across the 20 GLLM-generated CoTs for the Bobby Jindal StrategyQA example. Methodology : Each CoT is converted into a reasoning graph and scored by the main paper’s medoid objective, which combines normalized graph centrality and path consensus. Bars are sorted by this score; green denotes correct ( true ) CoTs, red denotes incorrect ( false ) CoTs, and hatching marks the GSC-selected medoid. Results : The figure makes the selection mechanism explicit. High-scoring traces cluster around the correct true reasoning paths, with the medoid located within this dense and semantically consistent region. In contrast, most incorrect false traces receive lower scores, reflecting weaker structural and semantic support. Consequently, while standard SC follows the numerical false majority, GSC selects the coherent true minority. 
+
+D.3 Case Study 2: The Assumption Fragmentation Case (Question: StrategyQA, a19804759885b694c56a) 
+
+This question is, again, extrapolated from the StrategyQA and its ID is a19804759885b694c56a. As Listing 7 shows, it asks whether one hundred thousand lolcat images could fit on a first-generation iPhone. The correct answer is true : the first-generation iPhone was available in a 16GB version, and if each lolcat image is roughly 100KB, then 100,000 such images would require about 10GB of storage, which fits within that capacity. Listing 7: StrategyQA, Question ID a19804759885b694c56a 
+
+"Could a hundred thousand lolcats fit on a first generation iPhone?" For the final answer after your reasoning , answer either 'true ' or 'false '
+
+37 Under review as a conference paper at COLM 2026 
+
+> GOLD VALUE: true
+
+We analyze and study the reasoning paths elicited using DeepSeek R1 as GLLM. Also in this case, SC selects the most frequent answer, false , that leads with 14 votes. On the other hand, GSC selected medoid CoT has true as its final answer. In this example, the core failure mode is not a single fabricated fact, but assumption fragmentation . The incorrect traces do not agree on one stable rationale. Instead, they vary across at least two hidden assumptions: the storage capacity of the first-generation iPhone and the average size of each lolcat image. Some false CoTs assume an 8GB model and conclude that 100 , 000 × 100 KB ≈ 10 GB cannot fit; others inflate the image size to 200KB, 300KB, or 500KB, making the total storage requirement much larger still (CoT 02, detailed in Listing 8, is an example). Listing 8: StrategyQA, Question ID a19804759885b694c56a, CoT 02 
+
+> 0. The first-generation iPhone has a maximum storage capacity of 8 gigabytes. [
+> depends_on : none] 1. A typical lolcat image is approximately 100-500 kilobytes in size. [ depends_on :none] 2. Converting the iPhone 's storage to megabytes gives 8192 megabytes (8 GB = 8192 MB). [depends_on : 0] 3. Assuming an average lolcat size of 300 kilobytes (0.3 MB), the iPhone could store about 27306 images (8192 MB / 0.3 MB per image). [ depends_on : 1,2] 4. 100,000 lolcats would require significantly more storage space than the iPhone 'scapacity. [ depends_on : 3] 5. Therefore, a hundred thousand lolcats cannot fit on a first-generation iPhone. [
+> depends_on : 4]
+> The final answer is: false
+
+By contrast, the faithful true traces repeatedly instantiate the same core graph: 16GB model exists → 100KB per image → 100,000 × 100KB ≈ 9.54 GB → fits → true . This pattern is exactly what’s described in the GSC selected medoid CoT (CoT 05, Listing 9), and appears consis-tently in multiple CoTs, including CoTs 01, 06, 10, and 11, which all recover essentially the same quantitative reasoning chain. Although the wording varies slightly across traces, the semantic content and causal structure remain highly aligned. Figure 13 makes the selection mechanism visually explicit: the top of the ranking is populated primarily by coherent reasoning traces, with the GSC medoid (CoT 05) emerging from this dense neighborhood, whereas incoherent or hallucinated traces are more fragmented and tend to receive lower scores. Listing 9: StrategyQA, Question ID a19804759885b694c56a, CoT 05 (Medoid CoT) 
+
+> 0. The first-generation iPhone had storage capacities of 4GB, 8GB, and 16GB. [
+> depends_on : none] 1. Assuming each lolcat image is approximately 100KB, 100,000 lolcats would require about 10GB of storage. [ depends_on : 0] 2. A 16GB iPhone could store 10GB of lolcats, leaving 6GB free. [ depends_on : 1] 3. Therefore, 100,000 lolcats could fit on a 16GB first-generation iPhone. [ depends_on :2]
+> The final answer is: true
+
+D.4 Case Study 3: Misordered Clinical Reasoning (Question: MedQA, 440) 
+
+This question is extrapolated from MedQA and asks for the most appropriate initial therapy for a 12-year-old boy with uncomplicated epistaxis (Listing 10). The correct answer is 
+
+D: squeezing the nostrils manually for 10 minutes with the head elevated. This is the standard first-line management for stable anterior epistaxis before escalation to topical vasoconstrictors, packing, or other interventions (MSD Manual Consumer Version, 2025). 38 Under review as a conference paper at COLM 2026 05 
+
+> 11
+> 10
+> 06
+> 01
+> 13
+> 12
+> 17
+> 04
+> 15
+> 09
+> 02
+> 18
+> 03
+> 08
+> 16
+> 20
+> 07
+> 19
+> 14
+> CoT Index
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> GSC Score
+> Correct (true)
+> Incorrect (false)
+> GSC Medoid
+
+Figure 13: Combined medoid objective across the 20 GLLM-generated CoTs for the lolcats/iPhone StrategyQA example. The GSC selected medoid CoT, having the highest GSC Score, is CoT 05. The highest-ranked traces form a coherent cluster, while hallucinated traces are more dispersed and score lower. Thus, GSC succeeds by selecting the structurally central path rather than the most frequent answer. Listing 10: MedQA, Question ID a19804759885b694c56a 
+
+"A 12-year-old boy is brought to the emergency department for the evaluation of persistent bleeding from his nose over the past hour. The bleeding started spontaneously. He has no history of a similar episode. He takes no medications. There is no history of abnormal bleeding in the family. His vital signs are within normal limits. On examination, he is pressing a gauze against his left nostril while hyperextending his head. The gauze is stained with blood and upon withdrawal of the gauze blood slowly drips out of his left nostrils. There is no bleeding from the right nostril. The remainder of the physical examination shows no abnormalities. Which of the following is the most appropriate initial therapy? Here are the answer options: A) Anterior packing and topical antibiotics B) Oxymetazoline nasal spray C) Placement of an epinephrine gauze in the left nostril D) Squeezing the nostrils manually for 10 minutes with the head elevated Answer by selecting just one of the options." 
+
+GOLD VALUE: D) Squeezing the nostrils manually for 10 minutes with the head elevated 
+
+We analyze the reasoning paths elicited using Phi-4 as GLLM. Here, the dominant failure mode is mainly related to misordered clinical reasoning . Many incorrect CoTs prematurely escalate to invasive therapy, especially epinephrine gauze (option C. ), by assuming that first-line conservative management has already failed or by incorrectly reclassifying the bleed as more severe than the vignette supports. In particular, several traces treat the patient’s use of gauze as evidence that proper manual compression has already been attempted and was ineffective, even though the vignette does not state that bilateral compression for 10 minutes with head elevation has been performed. Other traces incorrectly infer posterior epistaxis from persistence alone and justify escalation on that basis. Listing 11 illustrates this failure mode clearly. CoT 8 incorrectly interprets the presence of gauze as evidence that proper first-line manual compression has already failed, and therefore prematurely escalates to epinephrine gauze. The trace is locally coherent, but it is anchored in a false procedural assumption about what has already been tried. Listing 11: MedQA, Question ID 404, CoT 08 
+
+0. The boy is experiencing persistent nasal bleeding despite applying pressure, indicating the bleeding may be more severe than simple epistaxis. [ depends_on :none] 1. Oxymetazoline nasal spray (Option B) is a vasopressor that can constrict blood vessels and is often used as a first-line treatment for mild epistaxis, but given the persistence and severity of this case, it may not be sufficient. [ depends_on :0] 
+
+39 Under review as a conference paper at COLM 2026 
+
+2. Squeezing the nostrils (Option D) is a basic first-aid measure for epistaxis, but since the bleeding persists despite pressure, this method has already been attempted and is insufficient. [ depends_on : 0] 3. Anterior packing and topical antibiotics (Option A) are used for severe or persistent epistaxis that does not respond to initial measures, but antibiotics are not necessary without signs of infection. [ depends_on : 1, 2] 4. Placement of an epinephrine gauze (Option C) is appropriate as an initial therapy for severe epistaxis because epinephrine causes vasoconstriction, which can help control persistent bleeding. [ depends_on : 0, 1, 2] 5. Given the severity and persistence of the bleeding, and the fact that initial basic measures have failed, epinephrine gauze is the most appropriate initial therapy. [depends_on : 4] 
+
+The final answer is: C) Placement of an epinephrine gauze in the left nostril 
+
+The medoid CoT is (detailed in Listing 12) is correct because it preserves the correct treatment hierarchy: manual compression is first-line for uncomplicated anterior epistaxis, whereas oxymetazoline, epinephrine gauze, and packing are escalation steps. Although the trace contains some noisy supporting statements, it retains the key procedural ordering that defines the right answer. Listing 12: MedQA, Question ID 404, CoT 13 (Medoid CoT) 
+
+0. The boy has a persistent nosebleed that has not stopped with initial measures like gauze packing, indicating a need for further intervention [ depends_on : none]. 1. Anterior nosebleeds are a common issue in children and often respond well to initial conservative measures like nasal compression and topical vasoconstriction [depends_on : none]. 2. Oxymetazoline nasal spray can help by constricting blood vessels and is a non-invasive initial therapy for anterior nosebleeds [ depends_on : 1]. 3. Squeezing the nostrils manually is a recommended first-line conservative treatment for anterior nosebleeds [ depends_on : 1]. 4. Placement of an epinephrine gauze is typically used for more severe or recurrent nosebleeds when initial measures fail [ depends_on : 3]. 5. Anterior packing is used for persistent bleeding that doesn 't respond to initial conservative measures, and topical antibiotics can prevent infection from packing [depends_on : 4]. 
+
+The final answer is: D) Squeezing the nostrils manually for 10 minutes with the head elevated. 13 
+
+> 05
+> 07
+> 12
+> 11
+> 03
+> 18
+> 04
+> 14
+> 02
+> 10
+> 16
+> 20
+> 19
+> 08
+> 15
+> 06
+> 09
+> 01
+> 17
+> CoT Index
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> GSC Score
+> Correct (Answer D)
+> Incorrect (Others)
+> GSC Medoid
+
+Figure 14: Combined medoid objective across the 20 Phi-4 CoTs for MedQA question 440. 
+
+The medoid (CoT 13) is the unique top-ranked trace, while most of the next highest-scoring CoTs are incorrect. Thus, GSC recovers the correct answer in a difficult regime where the reasoning pool is dominated by high-scoring but misordered clinical traces. Quantitatively, Figure 14 shows a particularly challenging regime: the medoid (CoT 13) is alone at the top with the highest GSC score, while many of the immediately following 40 Under review as a conference paper at COLM 2026 traces are incorrect. Thus, GSC succeeds not because the correct cluster cleanly dominates the ranking, but because it isolates the single most central faithful path even when the surrounding reasoning pool is heavily contaminated by coherent but misordered clinical reasoning. 
+
+## E Related Work 
+
+The purpose of this section is to provide a more comprehensive review of the literature discussed in Section 6. 
+
+E.1 UQ Approaches 
+
+We can divide existing Uncertainty Quantification (UQ) approaches for Large-Language Models into two primary categories, architecture-dependent and architecture-agnostic .Architecture-dependent approaches require direct access to the internal mechanisms of the model to estimate confidence ( i.e. , they rely on token-level probabilities, raw logits, hidden states, or activation patterns). They can involve training auxiliary classifiers on these internal representations or fine-tuning the LLM itself to explicitly output confidence scores alongside its predictions. On the other hand, Architecture-agnostic approaches treat the LLM as a closed system, and estimate uncertainty relying solely on the final generated outputs. Common techniques include sampling multiple responses or prompting the LLM to self-evaluate its own responses. Within the architecture-depedent category, Kadavath et al. (2022) train an additional internal “value head” to predict P(IK ), which represents the probability that the model actually “knows” the correct answer. Specifically, they define "knowing" not as an abstract concept, but as the empirical likelihood that the model will independently generate the correct response when taking multiple open-ended samples at unit temperature. This approach inherently requires probing specific token positions and internal logits to calculate confidence. Within architectures-asgnostic category, Tian et al. (2023) extract well-calibrated confidence scores from RLHF-trained LLMs by prompt-ing models to directly verbalize their confidence as text or numerical probabilities. They demonstrate that these verbalized confidences—especially when aggregated over multi-ple sampled answers—are significantly better-calibrated than the models’ raw conditional probabilities. Beyond direct prompting, several architecture-agnostic methods estimate uncertainty from the semantic consistency of sampled outputs. Kuhn et al. (2023) introduced 
+
+Semantic Entropy , which measures uncertainty by grouping generations that express the same underlying answer. Building on this idea, Farquhar et al. (2024) showed that semantic clustering is effective for hallucination detection. Similarly, Lin et al. (2024) used semantic similarity graphs and their Laplacian spectra to identify unreliable outputs. However, these methods operate only at the level of the final answer and discard the intermediate reasoning structure. More recent work has begun to incorporate structure. Topo-UQ (Da et al., 2025), for example, maps CoTs into topological graphs and uses structural dispersion as a proxy for uncertainty. Related inference frameworks such as Tree of Thoughts (Yao et al., 2023) and graph-based reasoning (Besta et al., 2024) further show that non-linear structures can represent richer dependencies than linear chains. Yet these methods are primarily designed to guide generation, not to quantify uncertainty across independently sampled CoTs post hoc. A key limitation of purely topological approaches is that structural dispersion alone can miss important failure modes. In particular, it may fail under mode collapse, where models repeatedly produce structurally similar but flawed reasoning patterns (Ding et al., 2024). This leaves a clear gap: uncertainty should account for both semantic validity and structural organization across the full reasoning manifold, motivating our G RAPH EVAL framework. 
+
+E.2 Sequence-Level Decoding and Structural Reasoning 
+
+Decoding strategies dictate how an LLM navigates the vast distribution of possible rea-soning paths to generate a final answer. The standard approach is greedy decoding , which 41 Under review as a conference paper at COLM 2026 deterministically selects the highest-probability token at each step (Wei et al., 2022). While computationally efficient, greedy decoding is highly susceptible to cascading errors during complex tasks; a single hallucinated or incorrect token early in a Chain-of-Thought (CoT) trajectory locks the model into a suboptimal logical path, almost guaranteeing an incorrect final answer. To mitigate the brittleness of single-path greedy decoding, Wang et al. (2023b) introduced Self-Consistency (SC). Instead of relying on a single deterministic trajectory, SC samples a diverse set of reasoning paths using a non-zero temperature and selects the final answer via majority voting. By marginalizing over the intermediate reasoning steps, SC leverages the intuition that complex reasoning problems often have multiple valid logical pathways leading to the same correct conclusion, significantly improving accuracy over standard greedy decoding. However, a critical limitation of Self-Consistency is that it ag-gregates consensus solely at the level of the final output. Because it inherently discards the logical structure and validity of the intermediate CoTs, SC is highly vulnerable to unfaithful reasoning—instances where flawed, collapsed, or contradictory logic accidentally converges on the majority-voted answer. While advanced inference frameworks like Tree of Thoughts 
+
+(Yao et al., 2023) and Graph of Thoughts (Besta et al., 2024) address structural reasoning by searching over branches during generation, they do not resolve the decoding problem. This gap highlights the need for a decoding mechanism that selects answers based on the structural and semantic consensus of the entire reasoning graph, rather than just the final token. 42

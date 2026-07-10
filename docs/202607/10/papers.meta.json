@@ -1,0 +1,69 @@
+{
+  "label": "2026-07-10",
+  "date": "2026-07-10",
+  "generated_at": "2026-07-10T21:30:33",
+  "count": 4,
+  "papers": [
+    {
+      "paper_id": "202607/10/2607.06648v1-final-checkpoints-are-not-enough-analyzing-latent-reasoning-faithfulness-along-training-trajectories",
+      "section": "deep",
+      "title_en": "Final Checkpoints Are Not Enough: Analyzing Latent Reasoning Faithfulness Along Training Trajectories",
+      "authors": "Hengyu Jin, Shu Yang, Di Wang",
+      "date": "2026-07-07",
+      "pdf": "https://arxiv.org/pdf/2607.06648v1",
+      "score": "9.0",
+      "evidence": "通过反事实编辑对潜在推理步骤进行因果追踪",
+      "tldr": "潜在推理方法在隐藏状态中执行多步推理，但其忠实性未知。现有工作仅分析收敛检查点，忽略训练过程中的演变。本文通过反事实编辑和噪声消融激活补丁，在训练轨迹中跟踪不同范式的忠实性。发现输出层面不忠实性收敛时相似但轨迹不同；激活层面因果贡献随训练衰减；轨迹随答案格式（二选一 vs 开放式）分化。贡献在于揭示忠实性依赖于训练阶段和答案格式，需动态评估。",
+      "tags": "query:key-tokens",
+      "abstract_en": "Latent reasoning methods perform multi-step inference entirely in the model's continuous hidden states, promising more compact and efficient reasoning. However, these opaque hidden states raise a question of faithfulness: whether these latent reasoning steps causally drive the final answer. Prior work investigates this question at converged checkpoints and reports several unfaithful behaviors, such as latent reasoning steps that can be replaced without changing the answer, but leaves how these behaviors form during training unexamined. We instead track how faithfulness evolves across saved checkpoints for different latent reasoning paradigms, applying a verifiable counterfactual edit on the input and a noise-ablation activation patch on the latent reasoning steps. We find that (i) at the output level, latent reasoning methods can look similarly unfaithful at convergence under counterfactual edits while following qualitatively divergent trajectories; (ii) at the activation level, the causal contribution of latent reasoning steps to the final answer decays across training for both paradigms, with the examples that flip on the output side in (i) also being the examples on which this contribution decays; and (iii) the activation-level trajectory diverges by answer format, decaying on binary choice and rising on open-ended decoding. These findings highlight that latent reasoning faithfulness depends on training stage and answer format.",
+      "source": "arxiv",
+      "selection_source": "fresh_fetch"
+    },
+    {
+      "paper_id": "202607/10/2607.06720v1-when-does-in-context-search-help-a-sampling-complexity-theory-of-reflection-driven-reasoning",
+      "section": "quick",
+      "title_en": "When Does In-Context Search Help? A Sampling-Complexity Theory of Reflection-Driven Reasoning",
+      "authors": "Yotam Wolf, Noam Wies, Amnon Shashua",
+      "date": "2026-07-07",
+      "pdf": "https://arxiv.org/pdf/2607.06720v1",
+      "score": "6.0",
+      "evidence": "上下文搜索理论定位早期错误",
+      "tldr": "本文提出一种采样复杂度理论，将大语言模型的上下文搜索建模为推理轨迹上的近似推断，基础模型提供先验，自反思提供后验更新。研究表明，当反思能可靠定位早期错误时，上下文搜索可产生指数级改进，仅需多项式次尝试即解决零样本通过率极低的问题；反之则无渐进优势。近似后验更新足以保证鲁棒性，且交叉熵训练可学习该策略。在真实大推理模型上验证了理论预测。",
+      "tags": "query:key-tokens",
+      "abstract_en": "Training large language models (LLMs) with extended reasoning has enabled in-context search, in which models iteratively generate, critique, and revise solution attempts. We provide a theoretical analysis of in-context search by modeling it as approximate inference over reasoning traces, where the base model defines a prior and self-reflection provides feedback for posterior updates, and study the resulting inference-time sampling complexity - the number of sequential attempts needed to achieve high success probability. We show that when reflections reliably localize early mistakes, in-context search can yield exponential improvements over the base model, solving problems with exponentially small zero-shot pass rates using only a polynomial number of sequential attempts, whereas when this property fails, conditioning on past attempts offers no asymptotic benefit over parallel sampling. We further show that these gains are robust and learnable: approximate posterior updates suffice, and cross-entropy training on search rollouts recovers the required behavior with polynomial sample complexity. Finally, we show that under a stagewise abstraction of reinforcement learning with verifiable rewards, the optimal policy extension implements the same posterior reweighting rule. We validate key qualitative predictions of the theory on real large reasoning models.",
+      "source": "arxiv",
+      "selection_source": "fresh_fetch"
+    },
+    {
+      "paper_id": "202607/10/2607.08017v1-can-we-trust-llms-logic-quantifying-uncertainty-coherence-and-robustness-via-a-graph-based-framework",
+      "section": "quick",
+      "title_en": "Can We Trust LLM's Logic? Quantifying Uncertainty, Coherence, and Robustness via a Graph-Based Framework",
+      "authors": "Riccardo Revalor, Jalees Rehman, Debjit Pal",
+      "date": "2026-07-09",
+      "pdf": "https://arxiv.org/pdf/2607.08017v1",
+      "score": "6.0",
+      "evidence": "基于图框架的推理忠实性评估中的因果意识",
+      "tldr": "大型语言模型推理容易产生逻辑缺陷，自一致性解码仅评估最终答案一致性而忽略中间步骤的合理性。本文提出图推理框架GRAPHEVAL，通过图推理连贯性分数GRCS量化推理空间的语义-结构共识。实验发现GRCS与推理忠实性呈一致负相关；提出的Graph Self-Consistency解码策略能提升推理忠实性，并暴露自一致性的虚假膨胀。该工作为可靠评估与选择LLM推理路径提供了新方法。",
+      "tags": "query:key-tokens",
+      "abstract_en": "Large-Language Models (LLMs) can be prone to flawed and unfaithful reasoning that decoding strategies like Self-Consistency (SC) fail to detect as they evaluate only final-answer agreement while ignoring the logical validity of intermediate steps. This raises three fundamental questions: How can we reliably quantify uncertainty in LLM reasoning? Can semantic, structural, and causal awareness select more faithful reasoning compared to naïve majority voting? and How robust is reasoning topology under adversarial conditions? To address these questions, we introduce GRAPHEVAL, a graph-based reasoning framework that re-frames uncertainty quantification (UQ) as a holistic reasoning fidelity problem. We propose a novel UQ metric, Graph Reasoning Coherence Score (GRCS), that quantifies semantic-structural consensus of the reasoning space and captures pathological mode collapse and confident hallucinations. We find that GRCS is the only metric that is consistently negatively correlated with reasoning faithfulness across both more capable and smaller models. Additionally, we introduce Graph Self-Consistency (GSC), a medoid-based decoding strategy that trades nominal accuracy for reasoning fidelity, exposing the degree to which SC is inflated by unfaithful lucky guesses in smaller models, while preserving or improving accuracy in more capable ones. Finally, through adversarial medoid ablation, we demonstrate that the GSC-selected path acts as a \"load-bearing path\" and forcing models away from it degrades reasoning faithfulness and, in targeted cases, causes drops in accuracy.",
+      "source": "arxiv",
+      "selection_source": "fresh_fetch"
+    },
+    {
+      "paper_id": "202607/10/2607.08059v1-when-thinking-hurts-epistemic-signals-in-the-reasoning-chains-of-visual-language-models",
+      "section": "quick",
+      "title_en": "When Thinking Hurts: Epistemic Signals in the Reasoning Chains of Visual Language Models",
+      "authors": "Mayank Singal",
+      "date": "2026-07-09",
+      "pdf": "https://arxiv.org/pdf/2607.08059v1",
+      "score": "6.0",
+      "evidence": "视觉语言模型推理链熵分析",
+      "tldr": "视觉语言模型（VLM）的推理链（thinking chains）可作为比最终答案更可靠的认知信号，用于不确定性量化。在三个thinking-mode VLM家族上，发现思考链熵在存在链时始终优于答案熵（AUROC提升0.06-0.16），并扩展到VQAv2和HallusionBench任务。该工作还提出一种无需额外推理代价的实用拒绝门控机制，可将准确率从71.0%提升至93.8%（覆盖62.7%样本）。",
+      "tags": "query:key-tokens",
+      "abstract_en": "Uncertainty quantification for visual language models (VLMs) conventionally targets the answer token distribution. We provide the first three-family empirical characterisation of answer entropy behaviour in thinking-mode VLMs. Running four models on identical POPE adversarial samples, we find three qualitatively distinct patterns: Qwen3-VL-8B-Thinking shows complete collapse (ans H AUROC = 0.492); GLM-4.1V-9B-Thinking shows no collapse (0.716); and InternVL3-8B shows selective thinking (chains on only 50% of samples, ans H = 0.675 full / 0.602 thinking-only). Across all three thinking-mode models, thinking chain entropy outperforms answer entropy on the subset where chains are generated (0.647, 0.759, 0.608 vs. 0.492, 0.716, 0.602 respectively), suggesting chain signals are the more reliable predictor whenever chains are present. This holds strongly for Qwen and GLM, but with only marginal and statistically unreliable advantage for InternVL3 (n_FP = 17). A 300-sample VQAv2 pilot confirms chain entropy (0.680) outperforms answer entropy (0.595) on VQAv2 questions, with the gap largest for free-form answers (0.733 vs. 0.467). On harder reasoning tasks (HallusionBench) both Qwen models show moderate signal (approx. 0.64), consistent with incomplete pre-commitment on difficult questions. We additionally document structured abstention affecting 12-22% of queries with asymmetry toward absent-object queries, and a practical abstention gate raising accuracy from 71.0% to 93.8% at 62.7% coverage with no additional inference cost.",
+      "source": "arxiv",
+      "selection_source": "fresh_fetch"
+    }
+  ],
+  "errors": []
+}

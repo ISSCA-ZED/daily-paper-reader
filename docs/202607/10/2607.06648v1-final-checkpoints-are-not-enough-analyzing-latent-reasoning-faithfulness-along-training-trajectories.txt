@@ -1,0 +1,827 @@
+Title: Final Checkpoints Are Not Enough: Analyzing Latent Reasoning Faithfulness Along Training Trajectories
+
+URL Source: https://arxiv.org/pdf/2607.06648v1
+
+Published Time: Thu, 09 Jul 2026 00:02:57 GMT
+
+Number of Pages: 15
+
+Markdown Content:
+# Final Checkpoints Are Not Enough: Analyzing Latent Reasoning Faithfulness Along Training Trajectories 
+
+Hengyu Jin 1,2,3 , Shu Yang 2,3 , Di Wang 2,3 *1Tongji University 
+
+> 2
+
+Provable Responsible AI and Data Analytics (PRADA) Lab 
+
+> 3
+
+King Abdullah University of Science and Technology 
+
+Abstract 
+
+Latent reasoning methods perform multi-step inference entirely in the model’s continuous hidden states, promising more compact and effi-cient reasoning. However, these opaque hidden states raise a question of faithfulness: whether these latent reasoning steps causally drive the final answer. Prior work investigates this ques-tion at converged checkpoints and reports sev-eral unfaithful behaviors, such as latent reason-ing steps that can be replaced without chang-ing the answer, but leaves how these behav-iors form during training unexamined. We instead track how faithfulness evolves across saved checkpoints for different latent reasoning paradigms, applying a verifiable counterfactual edit on the input and a noise-ablation activa-tion patch on the latent reasoning steps. We find that (i) at the output level, latent reason-ing methods can look similarly unfaithful at convergence under counterfactual edits while following qualitatively divergent trajectories; 
+
+(ii) at the activation level, the causal contribu-tion of latent reasoning steps to the final answer decays across training for both paradigms, with the examples that flip on the output side in (i) also being the examples on which this contri-bution decays; and (iii) the activation-level tra-jectory diverges by answer format, decaying on binary choice and rising on open-ended decod-ing. These findings highlight that latent reason-ing faithfulness depends on training stage and answer format. 
+
+1 Introduction 
+
+Chain-of-thought reasoning represents intermedi-ate computation as natural-language tokens, im-proving multi-step reasoning by exposing a step-by-step trace (Wei et al., 2022; Nye et al., 2021). This representation comes at a cost: every reason-ing step must be committed to discrete textual to-kens, and the resulting traces lengthen inference. 
+
+> *Corresponding author.
+
+Latent reasoning methods instead perform multi-step inference entirely in the model’s continuous hidden states, promising more compact and effi-cient reasoning by removing the explicit trace that chain-of-thought requires (Hao et al., 2024; Shen et al., 2025). This opacity raises a question of faithfulness analogous to that studied in explicit CoT, where generated rationales need not reflect the underlying computation (Turpin et al., 2023; Lanham et al., 2023). Latent reasoning produces no such rationale to inspect, so the question is reframed as whether the latent reasoning steps themselves causally drive the final answer: do interventions that change or erase these steps actually change the prediction? 
+
+Prior work investigates this question at converged checkpoints and reports several unfaithful behav-iors of trained latent reasoners, including latent rea-soning steps whose hidden states can be replaced or perturbed without changing the final prediction, and evidence that the answer can be produced by alternative paths in the network that do not pass through these steps (Zhang et al., 2025; Lin et al., 2025; Cui et al., 2026; Li et al., 2026). These analyses share a methodological choice: each trained latent reasoner is treated as a fixed object and evaluated only at its final checkpoint. This leaves how the reported unfaithful behav-iors form during training unexamined, a question that is complex because latent reasoning train-ing paradigms differ substantially in mechanism. A final-checkpoint observation also cannot tell whether different paradigms reach a similar end-point through similar trajectories or through qual-itatively different ones. Treating a trained model as the endpoint of a training trajectory aligns with a broader line of work on model properties across training (Tirumala et al., 2022; Tigges et al., 2024), but has not yet been applied to latent reasoning faithfulness. We therefore measure faithfulness across saved 1arXiv:2607.06648v1 [cs.LG] 7 Jul 2026 (a) METHOD · COUNTERFACTUAL EDIT + NOISE-ABLATION PATCH (b) RQ1 · PREDICTION-LEVEL (c) RQ2 · ACTIVATION-LEVEL (d) RQ3 · CROSS-FORMAT                                                                 
+
+> CLEAN
+> Eva
+> v₁
+> v₂
+> yerpus
+> (answer A)
+> zarpus
+> (answer B)
+> reachable: Eva ⇒yerpus
+> COUNTERFACTUAL
+> Eva
+> v₁
+> v₂
+> yerpus
+> (answer A)
+> zarpus
+> (answer B)
+> ×
+> +
+> reachable: Eva ⇒zarpus
+> remove Eva →v1 ,add Eva →v2 ⇒verifiable label flip: yerpus →zarpus
+> TRAJECTORY ANALYSIS
+> score  probe across training
+> output-/activation-level score
+> illustrative —actual curves in panels (b–d)
+> ep 010 20 30 40 50
+> NOISE-ABLATION PATCH
+> patch =zero ·mean ·norm-noise
+> input
+> question
+> h₁
+> patched
+> h₂
+> patched
+> h₃
+> patched
+> h₄
+> patched
+> answer
+> token
+> measure Δanswer, OCR
+> 1815 16 25 48 0.00
+> 0.25
+> 0.50
+> 0.75
+> 1.00
+> pair-label  share
+> COCONUT
+> 1815 25 37 40
+> CODI training epoch
+> AB: faithful flip AA: retention Other
+> 10 20 30 40 48
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> Output  change  rate  (OCR)  COCONUT
+> 110 20 30 40
+> CODI training epoch
+> zero norm-noise
+> 410 20 25 48
+> training epoch
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> OCR  (norm-noise)
+> //
+> ProsQA GSM-Choice GSM-open
+
+Figure 1: Analysis along the training trajectory. (a) Counterfactual edit on ProsQA and noise-ablation patch on all latent reasoning steps, each evaluated across saved checkpoints. (b–d) Output-level (RQ1), activation-level (RQ2), and cross-format (RQ3) trajectories under these analyses. 
+
+checkpoints along training on a shared GPT-2 back-bone, applying the two interventions shown in Fig-ure 1a. The first, illustrated on the left, is a verified counterfactual edit on the input that we construct on ProsQA (Hao et al., 2024), a benchmark whose questions are graph reachability queries solvable by a deterministic BFS oracle: we edit a single edge of the underlying graph so that the BFS-verified oracle answer flips from the original target to the alternative, yielding 405 paired original/edited in-puts that differ only in a single rewritten clause. The second, on the right, is a noise-ablation acti-vation patch on the latent reasoning steps, adapted from causal-mediation analyses of model compo-nents (Vig et al., 2020; Heimersheim and Nanda, 2024). We organise the analysis around three re-search questions that move from the output level to the activation level to the answer format. 
+
+RQ1: Output-level faithfulness behaviors along training. Do latent reasoning methods with dif-ferent training paradigms exhibit qualitatively dif-ferent faithfulness behaviors at the output level along training, even when their final-checkpoint unfaithfulness looks similar? On the 405 veri-fied ProsQA counterfactual pairs above, tracing the joint label composition of each pair across six saved checkpoints in Figure 1b shows that surface similarity at convergence can hide qualitatively di-vergent output-level trajectories. 
+
+RQ2: Activation-level trajectory of latent rea-soning steps. Building on RQ1, we ask whether the output-level trajectory has a corresponding activation-level trajectory, that is, whether the la-tent reasoning steps lose their causal contribution to the answer on the same examples that drive the output-level transition. Following the patched-versus-clean output change rate across training in Figure 1c, we find that the causal contribution at the latent reasoning steps decays across training in both paradigms; a cohort analysis in §4 further shows that the examples flipping on the output side in RQ1 are also those on which this contribution decays. 
+
+RQ3: Cross-format dependence of the activation-level trajectory. The trajectories in RQ1 and RQ2 are both observed on a binary-choice setting. RQ3 asks whether they reflect an intrinsic property of latent reasoning or depend on the answer format , by varying only the answer format under a shared content and training recipe. Comparing the same trajectory across three answer formats in Figure 1d, we find that the activation-level trajectory reverses direction when only the answer format changes: the causal contribution at the latent reasoning steps decays across training on binary choice but rises on open-ended decoding. 22 Related Work 
+
+Latent reasoning methods. Latent reasoning replaces some or all discrete chain-of-thought steps (Wei et al., 2022; Nye et al., 2021) with com-putation in continuous hidden-state space. CO-CONUT (Hao et al., 2024) feeds the model’s last hidden state back as the next input embedding under a staged curriculum, while CODI (Shen et al., 2025) self-distils an explicit-CoT teacher into fixed-length continuous thoughts; related variants add non-verbal computation through pause tokens, recurrent depth, or implicit-CoT training (Goyal et al., 2024; Geiping et al., 2026; Deng et al., 2024; Chen et al., 2025). We focus on COCONUT and CODI as two representative training-paradigm choices (staged curriculum vs. self-distillation) and ask how the faithfulness profile of each evolves across training rather than at a single checkpoint. 
+
+Faithfulness for latent reasoning. Faithfulness diagnoses for explicit chain-of-thought assess whether the generated rationale reflects the model’s underlying computation (Jacovi and Goldberg, 2020; Turpin et al., 2023; Lanham et al., 2023; Lyu et al., 2024). Without an explicit trace to in-spect, latent reasoning faithfulness is reframed as whether the continuous thought steps causally drive the final prediction. Recent studies at the converged checkpoint suggest these continuous steps are often replaceable: ablation and perturbation on continu-ous thoughts largely preserve predictions (Zhang et al., 2025), models exploit shortcuts over inter-mediate steps (Lin et al., 2025; Wu et al., 2025; Liang and Pan, 2026), and latent positions exhibit shallow causal structure and limited interpretabil-ity (Li et al., 2026; Cui et al., 2026; Dilgren and Wiegreffe, 2026). These studies, however, evaluate models only at convergence. Inspired by perturba-tion tests for explicit reasoning (Atanasova et al., 2023; Kaushik et al., 2020; Lanham et al., 2023) and causal-mediation analyses (Vig et al., 2020; Heimersheim and Nanda, 2024), we track the de-velopment of these behaviors along the training trajectory. 
+
+Training-time dynamics. Neural-network ca-pabilities can change abruptly during training, as documented by work on grokking, induction-head phase transitions, and emergent abilities at scale (Power et al., 2022; Nanda et al., 2023; Ols-son et al., 2022; Zoph et al., 2022). Closer in spirit to our setting, Tirumala et al. (2022) track per-example behaviour across the training trajec-tory rather than at convergence, and Tigges et al. (2024) extend mechanistic circuit analyses across checkpoints and scales; both motivate looking at trained-model behaviour as the endpoint of a tra-jectory rather than as a fixed object. To our knowl-edge, no prior work jointly tracks a latent reasoning method’s counterfactual-following behaviour and the latent tokens’ causal contribution along its train-ing trajectory. 
+
+3 Counterfactual Response Across Training 
+
+Following the framing of §1, we measure faithful-ness by whether interventions on the model’s input or on its latent reasoning steps change the predic-tion. This section takes up the input intervention and the resulting output behaviour along training; the intervention on the latent reasoning steps is studied in §4. Prior work has reported similar un-faithful behaviors at the converged checkpoints of latent reasoning methods trained under different paradigms (Zhang et al., 2025; Lin et al., 2025; Cui et al., 2026; Li et al., 2026). We ask whether this surface similarity hides qualitatively different faith-fulness behaviors underneath: do latent reasoning methods with different training paradigms exhibit qualitatively different faithfulness behaviors along training, even when their final-checkpoint unfaith-fulness looks similar? 
+
+3.1 Experimental Setup Counterfactual edit on ProsQA. We formalise the edit introduced in §1 as follows. For each test instance with input xi and oracle answer Ai, we construct a minimally edited input x′ 
+
+> i
+
+whose oracle answer is the designated alternative Bi, and treat the model as counterfactually faithful on this pair when its prediction follows the edit from Ai to Bi.ProsQA is chosen for three reasons. (a) Its BFS-verifiable oracle lets the construction scale across the test set without human-edited labels, unlike NLI- or sentiment-style counterfactual sets (Kaushik et al., 2020; Gardner et al., 2020). 
+
+(b) ProsQA is the benchmark on which the orig-inal COCONUT report claims latent reasoning performs Breadth-First Search (BFS), so the test directly probes that capability. (c) ProsQA is also where latent reasoning’s lead over explicit chain-of-thought is largest, so a low counterfactual-following rate here is a disconfirming observation 3Algorithm 1 Verified answer-flipping perturbation for ProsQA. 
+
+Require: example (G, root, target, t −, π ) with gold path π
+
+Ensure: swap (u, v ) → (u, t −) that flips the ora-cle answer, or ⊥ 
+
+> 1:
+
+Tier 1 (canonical last hop):  
+
+> 2:
+
+(u, v ) ← (π|π|− 2, π |π|− 1) 
+
+> 3:
+
+G′ ← (G \ { (u, v )}) ∪ { (u, t −)} 
+
+> 4:
+
+if ¬BFS( G′, root, target ) and 
+
+BFS( G′, root, t −) then  
+
+> 5:
+
+return (u, v, canonical ) 
+
+> 6:
+
+end if  
+
+> 7:
+
+Tier 2 (bridge search):  
+
+> 8:
+
+B ← Bridges( G, root, target ) 
+
+> 9:
+
+for (u, v ) ∈ B do  
+
+> 10:
+
+G′ ← (G \ { (u, v )}) ∪ { (u, t −)} 
+
+> 11:
+
+if ¬BFS( G′, root, target ) and 
+
+BFS( G′, root, t −) then  
+
+> 12:
+
+return (u, v, bridge ) 
+
+> 13:
+
+end if  
+
+> 14:
+
+end for  
+
+> 15:
+
+return ⊥
+
+rather than a weak-baseline case. 
+
+Construction algorithm. We instantiate this minimal edit as a rewrite of one directed edge in the underlying graph: changing a single edge of G
+
+alters exactly the reasoning fact that a graph traver-sal would have to use, while leaving every other sentence in the question intact. Algorithm 1 de-tails the procedure. For each example with directed graph G, root ri, original target Ai, and alternative target Bi, the procedure first attempts the canon-ical last-hop swap that replaces the final edge of the gold reasoning path with an outgoing edge to 
+
+Bi. If this swap fails to disconnect Ai because the graph contains a parallel root-to-target path, the procedure falls back to a search over the bridge edges of the (ri, A i) query and accepts the first swap that succeeds. Every candidate swap is ac-cepted only when BFS on the edited graph confirms 
+
+¬[ri → Ai] ∧ [ri → Bi], so Bi becomes the unique reachable answer under the edit. 
+
+Coverage and reuse. The 95 rejected examples are those whose graph has multiple redundant root-to-target paths, for which no single-edge swap can disconnect the target while keeping the graph well-formed. The accepted 405 pairs are reused across every saved checkpoint of every paradigm; full cov-erage breakdown and reasoning-hop distribution are in Appendix A.2. 
+
+Training paradigms and baselines. The four training paradigms share a GPT-2 backbone (Rad-ford et al., 2019). CoT and answer-only (NoCoT) are text baselines that bracket faithfulness from above and below. COCONUT (Hao et al., 2024) and CODI (Shen et al., 2025) are two latent reason-ing methods that share the same architectural mech-anism, feeding the previous-step last hidden state back as the next-step input embedding, but differ sharply in training: COCONUT uses a staged cur-riculum that gradually replaces explicit reasoning tokens with continuous-thought positions, while CODI uses self-distillation to transfer an explicit-chain-of-thought signal into the same latent posi-tions. With architecture, backbone, and dataset fixed, any trajectory difference is attributable to the training mechanism, not data or architecture. The unit of analysis is the saved checkpoint trajectory 
+
+{Mt}Tt=1 , not only the final checkpoint or the one chosen by validation. 
+
+Metrics. For each checkpoint, predictions on 
+
+(xi, x ′
+
+> i
+
+) are mapped to joint labels over {A, B, O }2,where A is the original oracle Ai, B the perturbed oracle Bi, and O any other answer. The two key cells are AB (correct on the original and following the perturbed oracle) and AA (correct on the origi-nal but retaining the original answer after the edit). We report two complementary metrics. Contrast Consistency, in the sense of Gardner et al. (2020)’s contrast sets, 
+
+CC = Pr  ˆy(xi) = Ai ∧ ˆy(x′
+
+> i
+
+) = Bi
+
+,
+
+is the joint probability of being correct on the origi-nal input and following the perturbed oracle. Condi-tional Flip Rate is its capability-conditioned form, 
+
+CFR = Pr  ˆy(x′
+
+> i
+
+) = Bi | ˆy(xi) = Ai
+
+
+
+= CC /acc ,
+
+where acc = Pr(ˆ y(xi) = Ai). CFR isolates faith-fulness by conditioning on capability, unlike CC .
+
+3.2 Experimental Result Final checkpoints show a low-faithfulness end-point for both latent reasoning methods. Fig-ure 2 reports clean accuracy, CC , and CFR at each model’s best checkpoint. Both latent reasoning methods end with CC and CFR at roughly the 4CoT     
+
+> NoCoT
+> CODI
+> COCONUT 0
+> 0.25
+> 0.5
+> 0.75
+> 1
+> score
+> 0.76 0.80 0.84
+> 0.97
+> Clean acc.
+> CoT
+> NoCoT
+> CODI
+> COCONUT
+> 0.55
+> 0.00 0.03
+> 0.16
+> CC
+> CoT
+> NoCoT
+> CODI
+> COCONUT
+> 0.73
+> 0.00 0.04
+> 0.17
+> CFR
+
+Figure 2: Clean accuracy, Contrast Consistency ( CC ), and Conditional Flip Rate ( CFR ) on the 405 ProsQA oracle pairs at each model’s best checkpoint (CoT ep 30 ,NoCoT ep 14 , CODI ep 37 , COCONUT ep 48 ). 
+
+NoCoT answer-only baseline, even though CO-CONUT’s clean accuracy is the highest of the four paradigms; both methods’ CFR is roughly an or-der of magnitude below the explicit-CoT baseline. 
+
+CC and CFR agree at this snapshot, so the low-faithfulness endpoint is robust to whether faithful-ness is measured jointly with capability or condi-tioned on it. This reproduces the final-checkpoint concern from prior work using a verified counter-factual perturbation, but leaves open how the two paradigms arrived at the same endpoint. 
+
+COCONUT shifts abruptly at the curriculum boundary. Tracking the output-level trajectory of COCONUT across saved checkpoints, that is, the sequence of joint-label distributions on the counterfactual pairs at each saved epoch (Fig-ure 3), changes the interpretation. Through the early curriculum stages, COCONUT is domi-nated by the AB cell, that is, pairs on which the model is correct on the original input and follows the perturbed oracle. At the epoch 15 –
+
+16 curriculum boundary, where the latent budget grows from two to three positions, the joint la-bel distribution flips within a single epoch from counterfactual-following-dominated to retention-dominated, with detailed counts provided in Table 6 in Appendix A.4; the AA cell roughly quadruples while AB nearly halves, and CFR is approximately halved in the same epoch. Clean accuracy contin-ues to rise smoothly across this boundary, so the faithfulness drop is invisible from original-question accuracy alone. CC declines in parallel with CFR 
+
+but more gradually, because the simultaneous rise in clean accuracy partly compresses its change. 
+
+CODI is retention-like from early checkpoints. 
+
+CODI does not show this shift during training. Both CFR and CC sit at the NoCoT baseline level from the earliest saved checkpoint and never 10 20 30 40 50            
+
+> 0
+> 50
+> 100
+> pair-label share (%)  COCONUT
+> 10 20 30 40 50
+> CoT
+> 10 20 30 40 50
+> training epoch
+> 0
+> 50
+> 100
+> pair-label share (%)  NoCoT
+> 10 20 30 40
+> training epoch
+> CODI
+> AB
+> AA
+> BA
+> BB
+> AO
+> BO
+> O-cells
+
+Figure 3: Per-epoch joint label distribution on the 405 ProsQA oracle pairs for the four training paradigms. Each column is a stacked area over 
+
+{AB , AA , BA , BB , AO , BO , O-cells }, where O-cells groups OO , OA , and OB . On the COCONUT panel, 
+
+AB → AA collapses at the epoch 15 –16 stage bound-ary. 
+
+rise above it, so the trajectory enters the retention regime within the first few epochs and stays there. The contrast with COCONUT is clean: COCONUT first becomes more counterfactually adaptive and then loses that behaviour at a curriculum bound-ary, while CODI never visits the counterfactual-following regime in the first place. A single snap-shot at the best checkpoint collapses these two qual-itatively different training stories into the same low-
+
+CC , low-CFR summary. Takeaway 1 Latent reasoning methods can look similarly un-faithful at convergence while following qualita-tively different output-level trajectories. 
+
+4 Latent Mediation Across Training 
+
+The output-level trajectories from §3 characterise what the model outputs but not how the latent reasoning steps contribute to that output. Prior work probes this at the final checkpoint by apply-ing interventions to the latent reasoning steps and reports that they are often replaceable or weakly causal for the prediction (Zhang et al., 2025; Cui et al., 2026), building on causal-mediation and activation-patching techniques originally devel-oped for analysing model components (Vig et al., 2020; Heimersheim and Nanda, 2024). Such a final-checkpoint view leaves open whether the output-5level trajectory in §3 has an activation-level coun-terpart, so we ask: does the causal contribution of the latent reasoning steps to the answer follow its own trajectory across training, and does its timing align with the output-level transition within each paradigm? 
+
+4.1 Experimental Setup Trajectory-level patching. Following causal-mediation and activation-patching analyses (Vig et al., 2020; Heimersheim and Nanda, 2024), we patch all latent reasoning steps in a single inter-vention using one of three content-erasing values: 
+
+zero , the dataset mean latent embedding ( mean ), or norm-matched Gaussian noise ( norm-noise ). We replace the latent states at every step, forcing all downstream steps and the answer to be produced under the perturbed state (implementation details in Appendix A.3). The unit of analysis is the tra-jectory: we track how the intervention’s effect size evolves across saved checkpoints along training. The first metric is the output change rate, which measures the probability that predictions change under intervention: 
+
+OCR = Pr ˆypatch (x)̸ = ˆ yclean (x). (1) The second metric is the preserved-when-correct rate, which isolates the subset of inputs that are correct in the clean pass to measure how often the intervention is destructive: 
+
+PWC = Pr ˆypatch (x) = y ˆyclean (x) = y. (2) The two metrics are complementary: a non-zero 
+
+OCR can arise from breaking correct answers or from changing already-incorrect ones, and PWC 
+
+separates these. High OCR with low PWC means ablation destroys previously correct predictions, whereas low OCR with high PWC indicates a small causal mediation effect. We report the mean across four independent sampling seeds ±1
+
+standard deviation, with further details in Ap-pendix A.3. 
+
+Cohort-aware patching. The aggregate AB →
+
+AA transition in §3 is a property of the CO-CONUT average; we test whether the examples that flip on the output side also lose their causal contribution on the activation side. We therefore partition the test set into three cohorts by their joint label at checkpoints around the curriculum boundary, as defined in Table 1. For each co-hort we report the contrast indirect effect (Vig et al., 2020; Wang et al., 2022; Heimersheim and Nanda, 2024), IE contrast  
+
+> i
+
+= mpatch  
+
+> i
+
+− mclean  
+
+> i
+
+with 
+
+mi = log p(Bi) − log p(Ai), on the perturbed in-put; positive values indicate that the intervention shifts probability mass toward the perturbed oracle answer. Full formulas are in Appendix A.3.                            
+
+> Cohort ep 15 ep 16 ep 48
+> Gstable AB −AB
+> Gdrift AB AA AA
+> Gretain AA −AA
+> Table 1: Cohort criteria for the COCONUT ProsQA analysis (ep =epoch): ep 15 is just before the CO-CONUT curriculum boundary, ep 16 is immediately after it, and ep 48 is the best checkpoint. A −entry means that epoch 16 is not part of that cohort definition.
+
+4.2 Experimental Result Noise-ablation patching loses effect along the ProsQA trajectory. Figure 4 reports OCR and 
+
+PWC across the ProsQA checkpoint grid. Both COCONUT and CODI follow the same overall tra-jectory: OCR falls toward zero and PWC rises toward one across training, ending at a regime where noise ablation at the latent reasoning steps no longer produces detectable extracted-answer changes. This is the activation-level counterpart of the output-level pattern at convergence in RQ1: both models not only retain the original answer under counterfactual edits, but also become insen-sitive to noise ablation at the latent reasoning steps. 
+
+The two paradigms approach the low-dependence regime through qualitatively different trajectories. Figure 4 shows that for COCONUT, OCR falls and PWC rises smoothly across the curriculum and stabilises near the low-dependence regime by the best checkpoint. CODI reaches the same endpoint within the first few epochs and then stays there, aside from a brief epoch-10 transient. CODI thus enters the low-dependence regime early and abruptly, whereas COCONUT approaches it gradually; the boundary effect documented in §3 for COCONUT is recovered at the activation level only in the cohort analysis below. 
+
+For examples that drift from counterfactual following to retention of the original answer, the causal contribution of the latent steps also decays. Table 2 reports the effects per cohort: on Gdrift under all-step norm-noise , the median 
+
+IE contrast on the perturbed input drops across the 610 20 30 40 48               
+
+> 0.00
+> 0.06
+> 0.12
+> 0.18
+> OCR
+> COCONUT: OCR
+> 10 20 30 40 48
+> 0.925
+> 0.950
+> 0.975
+> 1.000
+> PWC
+> COCONUT: PWC
+> 110 20 30 40
+> training epoch
+> 0.00
+> 0.25
+> 0.50
+> 0.75
+> OCR
+> CODI: OCR
+> 110 20 30 40
+> training epoch
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+> PWC
+> CODI: PWC
+> zero mean norm-noise
+
+Figure 4: Causal analyses along the ProsQA training trajectory. Top: COCONUT, OCR and PWC across epochs for the zero , mean , and norm-noise content-erasing interventions. Bottom: CODI, same metrics on its 11 -checkpoint grid. Lines are the mean across four independent 256 -question sampling seeds; shaded bands are ±1 standard deviation across seeds. 
+
+same epoch 15 –16 boundary that produces the ag-gregate AB →AA transition in RQ1, and remains lower by the best checkpoint. This weakening is specific to the drift cohort under the counterfactual edit: the same cohort on the original input retains a large shift across the boundary, and the stable and retention cohorts, which are defined by epochs 15 
+
+and 48 , do not show a comparable drop.                             
+
+> Cohort Input ep 15 ep 16 ep 48
+> Gstable (n= 41 )perturbed 1.93 1.71 0.13
+> Gdrift (n= 62 )original 1.76 1.78 0.20
+> Gdrift (n= 62 )perturbed 1.71 0.70 0.23
+> Gretain (n= 35 )perturbed 2.32 3.44 0.20
+
+Table 2: Median contrast indirect effect IE contrast in nats under all-step norm-noise on the three cohorts of Table 1; positive values indicate that probability mass shifts toward the perturbed answer B. The Input column distinguishes the original ProsQA question xi from its counterfactual edit x′ 
+
+> i
+
+defined in §3. 
+
+Takeaway 2 
+
+Across training on ProsQA, the latent reasoning steps’ causal contribution to the answer decays for both paradigms; the examples that flip on the output side in §3 are also the examples on which this contribution decays. 
+
+5 Cross-Format Analysis: Latent Mediation Across Answer Formats 
+
+The output-level and activation-level trajectories identified in §3 and §4 are both observed on ProsQA, whose answer format is binary choice. Prior final-checkpoint studies report that latent rea-soning steps show different levels of causal in-volvement across datasets (Li et al., 2026; Cui et al., 2026). How this variability forms along train-ing has not been examined, and if the activation-level trajectory itself depends on the answer format, ProsQA alone cannot speak for latent reasoning as a whole. We therefore ask: do the output-level and activation-level trajectories observed in §3 and §4 depend on the answer format, or do they persist when only the format changes? 
+
+5.1 Experimental Setup 
+
+We apply the same all-step noise-ablation activa-tion patching from §4 to COCONUT on two answer formats of the same GSM8K problems (Cobbe et al., 2021). GSM-open keeps the original open-ended numerical answer format. GSM-Choice 
+
+rewrites each item as a two-option multiple-choice question containing the gold numerical answer and a distractor, aligned with the binary-choice format used by ProsQA. Because the GSM pair shares problem content, backbone, model family, and CO-CONUT training recipe, the comparison isolates the answer format more cleanly than a cross-task comparison can. We focus on the within-format trajectory direction of OCR under norm-noise ,rather than comparing absolute OCR levels across formats with different output spaces. Dataset con-struction and full intervention details are in Ap-pendix A.1 and Appendix A.3. 
+
+5.2 Experimental Result Changing only the answer format reverses the trajectory direction. Figure 5 shows the main result. On GSM-open, OCR under norm-noise 
+
+rises along training and remains high at the final evaluated epoch. On GSM-Choice, the same in-tervention moves in the opposite direction: OCR 
+
+falls and PWC rises across training, matching the direction observed on ProsQA in §4. 
+
+The flip decomposition shows that non-zero 
+
+OCR can reflect removable bias. On GSM-Choice, output changes are not mainly de-structive changes from correct to wrong. Ta-ble 3 shows that at the best checkpoint under 70.00             
+
+> 0.06
+> 0.12
+> 0.18
+> OCR
+> ProsQA
+> 0.0
+> 0.1
+> 0.2
+> 0.3
+> 0.4 GSM-Choice
+> 0.00
+> 0.25
+> 0.50
+> 0.75
+> 1.00 GSM-open
+> 10 20 30 40 48
+> training epoch
+> 0.94
+> 0.96
+> 0.98
+> 1.00
+> PWC
+> 410 25
+> training epoch
+> 0.7
+> 0.8
+> 0.9
+> 1.0
+> 410 25
+> training epoch
+> 0.00
+> 0.25
+> 0.50
+> 0.75
+> 1.00
+> zero mean norm-noise
+
+Figure 5: Latent-position dependence along the trajectory under the three all-step content-erasing interventions (zero , mean , norm-noise ) for COCONUT on three tasks. Left: ProsQA. Middle: GSM-Choice. Right: GSM-open. Top row: output change rate OCR . Bottom row: preserved-when-correct rate PWC . Lines are the mean over four independent sampling seeds and shaded bands are ±1 standard deviation across seeds.                         
+
+> Epoch Patch PWC c→ww→c4zero 0.801 0.199 0.510 13 zero 0.850 0.150 0.280 25 zero 0.919 0.081 0.180 25 mean 0.933 0.067 0.155 25 norm-noise 0.922 0.078 0.162
+
+Table 3: Flip decomposition on GSM-Choice × CO-CONUT (mean across four sampling seeds): preserved-when-correct rate vs. correct-to-wrong and wrong-to-correct flip rates. 
+
+zero , the wrong →correct flip rate exceeds the correct →wrong rate: the intervention preserves most predictions that are correct before patching, while a larger share of predictions that were wrong before the intervention move to the gold answer after patching. This breakdown keeps the interpre-tation of OCR precise: in binary-choice settings, latent reasoning steps may carry a removable an-swer bias rather than information required for the correct answer.           
+
+> GSM-Choice GSM-open COCONUT (best ep.) 0.868 0.356 CoT (best ep.) 0.828 0.446
+> ∆(COCONUT −CoT) +0 .040 −0.090
+
+Table 4: Validation accuracy at each model’s best epoch on the same GSM8K problems in two answer formats. 
+
+The same format change also affects headline accuracy. Table 4 shows a related implication for benchmark design: the ranking of COCONUT versus CoT in clean accuracy flips between open-ended GSM8K and its binary-choice reformulation. This ranking flip reinforces the broader point that answer format can change both apparent perfor-mance and the causal contribution measured at the latent reasoning steps. Takeaway 3 Changing only the answer format reverses the activation-level trajectory—decaying on binary choice, rising on open-ended decoding—so la-tent reasoning faithfulness depends on both the training trajectory and the answer format. 
+
+6 Conclusion 
+
+We track latent reasoning faithfulness across saved checkpoints rather than only at convergence, com-bining a verified counterfactual edit on the input with activation patching on the latent reasoning steps. Across COCONUT and CODI, the two paradigms reach similarly unfaithful endpoints through qualitatively divergent output-level and activation-level trajectories, and the activation-level trajectory reverses direction when only the answer format changes from binary choice to open-ended decoding. Latent reasoning faithfulness is therefore a property of the training stage and the answer for-mat, not of the architecture or the final checkpoint alone. 8Limitations 
+
+Our findings are scoped to settings where the anal-yses can give verifiable answers. The verified coun-terfactual edit requires a deterministic oracle on the perturbed input, which ProsQA provides through a BFS solver on the underlying graph; extending it to settings without such an oracle requires a new construction. We run all four training paradigms on the GPT-2 small backbone, both to match the scale at which the reference COCONUT and CODI recipes are reported (Hao et al., 2024; Shen et al., 2025) and to keep the cost of reproducing full train-ing trajectories tractable, following prior work that studies model behaviour across training at compa-rable scales (Tirumala et al., 2022; Tigges et al., 2024). The specific transition points we report should therefore be read as concrete instances of the methodological claim that final-checkpoint eval-uation can miss substantial changes along train-ing, rather than as universal claims across architec-tures. 
+
+References 
+
+Pepa Atanasova, Oana-Maria Camburu, Christina Li-oma, Thomas Lukasiewicz, Jakob Grue Simonsen, and Isabelle Augenstein. 2023. Faithfulness tests for natural language explanations. In Proceedings of the 61st Annual Meeting of the Association for Computational Linguistics (Volume 2: Short Papers) ,pages 283–294, Toronto, Canada. Association for Computational Linguistics. Xinghao Chen, Anhao Zhao, Heming Xia, Xuan Lu, Hanlin Wang, Yanjun Chen, Wei Zhang, Jian Wang, Wenjie Li, and Xiaoyu Shen. 2025. Reasoning beyond language: A comprehensive survey on la-tent chain-of-thought reasoning. arXiv preprint arXiv:2505.16782 .Karl Cobbe, Vineet Kosaraju, Mohammad Bavarian, Mark Chen, Heewoo Jun, Lukasz Kaiser, Matthias Plappert, Jerry Tworek, Jacob Hilton, Reiichiro Nakano, and 1 others. 2021. Training verifiers to solve math word problems. arXiv preprint arXiv:2110.14168 .Yingqian Cui, Zhenwei Dai, Bing He, Zhan Shi, Hui Liu, Rui Sun, Zhiji Liu, Yue Xing, Jiliang Tang, and Benoit Dumoulin. 2026. How do latent reasoning methods perform under weak and strong supervision? 
+
+arXiv preprint arXiv:2602.22441 .Yuntian Deng, Yejin Choi, and Stuart Shieber. 2024. From explicit cot to implicit cot: Learning to internalize cot step by step. arXiv preprint arXiv:2405.14838 .Connor Dilgren and Sarah Wiegreffe. 2026. Are la-tent reasoning models easily interpretable? arXiv preprint arXiv:2604.04902 .Matt Gardner, Yoav Artzi, Victoria Basmov, Jonathan Berant, Ben Bogin, Sihao Chen, Pradeep Dasigi, Dheeru Dua, Yanai Elazar, Ananth Gottumukkala, and 1 others. 2020. Evaluating models’ local deci-sion boundaries via contrast sets. In Findings of the Association for Computational Linguistics: EMNLP 2020 , pages 1307–1323. Jonas Geiping, Sean McLeish, Neel Jain, John Kirchen-bauer, Siddharth Singh, Brian Bartoldson, Bhavya Kailkhura, Abhinav Bhatele, and Tom Goldstein. 2026. Scaling up test-time compute with latent rea-soning: A recurrent depth approach. Advances in Neural Information Processing Systems , 38:41340– 41391. Sachin Goyal, Ziwei Ji, Ankit Singh Rawat, Aditya Kr-ishna Menon, Sanjiv Kumar, and Vaishnavh Nagara-jan. 2024. Think before you speak: Training lan-guage models with pause tokens. In International Conference on Learning Representations , volume 2024, pages 27896–27923. Shibo Hao, Sainbayar Sukhbaatar, DiJia Su, Xian Li, Zhiting Hu, Jason Weston, and Yuandong Tian. 2024. Training large language models to reason in a contin-uous latent space. arXiv preprint arXiv:2412.06769 .Stefan Heimersheim and Neel Nanda. 2024. How to use and interpret activation patching. arXiv preprint arXiv:2404.15255 .Alon Jacovi and Yoav Goldberg. 2020. Towards faith-fully interpretable NLP systems: How should we define and evaluate faithfulness? In Proceedings of the 58th Annual Meeting of the Association for Computational Linguistics , pages 4198–4205, On-line. Association for Computational Linguistics. Divyansh Kaushik, Eduard Hovy, and Zachary C Lipton. 2020. Learning the difference that makes a difference with counterfactually augmented data. International Conference on Learning Representations (ICLR) .Tamera Lanham, Anna Chen, Ansh Radhakrishnan, Benoit Steiner, Carson Denison, Danny Hernandez, Dustin Li, Esin Durmus, Evan Hubinger, Jackson Kernion, and 1 others. 2023. Measuring faithful-ness in chain-of-thought reasoning. arXiv preprint arXiv:2307.13702 .Zirui Li, Xuefeng Bai, Kehai Chen, Yizhi Li, Jian Yang, Chenghua Lin, and Min Zhang. 2026. Dynamics within latent chain-of-thought: An empirical study of causal structure. arXiv preprint arXiv:2602.08783 .Jia Liang and Liangming Pan. 2026. Do latent-cot models think step-by-step? a mechanistic study on sequential reasoning tasks. arXiv preprint arXiv:2602.00449 .
+
+9Tianhe Lin, Jian Xie, Siyu Yuan, and Deqing Yang. 2025. Implicit reasoning in transformers is reasoning through shortcuts. In Findings of the Association for Computational Linguistics: ACL 2025 , pages 9470– 9487. Qing Lyu, Marianna Apidianaki, and Chris Callison-Burch. 2024. Towards faithful model explanation in NLP: A survey. Computational Linguistics ,50(2):657–723. Neel Nanda, Lawrence Chan, Tom Lieberum, Jess Smith, and Jacob Steinhardt. 2023. Progress mea-sures for grokking via mechanistic interpretability. In 
+
+The Eleventh International Conference on Learning Representations .Maxwell Nye, Anders Johan Andreassen, Guy Gur-Ari, Henryk Michalewski, Jacob Austin, David Bieber, David Dohan, Aitor Lewkowycz, Maarten Bosma, David Luan, and 1 others. 2021. Show your work: Scratchpads for intermediate computation with lan-guage models. Catherine Olsson, Nelson Elhage, Neel Nanda, Nicholas Joseph, Nova DasSarma, Tom Henighan, Ben Mann, Amanda Askell, Yuntao Bai, Anna Chen, Tom Conerly, Dawn Drain, Deep Gan-guli, Zac Hatfield-Dodds, Danny Hernandez, Scott Johnston, Andy Jones, Jackson Kernion, Liane Lovitt, and 7 others. 2022. In-context learn-ing and induction heads. Transformer Circuits Thread . Https://transformer-circuits.pub/2022/in-context-learning-and-induction-heads/index.html. Alethea Power, Yuri Burda, Harri Edwards, Igor Babuschkin, and Vedant Misra. 2022. Grokking: Generalization beyond overfitting on small algorith-mic datasets. arXiv preprint arXiv:2201.02177 .Alec Radford, Jeffrey Wu, Rewon Child, David Luan, Dario Amodei, Ilya Sutskever, and 1 others. 2019. Language models are unsupervised multitask learn-ers. OpenAI blog , 1(8):9. Zhenyi Shen, Hanqi Yan, Linhai Zhang, Zhanghao Hu, Yali Du, and Yulan He. 2025. Codi: Compress-ing chain-of-thought into continuous space via self-distillation. In Proceedings of the 2025 Conference on Empirical Methods in Natural Language Process-ing , pages 677–693. Curt Tigges, Michael Hanna, Qinan Yu, and Stella Bi-derman. 2024. Llm circuit analyses are consistent across training and scale. Advances in Neural Infor-mation Processing Systems , 37:40699–40731. Kushal Tirumala, Aram Markosyan, Luke Zettlemoyer, and Armen Aghajanyan. 2022. Memorization with-out overfitting: Analyzing the training dynamics of large language models. Advances in Neural Informa-tion Processing Systems , 35:38274–38290. Miles Turpin, Julian Michael, Ethan Perez, and Samuel Bowman. 2023. Language models don’t always say what they think: Unfaithful explanations in chain-of-thought prompting. Advances in Neural Information Processing Systems , 36:74952–74965. Jesse Vig, Sebastian Gehrmann, Yonatan Belinkov, Sharon Qian, Daniel Nevo, Yaron Singer, and Stuart Shieber. 2020. Investigating gender bias in language models using causal mediation analysis. Advances in neural information processing systems , 33:12388– 12401. Kevin Wang, Alexandre Variengien, Arthur Conmy, Buck Shlegeris, and Jacob Steinhardt. 2022. Inter-pretability in the wild: a circuit for indirect object identification in gpt-2 small. Jason Wei, Xuezhi Wang, Dale Schuurmans, Maarten Bosma, Fei Xia, Ed Chi, Quoc V Le, Denny Zhou, and 1 others. 2022. Chain-of-thought prompting elic-its reasoning in large language models. Advances in neural information processing systems , 35:24824– 24837. Junhong Wu, Jinliang Lu, Zixuan Ren, Gangqiang Hu, Zhi Wu, Dai Dai, and Hua Wu. 2025. Llms are single-threaded reasoners: Demystifying the work-ing mechanism of soft thinking. arXiv preprint arXiv:2508.03440 .Yuyi Zhang, Boyu Tang, Tianjie Ju, Sufeng Duan, and Gongshen Liu. 2025. Do latent to-kens think? a causal and adversarial analysis of chain-of-continuous-thought. arXiv preprint arXiv:2512.21711 .Ziyin Zhang, Zhaokun Jiang, Lizhen Xu, Hongkun Hao, and Rui Wang. 2024. Multiple-choice questions are efficient and robust llm evaluators. arXiv preprint arXiv:2405.11966 .Barret Zoph, Colin Raffel, Dale Schuurmans, Dani Yo-gatama, Denny Zhou, Don Metzler, Ed H. Chi, Jason Wei, Jeff Dean, Liam B. Fedus, Maarten Paul Bosma, Oriol Vinyals, Percy Liang, Sebastian Borgeaud, Tat-sunori B. Hashimoto, and Yi Tay. 2022. Emergent abilities of large language models. TMLR .
+
+A Appendix 
+
+A.1 Training and Checkpoint Details 
+
+All four model families (CoT, NoCoT, COCONUT, CODI) are trained on a single RTX PRO 6000 GPU. CoT, NoCoT, and COCONUT use the COCONUT reference codebase (Hao et al., 2024) unmodified at the optimisation level; we adapt only the I/O paths and the per-device batch size so that, with gradient accumulation, the effective batch matches the origi-nal four-GPU recipe ( 32 ×4 = 128 ). CODI uses its reference repository (Shen et al., 2025) with only absolute paths changed. The main training budgets are approximately 36 GPU-hours for ProsQA ×
+
+COCONUT, 83 GPU-hours each for GSM-open 10 × COCONUT and GSM-Choice × COCONUT, and 5 GPU-hours for ProsQA × CODI. The GPT-2 checkpoint is MIT-licensed, and the other exter-nal artifacts used here are publicly released open-source research artifacts. We use these artifacts only for research training and evaluation, and the ProsQA perturbation pairs and GSM-Choice refor-mulation introduced here are intended as research evaluation artifacts. Every checkpoint that the orig-inal training loop saves is retained; checkpoint sav-ing is not filtered by validation score. When an analysis uses a best checkpoint, we select it af-terward by validation score and state that choice explicitly. 
+
+Backbone and tokeniser. All models use 
+
+openai-community/gpt2 (GPT-2 small, 124M pa-rameters) (Radford et al., 2019) from a local Hug-gingFace snapshot. The tokeniser is the GPT-2 BPE tokeniser. COCONUT and CODI extend the embedding table with the special tokens <bot> ,
+
+<eot> , and <latent> .
+
+Optimiser. For CoT, NoCoT, and COCONUT we use AdamW with learning rate 10 −4, weight decay 0.01 , and reset_optimizer=True when COCONUT enters its first latent stage. Preci-sion is FP32 ( bf16=False ). For CODI we fol-low the published recipe: AdamW with learning rate 3 · 10 −3, weight decay 0.1, cosine sched-ule, 0.03 warm-up ratio, gradient clipping at 2.0,BF16 mixed precision, and LoRA adapters ( r =128 , α = 32 , dropout 0) on top of frozen GPT-2 weights. CODI’s projection head has dimen-sion 768 with no dropout, and the distillation loss is normalised by the running standard deviation (distill_loss_div_std=True ). 
+
+ProsQA training. Train/valid/test splits contain 17 ,886 / 300 / 500 examples re-spectively. CoT, NoCoT, and COCONUT are each trained for 50 epochs on the same loader. The COCONUT curriculum uses 
+
+cthought = 1, epochs_per_stage = 5, and 
+
+max_latent_stage = 6, so the latent token budget grows as 0 → 1 → 2 → · · · → 6 over the first 30 epochs and then remains at 6. CoT keeps the same scaffolding but with cot=True 
+
+(no latent positions). NoCoT uses no_cot=True ,
+
+cthought = 0 , and max_latent_stage = 0 . CODI is trained for 40 epochs with num_latent = 6 ,
+
+model_max_length = 512 , max_token_num =1000 , include_last_cot=True , and 
+
+remove_eos=True , using per-device batch size 16 with 8 accumulation steps (effective batch 
+
+128 ). 
+
+GSM-open training. Train/valid/test splits contain 385 ,620 / 500 / 1,319 examples (the 
+
+coconut/data/gsm_train.json augmentation expansion of GSM8K (Cobbe et al., 2021)). Following the original COCONUT recipe, training is two-staged. Stage A (CoT) : GPT-2 is trained for 25 epochs with cthought = 0
+
+and max_latent_stage = 0, saving every epoch (save_only_improve=False ); we use 
+
+checkpoint_19 of this run as the initialisa-tion for Stage B (this is the highest-validation checkpoint of the CoT teacher). Stage B (CO-CONUT) : training continues for another 25 
+
+epochs with cthought = 2 , epochs_per_stage = 3 ,
+
+max_latent_stage = 3, and resume=3 (the curriculum starts from stage 1, skipping stage 
+
+0 which would just reproduce the loaded CoT checkpoint). The realised schedule is therefore: epochs 1–3 – stage 0, nlatent = 0 ; epochs 4–6 – stage 1, nlatent = 2; epochs 7–9 – stage 2, 
+
+nlatent = 4 ; epochs 10–25 – stage 3, nlatent = 6 .Both stages use batch_size_training=32 ,
+
+gradient_accumulation_steps = 4 (effective batch 128 ). 
+
+GSM-Choice training. The GSM-Choice cor-pus uses the same 385 ,620 / 500 / 1,319 split sizes, but each item is rewritten as a two-option multiple choice question following the method-ology of Zhang et al. (2024). The question text is appended with \nA) v1\nB) v2\nAnswer: ,where one of {v1, v 2} is the gold numerical an-swer and the other is a distractor. Distractors are drawn, in order of preference, from (i) the pub-lic GSM-MC option pool of Zhang et al. (2024) when available, (ii) intermediate values that ap-pear inside the «. . . =N» step calculations, and (iii) magnitude-perturbed variants of the gold an-swer ( ±1, ±10 , ×2, / 2). The gold letter is bal-anced across positions ( Pr[ gold = A] = 0 .5). Training proceeds with the same two-stage pro-tocol and identical hyperparameters as GSM-open; we use cot-gsm-mc/checkpoint_12 as the Stage A initialisation for Stage B. All other hyperparame-ters (lr, weight decay, accumulation, 25 epochs per stage) are unchanged. 
+
+Checkpoint grids for trajectory analyses. Be-havioural analyses consume every saved check-11 point of every run (epochs 1–50 on ProsQA, 1–25 
+
+on GSM-open and GSM-Choice, 1–40 on CODI-ProsQA). For the activation patching analyses we evaluate on a per-setting grid of checkpoints chosen to span the curriculum, with extra density placed where the trajectory in §4 changes most rapidly: • ProsQA × COCONUT : epochs 
+
+{6, 10 , 15 , 16 , 20 , 30 , 40 , 48 } (8 check-points; epoch_15 and epoch_16 bracket the nlatent =2 → 3 curriculum boundary highlighted in §3); • ProsQA × CODI : epochs 
+
+{1, 2, 3, 4, 5, 10 , 15 , 20 , 25 , 30 , 40 } (11 
+
+checkpoints; the first five epochs capture the early drop in the OCR trajectory); • GSM-open × COCONUT : epochs 
+
+{4, 7, 10 , 13 , 16 , 19 , 22 , 25 } (8 checkpoints; one checkpoint per stage in stages 0–3, then four checkpoints inside the terminal stage); • GSM-Choice × COCONUT : same epoch grid as GSM-open ( 8 checkpoints). The activation patching sampling protocol, decod-ing settings, and uncertainty methodology are in §A.3. 
+
+A.2 Counterfactual Edit Construction on ProsQA 
+
+This appendix collects the technical details sup-porting the verified counterfactual edit of §3: solver primitives, the swap acceptance criteria, the strategy-level coverage breakdown, the reasoning-hop distribution of the accepted pairs, and the surface-form rewriting rule. 
+
+Solver primitives. Reachability is decided by breadth-first search on the directed adjacency list. An edge (u, v ) is a bridge for the (root, target) query if removing it disconnects target from root 
+
+(this is a path-specific notion, not the classical undi-rected bridge). Bridges are enumerated by trying each edge (u, v ) that lies on at least one root → tar-get path and re-running BFS without it. 
+
+Swap acceptance criteria. Beyond the BFS-verified answer flip used in Algorithm 1, a candi-date swap must also (i) leave the graph well-formed (no orphan nodes, no schema violations) and (ii) admit a single-sentence surface rewrite of the form “Every u is a v” → “Every u is a t−”, where t− is the alternative candidate Bi. Edits that fail either criterion are rejected before the BFS check.                                   
+
+> Test Pert. Accept. Steps n%n%rate 3202 40.4 135 33.3 66.8% 4217 43.4 191 47.2 88.0% 569 13.8 67 16.5 97.1% 612 2.4 12 3.0 100 %total 500 405 81.0%
+> Table 5: Distribution of the number of gold reasoning-step sentences (a proxy for canonical-path length) on the ProsQA test set ( n= 500 ) and on the 405 accepted perturbation pairs. The two distributions are within a few percentage points of each other; the perturbation set spans the full hop range and is mildly enriched in longer-path examples.
+
+Strategy-level coverage. The 405 accepted pairs split into 335 found by the canonical last-hop swap (82 .7% of accepted) and 70 found by the bridge search ( 17 .3% ). The rejected examples are those for which every edge on every root → target path has a bypass, so no single-edge swap can achieve the conjunction ¬[root → target ] ∧ [root →
+
+t−]. Because the original ProsQA graph satis-fies ¬[root → t−] by construction (only target 
+
+is reachable from root ), the binding constraint is the existence of a bridge edge (u, v ) whose removal disconnects target ; these rejected examples would require coordinated multi-edge edits, which we ex-clude in order to keep the surface change to a single rewritten sentence. 
+
+Reasoning-hop distribution. The 405 accepted pairs preserve the reasoning-difficulty mixture of the full ProsQA test set rather than concentrating on shorter paths. Table 5 reports the distribution of the number of gold reasoning-step sentences (which determines the canonical-path length) on the 500 -example test set and on the 405 accepted pairs. The acceptance rate is in fact higher for longer-path examples ( 97 –100% for 5–6 steps vs. 67% for 3
+
+steps), because graphs with longer canonical paths are less likely to have a parallel alternative path; the resulting set is therefore mildly enriched in 4–
+
+6-step problems but still spans the full hop range present in the test set. 
+
+Question rewriting. After accepting a swap 
+
+(u, v ) → (u, t −), the perturbed natural-language question is generated by replacing the unique sen-tence “Every σ(u) is a σ(v).” with “Every σ(u) is a σ(t−).” (where σ is the symbol-name map of the example), leaving every other sentence unchanged. 12 The query sentence (“Is σ(root ) a σ(target ) or a σ(t−)?”) is preserved verbatim, so the answer flips from σ(target ) to σ(t−) but the candidate set, entity inventory, and surface form are otherwise identical. 
+
+A.3 Metric and Intervention Definitions 
+
+This appendix collects the explicit formulas, co-hort usage, and intervention protocols used in the analyses of §3–§5. 
+
+Joint-label coding. For each original/perturbed pair i, we map the extracted answer on both in-puts into {A, B, O }, where A is the original oracle answer Ai, B is the perturbed oracle answer Bi,and O is any other extracted answer. The resulting two-letter code ℓMt (i) takes values AB , the coun-terfactually adaptive cell; AA , original-answer re-tention; AO , originally correct but predicts neither 
+
+Ai nor Bi on the perturbed input; BA , the reversed pattern; and BB , predicting the perturbed oracle on both inputs. Cells with O in either coordinate are retained in the full 3 × 3 table and grouped as needed in figures. 
+
+Contrast Consistency, Conditional Flip Rate, and complementary rates. For each model checkpoint Mt and oracle pair i, let Ai be the orig-inal oracle answer and Bi be the perturbed oracle answer. We report original-question accuracy 
+
+acc Mt = Pr[ˆ yMt (xi) = Ai],
+
+Contrast Consistency in the sense of Gardner et al. (2020)’s contrast sets, 
+
+CC( Mt) = Pr ˆyMt (xi) = Ai ∧ ˆyMt (x′
+
+> i
+
+) = Bi
+
+ ,
+
+and the Conditional Flip Rate (the conditional form of CC , in the lineage of Kaushik et al. (2020); Lanham et al. (2023)), 
+
+CFR( Mt) = Pr ˆyMt (x′
+
+> i
+
+) = Bi ˆyMt (xi) = Ai
+
+
+
+= CC( Mt)/acc Mt .
+
+Equivalently, CC is the AB rate on the full 405 -pair denominator and CFR is the AB rate among the originally-correct pairs (AB +AA +AO); the complementary AA (retention) and AO fractions on that same denominator account for the rest. We report CC and CFR jointly because CC mixes capability with faithfulness while CFR isolates faithfulness by conditioning on capability. 
+
+Transition cohorts on ProsQA × COCONUT. 
+
+We use the three COCONUT ProsQA cohorts de-fined in Table 1. Epoch 16 is reported for every cohort, but for Gstable and Gretain it is not used to select examples; it is only an evaluation check-point for the intervention. Only Gdrift is condi-tioned on epoch 16 , because it isolates examples that move from AB at epoch 15 to AA at the cur-riculum boundary and are also AA at epoch 48 .On each cohort we apply the all-step norm-noise 
+
+intervention at epochs 15 , 16 , and 48 , and measure the answer margin shift 
+
+mi = log p(Bi) − log p(Ai),
+
+∆mi = mpatch  
+
+> i
+
+− mclean  
+
+> i
+
+,
+
+where ∆mi > 0 indicates that the intervention shifts probability mass toward the perturbed ora-cle answer. The cohort design controls for item difficulty: in Gdrift , the same example is solved correctly under perturbation at epoch 15 but not at epochs 16 and 48 , so comparisons across these checkpoints are not due to changing item composi-tion. 
+
+Activation patching protocol. For each (check-point, intervention) cell, evaluation is repeated on four independently sampled 256 -question sub-sets of the test set (sampling seeds {0, 1, 2, 3}), and we compare a clean forward pass with a patched forward pass on each. The all-step in-tervention replaces every latent position in the current curriculum stage. We use zero replace-ment, corresponding-position mean replacement from a held-out calibration batch, and norm-noise 
+
+replacement with isotropic Gaussian noise rescaled to the original latent norm and repeated for 3 noise seeds per question. For COCONUT, replacement is applied to the continuous-thought embedding be-fore it is fed back as the next input embedding; for CODI, replacement is applied to the post-projection hidden state used as the next latent-loop input. Decoding uses greedy generation with the model-specific maximum new-token budget ( 32 tokens for ProsQA, 256 for GSM-open, 8 for GSM-Choice), and the answer is extracted by the same regex used by the COCONUT and CODI evaluation scripts. 
+
+Output-level metrics for activation patching. 
+
+The output change rate is 
+
+OCR = Pr[ˆ ypatch ̸ = ˆ yclean ],
+
+13 the preserved-when-correct rate is 
+
+PWC = Pr[ˆ ypatch = y | ˆyclean = y],
+
+where y is the task gold answer after the task-specific answer normalisation. The flip decom-position refines output changes by correctness di-rection: 
+
+Pr[c → w] = Pr[ˆ ypatch ̸ = y | ˆyclean = y],
+
+Pr[w → c] = Pr[ˆ ypatch = y | ˆyclean ̸ = y],
+
+which is necessary when OCR is nonzero but 
+
+acc c −acc p ≈ 0, the regime of GSM-Choice × CO-CONUT at late checkpoints in Table 3. For GSM-open, OCR is computed after the same numeric-answer normalisation used for accuracy. 
+
+Sampling and uncertainty. Each (checkpoint, intervention) cell is estimated from 4 × 256 = 1024 clean forward passes and, for norm-noise ,
+
+4 × 256 × 3 = 3072 patched forward passes. Re-ported metrics in §4–§5 are the mean across the four sampling seeds; uncertainty is summarised as 
+
+±1 standard deviation across seeds.                                                    
+
+> Epoch AB AA BA BB Clean acc 5175 8110 0.528 10 191 44 618 0.681 15 220 38 090.790 16 127 161 15 21 0.857 17 74 261 20 13 0.886 20 100 242 11 10 0.901 30 77 311 690.963 48 (best) 65 326 590.965
+> Table 6: COCONUT on ProsQA: joint label counts on the 405 oracle pairs across selected checkpoints. The AB →AA collapse between epoch 15 and 16 is invisible from clean accuracy.
+
+Robustness across seeds. For COCONUT at the first and last evaluated checkpoint under 
+
+norm-noise , the four-seed OCR mean ± standard deviation is ProsQA 0.139 ± 0.009 / 0.000 ± 0.000 ,GSM-Choice 0.316 ± 0.013 / 0.101 ± 0.007 , and GSM-open 0.641 ± 0.011 / 0.874 ± 0.017 . All four seeds preserve the qualitative direction of each trajectory (decaying for ProsQA and GSM-Choice, rising for GSM-open). We therefore report the co-hort pattern around the boundary in §4 descriptively rather than as a standalone significance claim. 
+
+A.4 Additional Results 
+
+We report additional quantitative results to sup-port the findings in the main text. Table 6 lists the core joint label counts for COCONUT on ProsQA across selected checkpoints, highlighting the rapid 
+
+AB → AA flip at the epoch 15 –16 boundary. 
+
+A.5 The Use of Large Language Models 
+
+We used LLMs for limited writing support, includ-ing refining grammar and improving language clar-ity and fluency. The scientific content, experimen-tal design, analysis, claims, and citations were pro-duced and verified by the authors. The authors re-viewed and edited all LLM-generated content and take full responsibility for the final submission. 
+
+A.6 Notation and Terminology 
+
+Table 7 collects the symbols and terms used across the paper. 14 Symbol / Term Meaning 
+
+Training paradigms 
+
+CoT Chain-of-thought baseline: generates explicit step-by-step text tokens before the answer. NoCoT Answer-only baseline: trained to emit the answer directly with no intermediate text. COCONUT Latent-reasoning method that replaces explicit reasoning tokens with continuous thoughts via a curriculum (Hao et al., 2024). CODI Latent-reasoning method that compresses CoT into latent thoughts via self-distillation (Shen et al., 2025). 
+
+Datasets 
+
+ProsQA Reachability QA over small directed graphs; each question has a binary candidate answer. GSM-open Open-ended numerical answer format of GSM8K (Cobbe et al., 2021). GSM-Choice Two-option multiple-choice reformulation of GSM8K aligned with the binary interface of ProsQA. 
+
+Pairs, inputs, and oracle answers 
+
+xi, x′ 
+
+> i
+
+Original and perturbed input for pair i.
+
+Ai, Bi Original oracle answer and perturbed oracle answer. 
+
+t− Negative target node used to construct the perturbation. 
+
+ˆyMt (·) Predicted answer of checkpoint Mt on a given input. 
+
+Joint labels (per pair) 
+
+ℓMt (i) ∈ { A, B, O }2 Joint label encoding (original-answer, perturbed-answer) for checkpoint Mt on pair i, where 
+
+O is any answer outside {Ai, B i}.
+
+AB Original → A, perturbed → B; counterfactually adaptive. 
+
+AA Original → A, perturbed → A; original-answer retention. 
+
+AO Original → A, perturbed → O; correct on the original, off-target on the perturbed input. 
+
+Behavioural metrics 
+
+acc Mt Original-question accuracy at checkpoint Mt.
+
+CC( Mt) Contrast Consistency, Pr[ˆ y(xi) = Ai ∧ ˆy(x′
+
+> i
+
+) = Bi] (Gardner et al., 2020). 
+
+CFR( Mt) Conditional flip rate, Pr[ˆ y(x′
+
+> i
+
+) = Bi | ˆy(xi) = Ai].
+
+Mechanistic metrics 
+
+OCR Output change rate, Pr[ˆ ypatch ̸ = ˆ yclean ].
+
+PWC Preserved-when-correct rate, Pr[ˆ ypatch = y | ˆyclean = y].
+
+acc c, acc p Clean and patched accuracy on the same evaluation set. 
+
+Pr[c → w] Directional flip: items correct in the clean pass that become wrong after patching. 
+
+Pr[w → c] Directional flip: items wrong in the clean pass that become correct after patching. 
+
+mi Answer-margin, mi = log p(Bi) − log p(Ai).
+
+∆mi Intervention-induced margin shift, ∆mi = mpatch  
+
+> i
+
+− mclean  
+
+> i
+
+.
+
+Content-erasing interventions 
+
+zero Replace the latent activation at the target position with the zero vector. 
+
+mean Replace with the corresponding-position mean activation from a held-out calibration batch. 
+
+norm-noise Replace with isotropic Gaussian noise rescaled to the original latent norm. 
+
+Cohorts (ProsQA × COCONUT) 
+
+Gstable Pairs with ℓ15 = ℓ48 = AB (n = 41 ); counterfactually adaptive at epochs 15 and 48 .
+
+Gdrift Pairs with ℓ15 = AB , ℓ16 = AA , ℓ48 = AA (n = 62 ); adaptive at epoch 15 and retains the original answer at epochs 16 and 48 .
+
+Gretain Pairs with ℓ15 = ℓ48 = AA (n = 35 ); retains the original answer at epochs 15 and 48 .
+
+Checkpoints and curriculum 
+
+Mt Model at training checkpoint t.
+
+T Index of the last saved checkpoint in a training trajectory, so {Mt}Tt=1 denotes the full saved-checkpoint trajectory of a run. 
+
+nlatent Number of latent positions in the current curriculum stage. 
+
+cthought COCONUT hyperparameter: continuous thoughts inserted per replaced reasoning step. 
+
+Table 7: Notation and terminology used throughout the paper. 
+
+15
