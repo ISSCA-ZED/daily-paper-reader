@@ -1,0 +1,426 @@
+Title: A Mechanistic Lens on Semantic Conflicts: Using Activation Patching to Understand LLM Behavior
+
+URL Source: https://arxiv.org/pdf/2607.05587v1
+
+Published Time: Wed, 08 Jul 2026 00:09:39 GMT
+
+Number of Pages: 12
+
+Markdown Content:
+# A Mechanistic Lens on Semantic Conflicts: Using Activation Patching to Understand LLM Behavior 
+
+Youssef Abdelsalam, Norman Peitek, Anna-Maria Maurer, Marvin Wyrich, and Sven Apel 
+
+Saarland Informatics Campus, Saarland University 
+
+Saarbr¨ ucken, Germany 
+
+Abstract —Large language models (LLMs) are increasingly used in software-engineering tasks processing executable code and non-executable semantic cues such as comments or identi-fiers. These two sources of information can conflict, leading to situations where the semantic cues suggest different program behavior than the code itself. It remains unclear how such semantic conflicts affect LLM behavior and which source of information dominates their outputs. We present the first controlled, mechanistic study of LLM behavior under semantic conflicts. To this end, we construct 45 Python snippet triplets that isolate conflicts by varying either semantic cues or implementation while keeping token-aligned pairs for causal intervention. We evaluate four open-weight LLMs on two tasks—final-output prediction and unit-test generation— using both behavioral performance measures and residual-stream activation patching to identify token-layer states that causally contribute to differences in LLM behavior between aligned and conflicting inputs. Our results show that semantic conflicts significantly reduce execution-grounded correctness in both tasks and that all tested LLMs frequently follow (misleading) semantic cues. Residual-stream activation patching reveals a consistent pattern for final-output prediction: The changed cue/code region and a small set of intermediate tokens carry most of the recoverable causal signal before being aggregated near the output readout. For unit-test generation, this pattern extends beyond the prompt, showing that conflict-related information is not only recoverable at prompt sites but also at generated assertion sites before producing expected values. Overall, our findings show that semantic conflicts affect both program comprehension and downstream tasks, with the relevant information concentrated in a small number of causally active residual-stream states, and demonstrate aframework for mechanistically analyzing how LLMs integrate different sources of code-related information under controlled semantic variations. 
+
+Index Terms —Large Language Models, Mechanistic Inter-pretability, Semantic Conflicts, Program Comprehension 
+
+I. I NTRODUCTION 
+
+Large language models (LLMs) are increasingly used in software-engineering workflows [1], [2], including test gen-eration [3], [4], program repair [5], [6], and agentic de-velopment [7], [8]. These workflows expose LLMs to both executable code and non-executable semantic cues, such as comments, identifiers, and other natural-language texts. While these sources typically agree in well-maintained code [9], [10], they often diverge in practice due to outdated documentation, misleading identifiers, or evolving implementations [10]–[12], resulting in semantic conflicts . Such conflicts are inherently ambiguous, as neither source can be assumed authoritative without external validation. This renders LLMs distinctive among software-engineering tools, as they jointly process executable implementations and natural-language cues. In fact, LLMs often rely on semantic cues in their reasoning [13], [14]. When conflicts arise, it remains unclear which source LLMs prioritize and how this affects downstream tasks such as test generation, program repair, and agentic development. Prior work has documented many LLM failures in coding tasks [15], [16], but behavioral outputs alone cannot explain how conflicting information is in-ternally represented or how it influences downstream software-engineering tasks. We address this gap by studying LLM behavior under semantic conflicts in two tasks: predicting program outputs and generating unit tests. We introduce an experimental frame-work that combines behavioral evaluation with mechanistic interpretability. Using residual-stream activation patching, an intervention-based method commonly used in mechanistic interpretability [17], [18], we causally trace where conflict-relevant representations emerge within the model. To this end, we construct paired inputs in which identical code is presented with either consistent (aligned) or inconsistent (conflicting) semantic cues, allowing us to patch residual states between these conditions and identify token-layer sites whose internal states are sufficient to shift the LLM’s outputs. Our dataset consists of 45 minimal, token-matched Python triplets: an aligned baseline and two conflicting variants cre-ated by modifying either the implementation or a semantic cue. Across four open-weight autoregressive transformer models, we find that semantic conflicts substantially reduce execution-grounded correctness in both tasks. Models frequently follow misleading semantic cues, producing incorrect outputs or tests. Mechanistically, we observe a staged pattern: early layers are sensitive to modified cue/code regions, middle layers to a sparse set of intermediate tokens, and later layers to the final input context. To our knowledge, this is among the first applications of causal mechanistic interpretability methods in a software-engineering context. Beyond characterizing the effects of semantic conflicts, our framework shows how such methods can localize behaviorally relevant signals within the residual stream, narrowing the search space for future analyses (e.g., path patching [19] or circuit tracing [20]). This opens avenues for diagnosing LLM behavior, improving reliability, and de-tecting conflicts between cue- and execution-consistent signals before they affect outputs during code-related tasks. arXiv:2607.05587v1 [cs.SE] 6 Jul 2026 # Returns whether the input is even def compute(x): return x % 2 == 0print(compute(4)) 
+
+aligned (baseline)          
+
+> #Returns whether the input is odd def compute(x): return x % 2== 0print(compute(4))
+
+cue-varied      
+
+> #Returns whether the input is even def compute(x): return x % 2 == 1
+> print(compute(4))�
+
+implementation-varied                      
+
+> L1LN... T0Tn-1 1... L1LN... T0Tn-1 ‘even’ ... L1LN... T0Tn-1 ... ‘odd’
+> odd->even 0:
+> RQ 1.2 and RQ 2.2 : Can we trace the causal contribution of internal represen-tations by applying residual activation patching across layers and tokens? How do semantic conflicts affect LLM behavior during program comprehension ( RQ 1.1 ) and test generation ( RQ 2.1 )?
+> cue-consistent test generation: execution-consistent output generation: def test_compute(): assert compute(4) == True assert compute(5) == False
+> assert compute(6) == True�
+> FALSE
+> LNL1
+> patch Fig. 1. Overview of our experimental framework. We construct 45 Python snippet triplets (aligned, implementation-varied, and cue-varied) and provide them together with either an output prediction task (RQ 1) or a unit-test generation task (RQ 2) to four LLMs. We then (i) assess how semantic conflicts shift model behavior relative to execution and cues, and (ii) identify the token-layer sites that causally drive these shifts via residual activation patching.
+
+In summary, we make the following contributions:  
+
+> •
+
+An experimental framework to study semantic conflicts between cues and implementations, introducing activation patching for software-engineering research.  
+
+> •
+
+A behavioral analysis of 45 Python triplets showing that semantic conflicts significantly reduce correctness in both output prediction and generated unit tests.  
+
+> •
+
+A causal mechanistic analysis identifying token-layer states that shift outputs between aligned and conflicting inputs.  
+
+> •
+
+A replication package, including analysis scripts and 45 token-aligned code snippet triplets, to support future re-search [21]. Figure 1 summarizes the resulting study design, connecting the aligned and conflicting snippet variants to the behavioral measurements and residual-stream interventions used through-out the paper. II. B ACKGROUND AND RELATED WORK 
+
+In this section, we provide the necessary background and summarize prior work related to our study. We review three areas: (1) LLMs in software engineering, (2) mechanistic interpretability of LLMs, and (3) semantic conflicts between executable code and non-executable software artifacts. 
+
+A. LLMs in Software Engineering 
+
+LLMs for code generation are commonly evaluated through external behavioral criteria, especially execution-based func-tional correctness. For example, HUMAN EVAL introduced a benchmark of Python programming problems evaluated by unit tests and popularized pass@k-style evaluation [22]. The MBPP benchmark similarly evaluates synthesis of short Python programs from natural-language task descriptions and tests [23]. Subsequent work has shown that such test-based evaluation depends on the size and quality of the test set, show-ing that many LLM-generated solutions previously counted as correct fail under more rigorous testing [24]. In any case, these benchmarks and extensions establish functional correctness as a central evaluation target for code LLMs, but which is often assessed only for the final code output. LLMs are also increasingly applied for test generation. Recent benchmarks evaluate generated tests using a broad range of criteria, such as validity, coverage, mutation score, pass rate, and fault-detection ability [3], [4], [25]. ULT is a benchmark for function-level unit-test generation from real-world Python functions. It reports accuracy, statement cover-age, branch coverage, and mutation score [26]. T EST FORGE 
+
+evaluates an agentic test-generation framework using pass@1, line coverage, and mutation score on T EST GEN EVAL [27]. Wang et al. argue that coverage alone can be a weak indicator of fault-detection ability and use mutation score as a stricter evaluation target for LLM-generated tests [28]. Their work treats generated tests as software-engineering artifacts and evaluates their practical quality. In our study, test generation serves a different role: Generated assertions are used as one behavioral window into the LLM’s inferred interpretation of a program. Recent work suggests that code-tuned LLMs encode signals about generated-code correctness in their internal representa-tions before any external test execution occurs. Approaches such as O PENIA use intermediate representations from code-specialized LLMs to assess whether generated code is cor-rect [29], while A UTOPROBE refines this idea by dynamically selecting informative hidden states and applying them to prop-erties such as compilability, functionality, and security [30]. Similarly, Ribeiro et al. study LLMs’ internal representation of code correctness by contrasting hidden states for correct and incorrect code for the same programming tasks, showing that the extracted representation can help select higher-quality code samples without test execution [31]. Other work moves toward more mechanistic diagnostics: Sparse-autoencoder analyses identify activation directions associated with correctness [32], while C ODE CIRCUIT traces how information flows through the LLM during code generation and uses this analysis to identify which lines of code contribute to correctness-related predictions [33]. Together, these studies show that correctness-relevant information is reflected in internal representations and can be used to analyze, predict, or influence the quality of generated code. Despite this progress, this line of work has largely centered on correctness as the target property, while internal mechanisms for handling other aspects of program comprehension—such as conflicts between multiple sources of information—remain comparatively underexplored. 
+
+B. Mechanistic Interpretability of Language Models 
+
+Mechanistic interpretability aims to explain LLM behavior by analyzing internal components and representations. Causal mediation analysis introduced the idea of treating hidden units, attention heads, or layers as mediators between input and output and intervening on them to estimate causal contri-bution [34]. Causal abstraction and interchange-intervention frameworks provide a more general account of how neural computations can be related to abstract, human-interpretable causal explanations of LLM behavior [35]. In transformer language models, causal tracing and activation patching have become standard tools for localizing behaviorally relevant acti-vations. Meng et al. use causal tracing to locate factual associ-ations in GPT models [36]. Wang et al. use activation patching and path patching to identify an indirect-object-identification circuit in GPT-2 Small [37]. Conmy et al. systematize this workflow through automated circuit discovery [20]. Activation patching is particularly relevant to our work, as it provides a causal method for asking whether a specific internal activation contributes to an externally observable behavioral difference. Methodological work emphasizes that patching re-sults depend on the choice of source and destination prompts, corruption or contrast construction, patching granularity, and behavioral metrics: Zhang and Nanda show that activation-patching results can vary substantially with metric and method choices [17]. Heimersheim and Nanda emphasize that patching should be interpreted as evidence of causal contribution under a specified setup, not as a complete explanation of a models’s algorithm [18]. These cautions are especially important when patching code or other non-canonical natural-language tasks. The residual stream is a natural target for such interventions because work on transformer circuits conceptualizes it as the main communication channel through which layers read, write, and accumulate information across layers [38]. Residual-stream interventions are complementary to sparse-feature ap-proaches, which seek to decompose dense activations into interpretable features using sparse autoencoders [39]. In soft-ware engineering, sparse-autoencoder and attribution-graph approaches have recently been used to analyze correctness-related representations in code LLMs [32], [33]. Our work builds on these mechanistic tools: We use causal residual-stream patching on controlled code inputs to study how LLMs reconcile competing sources of program semantics. 
+
+C. Semantic Conflicts in Software Artifacts 
+
+Software artifacts combine executable code, which deter-mines runtime behavior, with non-executable semantic cues such as comments, docstrings, and identifiers that convey intent or rationale. Prior work has emphasized the impor-tance of comments and natural-language artifacts for program comprehension and maintenance, while also showing that they can diverge from code—for example, when comments are not updated alongside code changes [40]–[42] or when linked resources decay over time [43]. These studies motivate treating executable code and non-executable cues as related but separable sources of information. The distinction between executable behavior and natural-language intent is also reflected in code-tuned LLM bench-marks. HUMAN EVAL tasks are specified through natural-language doc strings and evaluated by tests [22]; MBPP tasks are specified by natural-language descriptions and example tests [23], which mirrors ordinary software-engineering prac-tice, where natural language and code jointly specify intended behavior. However, it also means that standard end-to-end benchmarks usually evaluate whether an LLM satisfies the pro-vided task specification, not how the LLM internally balances executable evidence against non-executable semantic cues in case of conflict/inconsistency. This creates an opportunity and a need at the same time for mechanistic analysis: Semantic conflicts in code provide controlled contrasts for studying how LLMs process different sources of program behavior. 
+
+D. Positioning of Our Work 
+
+Our work sits at the intersection of these three research areas. Unlike prior internal-correctness studies that primarily compare correct and incorrect generations, we study prompts in which the input itself contains conflicting evidence about behavior. Unlike standard code-generation or test-generation evaluations, we do not only ask whether the final artifact is correct, but we ask how information from different parts of the prompt causally contribute to the LLM’s behavior. We therefore use semantic conflicts in code as the experimental subject for mechanistic analysis, and compare two behavioral endpoints: final-output prediction and generated unit-test as-sertions. This positions our study as a causal analysis of how LLMs route executable and non-executable information when interpreting code, providing a more fine-grained view of how competing signals are resolved during inference. III. R ESEARCH QUESTIONS 
+
+Based on our overarching goal, we start from a setting where we have Python code snippets with aligned and conflicting versions at our disposal, allowing us to test whether conflicting semantic cues cause the LLM to deviate from execution-grounded behavior. To provide an overview of how the conflicts affect the LLM in standard program-comprehension tasks, we pose our first research question: 
+
+RQ 1.1 How do semantic conflicts affect LLM behavior during program comprehension? To answer this question, we create prompts with the snippets and an output prediction task and analyze the output tokens of the LLM compared to the snippet’s execution behavior. Based on that knowledge, we aim to next identify token-layer sites that shift the LLM’s output preference and pose the second part of the research question: 
+
+RQ 1.2 Which token-layer sites causally contribute to shift-ing LLM outputs between aligned and conflicting inputs? For this question, we store the internal representations gained through RQ 1.1 and perform residual activation patching per layer and token, where we patch the information from con-flicting code versions into the aligned one and vice versa. We execute the LLM with the patched representation and analyze whether the patch changes the model’s output preference. In addition to the output prediction task, we also analyze the LLM behavior and internal representations for a standard downstream task in software engineering: test generation. Thus, we pose our second research question: 
+
+RQ 2.1 How do semantic conflicts affect LLM behavior during test generation? To answer this question, we create prompts with the snip-pets, ask the LLM to generate pytest style unit tests with 3 test cases, and execute them to assess their alignment with semantic cues and implementation. 
+
+RQ 2.2 Which token-layer sites causally contribute to dif-ferences in LLM-generated unit tests between aligned and conflicting inputs? In line with RQ 1.2 , we create assertion-specific prompts in which each generated test case is provided up to the assertion value. We then perform residual activation patching per layer and token and analyze whether the patch changes the model’s completion at the assertion value. IV. M ETHODOLOGY 
+
+To answer our research questions, we create a curated set of Python snippets, prompt the LLM for final-output and unit-test generation, and perform residual activation patching to identify token-layer sites which shift the LLM’s output preference. 
+
+A. Independent Variables and Code Snippets 
+
+Our goal is to identify how LLMs handle conflicts between non-executable semantic cues, such as function names or comments, and executable program behavior. In this con-text, we construct systematically varied Python snippets and categorize them into aligned and conflicting , depending on whether the non-executable semantic cues and the executable program behavior are consistent with each other. We consider one independent variable (“cue-implementation alignment”) with 3 levels: For the aligned snippets, the non-executable semantic cues and the executable program behavior imply the same outcome. For the cue-varied snippets, we introduce a small, localized change to a semantic cue that contradicts the executable program’s behavior (e.g., replacing “even” with “odd”; see Figure 1). For the implementation-varied snippets, we instead introduce a localized code change that alters the program’s behavior to deviate from the intent suggested by the semantic cue (e.g., replacing “0” with “1”; see Figure 1). In total, we created 45 Python snippet triplets (i.e., 135 total snippets; similar to Figure 1) consisting of short functions with meaningful identifier names and, where necessary, a function-level comment describing the intended behavior. Each stimulus pair differs by 1–2 localized changes while ensuring that all regarded LLMs tokenize the changes in the exact same number of tokens, so that the post-change tokens remain aligned between prompts. To ensure meaningful contrasts, each pair must incite a cue–implementation conflict for, at least, one studied LLM for output generation. We provide details on the snippets and their construction in the replication package [21]. 
+
+B. LLMs 
+
+We selected four open-weight autoregressive transformer LLMs that support residual-stream analysis and can follow the task prompts. The selected LLMs are CODE LLAMA -7B-P YTHON [44] and the I NSTRUCT variants of Q WEN 2.5-7B [45], M ISTRAL -7B [46], and L LAMA -3.1-8B [47]. This set includes a code-tuned LLM and general-purpose, code-capable LLMs and is available for mechanistic analysis through T RANSFORMER LENS [48]. Q WEN 2.5 contains 28 
+
+transformer layers, whereas the other LLMs contain 32 .
+
+C. Tasks 
+
+We investigate two complementary programming tasks: final-output prediction and unit-test generation. 
+
+a) Final-Output Prediction (RQ 1): The final-output pre-diction task evaluates the LLM’s direct answer to an es-tablished program-comprehension question by predicting the output of a given snippet. We execute the LLM with zero temperature and validate the generated predictions against the executed runtime output to assess the consistency of the LLM with the implementation. We measure cue consistency by com-paring against the predefined behavior suggested by the cue or paired aligned variant. Thus, a response can be both-consistent, cue-consistent, execution-consistent, or neither-consistent. The ground truth for correctness is the execution behavior. b) Unit-Test Generation (RQ 2): The unit-test generation task measures the behavioral interpretation that the LLM externalizes as PYTEST -style unit-test assertions. This task requires the LLM to formulate expected behavior in executable test form with three test cases for the function compute .The generated unit tests are treated as a behavioral probe of the LLM’s inferred interpretation of the snippet. To determine whether an assertion aligns with the semantic cues or the implementation, we distinguish between the two types of conflicts. For cue-varied prompts, we evaluate the conflict-ing generated assertions against a cue-semantics oracle (cue-consistent) and the conflicting implementation (execution-consistent). For implementation-varied prompts, we evaluate the assertions against the conflicting (execution-consistent) and the aligned implementation (cue-consistent). If a test passes both implementations for a varied prompt, it is both/non-discriminating, as this test does not discriminate between the two interpretations. For aligned prompts, we evaluate the as-sertions against the aligned implementation (both-consistent). Otherwise, the assertion is labeled as neither. For RQ 2.2 , we create one prompt for each gener-ated test case, in which we separate the assertion ex-pression from its generated expected value, so that 
+
+assert compute(4) == is part of the prompt and the value after == is the output contrast. Based on this prompt, we patch the LLM and analyze how the output preference between the two expected values changes. 
+
+D. Statistical Analysis on Behavior (RQ 1.1 and RQ 2.1 )
+
+To assess whether semantic conflicts affect LLM behavior, we use standard paired statistical tests to compare between aligned and conflicting versions of the snippet triplets. The paired design controls for differences in snippet complexity. For the final-output prediction, the outcome is binary (i.e., correct or incorrect). Thus, we use exact paired McNe-mar tests, which are specifically designed for paired binary data [49]. We report the paired risk difference as aligned minus conflicting correctness and measure the effect size using Cohen’s g [50]. Because the comparisons are paired by snippet, they control for differences in baseline snippet difficulty and isolate the effect of introducing a semantic conflict. For unit-test generation, we evaluate LLM behavior using the pass rate of the 3 assertions per snippet. Since these rates are not binary and may not be normally distributed, we use paired Wilcoxon signed-rank tests [51] and measure the effect using signed rank-biserial effect size rrb .Finally, since our analyses include multiple LLMs and conflicts, we apply a Holm correction to control for family-wise error [52], and use the typical α = 0 .05 threshold. This holds for all statistical analyses, including RQ 1.2 and RQ 2.2 .
+
+E. Residual Stream Activation Patching (RQ 1.2 and RQ 2.2 )
+
+We use residual stream activation patching to identify token-layer sites that causally shift LLM behavior between our paired snippets. For each snippet pair, the LLM is run once on each snippet and the residual stream activations are cached per patch site. A patch site is defined by a transformer layer and an aligned patch unit (e.g., even , odd , 0, 1, see Figure 1). Consecutive changed tokens are treated as one combined patch unit to preserve the atomicity of the manipulation. Then, we execute patched runs by replacing the residual stream activation of a patch site in a destination prompt with the corresponding activation from the paired source prompt (source → dest). We perform patching starting from the first token position where the snippets differ, to ensure that patched activations occur at positions that can causally depend on the manipulation. We patch in both directions independently, fixing the conflicting prompt (forward: aligned → conflicting) and corrupting the aligned prompt (reverse: conflicting →
+
+aligned). For each patching comparison consisting of snippet pair and task, we define a source-associated behavior and a destination-associated behavior from the two semantic outputs represented by the stimulus pair. We interpret a patched activation as causally contributing to the paired contrast when it shifts the LLM’s output preference toward the source reference. This contrast is defined independently of the LLM’s generated response label. For RQ 1.2 , we contrast the two final-output candidates associated with a snippet pair. For RQ 2.2 , patching identifies prompt and generated-prefix states that shift the expected value of a generated assertion. We use the expected values used for labeling the assertions in RQ 2.1 now to contrast between aligning and conflicting snippets in a pair. Assertions for which both candidates are identical are excluded in RQ 2.2 because they do not distinguish the conflict. 
+
+1) Evaluation of LLM Patching: In line with prior work [17], [37], we compute how much a patched run changes from original destination behavior to source behavior using a recovery score. This score compares the logits of candi-date outputs associated with each prompt compared to the unpatched baseline logits. A larger recovery score indicates that the patched residual state activation has a stronger causal influence on the LLM’s output, identifying contributing token-layer sites. To focus on patch sites with a considerable causal effect, we exclude all patch sites with a recovery below 0.3.We report additional results with thresholds of 0.2 and 0.5 as sensitivity checks in the replication package [21]. The denominator of the recovery score is the unpatched source–destination margin gap, ∆ = mS − mD . If this denominator is close to zero, normalized recovery can look large even when the raw logit change caused by the patch is modest. We therefore perform a robustness check that filters runs with small denominators by requiring |∆| ≥ τ for 
+
+τ ∈ { 0.05 , 0.10 , 0.25 } logits, with τ = 0 .10 as the primary threshold. The exact formulas and edge-case handling are in the replication package [21]. Next, we localize the patch sites with the highest causal impact. One aspect we analyze is how causal contributions are distributed across different parts of the input. In addition to changed region and readout sites, we identify all intermediate TABLE I RQ 1.1 PAIRED EXACT MCNEMAR TESTS COMPARING ALIGNED AND CONFLICTING FINAL -OUTPUT CORRECTNESS .LLM Conflict Family Correctness Effect Size pHolm                                                  
+
+> Aligned Conflicting Diff. g
+> CodeLlama 7B Cue-varied 88.9% 44.4% 44.4 0.50 <0.001
+> Impl-varied 42.2% 46.7 0.46 <0.001
+> Llama 3.1 8B Cue-varied 84.4% 64.4% 20.0 0.50 0.004
+> Impl-varied 44.4% 40.0 0.41 <0.001
+> Mistral 7B Cue-varied 73.3% 33.3% 40.0 0.45 <0.001
+> Impl-varied 33.3% 40.0 0.30 0.003
+> Qwen2.5 7B Cue-varied 77.8% 35.6% 42.2 0.41 <0.001
+> Impl-varied 33.3% 44.4 0.46 <0.001
+
+patch units exerting a substantial causal effect, which we call carrier tokens . For RQ 2.2 , we additionally differentiate between carrier tokens within the prompt (prompt carriers) and within the generated test case (response carriers). To identify the best recovery per such category of patch units, we take the maximum recovery over layers. We analyze the strength of recovery over categories of patch units for every model, conflict type and patch direction using the paired Wilcoxon signed-rank tests [51] test and describe the signed rank-biserial effect size rrb .Furthermore, we calculate the best recovery layer for every category of patch units. We take the unit with the largest recov-ery score and record the layer at which it peaks. To account for the varying number of transformer layers (Qwen2.5 7B: 28; other LLMs: 32), we normalize the layer indices to their relative depth in the interval of [0 , 1] . We analyze the best recovery layer over categories of patch units for every model, conflict type and patch direction using the paired Wilcoxon signed-rank tests [51] test and describe the signed rank-biserial effect size rrb .V. R ESULTS 
+
+In this section, we present the results of our behavioral and causal analyses structured along our two tasks. 
+
+A. Effect of Semantic Conflicts on LLM Behavior (RQ 1.1 )
+
+Final-output prediction was the first behavioral test of the constructed semantic conflicts. We compare aligned and conflicting prompts using execution-grounded correctness. Our results show that correctness is consistently higher for aligned prompts than for conflicting prompts across all LLMs, with an average drop of 39 .7 percentage points. When conduct-ing paired McNemar tests, every LLM–conflict comparison remains statistically significant after Holm correction (see Table I), with effect sizes between 0.3 and 0.5.To characterize the errors induced by the conflicts, we further divide the incorrect conflicting-prompt responses based on whether they match the misleading cue to separate conflict-induced failure (cue-consistent output) from generic task fail-ure (neither). As shown in Figure 2, the division shows that many erroneous outputs of the LLMs are cue-consistent (up to 49% ), even frequently surpassing the rate of correct execution-consistent outputs (above 33% ). Thus, the LLMs 0 20 40 60 80 100        
+
+> Con fl icting prompts (%)
+> CodeLlama 7B
+> Llama 3.1 8B
+> Mistral 7B
+> Qwen2.5 7B
+> 44%
+> 64%
+> 33%
+> 36%
+> 42%
+> 18%
+> 40%
+> 49%
+> 13%
+> 18%
+> 27%
+> 16%
+> Cue-varied
+> 020 40 60 80 100
+> Con fl icting prompts (%)
+> 42%
+> 44%
+> 33%
+> 33%
+> 47%
+> 38%
+> 49%
+> 44%
+> 11%
+> 18%
+> 18%
+> 22%
+> Implementation-varied
+> Execution-consistent Cue-consistent Neither
+
+Fig. 2. RQ 1.1 Distribution of response labels on conflicting prompts. Cue-consistent responses are incorrect under the execution-grounded evaluation but indicate sensitivity to the misleading cue. [Context] 
+
+> [...]
+> odd -> even
+> result
+> .
+> def
+> compute
+> (x
+> ):
+> <3 spaces>
+> return
+> x
+> %
+> <space>
+> 2
+> ==
+> <space>
+> 0
+> <2 newlines>
+> print
+> (com
+> pute
+> (
+> 4
+> ))
+> ``
+> `
+> Output
+> :
+> 0
+> 5
+> 10
+> 15
+> 20
+> 25
+> Layer
+> -1
+> -0.5
+> 0
+> 0.5
+> 1
+> signed recovery
+
+Fig. 3. RQ 1.2 Representative residual-recovery heatmap for Qwen2.5 7B, cue-varied pair 001 , patching the conflicting-cue source into the aligned-cue destination. The changed cue token recovers in early layers, token 0 exhibits a later recovery band, and the readout token recovers in the final layers. 
+
+exhibit a directed bias under conflict, with many failures aligning with the incorrect but semantically salient cue. 
+
+RQ 1.1 Conflicting semantic cues reliably reduce final-output correctness. The effect is large, statistically signifi-cant for every LLM–conflict pair, and frequently directed toward the misleading cue. These findings establish that the dataset contains effective conflicts motivating the residual-stream analysis in RQ 1.2 .
+
+B. Internal Localization of Semantic-Conflict Information During Output Prediction (RQ 1.2 )
+
+Having established that semantic conflicts affect final-output behavior, we investigate in RQ 1.2 where the conflicting infor-mation becomes causally available inside the LLM. To illus-trate the results, we present a representative run for Qwen2.5 7B on cue-varied pair 001 in Figure 3. The execution-grounded result is True , whereas the conflicting cue implies False . The strongest recovery score first appears directly at the changed cue token odd in an early layer. A second region with a high recovery score appears at the token 0, which carries part of the relevant parity predicate. A high recovery score finally appears at the last readout token, where the output is decoded. This example is representative of the mechanistic pattern we identified over all patch runs: There is a noticeable recovery at the changed patch site, at a few intermediate code tokens and at the last token (i.e., the readout site). Our intermediate token analysis identified 2 640 carrier tokens across 720 runs, with a mean of 3.67 and a median of one carrier token per run. This sparsity indicates that conflict-relevant residual information is not uniformly available at all downstream tokens. Instead, it concentrates in a small Changed Carrier Readout   
+
+> 0.00
+> 0.25
+> 0.50
+> 0.75
+> 1.00
+> Best layer (norm.)
+> Changed Carrier Readout
+> 0.25
+> 0.50
+> 0.75
+> 1.00
+> 1.25
+> Best recovery
+
+Fig. 4. RQ 1.2 Site-group comparison at the primary carrier threshold. Changed region peaks early, carrier tokens in middle layers, and readout site late; recovery is strongest at changed and readout sites and substantial for carriers. 
+
+number of intermediate tokens before being aggregated at the readout site. Analyzing the recovery distribution across layers shows the same staged pattern. Median best recovery occurs around layer 2 at changed-region sites, around layers 10–11 at carrier tokens, and around layers 23–26 at readout sites (see Figure 4). Thus, carrier tokens peak several layers after the changed region but well before the late readout stage near generation. These layer offsets are pairwise significant with extremely large effects ( pHolm < 0.001 , rrb ≥ 0.958 ). A detailed overview is provided in the replication package [21]. Analyzing the recovery strength shows that carrier tokens exert a substantial effect (median 0.52 ), but it is lower than for the changed-region (median 1.01 ) and readout site (median 
+
+1.00 ), as shown in Figure 4. Pairwise tests show that there is a significant difference between all three categories ( pHolm <
+
+0.001 ), with a large recovery-strength contrast between carrier token and both changed-region and readout site ( rrb ≥ 0.892 ,
+
+rrb ≥ 0.830 ). The effect size between changed-region and readout site is much smaller (median difference < 0.1, rrb ≥
+
+0.371 ). Recovery strength, carrier prevalence, and staging remain similar across both carrier-threshold sensitivity checks and forward/reverse patching comparisons. Detailed analyses are included in the replication package [21]. 
+
+RQ 1.2 Residual patching provides a mechanistic account of the conflict in RQ 1.1 and reveals a general causal staging pattern for semantic conflicts: The changed cue/code region have a high recovery in early layers, sparse carrier tokens at intermediate layers, and the readout site in layers near generation. Thus, conflict information is introduced at the edited semantic site, made available at selected intermediate program tokens, and accumulated at the generation context. 
+
+C. Effect of Semantic Conflicts on Downstream Tasks (RQ 2.1 )
+
+Next, we study the effect of semantic conflicts on gener-ating unit tests as a downstream behavioral task common in software engineering. This task is more open-ended than final-output prediction because an LLM can generate different test inputs and multiple assertions per snippet. Nevertheless, the behavioral effect observed in RQ 1.1 also appears for unit-test generation, with lower assertion pass rate under both conflict pairs for every LLM. All eight LLM–conflict comparisons show statistically sig-nificant reductions in assertion pass rate after Holm correction 
+
+TABLE II RQ 2.1 PAIRED WILCOXON TESTS COMPARING ALIGNED AND CONFLICTING GENERATED -TEST ASSERTION CORRECTNESS .LLM Conflict Family Assertion Pass Rate Effect Size pHolm                                                                    
+
+> Aligned Conflicting Diff. rrb
+> CodeLlama 7B Cue-varied 81.5% 49.6% 31.9 0.82 <0.001
+> Impl-varied 81.1% 37.1% 43.9 0.89 <0.001
+> Llama 3.1 8B Cue-varied 89.6% 71.1% 18.5 1.00 <0.001
+> Impl-varied 89.6% 48.5% 41.1 1.00 <0.001
+> Mistral 7B Cue-varied 77.8% 50.7% 27.0 0.81 <0.001
+> Impl-varied 77.8% 34.1% 43.7 0.91 <0.001
+> Qwen2.5 7B Cue-varied 83.0% 62.5% 20.5 0.65 0.002
+> Impl-varied 83.0% 52.7% 30.3 0.71 <0.001 020 40 60 80 100
+> Con fl icting assertions (%)
+> CodeLlama 7B
+> Llama 3.1 8B
+> Mistral 7B
+> Qwen2.5 7B
+> 8%
+> 15%
+> 13%
+> 9%
+> 41%
+> 54%
+> 37%
+> 53%
+> 36%
+> 18%
+> 32%
+> 29%
+> 16%
+> 13%
+> 18%
+> 9%
+> Cue-varied
+> 020 40 60 80 100
+> Con fl icting assertions (%)
+> 9%
+> 15%
+> 10%
+> 10%
+> 28%
+> 34%
+> 25%
+> 42%
+> 44%
+> 35%
+> 42%
+> 31%
+> 19%
+> 16%
+> 23%
+> 18%
+> Implementation-varied
+> Both / non-discriminating Execution-consistent Cue-consistent Neither
+
+Fig. 5. RQ 2.1 Assertion labels for conflicting generated unit tests, in which both/non-discriminating assertions are runtime-correct assertions and share the same expected value under both execution semantics and misleading cue. 
+
+as shown in Table II. Aligned assertions result in a pass rate between 77% to almost 90% . In comparison, the cue-varied pass rate is reduced by 18 .5 to 31 .9 percentage points; this reduction is generally smaller than seen in RQ 1.1 . In contrast, implementation-varied reductions remain similarly large, ranging from 30 .3 to 43 .9 percentage points. The effects are large to very large ( rrb = 0.65 –1.00 ). The conflicts therefore affect not only direct output extraction but also the behavioral specifications encoded in generated tests. The generated unit tests show that, across both conflicts, many assertion failures are cue-consistent ( 18% –42% ) rather than arbitrary ( 9% –23% ; see Figure 5). Furthermore, a consid-erable portion of assertions are both/non-discriminating, which means the selected values fail to expose the underlying conflict (up to 15% ). This mirrors the pattern of RQ 1.1 at the level of generated behavioral specifications, and additionally shows that some generated tests avoid the conflict by choosing non-diagnostic inputs, which is highly problematic in practice (see Section VI-A) 
+
+RQ 2.1 Semantic conflicts also reduce the pass rate for assertions during unit-test generation. The effect is signif-icant across all LLM–conflict pairs, and many erroneous tests follow the conflicting cue. A separate both/non-discriminating category shows that some runtime-correct generated tests choose inputs that avoid the conflict. 
+
+D. Localization of Semantic-Conflict Information During Unit-Test Generation (RQ 2.2 )
+
+In RQ 2.2 , we investigate how semantic conflicts affect the expected assertion-value that the LLM writes into a unit test. Analyzing the recovery distribution across layers shows a staged pattern that closely parallels final-output prediction Changed Prompt    
+
+> carriers
+> Response
+> carriers
+> Readout
+> 0.00
+> 0.25
+> 0.50
+> 0.75
+> 1.00
+> Best layer (norm.)
+> Changed Prompt
+> carriers
+> Response
+> carriers
+> Readout
+> 0.50
+> 0.75
+> 1.00
+> 1.25
+> Best recovery Fig. 6. RQ 2.2 Assertion-specific staging and recovery strength of conflict information during unit-test generation at the primary carrier threshold.
+
+while adding a distinct response-generation stage before the readout site. Median best recovery occurs around layer 2 at changed-prompt sites, around layers 8–10 at prompt carriers, around layers 11–13 at response carriers, and at the final layer (27 or 31) at the expected-value readout (Figure 6). All adjacent layer offsets are significant with large to very large rank-biserial effects: prompt carriers follow changed-prompt sites by a median normalized-depth offset of 0.222 
+
+(pHolm < 0.001 , rrb = 0 .952 ), response carriers follow prompt carriers by 0.111 (pHolm < 0.001 , rrb = 0 .676 ), and the readout follows response carriers by 0.419 (pHolm < 0.001 ,
+
+rrb = 0 .982 ). Carrier prevalence remains sparse, with prompt carriers averaging 2.35 tokens or 5.3% of eligible patch units, and response carriers averaging 1.64 tokens or 4.6% of eligible patch units. The share between prompt and response carriers does not differ significantly ( pHolm = 0 .475 ), indicating that the smaller response count mainly reflects fewer available positions. Recovery strength differs in line with the recovery-strength pattern observed in RQ 1.2 : Median best recovery is high for both the changed region and expected-value readout ( 1.01 
+
+and 1.00 ), but lower for both carrier sites ( 0.54 ). Pairwise statistical tests confirm very large recovery-strength contrasts between carrier and changed-prompt respective expected-value readout sites ( pHolm < 0.001 , rrb ≤ −0.919 , respective 
+
+pHolm < 0.001 , rrb ≥ 0.876 ). In contrast, prompt and response carriers do not differ significantly ( pHolm = 0 .913 ), as well as changed region and readout site ( pHolm = 0 .355 ). Forward and reverse patching preserve the same four-part staging, with small direction-specific offsets reported in the replication package [21]. 
+
+RQ 2.2 Unit-test generation exhibits a four-stage localization pattern similar to what we observed for output prediction in RQ 1.2 . Conflicting information is first recoverable at the changed prompt, then at sparse prompt carriers, then at generated assertion-prefix carriers, and finally at the expected-value readout. Recovery strength is highest at the changed prompt and readout, while prompt and response carriers show lower but comparable recovery. VI. D ISCUSSION AND IMPLICATIONS 
+
+In this section, we discuss our results and their implications. 
+
+A. Synthesis and Interpretation 
+
+Our results in RQ 1.1 show that semantic conflicts expose a specific failure mode in which LLMs frequently follow cue-consistent behavior when implementation and semantic cues disagree. This decision between cue- and execution-consistent behavior occurs in both output prediction and unit-test gen-eration, propagating conflicts into a downstream artifact that can later misguide developers, tools, or further LLM actions. Beyond cue-consistency failures, our results in RQ 2.1 high-light another problematic bias: Many non-discriminating unit tests illustrate how conflicts can persist unnoticed, since these tests avoid the semantic disagreement. Unlike a failing test, a passing but non-discriminating test may not alert the developer that the implementation diverges from the intended behavior, leaving the underlying disagreement hidden and unresolved. These observations have implications for downstream software-engineering tasks that rely on LLMs inferring de-veloper intent correctly, including code review, automated repair, refactoring, test generation, and agentic workflows. Following the wrong source of information in a conflict can produce outputs that are plausible and useful-looking while preserving or introducing the wrong behavior. Our findings therefore provide empirical evidence from a new angle for the usual maintainability argument for accurate documentation and naming [11]. Bad comments, stale documentation, and misleading identifiers are not merely unhelpful context for an LLM, but they can actively steer generated code, reviews, repairs, or tests toward an incorrect interpretation. Semantic-cue sensitivity is therefore both useful and hazardous. LLMs need such cues to infer intent, but AI-assisted workflows need checks that identify when those cues conflict with execution. 
+
+B. Mechanistic Interpretability and Causal Analysis 
+
+For RQ 1.2 and RQ 2.2 , we turn the behavioral effects of LLMs into causal study objects using a mechanistic analysis through interventions. Although mechanistic interpretability methods are well established for natural-language behavior [36], [37], they have rarely been applied in software engineering [31], [33]. Our experimental framework demonstrates how these methods can be adapted to problems in software engineering with the example of semantic conflicts in program code. Our study demonstrates how residual-stream activation patching serves as a targeted discovery mechanism that re-vealed a staged localization pattern across the prompt and generation context, which gives the behavioral result a more actionable form: It identified at which layers and tokens the conflict-relevant information is recoverable and where follow-up methods should look for the components that carry cue or execution information, thereby reducing the otherwise large search space to a targeted set of candidate token-layer sites. This way, our framework enables more targeted follow-up analyses. For example, path patching can trace whether information from the changed region reaches intermediate tokens and readout sites through specific components, while component-level ablations can test whether those components are necessary for cue- or execution-following behavior. Vali-dated sites can further support cross-model comparisons and monitoring of conflict-related internal features during code tasks. 
+
+C. Implications for Research 
+
+For researchers, the main implication is methodological. Activation patching provides a way to connect behavioral evaluation with causal evidence about where task-relevant information is recoverable inside the LLM. Our results show that this approach can be applied to software-engineering problems when token-aligned inputs, well-defined behavioral contrasts, and localized changes in the prompt are available. Semantic conflicts should therefore be understood as a testbed rather than an endpoint. Similar paired designs could study localized code phenomena, such as control-flow condi-tions, loop bounds, non-local dependencies, API choices, or exception handling behavior. The same methodology could also be applied to other software-engineering tasks and arti-facts (design, requirements, etc.) when the task can be framed around a controlled, scoreable contrast. In each case, the contrast must define the output alternatives that are being compared so that behavioral changes and activation-patching effects can be measured. More broadly, software-engineering research can benefit from adapting mechanistic interpretability methods, which are well established in natural-language settings, ranging from activation probes and sparse autoencoders to activation patch-ing, path patching, targeted ablations, and circuit-discovery techniques [17], [18], [20]. Our experimental framework il-lustrates the feasibility of this transfer and highlights the non-trivial methodological requirements. Code tasks often require preserving syntactic validity, aligning interventions with mean-ingful program locations, and defining behavioral contrasts that are both controlled and semantically interpretable. The snippet-based paired design used here addresses these require-ments for semantic conflicts, and illustrates how software-engineering datasets may need to be structured to support causal mechanistic analysis. Broadening such task formula-tions would make it possible to study how LLMs represent program structure, execution behavior, developer intent, and task-specific decisions with the same causal precision that is increasingly common in natural-language analyses. 
+
+D. Implications for Practice 
+
+For practitioners, the immediate implication is that stale comments, misleading names, and inconsistent docstrings rep-resent risks in AI-assisted development. Beyond affecting human understanding, they can steer LLM-generated code, reviews, repairs, and tests. Cleaning up documentation and naming therefore lowers the chance that an LLM infers the wrong intent from otherwise plausible context. The broader opportunity is to turn this kind of analysis into generation-time tooling if reliable components or circuits can be identified. Residual-stream patching by itself is a discovery method, but validated circuit-level signals could be monitored during generation. In the semantic-conflict setting, a devel-opment environment could then flag reliance on misleading cues or detect generated tests that do not exercise the relevant behavioral distinction. More generally, similar diagnostics could be designed for specific code phenomena, such as side effects, API choices, exception paths, or state updates. When a generation depends on one of these fragile decisions, a tool could trigger targeted execution checks, request additional test cases, or ask the LLM to justify the behavior it assumed. The same analyses are also relevant for LLM providers. Controlled contrasts can become regression suites for code-capable LLMs, especially when new versions are trained or fine-tuned. They can reveal whether an LLM over-relies on misleading semantic cues, whether execution-grounded behav-ior improves after fine-tuning, and whether improvements on conflicting cases preserve behavior on aligned cases. More broadly, mechanistic signals could inform data curation, fine-tuning objectives, and deployment audits for LLMs used in software-engineering workflows. VII. T HREATS TO VALIDITY 
+
+In this section, we discuss potential threats to validity and how we mitigated them. 
+
+A. Construct Validity 
+
+A key threat concerns how we interpret LLM outputs when semantic cues and execution behavior diverge. For output prediction, execution behavior provides a reference for correctness, but binary correctness labels would obscure whether an LLM was influenced by semantic cues. For unit-test generation, no independent specification defines the in-tended behavior, which requires the LLM to infer it from the code, including comments, identifiers, and implementa-tion details. We mitigate this threat by distinguishing cue-consistent, execution-consistent, both-consistent, and neither-consistent outputs rather than forcing all outputs into a binary correctness judgment. A second threat concerns the granularity of our mechanistic analysis. We use residual-stream activation patching, which identifies token-layer sites that causally affect the LLM’s preference for specific outputs. This analysis localizes where these effects arise in the residual stream, but it abstracts away from the specific attention heads, multi-layer-perceptron components, and multi-layer paths that produce or propagate them. Future work shall investigate the feasibility of using path patching [19] or circuit-discovery methods [20] to analyze the responsible components and propagation paths in more detail. 
+
+B. Internal Validity 
+
+We designed the snippets to isolate conflicts between ex-ecutable behavior and non-executable semantic cues. Each snippet belongs to a paired triplet with localized, token-aligned changes, which controls for length, structure, and baseline difficulty. We preferred reducing such confounds over maximizing snippet diversity, so the results primarily support controlled semantic-conflict claims. During dataset construction, each snippet pair had to show the intended behavioral contrast for at least one studied LLM. The same LLM had to answer the aligned variant correctly and produce a cue-consistent error on the conflicting variant, ensuring a meaningful patching contrast. We do not require this behavior from every LLM on every pair and instead test whether the resulting patterns are stable across LLMs. For activation patching, we use predefined execution- and cue-consistent candidates, so neither-consistent generations are still analyzed when they define a valid contrast. To avoid inflated normalized recovery when source and destination margins are nearly identical, we require a minimum margin gap of 0.1 logits and report robustness checks with alternative margin thresholds in the replication package [21]. We also patch in both directions, so the reported localization patterns do not rely on a single patching direction. For generation, we use deterministic decoding ( temp = 0 )to remove sampling variance and improve reproducibility [53]. For unit-test generation, we ask for three assertions to give the model repeated opportunities to express its inferred behavior for assertion-specific patching. Since the model chooses the inputs, aligned and conflicting prompts may yield different assertions. We therefore score each assertion against its gen-erated expected value, and exclude non-contrastive assertions from patching when both interpretations give the same value. 
+
+C. External Validity 
+
+Our study provides controlled evidence that semantic con-flicts can affect LLM behavior and internal representations. However, the exact error rates, effect sizes, and localization patterns may differ in broader software-engineering settings. We study 45 Python snippet triplets with clear, localized conflicts. This makes execution- and cue-consistent outcomes unambiguous and keeps execution labels, token alignment, and residual patching feasible. This design does not cover larger files, repositories, dependencies, complex APIs, side effects, or conflicts spread across multiple functions. Such settings often lack clean contrastive pairs and token alignments, so our causal patching design may not transfer directly. Real conflicts may also be subtler than our constructed examples, such as outdated documentation for edge cases, identifiers that suggest only part of the behavior, comments that omit side effects, or multiple semantic cues that disagree with each other. We therefore interpret the results as evidence that semantic conflicts can affect LLMs, not that all conflict types have the same magnitude or localization. Another threat concerns our choice of tasks. We use the commonly used output prediction for verifying understanding of program behavior [54]. Our setting provides a controlled way to measure whether an LLM follows execution behavior or semantic cues. This setup enables precise and systematic analysis, but it may not reflect how semantic conflicts affect more complex software-engineering tasks. To increase practi-cal relevance, we study unit-test generation as a downstream task. This task requires the LLM to express its interpretation of the intended behavior and can be evaluated objectively with respect to executable behavior and cue-suggested behavior. Our results may not generalize to other downstream tasks such as summarization, bug detection, refactoring, or agentic tool use, where outputs are often longer, evaluation is less objective, and interaction, tools, or execution feedback may change how models rely on semantic cues. Finally, we analyze four open-weight LLMs around 7–8 B parameters because residual-stream patching requires mecha-nistic access and feasible compute. This avoids relying on a single model, but larger, closed, tool-augmented, or differently fine-tuned LLMs may behave differently. Future work shall test whether the effects transfer across model scales, model families, and different training data or fine-tuning choices. VIII. C ONCLUSION 
+
+In this paper, we presented an experimental framework that enabled us to investigate LLM behavior on semantic conflicts, where semantic cues suggest program behavior that differs from the code. To this end, we performed a controlled, mechanistic study with 45 Python code-snippet triplets across four LLMs to analyze the impact of semantic conflicts on LLM behavior for final-output prediction and unit-test generation. Furthermore, we causally located conflict-related information within the LLM representation using residual-stream activation patching. Our results show that semantic conflicts bias LLM behavior toward following semantic cues, resulting in incorrect output predictions and generated unit tests that either encode the wrong behavior or avoid the conflict altogether. Using activation patching, we identified a multi-stage localization pattern for semantic conflicts across output prediction and unit-test generation tasks. Conflict information is recoverable at the changed cue/code region in early layers, at sparse intermediate carrier tokens in both the prompt and generated assertion prefix, and finally at the readout site in late layers near generation. These findings demonstrate how our experimental frame-work allows us to not only observe LLM output behavior but also localize information that shifts LLM outputs. In particular, the results highlight that under semantic conflicts, LLMs may internalize a specific interpretation of the code and carry it into downstream tasks, leading to incorrect output predictions and generated unit tests that encode the wrong behavior or fail to exercise the conflict. This has substantial implications for the reliability of AI-assisted development, where such behavior can make semantic conflicts harder to notice and diagnose. More broadly, a major contribution of our mechanistic experimental framework is that it can be used to study further software engineering phenomena beyond semantic conflicts. Our setup paves the way for future approaches that detect conflict-relevant internal states before generation. Future work shall build up on our setup and findings by adopting more targeted mechanistic methods, such as identifying circuits responsible for propagating conflict information. This provides a starting point for approaches to detect, explain, and mitigate errors in AI-assisted workflows. DATA AVAILABILITY 
+
+Following open science principles [55], we openly disclose all snippet triplets, their construction details, raw data, and additional results (e.g., of our sensitivity checks) [21]. ACKNOWLEDGMENT 
+
+This work has been supported by the European Union as part of ERC Advanced Grant “Brains On Code” (101052182). REFERENCES [1] X. Hou, Y. Zhao, Y. Liu, Z. Yang, K. Wang, L. Li et al. , “Large Language Models for Software Engineering: A Systematic Literature Review,” 
+
+Transactions on Software Engineering and Methodology (TOSEM) ,vol. 33, no. 8, pp. 1–79, 2024. [2] Q. Zhang, C. Fang, Y. Xie, Y. Zhang, S. Yu, W. Sun et al. , “A Survey on Large Language Models for Software Engineering,” Science China Information Sciences , vol. 69, no. 4, p. 141102, 2026. [3] J. Wang, Y. Huang, C. Chen, Z. Liu, S. Wang, and Q. Wang, “Software Testing with Large Language Models: Survey, Landscape, and Vision,” 
+
+Transactions on Software Engineering (TSE) , vol. 50, no. 4, pp. 911– 936, 2024. [4] H.-F. Chang and M. Shokrolah Shirazi, “A Systematic Approach for Assessing Large Language Models’ Test Case Generation Capability,” 
+
+Software , vol. 4, no. 1, p. 5, 2025. [5] Z. Fan, X. Gao, M. Mirchev, A. Roychoudhury, and S. H. Tan, “Automated Repair of Programs from Large Language Models,” in Proc. International Conference on Software Engineering (ICSE) . IEEE, 2023, pp. 1469–1481. [6] X. Yin, C. Ni, S. Wang, Z. Li, L. Zeng, and X. Yang, “ThinkRepair: Self-Directed Automated Program Repair,” in Proc. International Symposium on Software Testing and Analysis (ISSTA) , 2024, pp. 1274–1286. [7] J. He, C. Treude, and D. Lo, “LLM-Based Multi-Agent Systems for Software Engineering: Literature Review, Vision, and the Road Ahead,” 
+
+Transactions on Software Engineering and Methodology (TOSEM) ,vol. 34, no. 5, May 2025. [8] J. Liu, K. Wang, Y. Chen, X. Peng, Z. Chen, L. Zhang, and Y. Lou, “Large Language Model-Based Agents for Software Engineering: A Sur-vey,” Transactions on Software Engineering and Methodology (TOSEM) ,2026. [9] D. L. Parnas, “Precise Documentation: The Key to Better Software,” in 
+
+The Future of Software Engineering . Springer, 2010, pp. 125–148. [10] Y. Huang, Y. Chen, X. Chen, and X. Zhou, “Are Your Comments Out-dated? Toward Automatically Detecting Code-Comment Consistency,” 
+
+Journal of Software: Evolution and Process , vol. 37, no. 1, p. e2718, 2025. [11] E. Aghajani, C. Nagy, M. Linares-V´ asquez, L. Moreno, G. Bavota, M. Lanza et al. , “Software Documentation: The Practitioners’ Perspec-tive,” in Proc. International Conference on Software Engineering (ICSE) ,2020, pp. 590–601. [12] N. Stulova, A. Blasi, A. Gorla, and O. Nierstrasz, “Towards Detecting Inconsistent Comments in Java Source Code Automatically,” in Interna-tional Working Conference on Source Code Analysis and Manipulation (SCAM) . IEEE, 2020, pp. 65–69. [13] S. Gao, C. Gao, C. Wang, J. Sun, D. Lo, and Y. Yu, “Two Sides of the Same Coin: Exploiting the Impact of Identifiers in Neural Code Comprehension,” in International Conference on Software Engineering (ICSE) . IEEE, 2023, pp. 1933–1945. [14] C. C. Le, M. V. Pham, C. D. Van, H. N. Phan, H. N. Phan, and T. N. Nguyen, “When Names Disappear: Revealing What LLMs Actually Understand About Code,” arXiv preprint arXiv:2510.03178 , 2025. [15] F. Tambon, A. Moradi-Dakhel, A. Nikanjam, F. Khomh, M. Desmarais, and G. Antoniol, “Bugs in Large Language Models Generated Code: An Empirical Study,” Empirical Software Engineering , vol. 30, no. 3, p. 65, 2025. [16] S. Dou, H. Jia, S. Wu, H. Zheng, M. Wu, Y. Tao, M. Zhang et al. , “What Is Wrong with Your Code Generated by Large Language Models? An Extensive Study,” Science China Information Sciences , vol. 69, no. 1, p. 112107, 2026. [17] F. Zhang and N. Nanda, “Towards Best Practices of Activation Patching in Language Models: Metrics and Methods,” in International Conference on Learning Representations (ICLR) , 2024, pp. 1651–1678. [18] S. Heimersheim and N. Nanda, “How to Use and Interpret Activation Patching,” arXiv preprint arXiv:2404.15255 , 2024. [19] N. Goldowsky-Dill, C. MacLeod, L. Sato, and A. Arora, “Localizing Model Behavior with Path Patching,” arXiv preprint arXiv:2304.05969 ,2023. [20] A. Conmy, A. Mavor-Parker, A. Lynch, S. Heimersheim, and A. Garriga-Alonso, “Towards Automated Circuit Discovery for Mechanistic In-terpretability,” Advances in Neural Information Processing Systems ,vol. 36, pp. 16 318–16 352, 2023. [21] Y. Abdelsalam, N. Peitek, A.-M. Maurer, M. Wyrich, and S. Apel, “Replication Package - Mechanistic Lens and Semantic Conflicts,” Jun. 2026. [Online]. Available: https://github.com/brains-on-code/ mechanistic-interpretability-semantic-conflicts [22] M. Chen, J. Tworek, H. Jun, Q. Yuan, H. P. d. O. Pinto, J. Kaplan et al. ,“Evaluating Large Language Models Trained on Code,” arXiv preprint arXiv:2107.03374 , 2021. [23] J. Austin, A. Odena, M. Nye, M. Bosma, H. Michalewski, D. Dohan 
+
+et al. , “Program Synthesis with Large Language Models,” arXiv preprint arXiv:2108.07732 , 2021. [24] J. Liu, C. S. Xia, Y. Wang, and L. Zhang, “Is Your Code Generated by ChatGPT Really Correct? Rigorous Evaluation of Large Language Models for Code Generation,” in Advances in Neural Information Processing Systems (NeurIPS) , vol. 36, 2023, pp. 21 558–21 572. [25] W. Wang, C. Yang, Z. Wang, Y. Huang, Z. Chu, D. Song et al. , “TestE-val: Benchmarking Large Language Models for Test Case Generation,” in Findings of the Association for Computational Linguistics: NAACL 2025 , L. Chiruzzo, A. Ritter, and L. Wang, Eds. Association for Computational Linguistics, Apr. 2025, pp. 3547–3562. [26] D. Huang, J. Zhang, M. Harman, Q. Zhang, M. Du, and S.-K. Ng, “Benchmarking LLMs for Unit Test Generation from Real-World Functions,” Transactions on Software Engineering and Methodology (TOSEM) , Mar. 2026. [27] K. Jain and C. Le Goues, “TestForge: Feedback-Driven, Agentic Test Suite Generation,” arXiv preprint arXiv:2503.14713 , 2025. [28] G. Wang, Q. Xu, L. Briand, and K. Liu, “Towards More Effective Fault Detection in LLM-Based Unit Test Generation,” arXiv preprint arXiv:2506.02954 , 2025. [29] T.-D. Bui, T. T. Vu, T.-T. Nguyen, S. Nguyen, and H. D. Vo, “Correctness Assessment of Code Generated by Large Language Models Using Internal Representations,” Journal of Systems and Software , p. 112570, 2025. [30] T. T. Vu, T.-D. Bui, T.-T. Nguyen, S. Nguyen, and H. D. Vo, “Model-Agnostic Quality Assessment for LLM-Generated Code via Dynamic Internal Representation Selection,” Journal of Systems and Software , p. 112852, 2026. [31] F. Ribeiro, C. Spiess, P. Devanbu, and S. Nadi, “On LLMs’ Internal Rep-resentation of Code Correctness,” in Proc. of International Conference on Software Engineering (ICSE) , 2026. [32] K. Tahimic and C. Cheng, “Mechanistic Interpretability of Code Correctness in LLMs via Sparse Autoencoders,” arXiv preprint arXiv:2510.02917 , 2025. [33] Y. He, Z. Zhao, Z. Kaiyu, B. Dai, J. Fu, and Y. Yang, “CodeCircuit: Toward Inferring LLM-Generated Code Correctness via Attribution Graphs,” arXiv preprint arXiv:2602.07080 , 2026. [34] J. Vig, S. Gehrmann, Y. Belinkov, S. Qian, D. Nevo, S. Sakenis 
+
+et al. , “Investigating Gender Bias in Language Models Using Causal Mediation Analysis,” in Advances in Neural Information Processing Systems (NeurIPS) , vol. 33. Curran Associates, Inc., 2020, pp. 9583– 9595. [35] A. Geiger, D. Ibeling, A. Zur, M. Chaudhary, S. Chauhan, J. Huang 
+
+et al. , “Causal Abstraction: A Theoretical Foundation for Mechanistic Interpretability,” Journal of Machine Learning Research , vol. 26, no. 83, pp. 1–64, 2025. [36] K. Meng, D. Bau, A. Andonian, and Y. Belinkov, “Locating and Editing Factual Associations in GPT,” in Advances in Neural Information Processing Systems (NeurIPS) , vol. 35. Curran Associates, Inc., 2022, pp. 17 359–17 372. [37] K. Wang, A. Variengien, A. Conmy, B. Shlegeris, and J. Steinhardt, “In-terpretability in the Wild: A Circuit for Indirect Object Identification in GPT-2 Small,” in International Conference on Learning Representations (ICLR) , 2023. [38] N. Elhage, N. Nanda, C. Olsson, T. Henighan, N. Joseph, B. Mann et al. , “A Mathematical Framework for Transformer Circuits,” Transformer Circuits Thread, 2021. [Online]. Available: https://transformer-circuits.pub/2021/framework/index.html [39] L. Gao, T. D. la Tour, H. Tillman, G. Goh, R. Troll, A. Radford 
+
+et al. , “Scaling and Evaluating Sparse Autoencoders,” in International Conference on Learning Representations (ICLR) , 2025, pp. 26 721– 26 754. [40] A. Mastropaolo, E. Aghajani, L. Pascarella, and G. Bavota, “An Empir-ical Study on Code Comment Completion,” in International Conference on Software Maintenance and Evolution (ICSME) . IEEE, 2021, pp. 159–170. [41] T. Steiner and R. Zhang, “Code Comment Inconsistency Detection with BERT and Longformer,” arXiv preprint arXiv:2207.14444 , 2022. [42] Y. Abdelsalam, N. Peitek, A. Bergum, and S. Apel, “The Effect of Comments on Program Comprehension: An Eye-tracking Study,” 
+
+Empirical Software Engineering , vol. 31, no. 4, p. 94, Mar 2026. [43] H. Hata, C. Treude, R. G. Kula, and T. Ishio, “9.6 Million Links in Source Code Comments: Purpose, Evolution, and Decay,” in Proc. International Conference on Software Engineering (ICSE) . IEEE, 2019, pp. 1211–1221. [44] B. Rozi` ere, J. Gehring, F. Gloeckle, S. Sootla, I. Gat, X. E. Tan 
+
+et al. , “Code Llama: Open Foundation Models for Code,” arXiv preprint arXiv:2308.12950 , 2024. [45] A. Yang, B. Yang, B. Hui, B. Zheng, B. Yu, C. Zhou et al. , “Qwen2 Technical Report,” arXiv preprint arXiv:2407.10671 , 2024. [46] A. Q. Jiang, A. Sablayrolles, A. Mensch, C. Bamford, D. S. Chaplot, D. de las Casas et al. , “Mistral 7b,” arXiv preprint arXiv:2310.06825 ,2023. [47] A. Grattafiori, A. Dubey, A. Jauhri, A. Pandey, A. Kadian, A. Al-Dahle, A. Letman et al. , “The Llama 3 Herd of Models,” arXiv preprint arXiv:2407.21783 , 2024. [48] N. Nanda and J. Bloom, “TransformerLens,” https://github.com/ TransformerLensOrg/TransformerLens, 2022. [49] Q. McNemar, “Note on the Sampling Error of the Difference Between Correlated Proportions or Percentages,” Psychometrika , vol. 12, no. 2, pp. 153–157, 1947. [50] J. Cohen, Statistical Power Analysis for the Behavioral Sciences .Lawrence Erlbaum Associates, 1977. [51] F. Wilcoxon, “Individual Comparisons by Ranking Methods,” Biometrics Bulletin , vol. 1, no. 6, pp. 80–83, 1945. [52] S. Holm, “A Simple Sequentially Rejective Multiple Test Procedure,” 
+
+Scandinavian Journal of Statistics , pp. 65–70, 1979. [53] S. Ouyang, J. Zhang, M. Harman, and M. Wang, “An Empirical Study of the Non-Determinism of ChatGPT in Code Generation,” Transactions on Software Engineering and Methodology (TOSEM) , vol. 34, no. 2, pp. 1–28, 2025. [54] M. Wyrich, J. Bogner, and S. Wagner, “40 Years of Designing Code Comprehension Experiments: A Systematic Mapping Study,” ACM Comput. Surv. , vol. 56, no. 4, Nov. 2023. [55] D. Mendez, D. Graziotin, S. Wagner, and H. Seibold, “Open Science in Software Engineering,” in Contemporary Empirical Methods in Software Engineering . Cham: Springer International Publishing, 2020, pp. 477– 501.

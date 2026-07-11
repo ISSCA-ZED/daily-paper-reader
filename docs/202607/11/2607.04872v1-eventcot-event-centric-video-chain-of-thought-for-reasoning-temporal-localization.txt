@@ -1,0 +1,1458 @@
+Title: EventCoT: Event-centric Video Chain-of-thought for Reasoning Temporal Localization
+
+URL Source: https://arxiv.org/pdf/2607.04872v1
+
+Published Time: Tue, 07 Jul 2026 03:42:02 GMT
+
+Number of Pages: 25
+
+Markdown Content:
+## EventCoT: Event-centric Video Chain-of-thought for Reasoning Temporal Localization 
+
+Youngkil Song 1, Yoonjae Baek 1, Dongwon Kim 2, Inho Kim 1, Dongkeun Kim 3†, Suha Kwak 1†
+
+> 1
+
+Pohang University of Science and Technology, Pohang, South Korea 
+
+> 2
+
+Korea Advanced Institute of Science and Technology, Daejeon, South Korea 
+
+> 3
+
+Handong Global University, Pohang, South Korea 
+
+> †
+
+Co-corresponding authors. 
+
+Abstract 
+
+Reasoning temporal localization (RTL) re-quires a model to generate an answer that itself contains the time interval supporting it, so high-level reasoning and precise temporal grounding must be produced jointly in a single response. To tackle this challenging task, we propose the first event-centric video chain-of-thought framework, dubbed EventCoT. EventCoT first performs event-centric tokenization of the input video to convert it into compact event tokens, enabling efficient identification of question-relevant events. It then reasons within the iden-tified events to generate the answer, grounding the time interval via embedding matching that aligns placeholder tokens with visual embed-dings. EventCoT achieves state-of-the-art re-sults on ActivityNet-RTL for reasoning tempo-ral localization while using substantially fewer visual tokens than previous work. To verify its general performance, we further evaluate EventCoT on the grounded video question an-swering benchmark ReXTime, where it attains strong zero-shot results. 
+
+1 Introduction 
+
+Large language models (LLMs) have demonstrated remarkable capabilities in reasoning and common-sense understanding from textual information. Mul-timodal LLMs (MLLMs) extend such capabilities to visual understanding through vision-language alignment (Radford et al., 2019; Hurst et al., 2024; Liu et al., 2023; Bai et al., 2025; Li et al., 2024a; Zhu et al., 2025; Ye et al., 2024; Lin et al., 2024b). More recently, video-LLMs (Lin et al., 2024a; Yang et al., 2023; Qian et al., 2024; Li et al., 2023; Zhang et al., 2023; Ren et al., 2024) have been developed to reason over long-form videos and perform high-level reasoning tasks such as video question answering (Wang et al., 2025; Li et al., 2024b; Fang et al., 2024; Chandrasegaran et al., 2024; Zhou et al., 2025b). However, most ex-isting video-LLMs lack the precise temporal rea-soning required to determine when and how long specific events occur. This limitation motivated the introduction of reasoning temporal localization (RTL) (Huang et al., 2024b). Unlike conventional video QA, where temporal grounding is at most an auxiliary output, RTL requires a model to gen-erate an answer that itself contains the supporting time interval. Reasoning and temporal localiza-tion therefore cannot be solved in isolation and must be produced jointly within a single response, which remains challenging even for recent large-scale foundation models. The pioneering work on RTL (Huang et al., 2024b) extends video-LLMs to jointly predict a time interval and an answer. Particularly for tempo-ral grounding, it uniformly samples frames across the entire video to ensure global temporal coverage, and exploits their features as input; time intervals are then estimated via the next-token prediction regime of LLMs with discrete time tokens incor-porated into the LLM vocabulary. While effective, this design suffers from two fundamental limita-tions. First, the query-agnostic uniform sampling of visual tokens introduces substantial noise when the sampling is overly dense and leads to infor-mation loss when the samples are too sparse; this becomes even more apparent in long videos where only a tiny fraction is relevant. Second, time inter-val estimation via next-token prediction entangles temporal grounding with answer generation, which degrades both precision of temporal grounding and inference throughput. Recent agentic systems (Liu et al., 2025; Menon et al., 2025) resolve the first issue by iteratively retrieving query-relevant video segments using external tools. While this design allows the model to condition its reasoning on se-lected temporal regions, it requires multiple rounds of LLM-driven planning and repeated model calls that operate on spatially detailed visual features, substantially increasing inference cost and token usage. Moreover, it does not address the second 1                  
+
+> arXiv:2607.04872v1 [cs.CV] 6 Jul 2026 0
+> 30k
+> 60k
+> 90k
+> 120k
+> 150k
+> 180k
+> 0100 200 300 400 500
+> Video Length (frames)
+> Number of Visual Tokens Used
+> T=100 T=200 T=1000
+> LLM Forward Inference Time ( ms )
+> 41,031
+> 10,053
+> 5,756
+> 905 940 930
+> 1,048
+> 1,205
+> 996
+> @100 frames:
+> 32,740 tokens
+> mIoU (%) GPT-4 (%)
+> Performance on RTL
+> 24.1
+> 58.5
+> 44.0
+> 48.7
+> (a) (b) (c)
+> EventCoT (Ours) 16 ×16 tokens/frame LITA EventCoT (Ours) LITA
+> LITA
+> EventCoT (Ours)
+> 16 ×16 tokens/frame
+> ~85% fewer tokens!
+> LITA: 356 tokens
+> EventCoT : 55 tokens
+
+Figure 1: Advantages of using events in RTL in terms of visual token usage (a), inference time (b), and perfor-mance on ActivityNet-RTL (Huang et al., 2024b). Models that process spatially detailed tokens like Temporal-CoT (Arnab et al., 2025) incur substantial LLM computation (colored in green), and query-agnostic frame sampling of LITA (Huang et al., 2024b) still introduce redundant tokens from irrelevant regions (colored in blue). EventCoT reduces visual token usage by event-centric CoT, achieving faster inference and improved RTL performance. 
+
+issue as it couples reasoning and temporal localiza-tion within an iterative generation loop. To address these limitations, we propose Event-CoT, an event-centric video framework for RTL. Chain-of-thought (CoT) reasoning (Wei et al., 2022) solves a complex problem by generating intermediate reasoning steps before the final an-swer, rather than producing the answer directly. EventCoT follows this principle. It first selects the question-relevant events as an intermediate reason-ing step, and then reasons within these events to produce the temporally grounded answer. We re-alize this chain of thought as a two-step operation. In Step 1, EventCoT selects the question-relevant events using an event tokenizer . We take inspiration from human perception, where continuous activity is understood as a sequence of discrete events (Za-cks and Swallow, 2007), and the event tokenizer ac-cordingly segments the video into non-overlapping events and summarizes each as a compact repre-sentation. This removes the redundancy of query-agnostic uniform tokenization and lets the model reason over events rather than individual frames. In Step 2, EventCoT performs the fine-grained reason-ing that grounds the temporal interval and generates the answer, and it relies on embedding matching 
+
+to do so. Instead of predicting the interval with discrete time tokens, which entangles grounding with answer generation, EventCoT aligns the place-holder tokens ⟨segment_key ⟩, ⟨start ⟩, and ⟨end ⟩
+
+with visual features by semantic similarity. Be-cause this matching operates in both steps, tem-poral grounding stays disentangled from answer generation, yielding consistent gains. We evaluate EventCoT on ActivityNet-RTL (Huang et al., 2024b) for reasoning temporal localization and on ReXTime (Chen et al., 2024) for grounded video question answering. EventCoT achieves state-of-the-art results on ActivityNet-RTL and strong zero-shot perfor-mance on ReXTime, while using substantially fewer visual tokens. These results demonstrate that event-centric chain-of-thought reasoning improves both temporal grounding and answering performance, and also enhances throughput of the overall reasoning process. In summary, our contribution is three-fold: • We propose EventCoT, the first event-centric chain-of-thought framework that decouples rea-soning and temporal localization for efficient RTL. • To reduce visual token redundancy while en-abling temporally grounded reasoning, we in-troduce an event tokenizer and an embedding matching mechanism, and verify their effective-ness through extensive experiments. • EventCoT achieves state-of-the-art results on ActivityNet-RTL and strong zero-shot perfor-mance on ReXTime, while using substantially fewer visual tokens. 
+
+2 Related Work 
+
+Grounded Video Question Answering. Bench-marks such as TVQA+ (Lei et al., 2020), NExT-GQA (Xiao et al., 2024), and ReXTime (Chen et al., 2024) evaluate whether an answer is supported by temporal evidence, asking a model to predict the supporting time span separately from its multiple-choice answer. In these protocols, the answer it-self carries no temporal extent, and answer correct-ness and localization are combined only post hoc through metrics such as Acc@GQA or accuracy 2Multimodal -LLM Visual Encoder 
+
+Projection Layer 
+
+Step 1. Question -relevant event selection 
+
+Step 2. Fine -grained reasoning with selected events     
+
+> “… Predict a
+> <segment_key >to select
+> question -relevant event
+> segments…”
+> “When does the man
+> show signs of being done
+> with his drinking action?”
+> Instruction
+> Question
+> Event Tokens
+
+Event Boundary Detection     
+
+> “… provide a detailed
+> answer to the question
+> with timestamps …”
+> “When does the man
+> show signs of being done
+> with his drinking action?”
+> Instruction
+> Question
+> Frame Tokens
+
+Event -Centric Tokenizer                 
+
+> Frame
+> features
+> Instruction Emb .
+> Answer Emb .
+> Embedding Matching  Embedding Matching
+> Visual Emb .23.67s 26.75s
+> Event Emb .
+> Question Emb .
+> Instruction Emb .
+> Question Emb .
+> 0.1 0.3 0.8
+> Normalize & MatMul
+> Sigmoid
+> Normalize & MatMul
+> Argmax
+> “The man .. drinking action between
+> 23.67s and 26.75s .… stops drinking
+> and wipes his mouth…”
+
+Event -centric tokenization  
+
+> <start> <end>
+> <segment_key > Emb.
+
+Figure 2: Overview of EventCoT. EventCoT first tokenizes a video into compact event tokens via event-centric tokenization. Given the question, it selects question-relevant events by matching the ⟨segment_key ⟩ token to event tokens (Step 1). It then performs fine-grained reasoning on frames from the selected events and predicts ⟨start ⟩
+
+and ⟨end ⟩ to generate temporally grounded answers (Step 2). 
+
+conditioned on IoU. These protocols therefore do not require a model to embed temporal evidence within its generated answer. Reasoning temporal localization (Huang et al., 2024b) instead defines the answer as the start and end timestamps together with the explanation, so reasoning and temporal localization must be produced jointly in a single response. This joint generation makes RTL more challenging than grounded VQA and motivates our design that disentangles the two through embed-ding matching while keeping a single response. 
+
+Event-centric Video Understanding. TRACE (Guo et al., 2025) structures the LLM’s output as a sequence of event triplets to cast temporal ground-ing as causal generation, and Chat-UniVi (Jin et al., 2024) merges visual tokens within segmented events to compress visual redundancy. However, both restrict the role of events to output formatting or passive token compression, without selecting or reasoning over question-relevant events. In con-trast, EventCoT uses events as the unit of both input representation and temporal reasoning, isolat-ing question-relevant events first and performing fine-grained temporal grounding within them. 
+
+Chain-of-Thought Reasoning in VLMs. Chain-of-thought (CoT) reasoning (Wei et al., 2022) de-composes a complex problem into intermediate reasoning steps that precede the final answer. In VLMs, these intermediate steps need not be tex-tual. Visual-CoT (Shao et al., 2024) first predicts bounding boxes of key regions as intermediate cues, Temporal-CoT (Arnab et al., 2025) iteratively se-lects the most relevant frames of a long video be-fore final reasoning, and agentic systems (Wang et al., 2024; Zhi et al., 2025) realize similar itera-tions by orchestrating external tools. These works establish that selecting visual units can itself serve as an intermediate reasoning step, yet their frame-level iteration remains computationally inefficient and suffers from token redundancy. EventCoT fol-lows the same principle with events as the unit of intermediate reasoning. It first selects question-relevant events at a coarse level (Sec. 3.2) and then performs fine-grained reasoning within them (Sec. 3.3), preserving the CoT structure without iterative frame selection. 
+
+VLMs for Grounded and Specialized Outputs. 
+
+While most VLMs generate only text, recent ap-proaches enable grounded, non-textual outputs by mapping the hidden embeddings of dedicated place-holder tokens to task-specific heads. LISA (Lai et al., 2024) passes the hidden embedding of a spe-3cial <SEG> token to a mask decoder to produce segmentation masks for implicit queries, and ET-Bench (Liu et al., 2024) matches the embedding of a <vid> token against frame features to predict precise timestamps. In this design, the LLM han-dles high-level reasoning while specialized outputs are delegated to dedicated tokens. Building on this idea, we develop a two-step embedding matching process that uses placeholder token embeddings for both event selection and temporal grounding. 
+
+3 Proposed Method 
+
+This section introduces EventCoT, the first event-centric video chain-of-thought (CoT) framework for reasoning temporal localization (RTL). As shown in Fig. 2, EventCoT first represents input video as a compact set of event token embeddings (Sec. 3.1), and then performs its CoT process for RTL: identifying event segments relevant to the input question (Sec. 3.2), followed by fine-grained reasoning within the detected segments to generate answers with temporal localization (Sec. 3.3). 
+
+3.1 Event-centric Tokenization 
+
+For event-centric tokenization of an input video, EventCoT first detects event boundaries from frame-wise features and then extracts features of the events defined by the detected boundaries. 
+
+3.1.1 Frame Feature Extraction. 
+
+Given an input video, we uniformly sample T
+
+frames and extract frame-wise features using a frozen CLIP-L/14 (Radford et al., 2021) visual encoder. A projection layer followed by spatial mean pooling yields F = [ f1, . . . , fT ]⊤ ∈ RT ×D,where fi ∈ RD denotes the frame-wise feature of the i-th frame. Finally, we apply rotary positional embeddings (Su et al., 2024) to the frame features, allowing the model to capture relative temporal dependencies across time. 
+
+3.1.2 Event Boundary Detection. 
+
+To efficiently model long-term videos, we divide the frame sequence into events, where ideally an event means a time interval that cannot be further split in terms of semantics. The key is to accurately detect event boundaries, where semantic or visual changes occur. To this end, we first measure how distinct each frame is with respect to others in the video. A naïve approach is to compute the average distance to its k-nearest neighbors and consider frames with large average distances as boundary 100 80 60 40 20 0        
+
+> Boundary Score
+> 0
+> 2
+> 4
+> 6
+> 8
+> (c) Ours :94.3%
+> 100 80 60 40 20 0
+> Boundary Score
+> 0.2
+> 0.3
+> 0.4
+> 0.5
+> 0.6
+> (b) Global Euclidean distance only: 66.6%
+> 𝑇
+> (a) Temporal local Euclidean distance only :55.5%
+> 100 80 60 40 20 0
+> Boundary Score
+> 0.4
+> 0.6
+> 0.8
+> 1.0
+
+Figure 3: Event boundary detection results on ActivityNet-RTL (Huang et al., 2024b). Numerical val-ues indicate boundary recall computed within a toler-ance of ±5% of the video duration. 
+
+candidates. However, relying solely on such dis-tances leads to unreliable boundary detection, as frames in highly dynamic scenes appear distinct even within the same event, causing false alarms while missing subtle transitions in static scenes. To resolve this issue, we adopt the idea of den-sity peak clustering with k-nearest neighbors (DPC-KNN) (Du et al., 2016), which suppresses unsta-ble peaks by considering both relative distance and local density. Specifically, we introduce two key improvements tailored for event boundary de-tection: temporal proximity-aware distance and power-scaled distance factor. When computing pairwise distances between frames, we consider feature distance and temporal proximity at once: 
+
+d(i, j ) = (1 − α)∥fi − fj ∥2 + α |i − j|
+
+T , (1) where α = 0 .3 controls the temporal proximity weight and T is the total number of frames. Then, the local boundary score is estimated as the mean distance to its k-nearest neighbors: 
+
+ρi = 1
+
+k
+
+X 
+
+> j∈N k(i)
+
+d(i, j ), (2) where Nk(i) is the set of the k-nearest neigh-bors based on d(i, j ); higher ρi indicates poten-tial boundaries. Next, the power-scaled distance factor is applied to further suppress noisy peaks. The original distance factor δ quantifies the relative 4Event Point Features        
+
+> {s 1, e 1}{s 2, e 2}{s 3, e 3}
+> Event Context Att ention
+> Event Tokens
+> Event Point
+> Features
+> Attention Mask
+> Video Frame
+> Features
+> QK, V
+> Event Point features
+> {s 1, e 1}{s 2, e 2}{s 3, e 3}
+> Event Context Attn
+> Event features
+> Event Point
+> features Attention Mask
+
+𝑓 𝑒  
+
+> Video frame
+> features
+> QK, V
+
+Figure 4: Details of the event-centric tokenizer. By us-ing an attention mask over an extended event boundary region, each event point feature aggregates local frames to form an event token. 
+
+isolation of each frame from those with higher ρ:
+
+δi =
+
+(
+
+min j:ρj >ρ i d(i, j ), if ∃j : ρj > ρ i,
+
+max j d(i, j ), otherwise. (3) Non-peak frames typically have a nearby denser neighbor (small δ), while only local density max-ima stay far from any denser frame (large δ), yield-ing fewer and more meaningful peaks per cluster. To further strengthen this effect, we apply nor-malization followed by power scaling: 
+
+˜δi = [ Normalize (δi)] p , (4) where the normalization operation uses the 10th and 90th percentiles for robustness against outliers, and p = 2 . This scaling amplifies the influence of large δ values while suppressing small ones, enforcing sharper peaks and yielding more stable boundary detection. The final boundary score is defined as bi = ρi · ˜δi.We then select the top N −1 frames with the highest scores as boundaries, partitioning the video into N
+
+events {E n}Nn=1 . As shown in Fig. 3, our technique accurately detects boundaries in both dynamic and static segments, whereas those using only distances between temporally adjacent frames or nearest-neighbor distances in feature space fail to do so. Qualitative examples of event segmentation on full videos are provided in Appendix D. 
+
+3.1.3 Per-event Embedding. 
+
+To obtain compact and discriminative representa-tions for each event, we propose an event-centric tokenizer (Fig. 4), inspired by point-to-region at-tention (Li et al., 2025). For each event En, we first compute an event point feature by mean pooling its frame-wise features: 
+
+pn = 1
+
+|E n|
+
+X
+
+> i∈E n
+
+fi. (5) The event point feature pn provides a coarse sum-mary of the event. We then refine it using event con-text attention : pn serves as a query, while frame-wise features F act as keys and values, producing an event token that captures the context within its interval. To mitigate potential boundary inaccura-cies, we expand the attention scope by including β
+
+frames before and after each interval: 
+
+en = Attention (pn, {fi | i ∈ E ext  
+
+> n
+
+}), (6) where Eext  
+
+> n
+
+= {i | i ∈ [max(1 , idx( en)[0] −
+
+β), min( T, idx( en)[ −1] + β)] }, with idx( en) de-noting the sorted list of frame indices belonging to the n-th event. The resulting event tokens {en}Nn=1 
+
+are used as input to the LLM for question-relevant event selection. 
+
+3.2 Step 1: Question-relevant Event Selection 
+
+The first step identifies question-relevant events. To this end, we introduce a placeholder token 
+
+⟨segment_key ⟩ into the LLM vocabulary, which serves to encode both the question and the visual context. When this token is processed, the LLM produces the final-layer hidden embedding hsk at its position. This embedding acts as a query that allows the model to determine which events should be selected. For each event token, we also extract its final-layer hidden embedding hen and compute its relevance score rn via embedding matching: 
+
+rn = σ
+
+ h ⊤ 
+
+> sk
+
+hen
+
+τ
+
+
+
+, (7) where τ is the temperature, and σ is the sigmoid function. Finally, events with rn > γ · max n rn are selected as the question-relevant ones. 
+
+3.3 Step 2: Fine-grained Reasoning with Relevant Events 
+
+The second step performs reasoning conditioned on the selected question-relevant events to predict accurate timestamps and generate textual answers. 
+
+3.3.1 Frame-level Visual Token Generation. 
+
+We first construct frame-level visual tokens from the relevant events. During training, the events that overlap with the ground-truth interval are di-rectly provided as the relevant ones, rather than relying on the prediction from Step 1. This iso-lates Step 2 training from potential event selection errors in Step 1. However, using only the overlap-ping events creates a shortcut, since the selection 5implicitly leaks ground-truth timestamps; model can overfit to simply predict interval boundaries as the start and end timestamps, rather than per-forming genuine temporal reasoning. To prevent this, we augment the visual tokens with a randomly sampled subset of unselected events, which breaks the boundary alignment between the input intervals and the ground-truth interval, encouraging the ro-bust temporal grounding. Formally, visual tokens input to the LLM for Step 2 are denoted as: 
+
+V = {fi | i ∈ E n, n ∈ S ∪ R} , (8) where S denotes the selected event indices, and R
+
+is a random subset of 30% from unselected events. We also apply this random sampling at inference so that the input matches the training distribution. The full inference procedure is detailed in Appendix A. 
+
+3.3.2 Answer Generation with Temporal Grounding. 
+
+In this stage, EventCoT generates an answer condi-tioned on the question and the constructed visual tokens V. Specifically, we introduce two place-holder tokens, ⟨start ⟩ and ⟨end ⟩, into the LLM vocabulary to represent the temporal boundaries of the interval supporting the answer. The LLM auto-regressively generates the textual descriptions. At each placeholder token’s position, we extract the hidden embedding and perform embedding match-ing with frame-wise features to predict the corre-sponding timestamp (Liu et al., 2024). For the start time prediction, we compute the similarity be-tween the LLM’s final-layer hidden embedding for 
+
+⟨start ⟩, denoted by hts , and that for each frame-wise feature fi in V of Eq. (8), denoted by hfi :
+
+pi = softmax 
+
+ h ⊤ 
+
+> ts
+
+hfi
+
+τ
+
+
+
+. (9) The frame with the highest similarity score is se-lected, converted to a timestamp, and substituted into the placeholder to form the final answer. The end time prediction follows the same process using the embedding of ⟨end ⟩, hte .
+
+3.4 Training Objectives 3.4.1 Event Selection Loss. 
+
+In the first step, we train the model with the stan-dard language modeling loss Llm and the event selection loss Lsel . For each event, we assign a binary label based on its temporal overlap with the ground-truth interval: events that overlap with a ground-truth interval by at least one frame are la-beled as positive, and all others as negative. The event selection loss Lsel is defined as the binary cross-entropy (BCE) loss between the predicted rel-evance score rn and the binary label yn ∈ { 0, 1}.
+
+3.4.2 Temporal Localization Loss. 
+
+In the second step, our model learns timestamp prediction using both a cross-entropy (CE) loss with Gaussian-smoothed labels and a DIoU loss for direct interval regression. For each frame i, a Gaussian-smoothed label is computed by 
+
+gi = exp 
+
+
+
+− (ti − tgt )2
+
+2σ2
+
+
+
+, (10) where ti is the timestamp of frame i, tgt is the ground truth timestamp, and σ = 0 .05 . The label is normalized via softmax as ˜yi = gi/ P 
+
+> j
+
+gj . We then compute the cross-entropy loss Lce between the predicted probability pi (Eq. (9) ) and the nor-malized target distribution ˜yi. Additionally, we compute the predicted interval as the weighted sum of frame timestamps: 
+
+ˆtstart = X
+
+> i
+
+pstart  
+
+> i
+
+· ti, ˆtend = X
+
+> i
+
+pend  
+
+> i
+
+· ti, (11) and apply DIoU loss (Zheng et al., 2020) between the predicted interval [ˆ tstart , ˆtend ] and the ground-truth interval, following ActionFormer (Zhang et al., 2022) and MATR (Song et al., 2024): 
+
+Ldiou = 1 − IoU (ˆ t, t gt ) + d2
+
+c2 , (12) where d is the distance between interval centers and c is the diagonal length of the smallest enclos-ing 1-D box length. The timestamp matching loss combines both terms: 
+
+Lts = Lce + Ldiou . (13) EventCoT is trained end-to-end in a multi-turn setting, where event selection and fine-grained rea-soning are optimized jointly. The overall training objective is: L = Llm + λsel · L sel + λts · L ts , where 
+
+λsel and λts denote loss weights. 
+
+4 Experiments 
+
+4.1 Experimental Settings Training Datasets. EventCoT is trained on a mixture of video-language datasets with and with-out temporal annotations following the training 6setup of LITA (Huang et al., 2024b). Datasets with temporal annotations include those for dense video captioning as well as that for RTL. In the case of the RTL dataset, ActivityNet-RTL (Huang et al., 2024b), we use its training split with 33,557 question–answer pairs. We also adopt the training splits of video captioning datasets, ActivityNet-Captions (Krishna et al., 2017) and YouCook2 (Zhou et al., 2018); in particular, for learning RTL using these datasets, we formulate an event localization task by treating each cap-tion as a question and predicting its correspond-ing time interval. Datasets without time intervals include those for video question answering and image-based instruction tuning. Specifically, we use NExT-QA (Xiao et al., 2021), a video ques-tion answering dataset with 37K videos, LLaVA-150K (Liu et al., 2023), an instruction tuning dataset containing 150K multi-turn instructions. To utilize these datasets for training, we train Step 1 to predict the ⟨segment_key ⟩ and train Step 2 to generate answers using all video frame features. Since no ground-truth time intervals are available, training on these datasets is done solely with the language modeling loss. 
+
+Implementation Details. We use Vicuna-7B (Chi-ang et al., 2023) as the LLM backbone, and initial-ize both the LLM and the projection layer with the pretrained LLaVA weights (Liu et al., 2023). To study robustness to the choice of backbone, we ad-ditionally instantiate EventCoT with a Qwen2.5-7B backbone, which we evaluate on ReXTime. We uni-formly sample T = 100 frames per video and set the number of events to N = 16 . For event bound-ary detection using DPC-KNN, we set k = 5 . The event context attention module consists of a single attention layer with nheads = 32 , hidden dimen-sion 4096 , and temporal extension factor β = 3 ,which is trained from scratch. We use a temper-ature of τ = 0 .07 , set the selection threshold to 
+
+γ = 0 .5, and set the loss coefficients to λsel = 0 .1
+
+and λts = 0 .1. All of these hyperparameters are fixed to a single configuration across every dataset and benchmark, without per-dataset tuning. 
+
+Training details. EventCoT is trained for 500K iterations with replacement using a learning rate of 2e −5 and a warm-up ratio of 0.03 . Training is conducted on 4 RTX 6000 ADA GPUs with a batch size of 4, taking approximately 30 hours. 
+
+4.2 Evaluation Benchmarks 
+
+To evaluate EventCoT, we use two benchmarks: ActivityNet-RTL (Huang et al., 2024b) for rea-soning temporal localization and ReXTime (Chen et al., 2024) for grounded video question answering. 
+
+ActivityNet-RTL is an open-ended benchmark that requires generating a free-form answer and the cor-responding start and end timestamps for a given question and video. It is derived from the valida-tion split of ActivityNet-Captions (Krishna et al., 2017), where GPT-4 (Achiam et al., 2023) gener-ates reasoning-based “when” questions from tem-porally localized dense captions, followed by man-ual filtering and verification. The benchmark con-tains 229 curated question–answer pairs spanning 160 videos. ReXTime is a grounded video question answering benchmark formulated as a multiple-choice task with four answer options, where the model selects the correct answer and separately lo-calizes the relevant moment. It is constructed from the ActivityNet (Krishna et al., 2017) and QVHigh-lights (Lei et al., 2021) datasets with time-aligned captions describing temporally localized events; GPT-4 models (Achiam et al., 2023; 202, 2023) generate reasoning-based multiple-choice question– answer pairs from temporally related event pairs, and the answer temporal spans are subsequently re-annotated and verified by human annotators. The benchmark contains 921 validation samples and 2,143 test samples. 
+
+4.3 Quantitative Analysis ActivityNet-RTL. We evaluate EventCoT on ActivityNet-RTL (Huang et al., 2024b). We em-ploy mIoU and P@ K as localization accuracy met-rics and GPT-4 score to evaluate answer quality, following LITA (Huang et al., 2024b). We first evaluate recent video VQA models, including large-scale foundation models, in the zero-shot setting. Our evaluation prompt specifies the duration of the input video, so that the model can predict start and end times within the actual duration of the video. We provide the detailed prompts and eval-uation protocol in Appendix B.4. However, even these large-scale foundation models still struggle on this task, showing that reasoning temporal lo-calization remains highly challenging and far from solved. Furthermore, fine-tuning the latest open-source video VQA models such as Qwen3.5-9B and TimeLens-8B on our training data improves their temporal localization but degrades their an-7Table 1: Quantitative comparisons in RTL performance on ActivityNet-RTL (Huang et al., 2024b). EventCoT uses 16 event tokens for event selection and 8–100 visual tokens (39 on average) for answer generation. Visual token usage of agentic methods is not fixed per query, and thus we report the maximum role-wise token budget for VideoMind and the approximate number of frames per tool call for CAViAR.                                                                                                                                                    
+
+> Method Backbone Fine-tuning # Visual Tokens mIoU P@0.3 P@0.5 P@0.7 GPT-4
+> Qwen3.5-9B (Team, 2026) Qwen3.5-9B ✗7,150 37.1 47.6 37.6 24.0 39.9 TimeLens-8B (Zhang et al., 2026) Qwen3-VL-8B ✗4,000 34.7 49.8 31.9 21.0 41.9 Gemini 2.5 Pro (Comanici et al., 2025) -✗∼26.7K 30.2 40.6 27.5 17.9 30.6 Gemini 2.5 Flash (Comanici et al., 2025) -✗∼25.9K 28.6 40.2 24.9 15.7 41.1 GPT-5 (OpenAI, 2025) -✗7,104 23.7 35.4 15.7 7.0 32.3 GPT-4o (Hurst et al., 2024) -✗8,605 20.2 29.3 13.1 7.0 29.9 GPT-5-mini (OpenAI, 2025) -✗9,804 19.9 28.4 15.3 6.6 28.1 Video-LLaMA-v2 (Cheng et al., 2024) Vicuna-13B ✓32 ----32.1 Video-ChatGPT (Maaz et al., 2024) Vicuna-13B ✓356 ----38.8 LITA-7B (Huang et al., 2024b) Vicuna-7B ✓356 24.1 35.6 21.2 9.2 44.0 LITA-13B (Huang et al., 2024b) Vicuna-13B ✓356 28.8 -25.6 -46.3 VideoMind-7B (Liu et al., 2025) Qwen2-VL-7B ✓up to 9.6K / role 31.3 -28.0 --CAViAR (Menon et al., 2025) Gemini-1.5 Flash ✓≈120 frames / call 32.3 ----Qwen3.5-9B (Team, 2026) Qwen3.5-9B ✓7,150 42.1 60.7 43.2 25.3 38.0 TimeLens-8B (Zhang et al., 2026) Qwen3-VL-8B ✓4,000 40.1 58.1 41.9 25.8 34.6 EventCoT (Ours) Step 1: Event Selection Vicuna-7B ✓16 56.2 76.9 62.0 45.4 -Step 2: Answer Generation Vicuna-7B ✓8–100 (39 on average) 58.5 78.6 66.8 45.9 48.7
+
+Table 2: Zero-shot RTL performance on ReXTime (Chen et al., 2024). Localization quality is measured by R@0.3, R@0.5, and mIoU metrics. Accuracy and Accuracy@IoU ≥0.5 indicate question answering performance. Best results are in bold and second-best are underlined. 
+
+Model Backbone # Visual Tokens R@0.3 R@0.5 mIoU Acc Acc@IoU 
+
+VTimeLLM (Huang et al., 2024a) Vicuna-7B 100 28.84 17.41 20.14 36.16 –TimeChat (Ren et al., 2024) LLaMA2-7B 3,072 (96) 14.42 7.61 11.65 40.04 –LITA-13B (Huang et al., 2024b) Vicuna-13B 356 29.49 16.29 21.49 34.44 –TOGA (Gupta et al., 2025) Mistral-7B 2,028 29.91 19.79 25.53 – –Qwen2.5-VL (Bai et al., 2025) Qwen2.5-VL-7B ≤24,576 16.05 9.24 13.60 56.60 6.35 GraphThinker (Cheng et al., 2026) Qwen2.5-VL-7B – 33.92 20.25 25.34 66.82 15.21 EventCoT (Ours) Vicuna-7B 51–100 (81 on average) 46.80 33.33 36.50 48.21 18.1 EventCoT (Ours) Qwen2.5-7B 50–100 (89 on average) 52.88 38.65 40.88 68.7 28.4 
+
+swer quality. This indicates that requiring a sin-gle VLM to handle both temporal localization and answer generation makes the two objectives diffi-cult to optimize jointly. Unlike these single-model baselines, EventCoT separates temporal localiza-tion from answer generation, so that each sub-task can be optimized without competing with the other. As shown in Table 1, EventCoT achieves the best performance on both temporal localization accu-racy and answer quality, even compared with the fine-tuned models. In particular, it improves per-formance across all metrics while using less than 
+
+20% of the visual tokens of LITA. These results demonstrate that EventCoT effectively identifies question-relevant temporal regions and performs reasoning with temporal grounding using signifi-cantly fewer visual tokens than prior approaches. 
+
+ReXTime. To further assess the generalization of our model, we evaluate its zero-shot performance on ReXTime (Chen et al., 2024). We use R@ K
+
+and mIoU as localization metrics, and Accuracy (Acc) and Accuracy@IoU ≥0.5 (Acc@IoU) to eval-uate answering. Acc@IoU counts an answer as correct only when the answer is correct and its predicted moment attains an IoU of at least 0.5
+
+with the ground truth, jointly reflecting answer-ing and localization quality. As shown in Table 2, EventCoT achieves the best performance with the Qwen2.5-7B backbone across all metrics. Even with a weaker backbone such as Vicuna-7B, Event-CoT remains the best among models with compa-rable backbones, and its temporal localization even surpasses prior works built on stronger backbones. This demonstrates that EventCoT’s effectiveness stems from the method rather than the backbone. 
+
+4.4 In-depth Analysis 
+
+We verify the effectiveness of EventCoT through in-depth analysis on the ActivityNet-RTL (Huang et al., 2024b) benchmark. To enable extensive ex-8Table 3: Comparisons between the uniformly divided intervals and our events in terms of temporal localization quality. 
+
+Method Boundary Recall mIoU P@0.3 P@0.5 P@0.7 
+
+Uniform 82.3 48.0 66.3 49.8 34.5 
+
+Event 94.3 50.4 67.6 53.7 35.8 
+
+Table 4: Comparison of the proposed embedding match-ing with discrete time token prediction in RTL perfor-mance.                 
+
+> Method Step 1 Step 2
+> mIoU P@0.5 mIoU P@0.5 GPT-4 Discrete token prediction 45.7 45.9 40.9 40.2 36.8
+> Embedding matching 49.2 48.9 50.4 53.7 42.4
+
+Table 5: Effect of individual components.                           
+
+> Method mIoU P@0.3 P@0.5 P@0.7 GPT-4 Ours 50.4 67.6 53.7 35.8 42.4 w/o event context attention 46.4 62.4 48.5 31.9 34.1 w/o sampled events R36.1 49.3 33.6 10.9 39.0 w/ sampled frames 40.8 57.2 40.6 21.0 42.8
+
+Table 6: Impact of the loss functions.                                        
+
+> Method Step 1 Step 2 Precision Recall Accuracy mIoU P@0.5 mIoU P@0.5 Ours 66.0 91.7 83.2 49.2 48.9 50.4 53.7
+> w/o Lsel 30.2 100.0 30.2 26.0 16.6 26.1 16.6 w/o Lce 45.1 89.9 63.9 32.6 28.4 18.1 13.5 w/o Ldiou 62.4 91.7 80.7 46.0 43.7 45.7 48.0
+
+Table 7: Comparison of event boundary detection meth-ods.                   
+
+> Method Local Boundary Score Avg. Recall KNN (Cover and Hart, 1967) Gaussian density 64.6 Euclidean mean 66.6 Local Euclidean mean 55.5 Local Euclidean std. 57.0 Euclidean mean & Local Euclidean std. 58.1
+> DPC-KNN (Du et al., 2016) Gaussian density 86.2 Euclidean mean 89.9 Local Euclidean mean 89.3 Local Euclidean std. 84.5 Euclidean mean & Local Euclidean std. 89.1
+> Ours
+> Euclidean mean 89.9 Euclidean mean (+ power scaling) 93.9 Euclidean mean (+ temporal proximity) 92.6 Euclidean mean (+ both) 94.3
+
+(a) Local boundary score variants.             
+
+> Method Avg. Recall Mem. (MB) T (ms) Ours 94.3 0.78 0.44
+> Strefer (Zhou et al., 2025a) 88.0 29.49 86.53 PySceneDetect (Castellano and contributors, 2025) 62.5 28.71 76.53
+
+(b) Comparison with prior methods. 
+
+periments at scale, all ablations are trained for 10% 
+
+of the full fine-tuning schedule. 
+
+Necessity of Event-centric Tokenization and Em-bedding Matching. Event-centric tokenization and temporal grounding via embedding matching are critical to our framework. As shown in Table 3, replacing event-centric intervals with uniform in-tervals significantly reduces boundary recall and degrades temporal localization performance, con-firming that aligning segments with semantic event transitions is essential for reliable localization. Fur-thermore, Table 4 demonstrates that substituting embedding matching with discrete time-token pre-diction leads to clear performance drops in both Step 1 and Step 2, as well as lower GPT-4 score, indicating weaker temporal reasoning. 
+
+Effect of Individual Components. Table 5 presents the contribution of each proposed com-ponent. Removing the event context attention and using event point features instead of event tokens degrades both localization and answer generation quality. This indicates that event representations enriched beyond simple mean-pooled features are crucial for reliable event selection and downstream reasoning. Omitting the randomly sampled events 
+
+R from unselected ones leads to significant per-formance drops especially in temporal grounding, since it is overly tied to event boundaries seen during training and fails to generalize. Finally, replacing these sampled events R with sampled frames slightly improves GPT-4 score, presumably because frame-level sampling offers broader visual context. However, this comes at the cost of signif-icantly worse temporal grounding, as frame-level sampling introduces substantial noise to focus on temporally coherent regions. 
+
+Impact of the loss function. Table 6 presents the effect of each loss component on temporal ground-ing. In Step 1, we report event-level metrics (preci-sion, recall, and accuracy) to evaluate the quality of question-relevant event selection. Both Lsel in Step 1 and Lce in Step 2 are essential; removing either leads to a drastic performance drop across all metrics. Moreover, removing Ldiou degrades per-formance, indicating that modeling the dependency between start and end timestamps is beneficial. 
+
+Impact of the event boundary detection method. 
+
+Table 7 shows the comparisons of various event boundary detection methods. Table 7a first evalu-ates different local boundary score variants under KNN (Cover and Hart, 1967) and DPC-KNN (Du et al., 2016). KNN-methods, which rely solely on local boundary scores, show limited performance, regardless of whether Euclidean or other local met-rics are used. Adopting DPC-KNN remarkably improves the average recall up to 89 .9, confirming that incorporating distance factor is crucial for iden-tifying event boundaries. Among different local 9When is the most intense competition between players observed? 
+
+The most intense competition between players is observed between 
+
+73.28s and 86.68s . During this time, two players are seen fighting 
+
+over the ball, indicating a high level of competition and intensity. 
+
+The most intense competition between players is observed 
+
+between 0s and 14.16s . During this time, two players are seen 
+
+fighting over the ball, suggesting a high level of competition. 
+
+> Threshold = 0.4023
+
+Step1: Event -Centric Tokenization and Selection 
+
+Step2: Answer Generation with Temporal Grounding 
+
+The Relevance Score for Each Segment 
+
+Selected Segments 
+
+Similarity Score between <start> and Frame Features 
+
+> Selected Frame 15
+
+Similarity Score between <end> and Frame Features 
+
+Final Answer 
+
+The most intense competition between players is observed between 
+
+0s and 15.92s . During this time, the game of lacrosse begins with two 
+
+players fighting and then running across the field. 
+
+LITA Output 
+
+> Selected Frame 0
+
+The man interacts with the second tire between 46.68s and 
+
+103.35s . During this time, he moves to the back of the truck to 
+
+replace the second tire. 
+
+Step1: Event -Centric Tokenization and Selection 
+
+Step2: Answer Generation with Temporal Grounding 
+
+The Relevance Score for Each Segment 
+
+Selected Segments 
+
+Similarity Score between <start> and Frame Features 
+
+Similarity Score between <end> and Frame Features 
+
+Final Answer  
+
+> Selected Frame 61
+> Selected Frame 28
+> 88.47s 166.70s
+
+Ground Truth 
+
+Question 
+
+> Threshold = 0.4553
+
+EventCoT Output EventCoT Output 
+
+When is the man interacting with the second tire? 
+
+Question 
+
+The man interacts with the second tire between 52.51s and 104.19s .
+
+During this time, he kicks the second tire several times and then 
+
+removes it from the truck. 
+
+Ground Truth 
+
+The man interacts with the second tire between 69.04s and 166.7s .
+
+During this time, he takes the hose and sprays the tire, then removes 
+
+the jack and the tire, and puts the spare tire on. 
+
+LITA Output Figure 5: Qualitative Results on ActivityNet-RTL (Huang et al., 2024b). 150.0s 
+
+How can you make a work area appear tidier, with items sorted 
+
+and the surface wiped clean? 
+
+Question 
+
+A. a girl can improve the organization of her work area by 
+
+rearranging furniture for a more streamlined layout. 
+
+B. a girl can make her work area tidier by digitizing paperwork to 
+
+reduce physical clutter. 
+
+C. a girl can clean her work area by sorting items and wiping the 
+
+surface clean. 
+
+D. a girl can enhance the tidiness of her work area by using 
+
+storage boxes to organize supplies. 
+
+Options 
+
+C, <0.00> <63.00> The girl is standing in her room talking to the 
+
+camera. She shows off her work area, which is cluttered with 
+
+various items. She then begins to sort through her items and put 
+
+them into different piles. She wipes down the surface of her desk 
+
+and then puts a clear coating on it. She then puts her items into 
+
+the storage boxes and shows off the clean work area. 
+
+EventCoT Output 
+
+GT 
+
+Step1 
+
+Step2 
+
+> [0, 44s]
+> [0, 118.5s]
+> [0, 63.0s]
+> 76.37s
+
+Why is the man shown inside a gym? 
+
+Question 
+
+A. to use the exercise equipment available to him. 
+
+B. to support a friend who is working out. 
+
+C. to meet with a personal trainer. 
+
+D. to attend a fitness class. 
+
+Options 
+
+A, <12.22> <56.51> A man is seen sitting on a piece of exercise 
+
+equipment and moving his arms and legs around. The man 
+
+continues moving his arms and legs and ends by standing up. 
+
+EventCoT Output 
+
+GT 
+
+Step1 
+
+Step2 
+
+> [12s, 61s]
+> [10.69s, 62.62s]
+> [12.22s, 56.51s]
+
+Figure 6: Zero-shot qualitative results on ReXTime (Chen et al., 2024). Left: ActivityNet (Krishna et al., 2017); right: QVHighlights (Lei et al., 2021). 
+
+10 boundary scores, Euclidean mean shows the best result, and serves as the basis for our design. Build-ing on this, our two key improvements: temporal proximity-aware distance and power-scaled dis-tance factor consistently enhance the performance, demonstrating their complementary effect. Fur-thermore, as shown in Table 7b, our method out-performs pixel-change-based boundary detection approaches such as PySceneDetect (Castellano and contributors, 2025) and Strefer (Zhou et al., 2025a). This is because our detection method targets se-mantic event transitions rather than pixel-level shot changes, enabling accurate boundary localization even without explicit cuts, while remaining sub-stantially more memory- and time-efficient. Additional ablations on each hyperparameter, together with further analyses such as feature dis-criminability and inference time, are provided in Appendix C. 
+
+4.5 Qualitative Results 
+
+Fig. 5 illustrates the outputs of EventCoT and LITA (Huang et al., 2024b). EventCoT first iden-tifies question-relevant event regions and predicts start and end timestamps via embedding matching. As shown in the example, event-centric video CoT reasoning enables EventCoT to produce markedly more accurate temporal intervals and more reliable answers than LITA for reasoning temporal localiza-tion. Fig. 6 further presents zero-shot qualitative results on ReXTime (Chen et al., 2024). In these examples, EventCoT localizes query-relevant mo-ments and selects the correct answer candidate, indicating effective temporally grounded reasoning beyond the training distribution. 
+
+5 Conclusion 
+
+We have presented EventCoT, an event-centric, token-efficient chain-of-thought framework for rea-soning temporal localization. By leveraging event-centric tokenization with a chain-of-thought pro-cess, EventCoT effectively identifies question-relevant video regions and performs fine-grained reasoning. Extensive experiments on ActivityNet-RTL for reasoning temporal localization and on ReXTime for grounded video question answering demonstrate substantial improvements in both tem-poral grounding and answer quality, validating the effectiveness and efficiency of our method. 
+
+Limitations 
+
+EventCoT fixes the number of events to N and uni-formly samples T = 100 frames per video, which specializes the framework to relatively short videos. Adapting the number of events and frames to the length of each video is therefore a natural direc-tion for future work. In addition, each placeholder token is currently optimized by the language mod-eling loss and the embedding matching loss at once, so a single embedding has to serve both generation and matching. Fully separating these roles would require techniques such as latent CoT (Hao et al., 2024), which generates multiple latent embeddings when producing a single next token. 11 References 
+
+2023. Gpt-4v(ision) system card. Josh Achiam, Steven Adler, Sandhini Agarwal, Lama Ahmad, Ilge Akkaya, Florencia Leoni Aleman, Diogo Almeida, Janko Altenschmidt, Sam Altman, Shyamal Anadkat, et al. 2023. Gpt-4 technical report. 
+
+arXiv preprint arXiv:2303.08774 .Anurag Arnab, Ahmet Iscen, Mathilde Caron, Alireza Fathi, and Cordelia Schmid. 2025. Temporal chain of thought: Long-video understanding by thinking in frames. Proc. Advances in Neural Information Processing Systems (NeurIPS) .Shuai Bai, Keqin Chen, Xuejing Liu, Jialin Wang, Wen-bin Ge, Sibo Song, Kai Dang, Peng Wang, Shijie Wang, Jun Tang, et al. 2025. Qwen2. 5-vl technical report. arXiv preprint arXiv:2502.13923 .Brandon Castellano and contributors. 2025. PySceneDe-tect: Video Scene Cut Detection. https://www. scenedetect.com/ . Version 0.6.6 (released March 9, 2025). Keshigeyan Chandrasegaran, Agrim Gupta, Lea M Hadzic, Taran Kota, Jimming He, Cristóbal Eyza-guirre, Zane Durante, Manling Li, Jiajun Wu, and Li Fei-Fei. 2024. Hourvideo: 1-hour video-language understanding. Proc. Advances in Neural Infor-mation Processing Systems (NeurIPS) , 37:53168– 53197. Jr-Jen Chen, Yu-Chien Liao, Hsi-Che Lin, Yu-Chu Yu, Yen-Chun Chen, and Frank Wang. 2024. Rextime: A benchmark suite for reasoning-across-time in videos. 
+
+Proc. Advances in Neural Information Processing Systems (NeurIPS) , 37:28662–28673. Zesen Cheng, Sicong Leng, Hang Zhang, Yifei Xin, Xin Li, Guanzheng Chen, Yongxin Zhu, Wenqi Zhang, Ziyang Luo, Deli Zhao, et al. 2024. Videollama 2: Advancing spatial-temporal modeling and au-dio understanding in video-llms. arXiv preprint arXiv:2406.07476 .Zixu Cheng, Da Li, Jian Hu, Ziquan Liu, Wei Li, and Shaogang Gong. 2026. Graphthinker: Reinforcing video reasoning with event graph thinking. arXiv preprint arXiv:2602.17555 .Wei-Lin Chiang, Zhuohan Li, Zi Lin, Ying Sheng, Zhanghao Wu, Hao Zhang, Lianmin Zheng, Siyuan Zhuang, Yonghao Zhuang, Joseph E. Gonzalez, Ion Stoica, and Eric P. Xing. 2023. Vicuna: An open-source chatbot impressing gpt-4 with 90%* chatgpt quality. Gheorghe Comanici et al. 2025. Gemini 2.5: Pushing the frontier with advanced reasoning, multimodality, long context, and next generation agentic capabilities. 
+
+arXiv preprint arXiv:2507.06261 .T. Cover and P. Hart. 1967. Nearest neighbor pattern classification. IEEE Transactions on Information Theory , 13(1):21–27. Mingjing Du, Shifei Ding, and Hongjie Jia. 2016. Study on density peaks clustering based on k-nearest neigh-bors and principal component analysis. Knowledge-Based Systems , 99:135–145. Xinyu Fang, Kangrui Mao, Haodong Duan, Xiangyu Zhao, Yining Li, Dahua Lin, and Kai Chen. 2024. Mmbench-video: A long-form multi-shot benchmark for holistic video understanding. Proc. Advances in Neural Information Processing Systems (NeurIPS) ,37:89098–89124. Yongxin Guo, Jingyu Liu, Mingda Li, Qingbin Liu, Xi Chen, and Xiaoying Tang. 2025. Trace: Temporal grounding video llm via causal event modeling. Proc. International Conference on Learning Representa-tions (ICLR) .Ayush Gupta, Anirban Roy, Rama Chellappa, Nathaniel D Bastian, Alvaro Velasquez, and Susmit Jha. 2025. Toga: Temporally grounded open-ended video qa with weak supervision. In Proc. IEEE In-ternational Conference on Computer Vision (ICCV) ,pages 23593–23603. Shibo Hao, Sainbayar Sukhbaatar, DiJia Su, Xian Li, Zhiting Hu, Jason Weston, and Yuandong Tian. 2024. Training large language models to reason in a contin-uous latent space. arXiv preprint arXiv:2412.06769 .Bin Huang, Xin Wang, Hong Chen, Zihan Song, and Wenwu Zhu. 2024a. Vtimellm: Empower llm to grasp video moments. In Proc. IEEE Conference on Computer Vision and Pattern Recognition (CVPR) ,pages 14271–14280. De-An Huang, Shijia Liao, Subhashree Radhakrishnan, Hongxu Yin, Pavlo Molchanov, Zhiding Yu, and Jan Kautz. 2024b. Lita: Language instructed temporal-localization assistant. In Proc. European Conference on Computer Vision (ECCV) .Aaron Hurst, Adam Lerer, Adam P Goucher, Adam Perelman, Aditya Ramesh, Aidan Clark, AJ Os-trow, Akila Welihinda, Alan Hayes, Alec Radford, et al. 2024. Gpt-4o system card. arXiv preprint arXiv:2410.21276 .Peng Jin, Ryuichi Takanobu, Wancai Zhang, Xiaochun Cao, and Li Yuan. 2024. Chat-univi: Unified visual representation empowers large language models with image and video understanding. In Proc. IEEE Con-ference on Computer Vision and Pattern Recognition (CVPR) , pages 13700–13710. Ranjay Krishna, Kenji Hata, Frederic Ren, Li Fei-Fei, and Juan Carlos Niebles. 2017. Dense-captioning events in videos. In Proc. IEEE International Con-ference on Computer Vision (ICCV) , pages 706–715. Xin Lai, Zhuotao Tian, Yukang Chen, Yanwei Li, Yuhui Yuan, Shu Liu, and Jiaya Jia. 2024. Lisa: Reasoning segmentation via large language model. In Proc. IEEE Conference on Computer Vision and Pattern Recognition (CVPR) , pages 9579–9589. 
+
+12 Jie Lei, Tamara L Berg, and Mohit Bansal. 2021. Detect-ing moments and highlights in videos via natural lan-guage queries. Proc. Advances in Neural Information Processing Systems (NeurIPS) , 34:11846–11858. Jie Lei, Licheng Yu, Tamara L Berg, and Mohit Bansal. 2020. Tvqa+: Spatio-temporal grounding for video question answering. In Proc. Annual Meeting of the Association for Computational Linguistics (ACL) .Bo Li, Yuanhan Zhang, Dong Guo, Renrui Zhang, Feng Li, Hao Zhang, Kaichen Zhang, Peiyuan Zhang, Yanwei Li, Ziwei Liu, et al. 2024a. Llava-onevision: Easy visual task transfer. arXiv preprint arXiv:2408.03326 .Hongyu Li, Jinyu Chen, Ziyu Wei, Shaofei Huang, Tian-rui Hui, Jialin Gao, Xiaoming Wei, and Si Liu. 2025. Llava-st: A multimodal large language model for fine-grained spatial-temporal understanding. In Proc. IEEE Conference on Computer Vision and Pattern Recognition (CVPR) , pages 8592–8603. KunChang Li, Yinan He, Yi Wang, Yizhuo Li, Wen-hai Wang, Ping Luo, Yali Wang, Limin Wang, and Yu Qiao. 2023. Videochat: Chat-centric video under-standing. arXiv preprint arXiv:2305.06355 .Kunchang Li, Yali Wang, Yinan He, Yizhuo Li, Yi Wang, Yi Liu, Zun Wang, Jilan Xu, Guo Chen, Ping Luo, et al. 2024b. Mvbench: A comprehen-sive multi-modal video understanding benchmark. In Proc. IEEE Conference on Computer Vision and Pattern Recognition (CVPR) , pages 22195–22206. Bin Lin, Yang Ye, Bin Zhu, Jiaxi Cui, Munan Ning, Peng Jin, and Li Yuan. 2024a. Video-LLaVA: Learn-ing united visual representation by alignment before projection. In Proc. Empirical Methods in Natural Language Processing (EMNLP) , pages 5971–5984, Miami, Florida, USA. Association for Computational Linguistics. Ji Lin, Hongxu Yin, Wei Ping, Pavlo Molchanov, Mo-hammad Shoeybi, and Song Han. 2024b. Vila: On pre-training for visual language models. In Proc. IEEE Conference on Computer Vision and Pattern Recognition (CVPR) , pages 26689–26699. Haotian Liu, Chunyuan Li, Qingyang Wu, and Yong Jae Lee. 2023. Visual instruction tuning. Proc. Advances in Neural Information Processing Systems (NeurIPS) ,36:34892–34916. Ye Liu, Kevin Qinghong Lin, Chang Wen Chen, and Mike Zheng Shou. 2025. Videomind: A chain-of-lora agent for long video reasoning. arXiv preprint arXiv:2503.13444 .Ye Liu, Zongyang Ma, Zhongang Qi, Yang Wu, Ying Shan, and Chang W Chen. 2024. Et bench: Towards open-ended event-level video-language understand-ing. Proc. Advances in Neural Information Process-ing Systems (NeurIPS) , 37:32076–32110. Muhammad Maaz, Hanoona Rasheed, Salman Khan, and Fahad Khan. 2024. Video-chatgpt: Towards detailed video understanding via large vision and language models. In Proceedings of the 62nd An-nual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) , pages 12585– 12602. Sachit Menon, Ahmet Iscen, Arsha Nagrani, Tobias Weyand, Carl Vondrick, and Cordelia Schmid. 2025. Caviar: Critic-augmented video agentic reasoning. 
+
+arXiv preprint arXiv:2509.07680 .OpenAI. 2025. Openai gpt-5 system card. arXiv preprint arXiv:2601.03267 .Long Qian, Juncheng Li, Yu Wu, Yaobo Ye, Hao Fei, Tat-Seng Chua, Yueting Zhuang, and Siliang Tang. 2024. Momentor: advancing video large language model with fine-grained temporal reasoning. In 
+
+Proc. International Conference on Machine Learning (ICML) , pages 41340–41356. Alec Radford, Jong Wook Kim, Chris Hallacy, Aditya Ramesh, Gabriel Goh, Sandhini Agarwal, Girish Sas-try, Amanda Askell, Pamela Mishkin, Jack Clark, et al. 2021. Learning transferable visual models from natural language supervision. In International confer-ence on machine learning , pages 8748–8763. PMLR. Alec Radford, Jeffrey Wu, Rewon Child, David Luan, Dario Amodei, Ilya Sutskever, et al. 2019. Language models are unsupervised multitask learners. Techni-cal report, OpenAI .Shuhuai Ren, Linli Yao, Shicheng Li, Xu Sun, and Lu Hou. 2024. Timechat: A time-sensitive multi-modal large language model for long video under-standing. In Proc. IEEE Conference on Computer Vision and Pattern Recognition (CVPR) , pages 14313– 14323. Hao Shao, Shengju Qian, Han Xiao, Guanglu Song, Zhuofan Zong, Letian Wang, Yu Liu, and Hong-sheng Li. 2024. Visual cot: Advancing multi-modal language models with a comprehensive dataset and benchmark for chain-of-thought reasoning. Proc. Ad-vances in Neural Information Processing Systems (NeurIPS) , 37:8612–8642. Youngkil Song, Dongkeun Kim, Minsu Cho, and Suha Kwak. 2024. Online temporal action localization with memory-augmented transformer. In Proc. Euro-pean Conference on Computer Vision (ECCV) , pages 74–91. Springer. Jianlin Su, Murtadha Ahmed, Yu Lu, Shengfeng Pan, Wen Bo, and Yunfeng Liu. 2024. Roformer: En-hanced transformer with rotary position embedding. 
+
+Neurocomputing , 568:127063. Qwen Team. 2026. Qwen3.5: Towards native multi-modal agents. https://qwen.ai/blog?id=qwen3. 5.
+
+13 Weihan Wang, Zehai He, Wenyi Hong, Yean Cheng, Xi-aohan Zhang, Ji Qi, Ming Ding, Xiaotao Gu, Shiyu Huang, Bin Xu, et al. 2025. Lvbench: An ex-treme long video understanding benchmark. In Proc. IEEE International Conference on Computer Vision (ICCV) , pages 22958–22967. Xiaohan Wang, Yuhui Zhang, Orr Zohar, and Serena Yeung-Levy. 2024. Videoagent: Long-form video understanding with large language model as agent. In Proc. European Conference on Computer Vision (ECCV) , pages 58–76. Springer. Jason Wei, Xuezhi Wang, Dale Schuurmans, Maarten Bosma, Fei Xia, Ed Chi, Quoc V Le, Denny Zhou, et al. 2022. Chain-of-thought prompting elicits rea-soning in large language models. Proc. Advances in Neural Information Processing Systems (NeurIPS) ,35:24824–24837. Junbin Xiao, Xindi Shang, Angela Yao, and Tat-Seng Chua. 2021. Next-qa: Next phase of question-answering to explaining temporal actions. In Proc. IEEE Conference on Computer Vision and Pattern Recognition (CVPR) , pages 9777–9786. Junbin Xiao, Angela Yao, Yicong Li, and Tat-Seng Chua. 2024. Can i trust your answer? visually grounded video question answering. In Proc. IEEE Conference on Computer Vision and Pattern Recog-nition (CVPR) .Antoine Yang, Arsha Nagrani, Paul Hongsuck Seo, An-toine Miech, Jordi Pont-Tuset, Ivan Laptev, Josef Sivic, and Cordelia Schmid. 2023. Vid2seq: Large-scale pretraining of a visual language model for dense video captioning. In Proc. IEEE Conference on Com-puter Vision and Pattern Recognition (CVPR) , pages 10714–10726. Jiabo Ye, Haiyang Xu, Haowei Liu, Anwen Hu, Ming Yan, Qi Qian, Ji Zhang, Fei Huang, and Jingren Zhou. 2024. mplug-owl3: Towards long image-sequence understanding in multi-modal large language models. 
+
+arXiv preprint arXiv:2408.04840 .Jeffrey M Zacks and Khena M Swallow. 2007. Event segmentation. Current directions in psychological science , 16(2):80–84. Chen-Lin Zhang, Jianxin Wu, and Yin Li. 2022. Action-former: Localizing moments of actions with trans-formers. In Proc. European Conference on Computer Vision (ECCV) , pages 492–510. Springer. Hang Zhang, Xin Li, and Lidong Bing. 2023. Video-llama: An instruction-tuned audio-visual language model for video understanding. In Proceedings of the 2023 conference on empirical methods in natural language processing: system demonstrations , pages 543–553. Jun Zhang, Teng Wang, Yuying Ge, Yixiao Ge, Xinhao Li, Ying Shan, and Limin Wang. 2026. Timelens: Re-thinking video temporal grounding with multimodal llms. In Proc. IEEE Conference on Computer Vision and Pattern Recognition (CVPR) .Zhaohui Zheng, Ping Wang, Wei Liu, Jinze Li, Rong-guang Ye, and Dongwei Ren. 2020. Distance-iou loss: Faster and better learning for bounding box regression. In Proc. AAAI Conference on Artificial Intelligence (AAAI) , pages 12993–13000. Zhuo Zhi, Qiangqiang Wu, Wenbo Li, Yinchuan Li, Kun Shao, Kaiwen Zhou, et al. 2025. Videoagent2: Enhancing the llm-based agent system for long-form video understanding by uncertainty-aware cot. arXiv preprint arXiv:2504.04471 .Honglu Zhou, Xiangyu Peng, Shrikant Kendre, Michael S Ryoo, Silvio Savarese, Caiming Xiong, and Juan Carlos Niebles. 2025a. Strefer: Empower-ing video llms with space-time referring and reason-ing via synthetic instruction data. In Proc. IEEE In-ternational Conference on Computer Vision (ICCV) ,pages 4289–4300. Junjie Zhou, Yan Shu, Bo Zhao, Boya Wu, Zhengyang Liang, Shitao Xiao, Minghao Qin, Xi Yang, Yong-ping Xiong, Bo Zhang, et al. 2025b. Mlvu: Bench-marking multi-task long video understanding. In 
+
+Proc. IEEE Conference on Computer Vision and Pat-tern Recognition (CVPR) , pages 13691–13701. Luowei Zhou, Chenliang Xu, and Jason Corso. 2018. Towards automatic learning of procedures from web instructional videos. In Proc. AAAI Conference on Artificial Intelligence (AAAI) .Jinguo Zhu, Weiyun Wang, Zhe Chen, Zhaoyang Liu, Shenglong Ye, Lixin Gu, Hao Tian, Yuchen Duan, Weijie Su, Jie Shao, et al. 2025. Internvl3: Ex-ploring advanced training and test-time recipes for open-source multimodal models. arXiv preprint arXiv:2504.10479 .
+
+14 This supplementary material provides additional details and analyses of EventCoT. Sec. A describes the training and inference pipeline of our event-centric video chain-of-thought framework, and Sec. B summarizes the task-specific prompts used for each dataset. Sec. C presents additional in-depth ablation studies, Sec. D offers additional qualitative comparisons with LITA, and finally, Sec. E discusses future research directions built upon EventCoT. 
+
+A Training and Inference Pipeline 
+
+This section provides additional details on how EventCoT is trained jointly in a multi-turn manner and how its two-step process is executed during inference. 
+
+A.1 Training Procedure 
+
+During training, EventCoT performs question-relevant event selection (Step 1) and fine-grained reasoning with relevant events (Step 2) within a single multi-turn conversation. Because ground-truth temporal intervals are available during train-ing, both stages can be supervised jointly. 
+
+Question-relevant Event Selection (Step 1). The model receives the event tokens and the input ques-tion, and is prompted to output the special token 
+
+⟨segment_key ⟩. The hidden embedding at this to-ken position is supervised using the event selec-tion loss Lsel , computed from the overlap with the ground-truth interval. 
+
+Fine-grained Reasoning with Relevant Events (Step 2). In the next turn, the model receives the frame-level tokens, constructed from both the selected events, determined by overlap with the ground-truth interval during training, and a ran-domly sampled subset of unselected events, and generates an answer that includes ⟨start ⟩ and 
+
+⟨end ⟩ placeholder tokens. The hidden embeddings at these token positions are trained using the tempo-ral localization loss Lts , based on the ground-truth start and end timestamps. 
+
+A.2 Inference Procedure 
+
+Unlike training, inference is executed sequentially: Step 1 first identifies the question-relevant events, and only then Step 2 performs fine-grained tempo-ral reasoning based on those selected events. 
+
+Question-relevant Event Selection (Step 1). The model receives the event tokens and the input ques-tion, produces ⟨segment_key ⟩, and computes its embedding similarity against the event tokens to determine the question-relevant events. 
+
+Fine-grained Reasoning with Relevant Events (Step 2). Step 2 proceeds as the next turn of the multi-turn conversation. Its input comprises the frame-level tokens of the selected events, aug-mented as described below, the input question, and the preserved Step 1 turn, which still carries both the event tokens of the whole video and the 
+
+⟨segment_key ⟩ output. Through this multi-turn context, Step 2 inherits the event-level represen-tation of the entire video, so regions outside the selected interval, such as causes and consequences, remain accessible as global context. Meanwhile, the frame-level tokens let the model zoom into the selected events for fine-grained reasoning. At in-ference, Step 1 selections are no longer guaranteed to match the ground-truth events. To keep Step 2’s input consistent between training and inference, we apply the same sampling scheme used in training, augmenting the selected events with a randomly sampled subset of unselected events (Eq. (8) ). Dur-ing training, the random sampling exposes Step 2 to events beyond the ground-truth selection. Apply-ing the same scheme at inference bridges the gap with Step 1’s noisy predictions. EventCoT then generates the answer together with the ⟨start ⟩ and ⟨end ⟩ placeholder tokens, reusing the reasoning signal carried over from Step 1. At these positions, it performs embedding matching (Liu et al., 2024; Lai et al., 2024) be-tween the placeholder token embeddings and those of the frame-level visual tokens to infer the start and end timestamps. 
+
+B Task Prompts 
+
+This section presents the task-specific prompts used in Step 1 and Step 2. All tasks follow the same two-step prompt template shown be-low: Step 1 uses the Event Selection Prompt , and Step 2 uses the Fine-grained Reasoning Prompt .From this shared template, we instantiate the tem-plate fields {task_prompt} , {question_prompt} ,
+
+{step1_prompt} , and {step2_prompt} with task-specific instructions and question texts, producing the final prompts used for both training and infer-ence. In the prompts, the L-th hidden state refers to the final-layer hidden embedding of the LLM. 
+
+Event Selection Prompt (Step 1): 
+
+> Task: {task_prompt} Event features: <image> Question: {question_prompt}
+
+15 Instruction: {step1_prompt} 
+
+Fine-grained Reasoning Prompt (Step 2): 
+
+Task: {task_prompt} Selected frame features: <image> Question: {question_prompt} Instruction: {step2_prompt} 
+
+B.1 Dense Video Captioning 
+
+The prompt construction for dense video caption-ing (Zhou et al., 2018; Krishna et al., 2017) follows LITA (Huang et al., 2024b), where each question is formed by combining a task description with a timestamp instruction. The task description spec-ifies the overall task objective, while the times-tamp instruction indicates how temporal bound-aries should be expressed. A question is generated by randomly sampling one option from each pool of task descriptions and timestamp instructions and concatenating them. The listing below shows the in-stantiated {task_prompt} , {question_prompt} ,
+
+{step1_prompt} , and {step2_prompt} for dense video captioning. 
+
+task_prompt: - Dense Video Captioning Task Descriptions (sample one): - Provide a detailed description of the given video. - Describe the provided video in detail. - Summarize the visual content of the video. - Write an informative summary of the video. Timestamp Instructions (sample one): - Each sentence should begin with the start and end timestamps. - At the beginning of each sentence, include the start and end timestamps. - Prepend each sentence with its start and end timestamps. question_prompt: - (sampled Task Description) + " " + (sampled Timestamp Instruction) step1_prompt: - Based on the given event features and question, predict a <segment_key> to select question-relevant event segments. The < segment_key> will be matched with the L-th hidden state embedding of event features through embedding matching to identify relevant event segments. step2_prompt: - Using the given event features and selected frame features, provide a detailed answer to the question. 
+
+B.2 Event Localization 
+
+Event localization (Zhou et al., 2018; Krishna et al., 2017) aims to predict the temporal interval in which a given event description occurs within the video. To construct questions for this task, we follow the same strategy as dense video captioning: a task description is combined with a timestamp in-struction. Here, the task description is formed by inserting the given sentence into a template that queries when the event happens in the video, while the timestamp instruction specifies the for-mat of the desired temporal boundaries. The in-stantiated {task_prompt} , {question_prompt} ,
+
+{step1_prompt} , and {step2_prompt} for event localization are shown below. 
+
+task_prompt: - Event Localization Task Descriptions (sample one): - When does "{SENTENCE}" happen in the video? - At what point in the video does "{SENTENCE}" happen? - When is "{SENTENCE}" depicted in the video? - At what time in the video does "{SENTENCE}" take place? Timestamp Instructions (sample one): - Provide the start and end timestamps when the event occurs. - Answer with the start and end timestamps of the event. - Indicate when the event happens using start and end timestamps. question_prompt: - (sampled Task Description) + " " + (sampled Timestamp Instruction) step1_prompt: - Based on the given event features and question, predict a <segment_key> to select question-relevant event segments. The < segment_key> will be matched with the L-th hidden state embedding of event features through embedding matching to identify relevant event segments. step2_prompt: - Using the given event features and selected frame features, provide the start and end timestamps when the event occurs. 
+
+B.3 Other Tasks: RTL, Video-QA, and Image-based Instruction Tuning 
+
+For the remaining tasks, namely reasoning tem-poral localization (RTL (Huang et al., 2024b)), video question answering (Video-QA (Xiao et al., 2021)), and image-based instruction tuning (Liu et al., 2023), the question is directly provided by the dataset without additional construction. All 16 three tasks share the same Step 1 prompt, which predicts the ⟨segment_key ⟩ using the event fea-tures and the input question. In Step 2, the prompt is slightly adapted for each task to reflect its out-put format. For RTL, the Step 2 instruction asks the model to produce an answer accompanied by temporal boundaries. For Video-QA, the model is prompted to generate a standard answer to the question. For image-based instruction tuning, the instruction requests detailed answers , since multi-ple QA pairs may be generated for a single image. We therefore show each task’s {task_prompt} and task-specific {step2_prompt} below. 
+
+(a) Reasoning Temporal Localization 
+
+> task_prompt: - Reasoning Temporal Localization step2_prompt: - Using the given event features and selected frame features, provide a detailed answer to the question with timestamps.
+
+(b) Video Question Answering 
+
+> task_prompt: - Video Question Answering step2_prompt: - Using the given event features and selected frame features, provide an answer to the question.
+
+(c) Image-based Instruction Tuning , whose de-ployed {task_prompt} is phrased as visual ques-tion answering. 
+
+> task_prompt: - Visual Question Answering step2_prompt: - Using the given event features and selected frame features, provide detailed answers to the question.
+
+B.4 Prompts and Evaluation Protocol for Foundation-Model Baselines 
+
+We evaluate every zero-shot baseline under a sin-gle protocol that follows the ActivityNet-RTL task. Each model is given the video, its total duration, and the question, and is asked to return one line containing both a free-form answer and the start and end timestamps of the supporting interval. Stat-ing the duration lets the model report timestamps in absolute seconds within the actual length of the video. From each response we extract the two timestamps, clamp them to the valid range, and use the timestamps to compute mIoU and P@ K,and the answer to compute the GPT-4 score. All models share the prompt template below, where the duration and question are filled in for each sample. 
+
+> Video duration: {duration} seconds. Question: {question} Output exactly ONE line in this format: The event happens between <START> and <END> seconds. <DESCRIPTION> Where <START> and <END> are floating-point seconds (0 to {duration}), and <DESCRIPTION> is one sentence describing what happens during that interval to answer the question.
+
+The models differ in how the video is supplied. Gemini 2.5 Pro and Gemini 2.5 Flash receive the full video through the Gemini File API, where the video is decoded at roughly one frame per sec-ond together with its audio track. The GPT mod-els (GPT-5, GPT-5-mini, and GPT-4o), Qwen3.5-9B, and TimeLens-8B instead receive 100 frames sampled uniformly across the video, matching the frame budget of EventCoT. The GPT models en-code each frame in the low-detail setting, which rescales it to 512 × 512 and represents it with a fixed budget of 85 tokens, so all frames use the same number of visual tokens. Qwen3.5-9B re-ceives the frames at their native resolution, whereas TimeLens-8B applies a total-pixel budget over the frame sequence that caps its visual token count. 
+
+C Additional In-depth Analysis 
+
+C.1 Feature Discriminability Analysis 
+
+While our embedding matching effectively handles event selection and temporal grounding (Table 1), we further examine how discriminative the features remain throughout the overall pipeline. We also analyze the impact of applying projectors, each implemented as a separate 2-layer MLP applied to the event embeddings and the placeholder to-ken embeddings ( ⟨segment_key ⟩, ⟨start ⟩, ⟨end ⟩)immediately before embedding matching. We em-pirically find that removing these projectors leads to better performance in EventCoT. Table S1 reports the cosine similarities among event features across four stages: event point fea-ture (before event context attention), event token 
+
+(after event context attention), event embedding (af-ter LLM), and projected event embedding (after the projector). We observe a consistent trend in which event features become increasingly more discrimi-native as they progress from event point features to event tokens and finally to event embeddings. This is reflected in decreasing overall similarity and re-duced similarity between question-relevant (GT) 17 Table S1: Feature discriminability in step 1 (mean ± std). Event feature similarity measures intra-sample similarity between event features within the same video, while segment key similarity measures inter-sample similarity across different videos. Lower similarity indicates higher discriminability. The model is trained for 10% of the full fine-tuning schedule. 
+
+Feature Type Inter-event Similarity GT vs. Non-GT Similarity 
+
+Event point feature (before event context attention) 0.6228 ± 0.0278 0.5766 ± 0.0504 
+
+Event token (after event context attention) 0.5832 ± 0.0332 0.5337 ± 0.0551 
+
+Event embedding (after LLM) 0.4481 ± 0.0330 0.3364 ± 0.1034 
+
+Event embedding (after projector) 0.7961 ± 0.0182 0.7353 ± 0.0635 
+
+Segment Key Discriminability Inter-sample Similarity 
+
+Segment key embedding (after LLM) 0.6870 ± 0.0947 
+
+Segment key embedding (after projector) 0.9155 ± 0.0624 
+
+Table S2: Ablation study on the projection head in step 1 temporal localization. All models are trained for 10% of the full fine-tuning schedule. 
+
+Method mIoU P@0.3 P@0.5 P@0.7 
+
+w/o Projector 49.6 63.3 48.9 34.9 
+
+w/ Projector 33.3 48.0 30.1 13.5 
+
+and non-relevant events. These results indicate that the model gradually refines event representations in a way that better supports embedding matching for question-relevant event selection. However, applying the projectors markedly in-creases feature similarity across all metrics, indi-cating a collapse in discriminability. This trend also appears in the segment-key discriminability analysis in Table S1, where inter-sample similarity rises sharply after passing through the projector. This issue becomes especially problematic under our Step 1 temporal localization setup, where time intervals are constructed from consecutive question-relevant events, and the longest consecutive interval is selected as the final output. Under this evalua-tion protocol, training with projectors leads to a substantial performance drop (Table S2), demon-strating that projectors degrade the model’s ability to distinguish event features. These results justify removing the projectors to preserve feature discrim-inability and improve the reliability of embedding matching. 
+
+C.2 Effect of the Number of Events 
+
+We conduct an ablation study on the number of events N . Using fewer events reduces the computa-tional cost of event selection but risks merging mul-tiple semantic events into a single segment, mak-
+
+Table S3: Ablation study on the number of events for temporal localization. All models are trained for 10% of the full fine-tuning schedule. 
+
+# Events (N) mIoU P@0.3 P@0.5 P@0.7 
+
+8 39.5 55.4 38.5 17.9 16 50.4 67.6 53.7 35.8 32 53.0 72.9 56.8 39.7 
+
+64 47.5 66.3 53.7 30.6 100 47.6 72.0 54.2 21.4 
+
+ing it harder to identify question-relevant regions. Conversely, increasing the number of events pre-vents multiple events from being merged, but may fragment a single coherent event across different segments and introduce redundant computation. As shown in Table S3, the choice of N affects temporal localization more than the other hyperpa-rameters, since N determines the semantic granu-larity of events. Both N =16 and N =32 achieve competitive results, indicating that moderate values of N balance accuracy and efficiency. We adopt 
+
+N =16 in our experiments as it provides strong per-formance while maintaining lower computational cost in Step 1. Since both too few and too many events degrade performance, these results highlight the importance of determining the number of events adaptively rather than fixing it for all videos. De-veloping an adaptive event segmentation strategy is therefore a promising future direction for improv-ing both accuracy and efficiency. 
+
+C.3 Effect of the Temporal Extension Factor 
+
+To mitigate potential errors in predicted event boundaries, our event context attention allows each event token to attend not only to frames within its 18 Table S4: Ablation study on the β of event context at-tention for temporal localization. All models are trained for 10% of the full fine-tuning schedule. 
+
+Method mIoU P@0.3 P@0.5 P@0.7 
+
+β = 0 50.1 67.6 51.6 33.6 
+
+β = 1 50.8 68.5 53.3 36.2 
+
+β = 3 50.4 67.6 53.7 35.8 
+
+β = 5 49.2 66.3 50.7 34.5 No mask 48.0 64.1 49.8 31.0                     
+
+> Table S5: Ablation study on the number of video frames for temporal localization. All models are trained for 10% of the full fine-tuning schedule.
+> # Video Frames (T) mIoU P@0.3 P@0.5 P@0.7
+> 50 47.5 67.2 48.1 32.7 100 50.4 67.6 53.7 35.8
+> 200 49.8 69.8 52.4 34.9 300 51.4 72.0 52.9 34.0
+
+own interval but also to a small temporal neigh-borhood around it. We investigate the impact of the temporal extension factor β, which controls the number of additional frames included on both sides of an event. Table S4 summarizes the results. “No mask” refers to computing attention over all frames, i.e., using the full frame sequence as keys and val-ues without any restriction. This causes the model to attend to many irrelevant frames, introducing substantial noise and resulting in worse temporal localization. In contrast, masking attention to a local temporal window around each segment yields better localization accuracy. Furthermore, includ-ing a small number of neighboring frames (e.g., 
+
+β = 1 or 3) consistently improves the performance over using no additional context ( β = 0 ), confirm-ing that a small amount of boundary-aware context is also beneficial. The best performance is obtained at β = 1 , suggesting that our event boundary detec-tor is sufficiently accurate (94.3% boundary recall), and thus a modest temporal extension is adequate to compensate for false boundary detection with-out introducing excessive noise. We adopt β = 3 
+
+in our main experiments, which achieves the best P@ 0.5 and performs comparably to β = 1 on the other metrics. 
+
+C.4 Effect of the Number of Video Frames 
+
+We further analyze the effect of the number of sam-pled video frames T . As shown in Table S5, the performance remains robust across different values of T , and even a moderate number of frames (e.g., 
+
+T = 100 ) is sufficient for stable temporal local-ization. This robustness arises from the design of EventCoT: during event-centric tokenization, each event is summarized into a single event embedding, and thus the semantic content of an event is suf-ficiently captured even with a limited number of frames. As long as each event contains enough visual cues, the resulting event embeddings do not change significantly. Nevertheless, increasing T continues to provide marginal improvements, with the best results ob-tained at T = 300 . This is likely because denser frame sampling offers more reliable local den-sity estimates for event boundary detection, and it also benefits fine-grained timestamp grounding in Step 2, where the similarity between the place-holder tokens and frame features is computed at the frame level. These results indicate that EventCoT is inherently robust to the number of sampled frames, yet can still take advantage of additional frame in-formation in longer or more complex videos. 
+
+C.5 Effect of Step 1 Localization on Step 2 Accuracy 
+
+To examine how event selection quality in Step 1 affects the final temporal grounding performance, we divide the validation samples into three groups based on the IoU between the predicted intervals of Step 1 and the ground-truth. The predicted in-terval is computed as the union of consecutive selected events; if multiple candidates exist, we select the one containing the largest number of events. Table S6 summarizes the results. Nearly half of the samples (48.2%) fall into the High IoU range ( >67%), showing that Step 1 reliably identi-fies question-relevant events. As expected, higher Step 1 accuracy leads to better Step 2 temporal grounding, since precise event selection restricts the candidate frames for embedding matching. The High IoU group shows a slight decrease in Step 2 mIoU. Since our detected event boundaries are highly accurate (94.3% recall), Step 1 often yields intervals already close to the ground-truth. In such cases, because the additional Step 2 refine-ment is performed jointly with answer generation, it may introduce errors in the predicted intervals and marginally lower IoU. For the Low IoU group (<33%), Step 1 fails to localize well, yet Step 2 still finds some temporal boundaries (5.0% P@ 0.5) and increases mIoU. This comes from two factors: (1) incorporating randomly sampled unselected events, 19 Table S6: Step 2 Performance Analysis by IoU Range 
+
+IoU Range Ratio Step1 mIoU Step2 mIoU Step2 P@0.5 GPT Score Low (0–33%) 26.3% 12.9 16.8 5.0 40.2 Medium (33–67%) 25.4% 50.6 61.6 81.0 47.0 High (67–100%) 48.2% 82.6 78.8 92.7 53.7 Overall 100.0% 56.2 58.5 66.8 48.7   
+
+> Table S7: Ablation study on the segment selection threshold γfor step 1 and step 2 temporal localization.
+
+γ Step 1 Step 2 mIoU P@0.3 P@0.5 P@0.7 mIoU P@0.3 P@0.5 P@0.7 
+
+0.1 52.0 72.9 53.7 37.6 55.5 73.8 60.2 41.0 
+
+0.2 54.0 74.7 55.9 38.9 56.7 74.2 61.1 42.8 
+
+0.3 55.6 77.3 57.6 40.6 57.5 76.0 62.9 44.1 
+
+0.4 56.4 78.6 59.0 42.4 57.6 76.9 64.2 43.7 
+
+0.5 56.2 76.9 62.0 45.4 58.5 78.6 66.8 45.9 
+
+0.6 57.0 79.5 62.9 46.3 58.2 79.9 67.2 44.5 
+
+0.7 57.8 79.0 63.3 49.3 56.7 78.2 65.1 43.2 
+
+0.8 58.7 79.5 65.9 50.2 55.3 76.9 64.6 41.5 
+
+0.9 57.9 77.3 65.1 48.9 52.3 74.2 59.0 38.0 
+
+which provides global context, and (2) frame-level embedding matching, which can identify relevant cues even outside the mis-localized events. Overall, these results demonstrate that Step 1 and Step 2 form a complementary coarse-to-fine process. Accurate Step 1 predictions improve fine-grained reasoning, while additional global context allows Step 2 to partially recover when Step 1 is inaccurate. 
+
+C.6 Effect of the Event Selection Threshold 
+
+We ablate the threshold γ used for selecting question-relevant events in Step 1. To ensure that at least one event is passed to Step 2, the thresh-old is defined as γ · max n rn, where rn denotes the predicted relevance score. As shown in Ta-ble S7, temporal localization performance remains stable across a wide range of γ values (0.1–0.9). This robustness indicates that the model assigns sharply higher relevance scores to true relevant events, making the separation between relevant and non-relevant events robust to threshold vari-ation. Based on this observation, we simply adopt 
+
+γ = 0 .5 for main experiments. 
+
+C.7 Effect of the Sampling Ratio 
+
+We conduct an ablation on the sampling ratio of additional unselected events R that are randomly 
+
+> Table S8: Ablation on the sampling ratio of additional unselected events provided to the LLM in Step 2.
+
+Ratio mIoU P@0.3 P@0.5 P@0.7 
+
+w/o R 36.1 49.3 33.6 10.9 10% 50.9 69.9 52.4 32.3 20% 52.4 72.5 53.7 35.4 30% 50.4 67.6 53.7 35.8 
+
+40% 47.4 65.1 48.0 32.3 50% 40.3 57.2 41.5 22.3 incorporated into the Step 2 input. As shown in Ta-ble S8, including R during Step 2 training substan-tially improves temporal localization compared to removing R. This is because R breaks the bound-ary alignment between the Step 2 input intervals and the ground-truth interval, mitigating a short-cut where the model simply outputs the input in-terval boundaries as the predicted start and end timestamps rather than performing genuine tempo-ral reasoning. However, overly large ratios (e.g., 
+
+≥ 40% ) degrade performance, as excessive unse-lected events dilute the question-relevant evidence identified by Step 1 and introduce additional noise, making fine-grained temporal grounding less reli-able. 20 T=100 T=200 T=1000       
+
+> LLM Forward Inference Time ( ms )
+> 41,031
+> 10,053
+> 5,756
+> 851 940 874
+> 1,048
+> 1,205
+> 931
+> T=100 T=200 T=1000
+> Visual Tokenization Inference Time ( ms )
+> 2430
+> 472
+> 228 229 228
+> 481 472
+> 2430 2465
+
+(a)        
+
+> EventCoT (Step 2) 16 ×16 tokens/frame LITA EventCoT (Step 1)
+> 54 56 65
+> EventCoT (Ours) 16 ×16 tokens/frame LITA
+
+(b) Figure S1: Inference time analysis. (a) Visual tokenization time for different video lengths. (b) LLM forward inference time. Table S9: Boundary recall on ActivityNet-RTL under varying temporal proximity weight α in event boundary detection. The recall stays within a narrow band across the entire sweep, showing that α is robust rather than hard-coded; we use α = 0 .3.            
+
+> α0.0 0.1 0.2 0.3 (ours) 0.4 0.5 Boundary Recall (%) 93.9 94.1 94.1 94.3 93.9 94.5
+
+C.8 Effect of Temporal Proximity Weight α
+
+We ablate the temporal proximity weight α, which weights temporal proximity against feature dis-tance in the pairwise frame distance used for event boundary detection. As shown in Table S9, the boundary recall stays within a narrow band of 0.6
+
+percentage points across the entire sweep α ∈
+
+[0 .0, 0.5] . Even its lowest value still exceeds the recalls of competing boundary detection methods such as Strefer (Zhou et al., 2025a) and PySceneDe-tect (Castellano and contributors, 2025), which are reported in Table 7b. The recall is highest at 
+
+α = 0 .5, yet we adopt α = 0 .3 without any tuning, since the method is insensitive to this hyperparame-ter rather than relying on a carefully chosen value. 
+
+C.9 Robustness to Hyperparameters 
+
+Most hyperparameters of EventCoT exhibit wide robust ranges. Across the temporal extension fac-tor β, the number of frames T , the event selection threshold γ, the sampling ratio of additional unse-lected events, and the temporal proximity weight 
+
+α, performance stays within a narrow margin over a wide range of values. The main exception is the number of events N , which determines the se-mantic granularity of events; too few events merge distinct semantics into one segment while too many fragment a coherent event, so N should be chosen at a moderate scale, where both N =16 and N =32 
+
+perform competitively. We therefore use a single default configuration in all experiments without tuning any hyperparameter per dataset. 
+
+C.10 In-depth Inference Time Analysis 
+
+Figure S1 presents a detailed analysis of the infer-ence time across different steps of the pipeline. As shown in Fig. S1(a), the visual tokenization time is comparable across all three methods. In the case of EventCoT, a slight increase in computation is observed because the event tokenizer additionally performs event context attention when constructing event tokens. Nevertheless, the overall visual tok-enization time remains similar to that of the base-line methods. In contrast, Fig. S1(b) shows that EventCoT achieves substantially faster LLM for-ward inference compared to the other approaches. Because each event interval is summarized into a compact event token, Step 1 requires only a small number of tokens, which significantly reduces the inference time. Furthermore, Step 1 effectively identifies question-relevant events, allowing Step 2 to operate only on a subset of the video rather than the entire sequence. As a result, the number of visual tokens processed by the LLM is greatly re-duced, leading to more efficient inference while preserving the information necessary for accurate answer generation and temporal grounding. 
+
+D Additional Qualitative Results 
+
+Event segmentation quality. Figure S2 visualizes the event boundaries detected by our event tok-enizer on two ActivityNet-RTL videos. In the first video, which contains frequent scene changes, the 21 0s  15s  30s  45s  60s            
+
+> 75s 90s 105s 120s
+> (a)
+> 0s 15s 30s 45s 60s
+> 75s90s105s 120s 135s
+> (b) Figure S2: Qualitative examples of event segmentation on ActivityNet-RTL. Uniformly sampled frames are shown along the time axis with the detected event boundaries (white dashed lines) and the resulting events (colored bars). (a) A cooking video with frequent scene changes. (b) A single-shot exercise video without explicit scene cuts.
+
+detected boundaries closely follow the transitions between cooking steps such as ingredient prepara-tion, blending, and grilling, so each event forms a semantically coherent unit. The second video is captured by a single fixed camera without any shot change, yet the boundaries still partition the video into distinct phases of the exercise, since our boundary detection relies on semantic feature dis-tances rather than pixel-level changes. These exam-ples show that the event tokenizer yields event units aligned with semantic transitions in both multi-shot and single-shot videos, providing a reliable basis for event-level selection in Step 1. Figures S3–S5 provide additional qualitative com-parisons between LITA (Huang et al., 2024b) and EventCoT on ActivityNet-RTL. Across these exam-ples, we observe that EventCoT performs robustly across a wide range of temporal positions. Because both stages of our framework rely on embedding matching grounded in the semantic information contained in the visual features, EventCoT accu-rately localizes events occurring at early, middle, or late positions in the video. Moreover, it con-sistently generates appropriate and contextually relevant answers to the given questions, demon-strating strong temporal reasoning and semantic understanding. 
+
+E Future Work 
+
+While EventCoT substantially improves temporal localization and reasoning for RTL, several promis-ing directions remain for further advancement. 
+
+(1) Handling variable-length videos. We uni-formly sample 100 frames per video following LITA (Huang et al., 2024b). Letting EventCoT adjust the number of processed frames to the video duration, or even operate in a streaming setting, would better align it with real-world long videos. 
+
+(2) Adaptive event boundary detection. As dis-cussed in Sec. C.2, the optimal number of events varies across videos, while we fix it to N . Since our detector already produces reliable boundary scores, these scores could be used to infer the num-ber of boundaries per video, potentially improving temporal localization. 
+
+(3) Latent CoT for more fine-grained reasoning. 
+
+The placeholder tokens ⟨segment_key ⟩, ⟨start ⟩,and ⟨end ⟩ are optimized by the language modeling loss and their matching losses at once, which lim-its the specialization of each token. Incorporating 
+
+latent CoT (Hao et al., 2024), where a placeholder triggers a short latent reasoning trace dedicated to constructing a more discriminative matching em-bedding, could decouple these roles and improve both localization and reasoning. 
+
+(4) Incorporating spatially detailed visual fea-tures. EventCoT relies on spatially aggregated fea-tures, which limits queries that require fine-grained spatial understanding. Integrating spatial feature maps, for instance within the fine-grained reason-ing of Step 2, could extend EventCoT to a broader range of vision-language tasks. 
+
+(5) Hierarchical event selection. EventCoT se-lects question-relevant events once before fine-grained reasoning. A hierarchical process that pro-gressively narrows the relevant temporal regions 22 EventCoT Output 
+
+The dancers are performing routines but not as a group between 
+
+7.93 s and 45.18 s. During this time, they are seen dancing around 
+
+the gym, but not necessarily together. 
+
+Step1: Question -Relevant Event Selection 
+
+Step2: Fine -Grained Reasoning with Selected Events 
+
+The Relevance Score for Each Segment 
+
+Selected Segments 
+
+Similarity Score between <start> and Frame Features 
+
+Similarity Score between <end> and Frame Features 
+
+Final Answer 
+
+> Selected Frame 10
+> Selected Frame 56
+> 79.27s
+
+When are the dancers performing routines but not as a group? 
+
+The dancers are performing routines but not as a group between 
+
+0.0s and 10.41s . During this time, a woman is seen dancing on a gym 
+
+floor and then flips out of a somersault. 
+
+The dancers are performing routines but not as a group between 
+
+6.34s and 44.39s . During this time, each dancer in colorful outfits is 
+
+seen doing a solo performance with a baton. 
+
+LITA Output 
+
+Ground Truth 
+
+Question 
+
+> Threshold = 0.4976
+
+The man shows his musical talent between 21.85s and 33.01s .
+
+During this time, he is seen playing a harmonica on the stage. 
+
+Step1: Question -Relevant Event Selection 
+
+Step2: Fine -Grained Reasoning with Selected Events 
+
+The Relevance Score for Each Segment 
+
+Selected segments 
+
+Similarity Score between <start> and Frame Features 
+
+Similarity Score between <end> and Frame Features 
+
+Final Answer 
+
+> Threshold = 0.4170
+> Selected Frame 47
+> Selected Frame 70
+> 46.49s
+
+When does the man show his musical talent? 
+
+The man shows his musical talent between 18.78s and 46.49s .
+
+During this time, he is seen playing the harmonica. 
+
+The man shows his musical talent between 21.85s and 31.84s .
+
+During this period, he is seen playing the harmonica. 
+
+LITA Output 
+
+Ground Truth 
+
+Question 
+
+EventCoT Output Figure S3: Additional Qualitative Results of LITA (Huang et al., 2024b) and EventCoT on the ActivityNet-RTL (Huang et al., 2024b). 
+
+could further improve localization and reduce noise from irrelevant content. 23 55.66s 
+
+When does the girl show resilience in her performance? 
+
+The girl displays resilience in her performance between 37.57s and 
+
+55.66s . After falling off the pommel horse, she quickly gets back on 
+
+and continues her exercise until she jumps off onto the floor. 
+
+Ground Truth 
+
+Question 
+
+The girl shows resilience in her performance between 37.85s and 
+
+55.66s . After falling from the beam, she gets back on it and 
+
+continues her routine, which demonstrates her ability to bounce 
+
+back and continue with her performance. 
+
+Step1: Question -Relevant Event Selection 
+
+Step2: Fine -Grained Reasoning with Selected Events 
+
+The Relevance Score for Each Segment 
+
+Selected Segments 
+
+Similarity Score between <start> and Frame Features 
+
+Similarity Score between <end> and Frame Features 
+
+Final Answer 
+
+> Selected Frame 68
+> Selected Frame 99
+
+The girl shows resilience in her performance between 48.91s and 
+
+55.66s . After falling off, she gets back on the beam, indicating her 
+
+determination and resilience. 
+
+LITA Output 
+
+EventCoT Output 
+
+> Threshold = 0.4983
+> 88.05s
+
+When does the concerted effort between the man and child in raking 
+
+leaves happen? 
+
+The concerted effort between the man and the child in raking leaves 
+
+happens between 21.13s and 58.55s . This is recognized as the period 
+
+when the man and child are seen beginning to rake the leaves into a 
+
+larger pile simultaneously. 
+
+Ground Truth 
+
+Question 
+
+The concerted effort between the man and child in raking leaves 
+
+happens between 21.13s and 62.52s . During this time, they are 
+
+seen raking leaves together in front of a pile. 
+
+Step1: Question -Relevant Event Selection 
+
+Step2: Fine -Grained Reasoning with Selected Events 
+
+The Relevance Score for Each Segment 
+
+Selected Segments 
+
+Similarity Score between <start> and Frame Features 
+
+Similarity Score between <end> and Frame Features 
+
+Final Answer 
+
+The concerted effort between the man and child in raking leaves 
+
+happens between 3.56s and 88.05s . During this time, the man is 
+
+actively raking leaves while the child is also present, holding a rake 
+
+and helping. 
+
+LITA Output 
+
+EventCoT Output 
+
+> Threshold = 0.4995
+> Selected Frame 24
+> Selected Frame 70
+> 26.15s
+
+EventCoT Output 
+
+The most noticeable activity from the casino patrons is between 
+
+17.78s and 26.15s . During this time, people are seen sitting 
+
+around the casino table, speaking to one another, and playing the 
+
+game. 
+
+Step1: Question -Relevant Event Selection 
+
+Step2: Fine -Grained Reasoning with Selected Events 
+
+The Relevance Score for Each Segment 
+
+Selected Segments 
+
+Similarity Score between <start> and Frame Features 
+
+Similarity Score between <end> and Frame Features 
+
+Final Answer 
+
+When is there the most noticeable activity from the casino patrons? 
+
+There is the most noticeable activity from the casino patrons 
+
+between 0.0s and 26.15s . During this time, people are seen standing 
+
+and sitting at black jack tables playing. 
+
+There is the most noticeable activity from the casino patrons 
+
+between 18.56s and 26.15s . During this time, the people around 
+
+move their arms around and there are several observers on the 
+
+sideline. 
+
+LITA Output 
+
+Ground Truth 
+
+Question 
+
+> Threshold = 0.4961
+> Selected Frame 68
+> Selected Frame 99
+> 33.48s
+
+EventCoT Output 
+
+The girl is on the ground and not using the monkey bars between 
+
+28.46s and 33.48s . After her unsuccessful attempt, she gets off 
+
+the monkey bars and walks back to the ground. 
+
+Step1: Question -Relevant Event Selection 
+
+Step2: Fine -Grained Reasoning with Selected Events 
+
+The Relevance Score for Each Segment 
+
+Selected Segments 
+
+Similarity Score between <start> and Frame Features 
+
+Similarity Score between <end> and Frame Features 
+
+Final Answer 
+
+When is the girl on the ground and not using the monkey bars? 
+
+The girl is on the ground and not using the monkey bars at 33.48s .
+
+This is when she jumps down and begins to walk across the bridge. 
+
+The girl is on the ground and not using the monkey bars between 
+
+28.46s and 33.48s . This is when she is seen jumping down from the 
+
+bars, while smiling. 
+
+LITA Output 
+
+Ground Truth 
+
+Question 
+
+> Selected Frame 85
+> Selected Frame 99
+
+Figure S4: Additional Qualitative Results of LITA (Huang et al., 2024b) and EventCoT on the ActivityNet-RTL (Huang et al., 2024b). 24 111.97s 
+
+EventCoT Output 
+
+The person adds the final touches to the lemonade between 
+
+73.90s and 88.46s . During this time, the person pours the finished 
+
+lemonade .
+
+Step1: Question -Relevant Event Selection 
+
+Step2: Fine -Grained Reasoning with Selected Events 
+
+The Relevance Score for Each Segment 
+
+Selected Segments 
+
+Similarity Score between <start> and Frame Features 
+
+Similarity Score between <end> and Frame Features 
+
+Final Answer 
+
+When does the person add the final touches to the lemonade? 
+
+The person adds the final touches to the lemonade between 82.56s 
+
+and 104.05s . This is when the person adds a bottle of honey, which is 
+
+the final ingredient in the recipe. 
+
+The person adds the final touches to the lemonade between 78.94s 
+
+and 89s . During this time, the water is boiled and put in the jars, and 
+
+slices of the lemons are added and stirred. 
+
+LITA Output 
+
+Ground Truth 
+
+Question 
+
+> Threshold = 0.3604
+> Selected Frame 66
+> Selected Frame 78
+> 160.59s
+
+EventCoT Output 
+
+The woman seems to be preparing her hair for the curling process 
+
+between 12.85s and 30.51s . During this time, she is seen 
+
+smoothing out her hair, which is a common step before applying 
+
+heat to hair. 
+
+Step1: Question -Relevant Event Selection 
+
+Step2: Fine -Grained Reasoning with Selected Events 
+
+The Relevance Score for Each Segment 
+
+Selected Segments 
+
+Similarity Score between <start> and Frame Features 
+
+Similarity Score between <end> and Frame Features 
+
+Final Answer 
+
+When does the woman seem to be preparing her hair for the curling 
+
+process? 
+
+The woman seems to be preparing her hair for the curling process 
+
+between 24.33s and 37.31s . During this time, she is seen showing off 
+
+her curling iron and hot roller set. 
+
+The woman appears to be preparing her hair for the curling process 
+
+between 15.26s and 25.69s . During this period, she is blow drying 
+
+her hair likely to eliminate moisture before rolling in large curlers. 
+
+LITA Output 
+
+Ground Truth 
+
+Question  
+
+> Threshold = 0.4202
+> Selected Frame 8
+> Selected Frame 18
+> 201.97s
+
+EventCoT Output 
+
+The woman expresses satisfaction with her new hairstyle between 
+
+183.79s and 201.97s . She is seen smiling during this time. 
+
+Step1: Question -Relevant Event Selection 
+
+Step2: Fine -Grained Reasoning with Selected Events 
+
+The Relevance Score for Each Segment 
+
+Selected Segments 
+
+Similarity Score between <start> and Frame Features 
+
+Similarity Score between <end> and Frame Features 
+
+Final Answer 
+
+When does the woman express satisfaction with her new hairstyle? 
+
+The woman expresses satisfaction with her new hairstyle between 
+
+179.53s and 201.97s . She is seen smiling and giving two thumbs up 
+
+in the camera during this time. 
+
+The woman expresses satisfaction with her new hairstyle between 
+
+181.77s and 201.97s . During this time, she looks at her hair and gets 
+
+up from the chair happily. 
+
+LITA Output 
+
+Ground Truth 
+
+Question 
+
+> Threshold = 0.4983
+> Selected Frame 91
+> Selected Frame 99
+> 65.99s
+
+EventCoT Output 
+
+The woman is cleaning with a tool that is not a broom between 
+
+34.97s and 65.99s . During this time, she uses a mop to clean the 
+
+floor. 
+
+Step1: Question -Relevant Event Selection 
+
+Step2: Fine -Grained Reasoning with Selected Events 
+
+The Relevance Score for Each Segment 
+
+Selected Segments 
+
+Similarity Score between <start> and Frame Features 
+
+Similarity Score between <end> and Frame Features 
+
+Final Answer 
+
+When is the woman cleaning with a tool that is not a broom? 
+
+The woman is cleaning with a tool that is not a broom between 
+
+41.99s and 65.99s . During this time, she is seen mopping the floor. 
+
+She is cleaning with a tool other than a broom between 34.32s and 
+
+65.99s . During this time, she uses a mop to clean the floor. 
+
+LITA Output 
+
+Ground Truth 
+
+Question 
+
+> Threshold = 0.4993
+> Selected Frame 53
+> Selected Frame 99
+
+Figure S5: Additional Qualitative Results of LITA (Huang et al., 2024b) and EventCoT on the ActivityNet-RTL (Huang et al., 2024b). 
+
+25

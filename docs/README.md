@@ -6,34 +6,33 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-07-10
-- 运行时间：2026-07-10 21:30:26 UTC
+- 最新运行日期：2026-07-11
+- 运行时间：2026-07-11 20:29:21 UTC
 - 运行状态：成功
-- 本次总论文数：4
+- 本次总论文数：3
 - 精读区：1
-- 速读区：3
+- 速读区：2
 
 ### 今日简报（AI）
-今日聚焦4篇推理与逻辑论文，精读揭示最终检查点不足以评估模型推理忠实性。  
-最值得看的是《Final Checkpoints Are Not Enough》关于训练轨迹中潜在推理忠实性分析，以及《When Thinking Hurts》对视觉语言模型思维链中认知信号的探讨。  
-建议下一步关注推理可信度，可结合图结构不确定性量化框架或反思驱动推理的采样复杂度理论深入。
-- 详情：[/202607/10/README](/202607/10/README)
+今天我们精读1篇、速读2篇，聚焦LLM语义冲突机制与长文本评估。
+
+精读《A Mechanistic Lens on Semantic Conflicts》用激活修补法揭示LLM语义冲突根源，速读《PredicateLongBench》提出长上下文任务难度轴。
+
+建议优先精读第一篇深入理解模型行为，后续可跟进视频推理链的相关工作。
+- 详情：[/202607/11/README](/202607/11/README)
 
 ### 精读区论文标签
-1. [Final Checkpoints Are Not Enough: Analyzing Latent Reasoning Faithfulness Along Training Trajectories](/202607/10/2607.06648v1-final-checkpoints-are-not-enough-analyzing-latent-reasoning-faithfulness-along-training-trajectories)  
-   标签：评分：9.0/10、query:key-tokens
-   evidence：通过反事实编辑对潜在推理步骤进行因果追踪
+1. [A Mechanistic Lens on Semantic Conflicts: Using Activation Patching to Understand LLM Behavior](/202607/11/2607.05587v1-a-mechanistic-lens-on-semantic-conflicts-using-activation-patching-to-understand-llm-behavior)  
+   标签：评分：8.0/10、query:key-tokens
+   evidence：使用激活补丁对令牌级影响进行因果干预
 
 ### 速读区论文标签
-1. [When Does In-Context Search Help? A Sampling-Complexity Theory of Reflection-Driven Reasoning](/202607/10/2607.06720v1-when-does-in-context-search-help-a-sampling-complexity-theory-of-reflection-driven-reasoning)  
+1. [Understanding Axes of Difficulty For Long Context Tasks Via PredicateLongBench](/202607/11/2607.08284v1-understanding-axes-of-difficulty-for-long-context-tasks-via-predicatelongbench)  
+   标签：评分：7.0/10、query:key-tokens
+   evidence：要求识别满足谓词的词子序列，类似关键token选择
+2. [EventCoT: Event-centric Video Chain-of-thought for Reasoning Temporal Localization](/202607/11/2607.04872v1-eventcot-event-centric-video-chain-of-thought-for-reasoning-temporal-localization)  
    标签：评分：6.0/10、query:key-tokens
-   evidence：上下文搜索理论定位早期错误
-2. [Can We Trust LLM's Logic? Quantifying Uncertainty, Coherence, and Robustness via a Graph-Based Framework](/202607/10/2607.08017v1-can-we-trust-llms-logic-quantifying-uncertainty-coherence-and-robustness-via-a-graph-based-framework)  
-   标签：评分：6.0/10、query:key-tokens
-   evidence：基于图框架的推理忠实性评估中的因果意识
-3. [When Thinking Hurts: Epistemic Signals in the Reasoning Chains of Visual Language Models](/202607/10/2607.08059v1-when-thinking-hurts-epistemic-signals-in-the-reasoning-chains-of-visual-language-models)  
-   标签：评分：6.0/10、query:key-tokens
-   evidence：视觉语言模型推理链熵分析
+   evidence：将视频转换为事件token以高效识别相关事件，类似关键token提取
 
 
 <div class="dpr-home-promo-card">

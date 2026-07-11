@@ -1,0 +1,54 @@
+{
+  "label": "2026-07-11",
+  "date": "2026-07-11",
+  "generated_at": "2026-07-11T20:29:28",
+  "count": 3,
+  "papers": [
+    {
+      "paper_id": "202607/11/2607.05587v1-a-mechanistic-lens-on-semantic-conflicts-using-activation-patching-to-understand-llm-behavior",
+      "section": "deep",
+      "title_en": "A Mechanistic Lens on Semantic Conflicts: Using Activation Patching to Understand LLM Behavior",
+      "authors": "Youssef Abdelsalam, Norman Peitek, Anna-Maria Maurer, Marvin Wyrich, Sven Apel",
+      "date": "2026-07-06",
+      "pdf": "https://arxiv.org/pdf/2607.05587v1",
+      "score": "8.0",
+      "evidence": "使用激活补丁对令牌级影响进行因果干预",
+      "tldr": "在软件工程任务中，LLM常需同时处理代码和非执行语义线索（如注释），二者可能冲突。本研究构建45个Python三元组，通过激活修补机制分析四个开源LLM在输出预测和单元测试生成中的行为。结果表明语义冲突显著降低正确性，LLM更易被误导；关键因果信息集中在少数残差流状态中。该工作提供了首个可控的机械论分析框架，揭示LLM如何整合代码语义线索。",
+      "tags": "query:key-tokens",
+      "abstract_en": "Large language models (LLMs) are increasingly used in software-engineering tasks processing executable code and non-executable semantic cues such as comments or identifiers. These two sources can conflict when semantic cues suggest different program behavior than the code itself. It remains unclear how such semantic conflicts affect LLM behavior and which source dominates their outputs.   We present the first controlled, mechanistic study of LLM behavior under semantic conflicts. To this end, we construct 45 Python snippet triplets that isolate conflicts by varying either semantic cues or implementation while keeping token-aligned pairs for causal intervention. We evaluate four open-weight LLMs on two tasks (output prediction and unit-test generation) using behavioral performance measures and residual-stream activation patching to identify token-layer states that causally contribute to behavioral differences between aligned and conflicting inputs.   Our results show that semantic conflicts significantly reduce execution-grounded correctness in both tasks and that all tested LLMs often follow misleading semantic cues. Residual-stream activation patching reveals a consistent pattern for final-output prediction: The changed cue/code region and a small set of intermediate tokens carry most of the recoverable causal signal before aggregation near the output readout. For unit-test generation, this pattern extends beyond the prompt, showing that conflict-related information is recoverable at generated sites before producing expected values. Overall, our findings show that semantic conflicts affect program comprehension and downstream tasks, with relevant information concentrated in a small number of causally active residual-stream states, and demonstrate a framework for mechanistically analyzing how LLMs integrate code-related information under controlled semantic variations.",
+      "source": "arxiv",
+      "selection_source": "fresh_fetch"
+    },
+    {
+      "paper_id": "202607/11/2607.08284v1-understanding-axes-of-difficulty-for-long-context-tasks-via-predicatelongbench",
+      "section": "quick",
+      "title_en": "Understanding Axes of Difficulty For Long Context Tasks Via PredicateLongBench",
+      "authors": "Siddhartha Jain, Ameya Velingker",
+      "date": "2026-07-09",
+      "pdf": "https://arxiv.org/pdf/2607.08284v1",
+      "score": "7.0",
+      "evidence": "要求识别满足谓词的词子序列，类似关键token选择",
+      "tldr": "现有长上下文评估多关注平均性能且易饱和。本文提出PredicateLongBench基准，通过要求模型识别满足特定谓词（如字典序）的最长连续子序列，系统性地从多个难度轴测试长上下文推理。采用全合成与基于真实文档两种生成方式。实验发现，随着难度提升，前沿模型表现显著下降，揭示了当前长上下文能力的局限。该基准简单、无LLM依赖，为理解长上下文模型的鲁棒性提供新工具。",
+      "tags": "query:key-tokens",
+      "abstract_en": "Large language models (LLMs) have demonstrated rapidly improving long-context capabilities, prompting a wave of benchmarks designed to evaluate them. However, existing long-context evaluations - from Needle-in-a-Haystack (NIAH) tests to more recent multi-hop reasoning and summarization tasks - predominantly measure average-case performance, and many are either saturated or lack robustness. Notably absent is a systematic way to probe how models perform as we scale up the difficulty of tasks along various axes. We address this gap by proposing PredicateLongBench, a benchmark that stress-tests long-context reasoning by asking models to identify the longest contiguous subsequence of words in a long input that satisfies given predicates/constraints (e.g., lexicographic ordering), drawn from a broader predicate class. The central innovation of our benchmark is the identification and systematic exploration of multiple different axes of difficulty which test multiple aspects of long context understanding. We provide two complementary generation pipelines - a fully synthetic setup using random word-like strings, and a real-world setup that samples words from natural documents while preserving their distributional properties. We find that frontier models struggle to perform well as we scale up the difficulty of tasks along our axes, demonstrating the utility of our benchmark in understanding the limitations of current long-context capabilities. Furthermore, the tasks in PredicateLongBench, though challenging, are conceptually simple and do not require LLM-based generations or judges.",
+      "source": "arxiv",
+      "selection_source": "fresh_fetch"
+    },
+    {
+      "paper_id": "202607/11/2607.04872v1-eventcot-event-centric-video-chain-of-thought-for-reasoning-temporal-localization",
+      "section": "quick",
+      "title_en": "EventCoT: Event-centric Video Chain-of-thought for Reasoning Temporal Localization",
+      "authors": "Youngkil Song, Yoonjae Baek, Dongwon Kim, Inho Kim, Dongkeun Kim, Suha Kwak",
+      "date": "2026-07-06",
+      "pdf": "https://arxiv.org/pdf/2607.04872v1",
+      "score": "6.0",
+      "evidence": "将视频转换为事件token以高效识别相关事件，类似关键token提取",
+      "tldr": "推理时间定位（RTL）需要模型在单次响应中同时完成高层推理与精确时间定位，极具挑战性。针对此任务，本文提出首个以事件为中心的视频思维链框架EventCoT，首先对视频进行事件级令牌化得到紧凑表示，高效筛选相关事件，然后基于事件推理生成答案，并通过嵌入匹配定位时间区间。在ActivityNet-RTL基准上，EventCoT以远少于先前工作的视觉令牌数取得最优结果，同时在ReXTime视频问答上展示出强大的零样本泛化能力。该工作为视频时间推理定位提供了高效且可解释的新思路。",
+      "tags": "query:key-tokens",
+      "abstract_en": "Reasoning temporal localization (RTL) requires a model to generate an answer that itself contains the time interval supporting it, so high-level reasoning and precise temporal grounding must be produced jointly in a single response. To tackle this challenging task, we propose the first event-centric video chain-of-thought framework, dubbed EventCoT. EventCoT first performs event-centric tokenization of the input video to convert it into compact event tokens, enabling efficient identification of question-relevant events. It then reasons within the identified events to generate the answer, grounding the time interval via embedding matching that aligns placeholder tokens with visual embeddings. EventCoT achieves state-of-the-art results on ActivityNet-RTL for reasoning temporal localization while using substantially fewer visual tokens than previous work. To verify its general performance, we further evaluate EventCoT on the grounded video question answering benchmark ReXTime, where it attains strong zero-shot results.",
+      "source": "arxiv",
+      "selection_source": "fresh_fetch"
+    }
+  ],
+  "errors": []
+}
