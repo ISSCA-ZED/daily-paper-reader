@@ -1,0 +1,611 @@
+Title: Legible-by-Construction: Attention and End-to-End Transformers
+
+URL Source: https://arxiv.org/pdf/2607.04319v1
+
+Published Time: Tue, 07 Jul 2026 02:27:42 GMT
+
+Number of Pages: 24
+
+Markdown Content:
+# Legible-by-Construction: Attention and End-to-End Transformers 
+
+## Mark Oskin Professor School of Computer Science and Engineering University of Washington 
+
+## mhoskin@uw.edu 
+
+## July 2026 
+
+Abstract 
+
+A companion paper showed that a transformer’s feed-forward layer can be rebuilt from explicit fuzzy set operations—intersection, set-difference, and a self-forgetting sequence quantifier—so that its hidden units read as named logical operators at no cost to language-model quality (Oskin, 2026). That left the other half of the transformer opaque. Here we carry the same idea into attention and then join the two into a single model. The core mechanism is deliberately minimal: a head’s value is passed through a sigmoid, 
+
+v = σ(Wv x) ∈ [0 , 1], so each value channel becomes a readable “does this feature hold” detector. This adds no parameters and leaves the standard head otherwise untouched—part of the point, since so small a change should not buy this much legibility, but it does. A Boolean variant goes further, restructuring the value into an explicit within-token intersection and negation-capable set-difference for crisper, explicitly logical relations, at the cost of departing from the standard value projection. In both designs the output projection is left free —not tied to the vocabulary—which is the load-bearing decision: bounding what a head detects while leaving what it writes unconstrained yields selective detectors, whereas constraining the write instead does not. A bounded value is then shaped into a readable detector by two selectivity pressures : one that makes a channel fire on a sparse set of contexts, one that makes it fire decisively at the rails rather than hovering in between. Which pressure a design wants is not universal—a single membership value wants both, whereas an explicit conjunction already fires sparsely by construction, so pressing its operands toward crispness alone keeps them alive and readable while the added sparsity pressure starves them into dead constants. Across five specialized-attention designs at 125M parameters, 44–62% of value channels become crisp, contextually selective detectors, and—unlike the folklore that “attention heads crystallize only on punctuation”—their legibility rises with depth , so that the deepest layers read as recognizable semantic and grammatical features rather than punctuation. Language-model quality is at parity with a conventional baseline. Finally, we couple the Boolean attention to the legible feed-forward layer and train an end-to-end legible-by-construction language model: at baseline perplexity and downstream accuracy—the strongest variant sitting at the top of the parity band on LAMBADA and BLiMP—its feed-forward units are named set and quantifier operations throughout, and we can take a token it generates and read the named units that compose to produce it. A sharp trainability boundary on which mixtures of bounded and unbounded heads train stably is characterized in an appendix. We argue this changes the kind of object a language model is to work with—an object whose internal computation can be read, edited, and audited by construction rather than recovered post hoc—and we lay out what such models make possible. 
+
+# 1 Introduction 
+
+Most of what we know about the inside of a transformer we know after the fact . We train an opaque model and then recover structure from it—probing directions, projecting activations through the unembedding (nostalgebraist, 2020; Belrose et al., 2023), or fitting sparse dictionaries to decompose superposed features (Bricken et al., 2023; Cunningham et al., 2024). This post-hoc program has been remarkably productive, but it is a program of reconstruction : the legibility lives in an external tool, not in the model, and it is always partial, contestable, and expensive to maintain as the model changes. 1
+
+> arXiv:2607.04319v1 [cs.CL] 5 Jul 2026
+
+A different route is to make the model legible by construction —to choose architectural primitives whose computation is a named operation before any interpretation is attempted. A companion paper took this route for the feed-forward network (FFN), the two-thirds of a transformer’s parameters that sit outside attention (Oskin, 2026). It replaced the FFN’s opaque activation with explicit fuzzy set operations: each hidden unit computes an intersection A ∩ B or a negation-capable set-difference A \ B over sigmoid-bounded operands, and a self-forgetting sequence quantifier supplies the one temporal primitive a left-to-right model needs. The result was a feed-forward layer whose units are named logical operations, a readable subset of which act as grammatical-licensing detectors, at no cost to language-model perplexity. But that work left the other half of the transformer—attention—exactly as opaque as before. A model with a legible FFN and an illegible attention is still, as an object, illegible. This paper closes that gap and then joins the halves. Our starting observation is an old asymmetry in the attention circuit (Elhage et al., 2021): the query–key (QK) product is comparatively legible—it is a pattern over positions, a readable where —while the output–value (OV) path is the opaque what . Reading a head’s value by projecting it to the vocabulary fails; the folklore conclusion, borne out in practice, is that attention heads rarely “crystallize” into anything nameable beyond a few that track punctuation or position. We show this folklore is a statement about the basis one reads in, not about attention. The fix is the same one that worked for the FFN, transposed to the value, and it is deliberately minimal: bound the head’s value into fuzzy memberships, v = σ(Wv x) ∈ [0 , 1], so that each value channel is a readable “does this feature hold at this token” detector, and let attention fuzzy-aggregate those memberships over context. This membership 
+
+head adds no parameters and changes nothing else about a standard head—only a sigmoid on the value, plus a light selectivity pressure that keeps the detectors sparse and crisp—so it is striking that so small a change makes the value readable at all. A Boolean variant goes one step further, restructuring the value into an explicit within-token intersection and set-difference (the OV analogue of the FFN’s set operators) for crisper logical relations, at the price of departing from the standard single value projection. The single most important design decision is where the constraint goes. We constrain what the head 
+
+detects (its bounded value, pre-output-projection) and leave what it writes (the output projection) completely free. Constraining the write instead—for instance tying a head’s output to the vocabulary so it decodes to tokens by construction—does not work, and Section 3 explains why; the short version is that it opens a gradient shortcut a context-independent constant can satisfy. This bounded-value / free-readout principle is what makes attention legible without making it worse, and it is the conceptual core of the paper. We report four things. 
+
+• Legible attention heads (Section 4). Across five specialized-attention designs at 125M parameters, 44–62% of value channels become crisp, contextually selective detectors, versus the constant-collapse of the vocabulary-tied design. Crucially, their legibility increases with depth : the deepest layers reach 70–95% selective and read as recognizable semantic and grammatical features (an abstract-concept channel, a domain channel, a people/plural channel), directly contradicting the “heads only crystallize on punctuation” folklore. 
+
+• Which pressure fits which design (Sections 3.6, 4). A bounded value is made selective by two training pressures—one toward firing on a sparse set of contexts, one toward firing crisply at the rails—and the right combination is not universal. A single membership value wants both. An explicit conjunction already fires sparsely by construction, so it wants crispness alone : adding the sparsity pressure over-sparsifies its operators into dead constants. And the pressures must target the operands 
+
+of an operator, not its combined output, on which they are inert. Which pressures a design wants is a property of the operator it implements, not a global knob. 
+
+• Parity (Section 4). On LAMBADA, BLiMP, and ARC-Easy the designs sit at parity with a conven-tional baseline, differences within what a single seed can resolve. The one real cost is a LAMBADA-perplexity gap for the fully-bounded membership design—largest under sparsity alone, and recovering under both pressures. 
+
+• An end-to-end legible language model (Section 5). Coupling the Boolean attention to the legible FFN yields a 125M model at baseline perplexity and downstream accuracy—the best variant at the top of the parity band on LAMBADA and BLiMP—whose feed-forward units are named set and quantifier operations throughout. We can then take a token the model generates and decompose its 2logit into the named units that produce it: for “it was the best of times, it was the ” the model writes “worst,” and the attribution reads as a superlative detector intersected with a negation detector—the computation read directly in its own basis rather than reconstructed after the fact. The attention legibility is a deep-layer phenomenon—shallow attention, once coupled to a legible FFN, goes constant—and our language-model numbers are single-seed at one scale. Legibility also comes with a training constraint: certain mixtures of a bounded majority of heads with a small unbounded minority diverge reproducibly, a boundary we characterize and trace to a saturated-head runaway write in Appendix A. None of these undercuts the central claim, which is architectural: a transformer can be built so that its dominant computations are named operations, readable and editable without a post-hoc tool, at no quality cost that we can measure. Section 6 argues why that is worth having and what it makes possible. 
+
+# 2 Background 
+
+Our contribution sits at the intersection of two literatures that have stayed separate: mechanistic inter-pretability of attention, which is overwhelmingly post-hoc , and interpretable-by-construction architecture, which has concentrated on the feed-forward layer and the classification setting. We organize the comparison around two axes that locate our design precisely: pattern vs. value (does the constraint act on the QK attention map or the OV value?) and pinned vs. free readout (is the interpretable quantity forced into the vocabulary basis, or read in its own basis?). 
+
+Reading attention after the fact. The dominant approach recovers structure from a trained model. The logit lens projects intermediate activations through the unembedding (nostalgebraist, 2020), and the tuned lens learns a per-layer affine correction because the raw projection reads as noise in the middle of the network (Belrose et al., 2023)—an observation we reproduce and that motivates not reading values in the vocabulary basis at all. Vocabulary-space analyses of transformer components (Geva et al., 2021, 2022; Dar et al., 2023) decode feed-forward and attention writes into token distributions; Attention Lens learns per-head transforms to make head outputs decodable (Sakarvadia et al., 2023); and attention-output sparse autoencoders decompose the OV stream into features after training (Kissane et al., 2024). All of these are reconstructions of a fixed opaque model, and Figure 1 makes concrete what there is to reconstruct: in a conventional baseline the feed-forward writes already decode into coherent concepts—a superlative 
+
+unit and a negative-valence unit compose to produce the generated token, reproducing Geva et al. (2021, 2022)—while the attention value stays opaque, and the whole picture is available only after training, through a lens. We instead make the value legible in the model, so that no lens or dictionary is needed to state what a head detects. Recent work also finds that many genuine features are dense , not sparse, and are not vocabulary-aligned (Sun et al., 2025); this is consistent with our own finding that a conventional value does not decode to tokens, and is why we constrain the value directly rather than hoping it decomposes. 
+
+The QK/OV legibility asymmetry. The circuits framework separates a head into a QK circuit that decides where to attend and an OV circuit that decides what to move (Elhage et al., 2021). The QK pattern is comparatively readable; the OV value is the opaque half. Almost all subsequent interpretability of attention has read the pattern. Our design targets the neglected half—the value—and this is the axis on which we differ from nearly all prior structured-attention work. 
+
+Bounded, sigmoid, and fuzzy attention—on the pattern. A growing line replaces or bounds the softmax to make the attention map better-behaved or more interpretable: sigmoid attention removes the row-normalization coupling (Ramapuram et al., 2024), and an attention bottleneck bounds the total attention mass for user intervention and debugging (Rahmanzadehgervi et al., 2024). Concept Transformers make a classifier’s attention pattern range over a supervised bank of named concepts, with the readout pinned to those concepts (Rigotti et al., 2022). Every one of these acts on the pattern (the where ); none bounds the value-as-membership (the what ), and the interpretable quantity is generally a supervised or pinned target. Ours is the value-side, unsupervised, free-readout counterpart: the head’s memberships are discovered from the language-modeling objective, not named in advance, and are read in their own basis. 3H0                                                                  
+
+> H1
+> H2
+> H3
+> H4
+> H5
+> H6
+> H7
+> H8
+> H9
+> H10
+> H11
+> FFN
+> attention heads |FFN (monolithic GELU)
+> L0
+> L1
+> L2
+> L3
+> L4
+> L5
+> L6
+> L7
+> L8
+> L9
+> L10
+> L11
+> layer
+> Standard GELU baseline: DLA to the generated token
+> (red =positive, blue =negative)
+> FFN units promote decodable concepts
+> (recovered post hoc by a logit lens; cf. Geva et al.)
+> L11 FFN +3.11 [negative valence]
+> promotes: hell, dead, crime, here, bitter
+> "worst" rank 12
+> L10 FFN +3.99 [superlatives]
+> promotes: best, worst, first, second, day
+> "worst" rank 2
+> L9 FFN +1.63 [superlatives]
+> promotes: least, single, ft, most, epit
+> "worst" rank 14
+> L8 FFN +0.91 [mixed]
+> promotes: way, beginning, e, next, start
+> "worst" rank 231
+> Attention heads promote incoherent tokens (no nameable concept)
+> L10 H9 -0.53
+> promotes: ada, John, new, University, O
+> "worst" rank 49,271
+> L7 H2 +0.52
+> promotes: gate, inal, miss, force, fest
+> "worst" rank 44,230
+
+Figure 1: Legibility in a standard transformer is real, but post-hoc and one-sided—the situation this paper changes. Direct logit attribution of the token a conventional gelu baseline generates for “It was the best of times, it was the” (again “worst” ), across all 12 layers and per attention head / feed-forward block. The feed-forward writes decode, through a logit lens, into coherent vocabulary concepts: a superlative unit (layer 10, best /worst /first , “worst” at rank 2) and a negative-valence unit (layer 11, hell /dead /crime )compose to “worst,” reproducing the vocabulary-space view of feed-forward layers (Geva et al., 2021, 2022). The attention heads, by contrast, promote incoherent tokens (“worst” beyond rank 44 ,000): the value is opaque. Both readings exist only after training, via a lens. Our model instead names the feed-forward operators by construction and makes the attention value legible as well (Figure 5). 
+
+Interpretable-by-construction units. On the feed-forward side, Softmax Linear Units sharpen neuron activations toward monosemanticity (Elhage et al., 2022a); codebook features quantize activations into a dis-crete, inspectable code (Tamkin et al., 2023); and bilinear MLPs expose weight-based structure by removing the elementwise nonlinearity (Pearce et al., 2025). These make the FFN more analyzable but do not give each unit a named logical form, and they do not address attention. Our companion paper’s feed-forward layer (Oskin, 2026)—explicit fuzzy set operations with a self-forgetting quantifier—does give the named form; the present paper supplies the missing attention piece and shows the two compose into a single legible model. The distinction from codebook/discrete methods is that our value is a fuzzy membership in [0 , 1] with a free continuous readout, not a discrete code with a fixed decoder. 
+
+Vocabulary-tied readouts, and why we avoid them. The natural way to make a head “decodable by construction” is to tie its output to the token embedding, so its write is a token distribution. We built exactly this and it failed: the value collapsed to a context-independent constant, because pinning the output to the vocabulary opens a gradient path to the unigram prior that a constant satisfies. This is the concrete lesson behind our pattern of constraint—bound the detected feature (value, pre-projection) and leave the 
+
+write (output projection) free—and it is the axis (pinned vs. free readout) on which we differ from Concept Transformers and from vocabulary-space methods. It also connects to superposition: because genuine value content is dense and non-lexical (Elhage et al., 2022b; Sun et al., 2025), forcing it into the vocabulary basis is actively harmful, whereas a bounded membership with a free readout keeps the content in a basis it can use. 
+
+Fuzzy and differentiable logic. The set operations we use are standard product-t-norm fuzzy connectives (van Krieken et al., 2022), in the tradition of logic tensor networks (Badreddine et al., 2022) and differentiable 4logic gate networks (Petersen et al., 2022), and the multiplicative form relates to gated and bilinear FFNs (Dauphin et al., 2017; Shazeer, 2020; Pearce et al., 2025). Our use is distinctive in being a drop-in, parameter-neutral component of a language model whose legibility is measured on real text, and in being applied to the attention value rather than to a dedicated reasoning module. The self-forgetting quantifier’s learned decay is the classical forget gate (Gers et al., 2000) repurposed as a legible temporal operator, detailed in the companion paper. 
+
+Superposition and automated interpretation. We still find polysemantic channels, and we quantify legibility in the vocabulary of that literature: crisp-but-globally-polysemantic units whose meaning is local to an input (Elhage et al., 2022b), the monosemanticity goal of dictionary learning (Bricken et al., 2023; Cunningham et al., 2024), and the name-then-predict evaluation of automated interpretability (Bills et al., 2023). The difference is that our units come with a named operation for free; superposition then governs only whether the operands are monosemantic, a strictly smaller problem. 
+
+Training instabilities. The trainability boundary we characterize (Appendix A) is a structured, repro-ducible instance of the late-onset divergences studied at scale (Wortsman et al., 2023); our contribution is not the observation that transformers can diverge but a specific, checkpoint-verified mechanism—saturating bounded heads plus a starved unbounded minority—that predicts which mixtures diverge and why the relationship is non-monotonic in the bounded fraction. 
+
+# 3 Architecture 
+
+Our method changes one object inside a standard multi-head attention layer—the value—and leaves ev-erything else untouched: the queries, the keys, the attention map, the output projection, and the residual stream are all exactly as in a conventional transformer. The change is governed by a single principle, which we state first because it—and not the particular bounded form the value takes—is what the paper is about: 
+
+constrain what a head detects, and leave what it writes free . The rest of this section makes that principle precise ( §3.1– §3.2) and gives two ways to instantiate it: a minimal one—a fuzzy membership value, just a sig-moid on an otherwise standard head—and a structured one—an explicit Boolean value that restructures the head’s value projection into set operations. It then describes how we mix bounded heads with conventional ones, how we pressure them to be selective, and how we couple the result to the legible feed-forward layer of Oskin (2026). Every design is parameter-neutral relative to its conventional baseline: the membership head reuses the value projection unchanged, and the Boolean head splits it into two half-width projections of equal total size, so neither introduces new weights (the sigmoids and products add none). 
+
+## 3.1 Two circuits, one opaque 
+
+For input X ∈ RT ×d and head h with head dimension dh, a standard head computes a value Vh = XW hv ,an attention map Ah = softmax( QhK⊤ 
+
+> h
+
+/√dh), and an output Oh = AhVh; the per-head outputs are con-catenated and mixed by a shared output projection WO (Vaswani et al., 2017). The circuits view (Elhage et al., 2021) splits this into two parts that are usually studied separately. The QK circuit —the attention map Ah—decides where the head reads, and it is already legible: an attention pattern can be plotted and read directly. The OV circuit —the value Vh carried through WO —decides what the head moves from those positions into the residual stream, and it is the opaque half. Vh is a dense, unconstrained vector with no reason for any of its coordinates to correspond to something a human can name; this is the part of attention that post-hoc interpretability spends its effort trying to reconstruct. Our target is to make it legible by construction instead. 
+
+## 3.2 Where to put the constraint 
+
+Making the OV circuit legible means placing a constraint on it, and the central design choice—the one the rest of the paper turns on—is which part of the circuit to constrain. There are two candidates: the value 5Vh, which is what the head detects before WO , or the output written to the residual stream, which is what the head produces after WO . The two choices pull in opposite directions, and only one of them works. Constraining the output is the more obvious choice, and it is the one we tried first. Tie a head’s post-WO
+
+write to the token-embedding matrix, so that whatever it adds to the residual stream decodes directly to vocabulary tokens; then the write is legible by definition—one can just read off the tokens it promotes. It fails, and instructively. Handed a gradient path that runs straight from the write to the vocabulary, the head takes the cheapest available route to lower loss: it reproduces the unigram prior, and a single context-independent constant satisfies that perfectly. The value stops varying with the input—it detects nothing—and collapses to a bias. Legibility bought by pinning the write turns out to be the legibility of a dead unit. Constraining the value instead leaves the write free and removes that shortcut. We give Vh a bounded, named form—defined in the next two subsections—so that each of its coordinates has a fixed meaning, and we let WO learn, unconstrained, how to express those detected features in the residual stream. The head is then read on the detection side—which bounded features fired, and where the attention pattern gathered them from—never by decoding its write. This is the principle stated at the top of the section, and the collapse above is why the pre-WO side is the right place for the constraint: the value is the half that must stay meaningful, and the write is the half that must stay free. Everything that follows is a choice of what “a bounded, named value” should be. 
+
+## 3.3 Membership value head 
+
+The first instantiation makes each value coordinate a fuzzy membership : a soft truth value in [0 , 1] answering “is feature c present at this token?”, where 1 is clearly yes, 0 is clearly no, and intermediate values are a partial or uncertain degree. The contrast with a conventional value is the point: an unbounded value coordinate has no canonical scale or zero and means nothing on its own—only in concert with WO and the rest of the network—whereas a membership coordinate carries a fixed, self-contained reading on a common [0 , 1] scale. Concretely, the membership head passes the ordinary value through a sigmoid: 
+
+Vh = σ XW hv
+
+ ∈ [0 , 1] T ×dh , Oh = AhVh. (1) The head’s trained parameters are exactly a conventional head’s—the same per-head query, key, and value projections W hq , W hk , W hv and the shared output projection WO —with a single sigmoid inserted on the value. The membership head is thus parameter-identical to its baseline; its one difference is functional—the sigmoid bounds each value coordinate to [0 , 1], turning an unbounded activation into the membership degree just described. Entry ( t, c ) of Vh is now the degree to which feature c holds at token t. Attention forms a fuzzy-weighted average of these memberships over the attended context—so Oh reports, per feature, how strongly it was present among the positions the head read—and the free WO decides how those aggregated memberships enter the residual stream. The bound to [0 , 1] is not mere squashing, and it does two things. It endows each coordinate with a stable semantics—a membership degree on a common scale—and therefore with a name, which an unbounded value, having no shared frame, cannot supply. And it anchors the value’s scale : because the write WO is left free, a sparsity pressure applied to an unbounded value would be rescaled away, whereas on a bounded membership it cannot be, so the bound is precisely what lets the sparsity pressure of §3.6 carve out a sparse detector rather than a diffuse gate ( §3.6 makes this argument precise). Both roles turn on constraining the value and not the write: this is the very same sigmoid bound that collapsed in §3.2 when we applied it after WO instead of before. Reading the head means naming each channel by the contexts that drive it toward 1 and inspecting its attention pattern—never by decoding Oh
+
+to tokens. 
+
+## 3.4 Boolean value head 
+
+The second instantiation goes one step further, and it is a larger architectural change. Where the membership head left a standard head intact and merely bounded its value, the Boolean head alters the structure of the value: instead of leaving each detected feature to stand alone, it combines two of them with an explicit logical operation, making the value the OV analogue of the set operators in the legible FFN. Here the single value projection is replaced by two half-width value projections W ha , W hb ∈ Rd×dh/2 (the per-head query and key 6projections and the shared WO are unchanged); the head’s trained parameters are now W hq , W hk , W ha , W hb
+
+in place of the conventional W hq , W hk , W hv . From these it detects two bounded operand banks A = σ(XW ha )and B = σ(XW hb ) with A, B ∈ [0 , 1] T ×dh/2, and forms the value as the concatenation of a fuzzy intersection and a negation-capable set-difference: 
+
+Vh =  A ⊙ B
+
+| {z } 
+
+> intersection
+
+; A ⊙ (1 − B)
+
+| {z }
+
+> set-difference
+
+ ∈ [0 , 1] T ×dh . (2) A coordinate of the first block reads as “ A and B” (both features present), and one of the second block as “A and-not B” ( A present, B absent); the two blocks are asymmetric by construction, since A \ B̸ = B \ A.Because W ha and W hb together have exactly the size of the value projection W hv they replace, the head stays parameter-neutral even though its value is now produced by two trained projections rather than one. This is deliberately a within-token combination—a single attended token is simultaneously A and not-B—rather than a cross-position relation between argument slots. Relational binding across positions (Smolensky, 1990) is a different mechanism that we do not attempt here, and one that, in our prior experiments, does not train profitably at this scale. 
+
+## 3.5 Fraction sweep 
+
+We do not assume every head should be bounded. In a layer with nh heads we make the first nsp spe-cial (bounded, via Eq. 1 or Eq. 2) and leave the remaining nh − nsp conventional. The special fraction 
+
+nsp /n h ∈ { 50% , 75% , 100% } is swept for each family. As Appendix A shows, this fraction is not a benign hyperparameter: it controls a trainability boundary, and the relationship is non-monotonic. 
+
+## 3.6 Selectivity pressures 
+
+A bounded value is not automatically legible. To be readable a detector should fire on a specific, sparse set of contexts—so a human can name what it detects—and it should fire decisively , near 0 or near 1 rather than hovering in the ambiguous middle—so “present” and “absent” are unambiguous. These are two separate properties, and we impose them with two separate selectivity pressures , each a small penalty on the bounded operands added to the language-model loss. By “operands” we mean the membership value σ(XW hv ) for a membership head, or the two operands A, B for a Boolean head—the atoms we want to name, not the combined output A ∩ B (a distinction Section 4 shows is essential). 
+
+Sparsity pressure. A term λs
+
+P 
+
+> t,c
+
+|vt,c | pushes every value toward 0, so a channel is off by default and fires only where it earns its keep. Its effect depends on the bound. With the output projection WO left free, a sparsity penalty on an unbounded value is scale-defeated: the network shrinks v → αv and absorbs the factor into WO → WO /α , leaving the head’s function unchanged while driving the penalty toward zero, so it buys no sparsity. On a bounded value the escape is closed—a coordinate of σ(·) cannot be scaled toward 0 without sending its pre-activation to −∞ , i.e. genuinely turning the feature off —so the pressure can be satisfied only by real sparsity. The bound is what gives it teeth. (It is the static analogue of the legible FFN quantifier’s learned decay, and unlike the vocabulary-pinned design of §3.2 it suffices on its own.) 
+
+Crispness pressure. A term λc
+
+P 
+
+> t,c
+
+vt,c (1 − vt,c ) is maximal at 12 and zero at the rails, so it drives each value toward whichever rail is nearer—down when v < 12 , up when v > 12 . Unlike sparsity it is symmetric 
+
+between 0 and 1: it makes a value decisive without preferring off. It, too, cannot be rescaled away by the free WO , because it constrains the value’s distribution (pushing its mass to the rails), not its magnitude. 
+
+How they compose. On each coordinate three forces act at once: the language-model loss pulls the value 
+
+up toward 1 wherever its presence—aggregated by attention or the FFN and expressed through the free 
+
+WO —improves prediction; sparsity pulls down toward 0; crispness pulls toward the nearer rail. Sparsity governs how many coordinates fire, crispness how decisively each sits, and the task which fire. Applied together they hold a value at 0 unless the task lifts it past a threshold, beyond which it is driven crisply to 1—a sparse, crisp, contextual detector. The two can also be applied separately, and which combination is 
+
+7right is not universal : Section 4 shows that for a single membership value sparsity is what makes it selective (both pressures together are best), whereas for a conjunctive operator the intersection already supplies its own sparsity— A ∩ B fires only when both operands do—so the crispness pressure alone yields livelier, more readable operators, while adding sparsity thins the operands until the operator rarely fires at all. Throughout we use λs = 10 −3 and λc = 3 × 10 −3.
+
+## 3.7 End-to-end legible model 
+
+Finally we couple the Boolean attention (Eq. 2, at 100%) to the legible feed-forward layer of Oskin (2026), whose units are fuzzy set operations plus a self-forgetting sequence quantifier. The FFN’s operator fraction is set by a GELU partition (the ρ of Oskin, 2026): a fraction of hidden units remain conventional GELU for training stability, the rest are the named operators. We train two end-to-end configurations, differing only in that partition: a 25%-named split (75% of FFN units GELU, ρ = 0 .75) and an even 50%-named split (ρ = 0 .5). Both place every attention value under Eq. 2. These are the models in which both halves of the transformer—“what it moves” and “what it combines”—are named operations at once. 
+
+## 3.8 Training and evaluation 
+
+All models are 125M-parameter, 12-layer, 768-wide transformers with learned positional embeddings, trained for one epoch on the same open-web corpus and tokenizer as the baseline, with identical optimizer and schedule. The conventional gelu baseline is architecturally identical except for the value transform and FFN. We evaluate language-model quality with LAMBADA (Paperno et al., 2016), BLiMP (Warstadt et al., 2020), and ARC-Easy (Clark et al., 2018) via the standard harness (Gao et al., 2021)—WinoGrande (Sakaguchi et al., 2020) sits at chance for all models and is omitted—and we probe legibility directly on held-out text (defined in Section 4). All language-model results are single-seed at this scale; we note this where it matters. 
+
+# 4 Specialized-Attention Designs: Legibility and Parity 
+
+We first study the value-head designs in isolation, with a conventional feed-forward layer, so that any change is attributable to the attention. We ask two questions: are the bounded values readable , and do they cost 
+
+anything? The answer to both turns out to depend on which selectivity pressure is applied ( §3.6), and—this is the section’s central finding—the right choice is opposite for the two designs: the single membership value wants both pressures, whereas the conjunctive Boolean operator wants crispness alone. 
+
+## 4.1 A legibility metric for value channels 
+
+We probe each bounded value channel on held-out text (8 × 256 tokens per batch, 12 batches). We read the head on two levels: the combined value it feeds through WO (the membership σ(XW hv ), or the block [A ∩ B; A \ B] for a Boolean head), and the operands it is built from (the membership itself, or the two operand banks A, B of Eq. 2)—the atoms we actually want to name. For channel c of special head h we recompute its combined value at every token and record the mean activation, the variance across tokens, and a crispness —the fraction of tokens at which the value is within 0.1 of a rail (min( v, 1 − v) < 0.1), i.e. decisively on or off. We then classify each channel: 
+
+• CONSTANT (variance < 0.003): the channel barely varies with context. This is the failure mode of the vocabulary-tied design—a channel that has collapsed to a bias and detects nothing—and, as we will see, also the mode into which an over-pressured operator collapses. 
+
+• SELECTIVE (variance ≥ 0.003 and crispness > 0.5): the channel varies with context and is decisively on/off—a crisp, contextually driven detector, the legible outcome. 
+
+• FUZZY (the remainder): varies but is not crisp—a soft gate rather than a readable detector. SELECTIVE is the fraction we care about: a channel that is both crisp and contextual is one we can name by its max-activating contexts. Because it requires both variance and crispness, it is a single number that 8fails in two distinguishable ways—toward CONSTANT (crisp but dead) or toward FUZZY (contextual but indecisive). To separate those two failure modes we track two further statistics on the operands , which the three-regime sweep below makes central: 
+
+• atom crispness : the fraction of operand values (the membership, or A and B individually) within 0.1 of a rail. This measures whether the atoms —not the combined output—are decisive, and it is the quantity the crispness pressure targets directly. 
+
+• ON-fraction : the fraction of operand values decisively on (v > 0.9). A low ON-fraction with high crispness means the operands are crisply off almost everywhere—the operator is alive on paper but rarely fires. We read ON-fraction as “how alive the operators are”: a healthy detector is off by default but must actually turn on somewhere. 
+
+## 4.2 Legibility is a trained feature 
+
+Table 1 reports the four statistics for every design under each selectivity regime. Read by columns, three facts stand out, and together they are the section’s central result. The crispness term raises atom crispness sharply and monotonically. For the Boolean operands it climbs from 32–33% under sparsity alone to 53–84% once the crispness term is present (either alone or with sparsity); the membership operands, already fairly crisp under sparsity, hold at 74–86%. On its own target metric the crispness term does exactly what §3.6 promises: it drives the atoms to the rails. Crisp atoms are necessary but not sufficient: under both pressures together the Boolean operators over-sparsify into a constant-off collapse. The Boolean ON-fraction falls to 0 .2–0 .9%: the operands are crisp, but crisp off —they almost never fire. The mechanism is specific to a conjunction. The value A ∩ B requires two operands high at once, so the intersection already fires only rarely; add a sparsity term that pushes both operands down toward 0 and the conjunction is starved to the point of never firing, at which point the channel stops varying and is read as CONSTANT. The metric confirms the collapse: SELECTIVE drops from 60–62% under sparsity alone to 38–54% under both pressures, while CONSTANT rises correspondingly (to 58% at Boolean head-50). It also worsens over training : for Boolean head-100 under both pressures SELECTIVE falls from 60% at 50k steps to 54% by the end of the epoch, as the sparsity term keeps thinning the operands the longer it acts. Removing the sparsity term averts the collapse, and crispness alone keeps the operators alive. Under crispness alone the Boolean ON-fraction stays at 12–19%—an order of magnitude above the both-pressures regime—and SELECTIVE recovers to 44–56%. The crispness term supplies decisiveness without the down-ward pull that starves the conjunction, so the operators stay lively and crisp. This is the empirical form of the argument in §3.6: for a conjunctive operator the intersection supplies its own sparsity, so an added sparsity pressure is not merely redundant but actively harmful. The membership head is the exception, because for a single value sparsity is the selectivity: with no conjunction to supply sparsity, the logic reverses. Here both pressures together are best: membership head-100 reaches its highest SELECTIVE (59%) under both pressures, above sparsity alone (44%) and crispness alone (46%), and—uniquely—crispness alone is the worst of the two single pressures for the combined-value metric. For a lone value the sparsity term is what carves “fires on a specific set of contexts” out of “fires softly everywhere”; there is no conjunction for it to starve, so it is pure benefit. The same pressure that kills the Boolean operator makes the membership value. Legibility still rises with depth, orthogonal to the pressure choice: where the legibility lives is unchanged from design to design. Figure 2a plots SELECTIVE% by layer: in every design the fraction climbs with depth, with shallow layers noisy or near-constant and the deep half (L7–11) far more legible, reaching 70– 95% SELECTIVE. This contradicts the folklore that attention heads crystallize only on low-level cues like punctuation and position: that folklore is a statement about shallow heads read in the vocabulary basis, and when we read the deep value in its own bounded basis it crystallizes readily. It also frames the collapse above as a story about how many deep detectors survive the pressure, not about where they sit. 9Design pressure atom-crisp ON% SELECTIVE CONSTANT                                                                  
+
+> Membership head
+> membership head-50 sparsity alone 77% 0.1 58% 30% crispness alone 84% 0.9 53% 41% both pressures 86% 0.1 57% 39% membership head-100 sparsity alone 74% 3.3 44% 35% crispness alone 74% 5.3 46% 36% both pressures 81% 0.1 59% 34%
+> Boolean head
+> Boolean head-50 sparsity alone 32% 1.5 60% 32% crispness alone 73% 19.4 44% 47% both pressures 84% 0.2 38% 58% Boolean head-75 sparsity alone 33% 1.8 62% 31% crispness alone 67% 17.0 48% 42% both pressures 75% 0.4 45% 47% Boolean head-100 sparsity alone 32% 2.2 60% 27% crispness alone 53% 12.1 56% 32% both pressures 63% 0.9 54% 37%
+
+Table 1: Value-channel legibility across the three selectivity regimes (Section 4.1). atom-crisp and ON% 
+
+are measured on the operands (the atoms we name); SELECTIVE /CONSTANT on the combined value. Crispness pressure raises atom-crispness, but for the Boolean head both pressures over-sparsify the operators into a constant-off collapse (ON → 0.2–0 .9%, SELECTIVE 60% → 38–54%), which crispness alone averts (ON 12–19%). For the membership head the reverse holds: both pressures give the highest SELECTIVE.                       
+
+> Design channel max-activating tokens reading membership head-100 L6 h4c48 body, mind, love, point, idea abstract concept membership head-100 L6 h10c4 Health, military, generals, philosophy domain/topic membership head-50 L6 h5c2 businesses, taxes, concerns, business economy topic Boolean head-100 L6 h3c31 everyone, her, users, politicians people/plural Boolean head-100 L6 h10c2 ; ). \n . clause boundary Boolean head-75 L6 h1c30 regardless, going, the, not (polysemantic tail)
+
+Table 2: Representative SELECTIVE value channels (layer 6) from the operator-alive regimes, named by their highest-activating held-out contexts. They read as semantic and grammatical features, not merely punctuation. About half read cleanly; the rest are polysemantic, as in comparable sparse-feature analyses. When the operators are instead starved into the constant-off collapse, this named-detector yield disappears. 
+
+## 4.3 The surviving detectors read as features, not punctuation 
+
+Table 2 lists representative SELECTIVE channels from the operator-alive regimes (sparsity alone and crisp-ness alone), sampled at a middle layer (L6) and named by their max-activating contexts. They are recog-nizable: an abstract-concept channel ( body, mind, love, idea ), a domain channel ( Health, military, generals, philosophy ), a people/plural channel ( everyone, users, politicians ), a topical channel ( businesses, taxes, concerns ), alongside the expected clause-boundary punctuation detector. As with the FFN units of Oskin (2026) and with sparse-autoencoder features, there is a polysemantic tail—roughly half of the channels read cleanly—but the presence of crisp, contextual, semantic detectors already at a middle layer is exactly what the QK/OV folklore says should not be there. The contrast with the collapsed regime is qualitative as well as quantitative. In the operator-alive regimes the surviving SELECTIVE channels are nameable features like these. Under both pressures, where the Boolean ON-fraction has fallen to near zero, the operators are dead and the few channels that still vary lock onto high-frequency function words rather than content—consistent with a value that has been squeezed until only the cheapest, most frequent distinctions survive. The named-detector yield and the ON-fraction move together: keeping the operators alive is what keeps the channels nameable. 10 0 1 2 3 4 5 6 7 8 9 10 11 
+
+> layer
+> 0
+> 20
+> 40
+> 60
+> 80
+> 100
+> SELECTIVE value channels (%)
+> deep half
+> (L7--11)
+> Attention legibility rises with depth
+> membership-50
+> membership-100
+> Boolean-50
+> Boolean-75
+> Boolean-100
+
+(a) SELECTIVE value channels by layer. membership-50  
+
+> membership-100
+> Boolean-50
+> Boolean-75
+> Boolean-100
+> E2E 25%
+> E2E 50%
+> 0
+> 20
+> 40
+> 60
+> 80
+> 100
+> value channels (%)
+> end-to-end
+> Value-channel legibility by design
+> SELECTIVE (readable detector)
+> FUZZY
+> CONSTANT (collapsed)
+
+(b) Legibility composition by design. 
+
+Figure 2: (a) Attention legibility rises with depth in every design; the deep half of the network reaches 70–95% selective. (b) Composition of value channels across the specialized-attention designs and the two end-to-end models; SELECTIVE (green) dominates in the specialized-attention designs, while the end-to-end models push attention legibility deeper and shallower attention toward CONSTANT (Section 5). 
+
+## 4.4 Language-model quality 
+
+Table 3 gives downstream numbers across all three regimes against the conventional baseline. The headline is 
+
+parity : nearly every configuration sits in the 0 .22–0 .27 LAMBADA band around the baseline’s 0 .2536, with BLiMP within 0 .03 and ARC-Easy within 0 .05, so legibility does not come at a measurable aggregate quality cost. WinoGrande is at chance for every model and is omitted. Two real movements survive that parity band, and they are movements in quality produced by the same pressure choices that drove the legibility result. The first movement is the membership head-100 recovery, and it mirrors the legibility story exactly. When every head’s value is squeezed to [0 , 1], the bottleneck bites: under sparsity alone membership head-100 drops to LAMBADA 0 .2142 with perplexity 189 .6, the paper’s clearest quality loss. Adding the crispness term turns this into the best membership configuration—LAMBADA 0 .2313, perplexity down to 146 .2, and the highest membership BLiMP at 0 .8032—the same both-pressures regime that gave membership head-100 its highest SELECTIVE. For a single bounded value, the two pressures help both legibility and quality at once; there is no tradeoff to manage. (At half strength, membership head-50, the six unbounded heads retain enough headroom that the sparsity-alone cost never appears.) The second movement is Boolean head-50 under sparsity alone (LAMBADA 0 .2727, +0 .019 over base-line), and its main lesson is negative: a 4-layer pilot in which the fully -Boolean design was best does not survive scaling. At 12 layers Boolean head-100 regresses to parity (LAMBADA 0 .2468, BLiMP 0 .8050 versus baseline 0 .8066) and the clearest gain moves to the mix . Across the Boolean rows, quality is otherwise a wash—no regime is reliably better than another on LAMBADA once the parity band is acknowledged—so unlike the membership case the Boolean pressure choice is decided on legibility , not quality. Both tables want a seed sweep before any ordering within the parity band is trusted; a single seed does not support an ordering among movements this small. 
+
+## 4.5 Which pressure for which design 
+
+The two tables agree on a single, actionable rule, and it is not the “more pressure is better” one might expect. For a single membership value , keep both pressures: sparsity is what makes a lone value selective, and here it improves legibility and quality together. For a conjunctive Boolean operator , use crispness alone :the intersection already supplies its own sparsity, so an added sparsity term does not sharpen the operator but over-sparsifies it—starving both operands toward zero until the conjunction never fires and the channel collapses to constant-off, a collapse that deepens the longer training runs. The mechanism is the same object 11 Design pressure LAMBADA L-ppl ↓ BLiMP ARC-E                                                                        
+
+> gelu baseline —0.2536 109.4 0.8066 0.4120
+> Membership head
+> membership head-50 sparsity alone 0.2649 110.0 0.7982 0.3990 crispness alone 0.2257 149.1 0.7974 0.4036 both pressures 0.2567 112.5 0.8070 0.3880 membership head-100 sparsity alone 0.2142 189.6 0.7907 0.3830 crispness alone 0.2220 209.6 0.7767 0.3708 both pressures 0.2313 146.2 0.8032 0.3788
+> Boolean head
+> Boolean head-50 sparsity alone 0.2727 94.4 0.7982 0.3902 crispness alone 0.2538 116.2 0.7974 0.4061 both pressures 0.2480 106.2 0.7944 0.4040 Boolean head-75 sparsity alone 0.2383 123.0 0.7951 0.4066 crispness alone 0.2366 131.1 0.8017 0.4070 both pressures 0.2527 118.4 0.7974 0.3939 Boolean head-100 sparsity alone 0.2468 129.6 0.8050 0.3986 crispness alone 0.2368 144.4 0.8042 0.3851 both pressures 0.2368 142.6 0.7995 0.3939
+
+Table 3: Downstream accuracy across the three selectivity regimes (single seed, one epoch, full evaluation sets; higher is better except L-ppl, LAMBADA perplexity, lower is better). Bold marks the departures that survive the parity band: membership head-100 is a genuine loss under sparsity alone that recovers under both pressures, and Boolean head-50 is a genuine LAMBADA gain. seen from two sides: the sparsity pressure removes coordinates, which is exactly what a lone value needs and exactly what a conjunction cannot afford. This design-dependent verdict is what we carry into the end-to-end models of Section 5. 
+
+# 5 An End-to-End Legible Language Model 
+
+We now couple the Boolean attention (every value under Eq. 2, at 100%)—the more selective of the two value designs (Section 4), and the one that makes the value an explicit logical operation—to the legible feed-forward layer of Oskin (2026), whose units are fuzzy set operations plus a self-forgetting sequence quantifier. This is the first model in which both halves of the transformer—what the attention moves and what the feed-forward layer combines —are named operations at once, and the question is whether the two legible components compose, in quality and in legibility, or interfere. Two design axes stay open, and we sweep both. The feed-forward layer exposes an operator fraction (a GELU partition, the ρ of Oskin, 2026): we run a 25%-named split and an even 50%-named split. And, central to this section, each legible surface can carry a selectivity pressure (Section 3.6), and the pressure on the attention need not match the one on the feed-forward layer. Every end-to-end variant therefore has an attention pressure regime and, optionally, a feed-forward pressure regime; we describe a variant as placing selectivity on the attention only (a plain feed-forward layer beneath it) or on attention and the feed-forward layer . The headline is that the crispness-alone variants—the pressure that makes operands decisive without also sparsifying them into dead constants—keep the feed-forward operators alive and namable as a standing bank, so that a prediction can be read off named units (Figure 3, Figure 5); the quality-strongest variant applies both pressures to the feed-forward layer and sits at the top of the parity band, but leaves most of its operators crisp yet dead, few of them alive to name. The quality-versus-legibility tradeoff of the whole design lives on the feed-forward surface, and we make it explicit below. 12 Selectivity / regime Frac. LAMBADA BLiMP ARC-E                                                      
+
+> gelu baseline —0.2536 0.8066 0.4120
+> Selectivity on the attention only (plain feed-forward)
+> sparsity alone 25% 0.2544 0.8039 0.3977 sparsity alone 50% 0.2449 0.8027 0.3923 both pressures 25% 0.2575 0.8061 0.3918 both pressures 50% 0.2488 0.8004 0.3977 crispness alone 25% 0.2511 0.8103 0.3939 crispness alone 50% 0.2451 0.8104 0.3931
+> Selectivity on attention and the feed-forward layer
+> sparsity alone 25% 0.2544 0.8095 0.3893 sparsity alone 50% 0.2519 0.8047 0.3902 both pressures 25% 0.2608 0.8103 0.3737 both pressures 50% 0.2657 0.8163 0.3939 crispness alone 25% 0.2472 0.8062 0.3939 crispness alone 50% 0.2612 0.7978 0.3986
+
+Table 4: End-to-end quality (accuracy; higher is better). Every variant places every attention value under Eq. 2 at 100% and names a fraction of feed-forward units; “Frac.” is the named operator fraction. Run perplexity is flat ( ≈ 29–30) across all variants and is omitted; WinoGrande is at chance for all models and is omitted. The even-split both-pressures model (bold) is nominally highest on LAMBADA and BLiMP, at the top of the parity band; with a single seed the small margin over baseline is not a reliable win. Single-seed, one epoch. 
+
+## 5.1 Every variant trains 
+
+The companion paper locates divergence just above an even Boolean split, and Appendix A finds an analogous boundary in the membership family, so the even-split configuration—an even feed-forward split plus fully-Boolean attention on top—was the run we expected to diverge. It did not. Every end-to-end variant in this section trained a full epoch cleanly, across both operator fractions and all three pressure regimes. Cumulative training perplexity is flat at ≈ 29–30 for all of them and carries no signal; the discriminating axes are downstream ( §5.2). The Boolean attention, at 100%, carries no starved-minority risk of its own (Appendix A) and did not push the feed-forward layer over its horizon. The one coupling that does diverge— a more aggressive, fully-Boolean feed-forward variant under both pressures, where crispness deepens the operator’s saturation past its stall horizon—is a different and stricter feed-forward layer than the legible one studied here; it is reported in Appendix A, and its crispness-alone counterpart trains. 
+
+## 5.2 Parity holds across the end-to-end sweep 
+
+Table 4 gives downstream quality. Because run perplexity is flat, LAMBADA and BLiMP are the discriminat-ing axes, and every end-to-end variant sits in or above the parity band on both: the two most aggressive leg-ibility constraints we have—bounded Boolean attention values and named feed-forward operators—compose without breaking quality. The strongest variant is the even-split model with both pressures on attention 
+
+and the feed-forward layer, at LAMBADA 0 .2657 and BLiMP 0 .8163 against the baseline’s 0 .2536 and 0.8066; with a single seed and margins this small we read it as sitting at the top of the parity band, not as a reliable win. The uniform slip on ARC-Easy ( ≤ 0.04) is the same parity-band movement seen for the specialized-attention designs—single-seed texture, not a reliable ordering. 
+
+## 5.3 Legibility, surface one: the feed-forward operands 
+
+The parity numbers say the components coexist; legibility says what one can read off them. We start with the feed-forward layer, because this is where the end-to-end legibility turns out to live, and it is the central new result of this section. Table 5 measures the Boolean operands A, B of the feed-forward operators with the same statistics used for the attention value (Section 4): the fraction of operand tokens within 0 .1 of a rail 13 Feed-forward pressure Frac. op-crisp ON% SELECTIVE CONSTANT none (plain) 25% 50 0.9 1 58 sparsity (on operator output) 25% 51 0.8 1 50 both pressures (on operands) 25% 95 3.5 13 85 crispness alone (on operands) 25% 91 32 .7 25 70 none (plain) 50% 50 0.6 0 52 sparsity (on operator output) 50% 51 0.5 0 55 both pressures (on operands) 50% 86 1.9 15 73 crispness alone (on operands) 50% 81 17 .5 11 69 
+
+Table 5: Legibility of the feed-forward operands (percentages; “Frac.” is the named operator fraction). op-crisp is the fraction of operand tokens within 0 .1 of a rail; ON the fraction above 0 .9 (operators alive); SELECTIVE the crisp-and-contextual fraction; CONSTANT the crisp-but-context-free fraction. A plain layer is illegible ( ≈ 50% crisp, ≈ 0% SELECTIVE); sparsity on the combined output is inert; only operand-targeted pressure crispens the atoms, and crispness alone keeps them alive and is the most SELECTIVE (bold).                      
+
+> FFN unit crispness top-activating tokens reading L1 u18 1.00 there, Surely, Indeed, Meanwhile, No sentence-initial/discourse L1 u57 0.99 ( , if, as, whether, when, If, which conditional/subordinator L6 u49 1.00 to, think, need, insists infinitival/modal complement L11 u39 0.98 less, more, faster, -ier, different comparative
+> L11 u89 0.98 not, nothing, even, non negation
+> L11 u11 0.95 had, has, have, having, since perfect aspect
+
+Table 6: Most-engaged feed-forward units of a crispness-alone end-to-end model, named by max-activating held-out contexts. The final-layer triple—comparative, negation, aspect—is the “named logical operator” outcome, now inside a model whose attention is also constrained. (crispness), the fraction of operands above 0 .9 (“ON”, i.e. the operator is alive rather than saturated-off), and the SELECTIVE fraction (crisp and contextual channels). Three things follow, and they mirror the attention story exactly. First, a plain legible feed-forward layer has barely legible operands— ≈ 50% crisp and ≈ 0% SELECTIVE—which is the companion paper’s “polysemantic operands” limitation, now quantified. Second, a sparsity pressure applied to the combined 
+
+operator output is inert for the atoms: it moves operand crispness only 50% → 51% at 0% SELECTIVE, because penalizing A ∩ B does nothing to A or B—you must target the operands themselves. Third, an operand-targeted pressure crispens them dramatically (50% → 81–95%), and here the same split as the attention returns: both pressures leave the operands crisp but nearly dead (ON 1 .9–3 .5%), while crispness 
+
+alone leaves them crisp and alive (ON 17–33%) and gives the best SELECTIVE fraction (25% at the 25% operator setting). Crispness alone is what makes the feed-forward operators readable. Because crispness alone keeps the operators alive, its living units can be named. Table 6 lists the most-engaged operators of a crispness-alone model, named by their max-activating held-out contexts: sentence-initial discourse markers and conditional openers early, an infinitival/modal-complement detector in the middle, and—in the final layer—clean comparative , negation , and perfect-aspect units. This is the companion paper’s “named logical operator” outcome reproduced with legible attention stacked on top, and it is exactly the both-pressures variant cannot give: crisp operators that never fire are crisp on paper but carry nothing to name. 
+
+## 5.4 Legibility, surface two: the attention, and a division of labor 
+
+Figure 3 reads both surfaces of an end-to-end model layer by layer. The feed-forward side is legible through-out, as just shown; the attention side tells the expected caveat, and it is precisely the one this paper predicts. Coupled to a legible feed-forward layer, the shallow attention goes constant : across both operator fractions 14 0 1 2 3 4 5 6 7 8 9 10 11 
+
+> layer
+> 0
+> 20
+> 40
+> 60
+> 80
+> 100
+> legibility (%)
+> deep half
+> (L7--11)
+> End-to-end legibility of the crispness-alone model
+> FFN: Boolean-operand crispness %
+> FFN: quantifier-unit crispness %
+> attention: SELECTIVE value channels %
+
+Figure 3: End-to-end legibility by layer, for a crispness-alone model. The feed-forward operands are crisp at every depth ( §5.3), while the Boolean attention value is selective only in the deep half and goes constant in the shallow layers—the division of labor discussed in the text: the legible feed-forward layer takes the shallow work, so the attention need only be readable at depth. the end-to-end attention is only 30–35% SELECTIVE with 64–69% of channels CONSTANT, well below the 60% SELECTIVE of standalone Boolean head-100 (Figure 2b). Its operands are crisp (63–73%), and, exactly as on the feed-forward surface, crispness alone keeps them alive (ON 12%) where both pressures kill them (ON 0 .3%). The interpretation is a division of labor: the legible feed-forward layer absorbs the shallow, local work, freeing the attention to specialize—and be readable—only at depth, where it must. The claim is therefore precise: the model is legible in its feed-forward operands throughout and in its attention value at depth, not everywhere and not in shallow attention. The end-to-end legibility lives in the feed-forward layer; the attention contributes a legible deep fraction and a constant shallow one, and closing that gap is stated as future work in Section 6. A per-head view sharpens the claim. Figure 4 (left) gives the SELECTIVE fraction of every one of the 144 heads: it is near-zero across the shallow layers and rises sharply through the deep half, peaking at 87–88% at layers 8–9 before easing at layer 11—the aggregate depth gradient, resolved head by head. This heatmap has no baseline counterpart, and deliberately so: SELECTIVE is defined on a bounded value—crisp meaning within 0 .1 of a rail, contextual meaning it varies across tokens—so it is simply undefined for a conventional head, whose value is unbounded and has no rails to be crisp against. There is thus no baseline version of this figure to place beside it; the only legibility a standard model exposes is the post-hoc, promote-side view of Figure 1, and the detection-side selectivity measured here exists only because the value is bounded by construction. Reading a single prediction (Figure 5) understates this, because direct logit attribution surfaces only the heads relevant to that token; the legibility is a property of the standing head bank, not of any one prediction. Naming what a deep head detects is harder, and succeeds only in part. A naive readout of a channel’s most-active tokens collapses to frequent function words unless one restricts to the tokens it decisively fires on; under that stricter reading most SELECTIVE deep heads resolve to syntactic or functional patterns (determiners, pronouns, particles), while a readily-nameable sample of the deep heads carry a channel with a clearly nameable content category (Figure 4, right)—place names ( York /New /Street ), temporal spans ( year /day /week ), quantities ( two /million /percent ), modality ( might /want /should ), action verbs ( take /get /make ). The claim is therefore graded: crisp, contextual legibility is near-universal in the deep half, and a cleanly nameable content category is present in at least a readily-identifiable sample—the exact fraction is threshold-dependent and a deeper per-channel analysis will likely name more, which we leave to future work—while, as on the feed-forward surface, naming the operand’s meaning remains the harder frontier. 15 H0                                                        
+
+> H1
+> H2
+> H3
+> H4
+> H5
+> H6
+> H7
+> H8
+> H9
+> H10
+> H11
+> head
+> L0
+> L1
+> L2
+> L3
+> L4
+> L5
+> L6
+> L7
+> L8
+> L9
+> L10
+> L11
+> layer  deep half
+> Per-head SELECTIVE value channels (%)
+> legibility rises with depth
+> 0
+> 20
+> 40
+> 60
+> 80
+> 100
+> SELECTIVE %
+> A sample of easily-understood attention heads
+> (each named by the token category its value channel fi res on, corpus-wide;
+> a conservative sample —the threshold is arbitrary, and deeper analysis may name more):
+> ACTION VERBS
+> L7H9 take, get, make, find
+> L8H2 something, going, get
+> L10H11 get, something, going, make, want
+> TIME / DURATION
+> L7H0 years, week, day, year
+> L9H2 long, year, day
+> L9H9 year, years, long, three
+> MODALITY / DESIRE
+> L8H9 might, may, going, over, too
+> L10H4 want, need, should
+> PLACES / PROPER NOUNS
+> L10H0 York, New, Street
+> L10H9 New, Street, York
+> QUANTITY / NUMBER
+> L8H1 two, three, million, few, much
+> L9H5 two, three, few, these, many
+> COGNITION / STANCE
+> L7H11 think, don, whether
+> PEOPLE / GROUPS
+> L9H8 people, these, those, police
+
+Figure 4: Per-head attention legibility across all 144 heads, measured over held-out corpus text—a description of what each head detects across all inputs , not of any single prediction. Left: the SELECTIVE fraction (crisp and contextual value channels) of each head—near-zero in the shallow layers, rising to 87–88% by layers 8–9; the depth gradient of Figure 3, resolved per head. Right: a sample of the easily-understood deep heads—those whose most content-rich value channel fires on a clearly nameable category of tokens, grouped by category (modality, time, place names, quantity, action verbs, cognition, people). We do not treat the size of this sample as a hard boundary: it depends on an arbitrary readability threshold, and many of the remaining deep heads—crisp and contextual, but reading as syntactic or functional patterns here—likely carry a nameable meaning too, only harder to surface, which the deeper per-channel analysis we leave to future work may recover. On the sample itself, two caveats: this is each head’s most content-rich channel (its others are often functional), and a naive most-active-token readout is frequency-confounded (it collapses to “the”/“people”), so the labels restrict to the tokens a channel fires on decisively. 
+
+## 5.5 Legibility in action: reading a single prediction 
+
+The aggregate statistics say the operators are readable; the payoff is reading them for a specific prediction ,on the crispness-alone headline model. It completes “It was the best of times, it was the” with “worst” 
+
+(probability 0 .83). We decompose that token’s logit by direct logit attribution—writing it, through the tied unembedding, as an additive sum over every attention head and every feed-forward unit—and name each contributor not by what it detects but by the vocabulary category its write most promotes, together with the rank worst holds in that promotion, because the write, not the detected context, is the half that explains the prediction (Figure 5). Three-quarters of the token’s attribution is legible —carried by attention heads and named feed-forward units rather than the opaque residual (GELU) path—and its largest contributors are named feed-forward units that compose. A superlative unit at layer 11 promotes most /greatest /biggest /least /best /highest ,placing worst at rank 9 of 50 ,257; a negation unit at layer 8 promotes not /instead /less and their kin, placing worst at rank 39. The prediction reads directly off named units: superlative axis ∩ negation = 
+
+worst . The reading is not free of noise—of the six largest contributors two carry worst only weakly (rank 
+
+> 10 3) and the attention heads add little here—but the nameable units dominate the attribution and suffice to explain the token. This is the concrete form of what by-construction legibility buys: for an arbitrary token one can point at named writes and watch them compose, without training an external probe. Amethodological aside sharpens the thesis: a unit’s detect signature (the contexts it fires on) is polysemantic, whereas its promote signature (the category it writes toward) is clean—a named operation whose operands 16 are fuzzy but whose effect is readable, and it is this promote-side legibility, preserved only while the operators stay alive, that the aggregate tables track. This is the sense in which the feed-forward layer goes beyond the conventional one of Figure 1. There, the same superlative and negative-valence concepts are present, but each is a single monolithic GELU block whose vocabulary promotion is recovered only after training by a lens. Here each contributor carries its logical form on its face (Figure 5): the superlative and valence units are explicit set-differences—negations— and intersections, so one reads not only the concept but the operation that composes it. And the feed-forward layer contains sequence-quantifier units, soft existential and proportional scans over the prefix, an operation a pointwise GELU network cannot express at all. The baseline promotes a concept; ours exposes the operation that produces it. The attention side of the same figure is worth reading, because for this token it says exactly what the division of labor predicts. No head’s attribution to worst exceeds |+0 .77 |, against the feed-forward units’ +2 .14: the attention barely moves this prediction, and the heads that do fire split cleanly by depth. The shallow contributors are the textbook positional and punctuation heads—layer-0 heads that key on of , to ,or a newline and write toward commas and function words, the very “heads crystallize on punctuation” pattern, here doing the local bookkeeping the feed-forward layer is free to ignore. The readable deep head, by contrast, is an evaluation detector that has read the sentiment of the prompt: a layer-9 head fires on perfect /excel /love /review /well and writes toward a valence axis ( approval /positive /rejection ), having registered “the best of times” as an evaluative context without itself promoting worst . A single prediction thus shows all three roles at once: the feed-forward units compose the token, the deep attention supplies readable context, and the shallow attention supplies position. 
+
+## 5.6 What the end-to-end model delivers 
+
+The readable end-to-end model is the crispness-alone one. Its feed-forward operators are crisp and alive (Table 5), its living units are namable (Table 6), and an arbitrary prediction can be attributed to a com-position of named operators without a post-hoc tool (Figure 5)—all at quality inside the parity band. Its cost is modest and precisely located: the both-pressures variant is the quality strongest (even split, LAM-BADA 0 .2657 / BLiMP 0 .8163, at the top of the parity band) but its feed-forward operators, crisp yet nearly dead (Table 5), leave few units alive to name as a standing bank. That is the quality-versus-legibility tradeoff of the whole design, and it lives on the feed-forward surface. What we deliver is a language model at baseline quality whose dominant feed-forward computations are named operations readable in the act of predicting a token, with legible attention at depth; what we do not yet deliver is a network with no opaque part anywhere—the gap is the shallow attention (Section 6). The reading at a second epoch, at matched training, is the same: benchmark parity. Continued for one more epoch, with no change to the architecture or the selectivity pressures, the crispness-alone end-to-end models reach LAMBADA 0 .2635 (perplexity 98 .2) and BLiMP 0 .8086 at the 25%-named split, and LAMBADA 0 .2620 (perplexity 94 .6) and BLiMP 0 .7932 at the even split (ARC-Easy 0 .39); the same gelu baseline trained a second epoch reaches LAMBADA 0 .275 (perplexity 78 .1) and BLiMP 0 .823 (Oskin, 2026). On the discriminating axes—LAMBADA accuracy and BLiMP—the legible model and the baseline sit within the parity band at both epochs (Table 7); LAMBADA perplexity, the most seed-sensitive of the three, moves more, and at two epochs the baseline is nominally ahead on all three aggregates by small margins. With a single seed we cannot separate a real ordering from training-run and sampling noise, so we claim neither a gain nor a loss at convergence: the reading is parity, and any drift toward the baseline at the second epoch is as plausibly a single-seed artifact as a real effect. What the second epoch does not do is disturb the legibility, which is read off the same crispness-alone model throughout. 
+
+# 6 Discussion 
+
+What the pieces say together. Read as one result, the paper makes a single architectural claim: atransformer can be built so that its dominant computations are named operations, readable in their own basis, at no quality cost we can measure. The feed-forward half was already legible (Oskin, 2026); here the attention value becomes legible too, under the same discipline—constrain what a component detects 
+
+and leave what it writes free—and the two compose into an end-to-end model at baseline perplexity and 17 H0                                                                                           
+
+> H1
+> H2
+> H3
+> H4
+> H5
+> H6
+> H7
+> H8
+> H9
+> H10
+> H11
+> FFN
+> named
+> FFN
+> GELU
+> attention heads |FFN (named / GELU)
+> L0
+> L1
+> L2
+> L3
+> L4
+> L5
+> L6
+> L7
+> L8
+> L9
+> L10
+> L11
+> layer
+> Our end-to-end model: DLA to the generated token
+> (red =positive, blue =negative)
+> Each FFN unit is a named operation over readable operands
+> the composition is sometimes transparent, sometimes a genuine surprise
+> L11 FFN A∖B(set-difference) →superlative ("worst" #9)
+> Adetects determiners, Bdetects determiners
+> ⇒determiners ∖determiners →superlative [surprising]
+> L10 FFN A∩B(intersection) →superlative ("worst" #1,045)
+> Adetects determiners, Bdetects determiners
+> ⇒determiners ∩determiners →superlative [surprising]
+> L8 FFN A∩B(intersection) →negation ("worst" #39)
+> Adetects conjunctions, Bdetects negation
+> ⇒conjunctions ∩negation →negation [transparent]
+> Attention value: readable at depth, positional when shallow
+> L9 H10 (deep: evaluation) DLA +0.67 detects: positive, ALSO, legitim, lingering ("worst" #148)
+> L0 H7 (shallow: positional) DLA -0.28 detects: of, of, of, of ("worst" #3,645)
+
+Figure 5: Reading a single prediction on the crispness-alone headline model. Left: direct logit attribution of the generated token “worst” (from “It was the best of times, it was the” ) across all 12 layers, per attention head and per feed-forward unit (red positive, blue negative). Right, top: unlike the baseline’s monolithic block, each named feed-forward unit exposes not just what it promotes but the operation over which operands 
+
+produces it, and the operands read as functional features. Two of the three are a genuine surprise—a superla-tive is a set-difference (or intersection) of two determiner detectors, determiner \ determiner → superlative (layers 11 and 10, worst at ranks 9 and 1045)—and one is transparent: a negation is an intersection one of whose operands is itself a negation detector, conjunction ∩ negation → negation (layer 8, rank 39). The named form is what lets one see the composition at all. Right, bottom: the top attention heads; the atten-tion contributes weakly (its readable deep head reaches +0 .67 against the feed-forward’s larger writes) and splits by depth—the deep head reads the prompt’s evaluative sentiment, the shallow head keys on position. Three-quarters of the attribution is legible. downstream accuracy. On the attention side the constraint can be almost nothing—in its membership form, a single sigmoid on an otherwise standard head—which makes the size of the payoff disproportionate to the change. The one load-bearing lesson, learned the hard way from a design that collapsed, is that the site of the constraint is everything: bound the pre-projection value and the head becomes a bank of selective detectors; pin the post-projection write to the vocabulary and it collapses to the unigram prior. Legibility is not something you add to a write; it is something you impose on a representation and then let the model use freely. A second, quieter lesson comes from the operators that died when over-constrained: turning a bounded value into a selective one is not one knob but two—a sparsity pressure and a crispness pressure—and the right mix is dictated by the operator rather than set globally. A lone membership value wants both; a conjunction, already sparse because it fires only when both operands do, wants crispness alone and is starved to dead constants if pushed to be sparser still. The pressures also have to land on the operands one hopes to name, not on the operator’s combined output, where they do nothing. 
+
+Why by-construction legibility is worth the trouble. Post-hoc interpretability—lenses, probes, sparse autoencoders—has taught us most of what we know about these models, and it will remain essential. But it has three structural costs that by-construction legibility does not. It is external : the explanation lives in a tool that must be trained and validated separately, and can be wrong about the model. It is partial and contested : which SAE, which width, which layer, which threshold. And it is perishable : every change to the model invalidates the tool and demands it be rebuilt. A model whose units are named operations by construction pays none of these. The comparative and negation units of Table 6 are not hypotheses recov-18 Epoch 1 Epoch 2 Model LAMBADA L-ppl ↓ BLiMP LAMBADA L-ppl ↓ BLiMP                    
+
+> gelu baseline (Oskin, 2026) 0.2536 109.4 0.8066 0.2750 78.1 0.8230 crispness alone, 25%-named 0.2472 115.7 0.8062 0.2635 98.2 0.8086 crispness alone, even split 0.2612 109.9 0.7978 0.2620 94.6 0.7932
+
+Table 7: End-to-end quality at both training epochs, against a matched gelu baseline (same architecture, corpus, and schedule; baseline numbers from Oskin, 2026). On the discriminating axes—LAMBADA ac-curacy and BLiMP—the legible model and the baseline sit within the parity band at both epochs; at two epochs the baseline is nominally ahead by small margins on all three aggregates. With a single seed we read this as benchmark parity rather than a reliable win or loss. Single seed, one scale. (The full one-epoch sweep over pressures and operator fractions is Table 4, where the strongest variant sits at the top of the parity band on LAMBADA and BLiMP.) ered by a dictionary that might be mistuned; they are what those units are . This does not make the model fully transparent—the operands are still often polysemantic, and shallow attention is still opaque—but it moves the boundary of what must be reconstructed inward, and it makes the reconstructed part smaller and better-posed (name the operands of a known operator, rather than discover both operator and operands at once). 
+
+What one can do with a legible-by-construction LLM. The point of reading a model is usually to 
+
+act on it, and named operations are directly actionable in ways a dense activation is not. 
+
+• Edit and steer by operator. A membership channel or a Boolean/quantifier unit has a meaning one can set, clamp, or ablate. Suppressing a negation unit, forcing a licensing detector on, or reading off 
+
+when a comparative unit fires are single-unit interventions with a stated semantics—closer to editing a program than to the diffuse activation-steering vectors current methods must search for. 
+
+• Audit and monitor. Because the units are named, one can watch them at inference: raise a flag when a particular detector fires, log which quantifiers are active on a given input, or gate on the presence of a semantic feature. Safety-relevant monitoring becomes a matter of reading declared operators rather than of training a probe to guess at hidden ones. 
+
+• Debug linguistic behavior. The FFN’s grammatical-licensing units and the attention’s deep se-mantic detectors give a direct handle on why a model does or does not respect an agreement, negation, or discourse constraint—a mechanism to inspect rather than a black box to prod. 
+
+• Cheaper, more faithful interpretation. Half the work of a sparse autoencoder—discovering that a unit computes an intersection or an existential—is done exactly and by construction, leaving only the operands to name. Interpretation starts from a correct operator instead of from scratch. 
+
+• A substrate for verification. Bounded memberships and explicit set operations are the kind of object over which one can hope to state and check properties (monotonicity of a detector, an invariant on a quantifier’s reach). We do not attempt formal guarantees here, but a network of named fuzzy operations is a far more promising target for them than a stack of GELU MLPs. These are directions, not finished results; the contribution of this paper is the substrate that makes them approachable, together with evidence that adopting it costs nothing measurable in quality. 
+
+What the named operations reveal. A closer look at the operators’ operands turns an apparent limita-tion into a finding. The two inputs A, B of a named feed-forward unit are not monosemantic, but neither are they noise: read with frequency correction they resolve into recognizable functional features—determiners and possessives, negation, modals, conjunctions, copulas. What the named form then exposes, and a post-hoc lens on a monolithic block cannot, is the operation the model runs over them . Sometimes that composition 19 is transparent: a unit that promotes negation is an intersection one of whose operands is itself a negation detector. Sometimes it is genuinely non-obvious—the unit that promotes superlatives is a set-difference of two determiner detectors, determiner \ determiner → superlative, a computation no one would write down and that a conventional GELU block hides completely. We do not claim to understand why such a compo-sition works; the point is that a by-construction architecture lets us see it at all—a different and stronger kind of legibility than recovering the concept a layer promotes (Figure 1). 
+
+Limitations. We are single-seed at one scale (125M, one epoch); the parity claim is robust but the within-band ordering and the exact legibility percentages want a seed sweep, and scaling behavior is untested. Probing harder prompts, moreover, suggests that some of what we see—the attention staying shallow, the crispest readings falling on confident, feed-forward-driven tokens—is partly the ceiling of a small, shallow model; whether the division of labor and the operator legibility survive at 1B+ parameters is an open question we cannot settle here. The attention legibility is a deep-layer phenomenon and, once coupled to a legible FFN, shallow attention goes constant—so the end-to-end model is legible in its FFN throughout and its attention at depth, not everywhere. The Boolean value is deliberately within-token ; genuine n-ary relational binding across positions is a different mechanism we do not provide. 
+
+Future work. Four steps follow directly. Close the shallow gap : understand why a legible FFN drives shallow attention constant, and whether a shallow-specific legibility constraint (or simply accepting an opaque shallow stem) is the right resolution. Remove the trainability boundary : Appendix A points the cause at a saturated-product gradient, and a remedy aimed there—rather than at the residual write—would allow a fully-Boolean FFN and a wider range of stable mixtures. Add relational binding as a separate, equally-legible mechanism, so that “what relates to what” joins “what holds” and “what combines.” And demonstrate the actionability above concretely—edit a negation unit and measure the behavioral effect, monitor a detector under distribution shift—turning the substrate into evidence that by-construction legibility pays off in use. 
+
+# 7 Conclusion 
+
+We set out to make attention legible by construction and to join it to an already-legible feed-forward layer. The mechanism is one change—bound a head’s value into fuzzy memberships (in its simplest form a single sigmoid on an otherwise unchanged head), or into an explicit intersection and set-difference, and leave the write free—and it turns the opaque half of the attention circuit into a bank of crisp, contextual detectors whose legibility, contrary to folklore, grows with depth. The same choice that succeeds here is the mirror image of one that failed: pinning a head’s output to the vocabulary collapses it, while bounding what it detects and freeing what it writes does not. Turning a bounded value into a selective one takes two pressures—one toward firing sparsely, one toward firing crisply—and which combination a design wants is itself part of the design: a single membership value wants both, whereas an explicit conjunction, already sparse by construction, wants crispness alone and dies if pressed to be sparser. Putting the pieces together yields a 125M language model at baseline quality whose feed-forward units are named set and quantifier operations throughout and whose deep attention values are readable memberships: a model that is, over its dominant computations, legible before anyone interprets it—so that a token it generates can be decomposed into the named units that compose to produce it. What makes this more than a curiosity is how little it costs: the attention mechanism adds no parameters, holds quality at parity with a conventional baseline—the best end-to-end variant level with it at the top of the parity band—and asks only that we bound what a head detects and leave what it writes free. Legibility, long treated as something to recover after training and at some price in accuracy, is here built in and effectively free. The remaining opacity— shallow attention, polysemantic operands—marks the work still to do, but the object is now the right kind of object: one built to be read, edited, and audited, rather than reconstructed after the fact. 
+
+# A A Trainability Boundary: Why the 75% Design Fails 
+
+Table 3 is missing a row. The membership family has a 75% variant—nine bounded heads and three conventional—and it does not train. The pattern is counterintuitive, and its cause is instructive for anyone 20 building bounded components into a residual stream. 
+
+## A.1 The phenomenon: non-monotonic in the bounded fraction 
+
+The failure is non-monotonic . membership head-50 (six bounded, six conventional) trains; membership head-100 (all twelve bounded) trains; but membership head-75 (nine bounded, three conventional) diverges—and it does so reproducibly at two depths, at 4 layers and again at 12. Figure 6(a) shows the 12-layer run: it descends cleanly for roughly 16k steps—tracking the healthy runs—then turns over and climbs monotonically in both running and instantaneous perplexity until the loss-based guard aborts it at step 30 ,250. Depth did not fix it; it bought about a thousand steps. “More bounding is worse” would be monotonic, and it is not, so the cause cannot simply be the amount of bounding. 
+
+## A.2 The cause: a starved unbounded minority 
+
+The clue is the non-monotonicity itself. Bounded heads cap their values in [0 , 1]; conventional heads are unbounded. They write the same residual stream, so any high-dynamic-range content the bounded heads 
+
+cannot represent—rare tokens, large-magnitude directions—must route through the conventional heads. At 50% there are six unbounded heads to absorb that load; at 100% there is no unbounded content at all and the system self-balances. At 75% there are only three unbounded heads carrying everything nine bounded heads cannot—overdriven, and with no bound to stop them. The danger is not the bounded majority; it is the starved unbounded minority .We confirm this on the saved divergence checkpoint with two reads. First, static: per-head output-projection column norms are systematically larger for the three conventional heads than the nine bounded ones (1 .34 × on average, up to 2 × in mid-network)—the minority is overweighted on the write side. Second, and decisively, a forward read at the abort point measures, per layer, the fraction of bounded memberships that are saturated (pinned within 0 .02 of a rail, where the sigmoid gradient vanishes) and the per-head 
+
+residual-write magnitude . Figure 6(b) shows the two together, and they tell one story, co-located at layers L2–L4: 
+
+• The bounded heads saturate at L2–L4—68%, 99%, 79% of channels pinned to 0 /1. A saturated sigmoid has near-zero gradient, so those heads are frozen; their per-head write collapses to 2–5. 
+
+• The three conventional heads explode at exactly those layers to compensate—per-head residual writes of 441 and 523 at L2–L3 against ∼ 3 for the bounded heads, a 100–200 × ratio. A magnitude-500 vector added to the residual stream is the divergence. 
+
+• Where the bounded heads stay healthy (L6–L11, 3–38% saturated), the conventional writes are near-normal (3–5 ×). The pathology is a mid-network phenomenon. The mechanism is a positive-feedback runaway: as the conventional heads take over, the residual grows, the bounded pre-activations grow, their sigmoids saturate, the bounded heads freeze, and still more load falls on the three unbounded heads, whose output projection grows until a step overshoots. Notably the bounded heads’ weights are intact—this is saturation from blown-up activations, not weights driven to zero by the sparsity pressure. 
+
+## A.3 True divergence versus a transient spike 
+
+It is worth separating what “fails” means here from a benign phenomenon the bounded operators produce that is easily mistaken for it. The membership head-75 failure is a true divergence: the cumulative perplexity climbs monotonically (from ∼ 85 at step 16k to 230 at the abort), the instantaneous perplexity is sustained 
+
+in the hundreds-to-thousands, and the residual scale γ collapses throughout (57 → 42)—a positive-feedback runaway that a looser abort threshold only postpones, never averts. Distinct from this, healthy bounded-operator runs throw isolated instantaneous-perplexity spikes while their cumulative perplexity stays flat. The operators spend most of their mass at the rails—crispness pressure pins them there explicitly, sparsity pins them off—so they behave as near-binary gates, and on an occasional batch a handful flip and the single-window perplexity jumps to the hundreds or beyond before returning. 21 2.5 5.0 7.5 10.0 12.5 15.0 17.5 20.0              
+
+> step (thousands)
+> 10 2
+> 10 3
+> perplexity (log)
+> turnover ∼16k
+> (a) membership-75 diverges after clean descent
+> running ppl
+> instantaneous ppl
+> 012345678910 11
+> layer
+> 0
+> 20
+> 40
+> 60
+> 80
+> 100
+> membership saturated (%)
+> (b) saturation \& runaway write co-locate at L2--L4
+> membership saturated %
+> conv/memb write ratio
+> 10 1
+> 10 2
+> conv/memb residual-write ratio
+
+Figure 6: Why membership head-75 fails. (a) The run descends cleanly for ∼ 16k steps, then diverges in both running and instantaneous perplexity (log scale) until aborted. (b) At the abort checkpoint, the fraction of bounded memberships that are saturated (left axis, purple) and the ratio of conventional-to-bounded per-head residual write (right axis, log, orange) spike together at layers L2–L4: the bounded heads freeze and the three unbounded heads are driven 100–200 × harder to compensate. In our converged runs (final perplexity ≈ 31), 1–2% of logging windows exceed instantaneous perplexity 100 with isolated maxima near 6 ,000, none of which move the running average. These are not divergences: Boolean head-75 crispness-alone, for instance, was aborted by a tight instantaneous-perplexity guard at step 261 ,750—96% of the way through training and sitting at a flat perplexity of 31 .7—by a single window that touched 705, and it trains to completion once the guard is loosened. The reliable divergence signal is therefore a rising cumulative perplexity (with γ collapse), not an instantaneous spike; a guard keyed tightly to the instantaneous value false-positives on the binarized operators, so we set it loosely. The only genuine divergences we observe are membership head-75 (at every depth) and the fully-Boolean feed-forward layer under both pressures—both showing the sustained, cumulative signature above; several runs first recorded 
+
+as failures were tight-guard false alarms that train cleanly. 
+
+## A.4 Scope, caveat, and the fix 
+
+Two controls sharpen the claim. First, the Boolean family at the same 9+3 split (Boolean head-75) trains fine (Table 3), which isolates the pathology to the sparsity-penalized membership family’s residual-load asymmetry rather than to bounded value heads in general—the only difference between them being a bounded sigmoid value versus a bounded multiplicative value. Second, the limit of this read: our forward read is a single snapshot taken ∼ 14k steps into divergence, when saturation and the runaway write are already mutually reinforcing. This is the same class of instability as the Boolean-fraction-dependent trainability horizon of the legible FFN (Oskin, 2026): late-onset, abrupt, driven by saturating bounded units composing into the residual stream. It adds a mechanistic wrinkle. There, a parallel linear “highway” only delayed divergence; here the conventional heads are a linear highway, and they behave exactly so—three of them delay the failure by 
+
+∼ 16k steps but cannot carry the load, while six (or zero) are safe. The lesson is precise: a highway that is 
+
+too narrow is worse than none, because it draws load it cannot carry. The practical fix follows directly—do not run a small unbounded minority: keep conventional heads at zero (the 100% design) or at least at an even split, or give the bounded majority a magnitude escape valve so the minority is not the sole sink. 22 References 
+
+Samy Badreddine, Artur d’Avila Garcez, Luciano Serafini, and Michael Spranger. Logic tensor networks. 
+
+Artificial Intelligence , 303, 2022. Nora Belrose, Zach Furman, Logan Smith, Danny Halawi, Igor Ostrovsky, Lev McKinney, Stella Biderman, and Jacob Steinhardt. Eliciting latent predictions from transformers with the tuned lens. arXiv preprint arXiv:2303.08112 , 2023. Steven Bills, Nick Cammarata, Dan Mossing, Henk Tillman, Leo Gao, Gabriel Goh, Ilya Sutskever, Jan Leike, Jeff Wu, and William Saunders. Language models can explain neurons in language models. OpenAI , 2023. Trenton Bricken, Adly Templeton, Joshua Batson, Brian Chen, Adam Jermyn, et al. Towards monoseman-ticity: Decomposing language models with dictionary learning. Transformer Circuits Thread , 2023. Peter Clark, Isaac Cowhey, Oren Etzioni, Tushar Khot, Ashish Sabharwal, Carissa Schoenick, and Oyvind Tafjord. Think you have solved question answering? try ARC, the AI2 reasoning challenge. arXiv preprint arXiv:1803.05457 , 2018. Hoagy Cunningham, Aidan Ewart, Logan Riggs, Robert Huben, and Lee Sharkey. Sparse autoencoders find highly interpretable features in language models. In International Conference on Learning Representations (ICLR) , 2024. Guy Dar, Mor Geva, Ankit Gupta, and Jonathan Berant. Analyzing transformers in embedding space. In 
+
+Association for Computational Linguistics (ACL) , 2023. Yann N. Dauphin, Angela Fan, Michael Auli, and David Grangier. Language modeling with gated convolu-tional networks. International Conference on Machine Learning (ICML) , 2017. Nelson Elhage, Neel Nanda, Catherine Olsson, Tom Henighan, Nicholas Joseph, Ben Mann, et al. A math-ematical framework for transformer circuits. Transformer Circuits Thread , 2021. Nelson Elhage, Tristan Hume, Catherine Olsson, Neel Nanda, Tom Henighan, et al. Softmax linear units. 
+
+Transformer Circuits Thread , 2022a. Nelson Elhage, Tristan Hume, Catherine Olsson, Nicholas Schiefer, Tom Henighan, et al. Toy models of superposition. Transformer Circuits Thread , 2022b. Leo Gao, Jonathan Tow, Stella Biderman, Sid Black, et al. A framework for few-shot language model eval-uation. EleutherAI lm-evaluation-harness, Zenodo, https://doi.org/10.5281/zenodo.5371628 , 2021. Felix A. Gers, J¨ urgen Schmidhuber, and Fred Cummins. Learning to forget: Continual prediction with LSTM. Neural Computation , 12(10):2451–2471, 2000. Mor Geva, Roei Schuster, Jonathan Berant, and Omer Levy. Transformer feed-forward layers are key-value memories. In Empirical Methods in Natural Language Processing (EMNLP) , 2021. Mor Geva, Avi Caciularu, Kevin Ro Wang, and Yoav Goldberg. Transformer feed-forward layers build predictions by promoting concepts in the vocabulary space. In Empirical Methods in Natural Language Processing (EMNLP) , 2022. Connor Kissane, Robert Krzyzanowski, Joseph Isaac Bloom, Arthur Conmy, and Neel Nanda. Interpreting attention layer outputs with sparse autoencoders. arXiv preprint arXiv:2406.17759 , 2024. nostalgebraist. Interpreting GPT: The logit lens. LessWrong, 2020. https://www.lesswrong.com/posts/ AcKRB8wDpdaN6v6ru/interpreting-gpt-the-logit-lens .Mark Oskin. Explicit fuzzy logic in the feed-forward layer: Self-forgetting quantifiers discover legible grammatical-licensing detectors. arXiv preprint arXiv:2606.31845 , 2026. 23 Denis Paperno, Germ´ an Kruszewski, Angeliki Lazaridou, Quan Ngoc Pham, Raffaella Bernardi, Sandro Pezzelle, Marco Baroni, Gemma Boleda, and Raquel Fern´ andez. The LAMBADA dataset: Word prediction requiring a broad discourse context. In Association for Computational Linguistics (ACL) , 2016. Michael T. Pearce, Thomas Dooms, Alice Rigg, Jose Oramas, and Lee Sharkey. Bilinear MLPs enable weight-based mechanistic interpretability. International Conference on Learning Representations (ICLR) ,2025. arXiv:2410.08417. Felix Petersen, Christian Borgelt, Hilde Kuehne, and Oliver Deussen. Deep differentiable logic gate networks. In Advances in Neural Information Processing Systems (NeurIPS) , 2022. Pooyan Rahmanzadehgervi, Hung Huy Nguyen, Rosanne Liu, Long Mai, and Anh Totti Nguyen. TAB: Transformer attention bottlenecks enable user intervention and debugging in vision-language models. arXiv preprint arXiv:2412.18675 , 2024. Jason Ramapuram, Federico Danieli, Eeshan Dhekane, Floris Weers, Dan Busbridge, Pierre Ablin, Tatiana Likhomanenko, Jagrit Digani, Zijin Gu, Amitis Shidani, and Russ Webb. Theory, analysis, and best practices for sigmoid self-attention. arXiv preprint arXiv:2409.04431 , 2024. Mattia Rigotti, Christoph Miksovic, Ioana Giurgiu, Thomas Gschwind, and Paolo Scotton. Attention-based interpretability with concept transformers. In International Conference on Learning Representations (ICLR) , 2022. Keisuke Sakaguchi, Ronan Le Bras, Chandra Bhagavatula, and Yejin Choi. WinoGrande: An adversarial winograd schema challenge at scale. AAAI Conference on Artificial Intelligence , 2020. Mansi Sakarvadia, Aswathy Ajith, Arham Khan, Daniel Grzenda, Nathaniel Hudson, Andr´ e Bauer, Kyle Chard, and Ian Foster. Attention lens: A tool for mechanistically interpreting the attention head infor-mation retrieval mechanism. arXiv preprint arXiv:2310.16270 , 2023. Noam Shazeer. GLU variants improve transformer. arXiv preprint arXiv:2002.05202 , 2020. Paul Smolensky. Tensor product variable binding and the representation of symbolic structures in connec-tionist systems. Artificial Intelligence , 46(1–2):159–216, 1990. Xiaoqing Sun, Alessandro Stolfo, Joshua Engels, Ben Wu, Senthooran Rajamanoharan, Mrinmaya Sachan, and Max Tegmark. Dense SAE latents are features, not bugs. arXiv preprint arXiv:2506.15679 , 2025. Alex Tamkin, Mohammad Taufeeque, and Noah D. Goodman. Codebook features: Sparse and discrete interpretability for neural networks. arXiv preprint arXiv:2310.17230 , 2023. Emile van Krieken, Erman Acar, and Frank van Harmelen. Analyzing differentiable fuzzy logic operators. 
+
+Artificial Intelligence , 302, 2022. arXiv:2002.06100. Ashish Vaswani, Noam Shazeer, Niki Parmar, Jakob Uszkoreit, Llion Jones, Aidan N. Gomez, Lukasz Kaiser, and Illia Polosukhin. Attention is all you need. In Advances in Neural Information Processing Systems (NeurIPS) , 2017. Alex Warstadt, Alicia Parrish, Haokun Liu, Anhad Mohananey, Wei Peng, Sheng-Fu Wang, and Samuel R. Bowman. BLiMP: The benchmark of linguistic minimal pairs for english. Transactions of the Association for Computational Linguistics (TACL) , 2020. Mitchell Wortsman, Peter J. Liu, Lechao Xiao, Katie Everett, Alex Alemi, Ben Adlam, John D. Co-Reyes, Izzeddin Gur, Abhishek Kumar, Roman Novak, et al. Small-scale proxies for large-scale transformer training instabilities. arXiv preprint arXiv:2309.14322 , 2023. 24

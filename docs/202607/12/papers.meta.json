@@ -1,0 +1,69 @@
+{
+  "label": "2026-07-12",
+  "date": "2026-07-12",
+  "generated_at": "2026-07-12T20:01:07",
+  "count": 4,
+  "papers": [
+    {
+      "paper_id": "202607/12/2607.04319v1-legible-by-construction-attention-and-end-to-end-transformers",
+      "section": "deep",
+      "title_en": "Legible-by-Construction: Attention and End-to-End Transformers",
+      "authors": "Mark Oskin",
+      "date": "2026-07-05",
+      "pdf": "https://arxiv.org/pdf/2607.04319v1",
+      "score": "8.0",
+      "evidence": "通过sigmoid门控注意力值实现关键token的隐藏状态分析",
+      "tldr": "Transformer注意力机制不透明，本文通过sigmoid约束值通道使其成为可读特征检测器，并设计Boolean变体引入显式集合操作。在125M参数模型中，44%-62%的通道成为清晰、上下文选择性的检测器，可读性随深度提升，语言质量与基线相当。最终将可读注意力与可读前馈层结合，构建了端到端可解释的语言模型，能读取生成token的组成单元。",
+      "tags": "query:key-tokens",
+      "abstract_en": "A companion paper showed that a transformer's feed-forward layer can be rebuilt from explicit fuzzy set operations - intersection, set-difference, and a self-forgetting sequence quantifier - so its hidden units read as named logical operators at no cost to language-model quality. That left the other half of the transformer opaque. Here we carry the same idea into attention and join the two into one model. The mechanism is minimal: a head's value is passed through a sigmoid, so each value channel becomes a readable detector of whether a feature holds at a token. This adds no parameters and leaves the standard head otherwise untouched. A Boolean variant goes further, restructuring the value into an explicit within-token intersection and negation-capable set-difference. In both designs the output projection is left free, not tied to the vocabulary, which is the load-bearing decision: bounding what a head detects while leaving what it writes unconstrained yields selective detectors, whereas constraining the write does not. A bounded value is shaped into a readable detector by two selectivity pressures - one for sparse firing, one for decisive firing at the rails - and which a design wants is not universal. Across five specialized-attention designs at 125M parameters, 44 to 62 percent of value channels become crisp, contextually selective detectors, and their legibility rises with depth rather than crystallizing only on punctuation. Language-model quality is at parity with a conventional baseline. Finally, we couple the Boolean attention to the legible feed-forward layer and train an end-to-end legible-by-construction language model at benchmark parity: its feed-forward units are named set and quantifier operations throughout, and we can take a token it generates and read the named units that compose to produce it.",
+      "source": "arxiv",
+      "selection_source": "fresh_fetch"
+    },
+    {
+      "paper_id": "202607/12/2607.07380v1-interpretable-uncertainty-for-adaptive-retrieval-and-reasoning-in-question-answering",
+      "section": "quick",
+      "title_en": "Interpretable Uncertainty for Adaptive Retrieval and Reasoning in Question Answering",
+      "authors": "Ritajit Dey, Iadh Ounis, Graham McDonald",
+      "date": "2026-07-08",
+      "pdf": "https://arxiv.org/pdf/2607.07380v1",
+      "score": "7.0",
+      "evidence": "从隐藏状态中提取显式知识信号用于自适应检索与推理",
+      "tldr": "大语言模型在问答中易产生幻觉且缺乏透明度。现有检索增强生成依赖于不透明的策略或多步提示。本文提出基于不确定性信号的框架，从隐藏状态中分解估计知识不足与知识模糊/冲突，在单次前向传播中触发检索或推理，实现了透明高效的适应性问答，为可解释用户工具提供了基础。",
+      "tags": "query:key-tokens",
+      "abstract_en": "Large language models (LLMs) achieve a strong performance in question answering (QA), but remain prone to hallucinations and suffer from limited transparency. Retrieval-augmented generation (RAG) can improve factuality, yet decisions about when and how to retrieve from external resources are typically based on opaque policies or computationally inefficient multi-step prompting procedures. We propose an uncertainty-aware framework for adaptive QA based on explicit signals derived from LLM internal representations. We distinguish between knowledge insufficiency and knowledge ambiguity or conflict, and efficiently estimate these from hidden states in a single forward pass. These signals guide system behaviour: RAG is triggered when knowledge is insufficient, while additional reasoning is applied when ambiguity or conflict is high. By grounding adaptive decisions in decomposed and efficiently estimable uncertainty signals, this approach provides a transparent and practical alternative to existing retrieval and reasoning strategies supporting the design of interpretable user-facing tools.",
+      "source": "arxiv",
+      "selection_source": "fresh_fetch"
+    },
+    {
+      "paper_id": "202607/12/2607.05089v1-timethink-reasoning-with-time-for-video-llms",
+      "section": "quick",
+      "title_en": "TimeThink: Reasoning with Time for Video LLMs",
+      "authors": "Handong Li, Longteng Guo, Zikang Liu, Dongze Hao, Yepeng Tang, Zijia Zhao, Jie Jiang, Zhiwei Jin, Chen Chen, Haonan Lu, Jing Liu",
+      "date": "2026-07-06",
+      "pdf": "https://arxiv.org/pdf/2607.05089v1",
+      "score": "6.0",
+      "evidence": "将时间线索步骤视为视频推理中的关键优化原语",
+      "tldr": "视频推理需要模型在长视频中定位时间证据，但现有强化学习方法仅用结果奖励监督最终预测，缺乏对中间推理过程的指导。本文提出TimeThink框架，将每个推理步骤与候选时间间隔关联，引入步骤级时间过程奖励和联合过程-结果优化目标，并构建TimeThink-RFT-20K数据集。实验表明，TimeThink在视频推理、时间定位和通用视频理解基准上一致提升，达到开源视频RL模型的先进水平。该方法为视频大语言模型提供了显式的时间推理引导，增强了时序定位与推理能力。",
+      "tags": "query:key-tokens",
+      "abstract_en": "Video reasoning requires models to identify and verify temporally localized evidence within long video sequences. Recent Video Large Language Models (Video-LLMs) have shown promising reasoning abilities when aligned with reinforcement learning, yet existing approaches typically rely on outcome-based rewards that supervise only the final prediction. Such supervision provides limited guidance on how models should discover the relevant temporal evidence during intermediate reasoning. In this work, we propose TimeThink, a reinforcement learning framework that explicitly guides temporal evidence discovery in Video-LLMs. Our key idea is to treat temporal clue steps as the fundamental optimization primitive of video reasoning, where each reasoning step references a candidate time interval in the video. We introduce a step-wise temporal process reward that provides localized credit assignment for these clues and a joint process--outcome optimization objective that balances reasoning fidelity with task correctness. To enable scalable training, we construct TimeThink-RFT-20K, a dataset with automatically derived temporal evidence segments. Extensive experiments across video reasoning, temporal grounding, and general video understanding benchmarks show that TimeThink consistently improves both temporal localization and reasoning performance, achieving state-of-the-art results among open-source video RL models.",
+      "source": "arxiv",
+      "selection_source": "fresh_fetch"
+    },
+    {
+      "paper_id": "202607/12/2607.05721v1-spanuq-span-level-uncertainty-quantification-for-large-language-model-generation",
+      "section": "quick",
+      "title_en": "SpanUQ: Span-Level Uncertainty Quantification for Large Language Model Generation",
+      "authors": "Yimeng Zhang, Yingying Zhuang, Ziyi Wang, Yuxuan Lu, Pei Chen, Aman Gupta, Zhe Su, Ming Tan, Zhilin Zhang, Qun Liu, Manikandarajan Ramanathan, Rajashekar Maragoud, Edward Vul, Jing Huang, Dakuo Wang",
+      "date": "2026-07-07",
+      "pdf": "https://arxiv.org/pdf/2607.05721v1",
+      "score": "6.0",
+      "evidence": "利用LLM隐藏状态量化span级不确定性",
+      "tldr": "现有LLM不确定性估计在token级缺乏语义，序列级无法定位错误。本文提出SpanUQ，使用轻量探针将多采样知识蒸馏为单次前向，通过DETR式跨解码器和Beta混合分布进行跨级不确定性估计。在20K提示、293K跨标注的基准上，SpanUQ在所有LLM上达到最佳跨级不确定性，F1达0.910，速度提升10-20倍，实现了精确错误定位。",
+      "tags": "query:key-tokens",
+      "abstract_en": "Uncertainty estimation is essential not only for the trustworthy deployment of large language models (LLMs) but also as a foundation for self-refinement in LLM generation. However, existing approaches operate at suboptimal granularities: token-level scores lack semantic coherence, while sequence-level scores fail to localize errors. We formalize Span-Level Uncertainty Estimation (SLUE), a new task that targets the natural granularity for uncertainty: semantically coherent text spans, each conveying a single assessable unit of meaning. To address this task, we introduce SPANUQ, a lightweight probe that distills the uncertainty knowledge from expensive multi-sample inference into a single forward pass over LLM hidden states. SPANUQ employs a DETR-style span decoder to simultaneously detect spans and estimate their uncertainty via a Mixture of Beta distribution, trained with a principled combination of Beta NLL regression and contrastive ranking objectives. We construct SPANUQ-BENCH, the first span-level uncertainty benchmark comprising 20K prompts, 293K annotated spans, and continuous soft labels derived from multi-sample claim verification. Experiments on five LLM backbones show that SPANUQ consistently achieves the best span-level uncertainty quality, outperforming the strongest probe baseline and all sampling-based methods while being 10-20x faster. Its DETR-based span detector attains 0.910 F1, surpassing the best heuristic by 39.4%, enabling precise error localization that sequence-level methods cannot provide. The framework generalizes across five LLMs spanning two model families.",
+      "source": "arxiv",
+      "selection_source": "fresh_fetch"
+    }
+  ],
+  "errors": []
+}

@@ -1,0 +1,648 @@
+Title: TimeThink: Reasoning with Time for Video LLMs
+
+URL Source: https://arxiv.org/pdf/2607.05089v1
+
+Published Time: Tue, 07 Jul 2026 03:43:00 GMT
+
+Number of Pages: 26
+
+Markdown Content:
+# TimeThink: Reasoning with Time for Video LLMs 
+
+Handong Li 1,2⋆, Longteng Guo 2⋆, Zikang Liu 1,2⋆, Dongze Hao 3, Yepeng Tang 2,Zijia Zhao 2, Jie Jiang 2, Zhiwei Jin 3, Chen Chen 3, Haonan Lu 3, and Jing Liu 1,2⋆⋆  
+
+> 1
+
+School of Artificial Intelligence, University of Chinese Academy of Sciences  
+
+> 2
+
+Institute of Automation, Chinese Academy of Sciences  
+
+> 3
+
+OPPO AI Center, OPPO Inc. 
+
+{lihandong2023}@ia.ac.cn, {longteng.guo,jliu}@nlpr.ia.ac.cn 
+
+Abstract. Video reasoning requires models to identify and verify tem-porally localized evidence within long video sequences. Recent Video Large Language Models (Video-LLMs) have shown promising reason-ing abilities when aligned with reinforcement learning, yet existing ap-proaches typically rely on outcome-based rewards that supervise only the final prediction. Such supervision provides limited guidance on how models should discover the relevant temporal evidence during interme-diate reasoning. In this work, we propose TimeThink , a reinforcement learning framework that explicitly guides temporal evidence discovery in Video-LLMs. Our key idea is to treat temporal clue steps as the funda-mental optimization primitive of video reasoning, where each reasoning step references a candidate time interval in the video. We introduce a step-wise temporal process reward that provides localized credit assign-ment for these clues and a joint process–outcome optimization objective that balances reasoning fidelity with task correctness. To enable scalable training, we construct TimeThink-RFT-20K, a dataset with automati-cally derived temporal evidence segments. Extensive experiments across video reasoning, temporal grounding, and general video understanding benchmarks show that TimeThink consistently improves both temporal localization and reasoning performance, achieving state-of-the-art results among open-source video RL models. 
+
+Keywords: Video-LLMs · Reinforcement Learning · Process Reward 
+
+1 Introduction 
+
+Recent advances in Video Large Language Models (Video-LLMs) [4, 28, 47, 67] have significantly expanded the frontier of machine video understanding. By in-tegrating pretrained vision encoders with large language models, these systems are capable of performing diverse tasks such as video question answering, event narration, and complex video reasoning [9,30,52,71,72]. However, enabling mod-els to reason reliably over long temporal contexts remains a central challenge.  
+
+> ⋆
+
+Equal contribution.  
+
+> ⋆⋆
+
+Corresponding author. 
+
+> arXiv:2607.05089v1 [cs.CV] 6 Jul 2026
+
+2 H. Li et al. (1) Traditional Video-CoT (Outcome-based RL)   
+
+> Question:
+> What key events
+> happen in order?
+> <think>:
+> The white cat… It attack…
+> cat under the car… it seems
+> answer is…
+> Final Answer
+> (potentially
+> Vague or
+> inaccurate)
+> Generic
+> Video-LLM
+> backbone
+> [0:00 Full video 1:20]
+
+… …
+
+> Video Input
+
+(2) TimeThink (Process & Outcome-based RL)      
+
+> <think>:
+> [0:03 – 0:18 ]Two cats …
+> [0:35 – 0:42 ]Angry white cat
+> [1:15 – 1:19 ]Attack again…
+> Final Answer
+> Reference the
+> Grounded clues
+> TimeThink-
+> Zero policy
+> 𝜋𝜋 𝜃𝜃
+> [0:00 – 0:18] [0:35 – 0:42] [1:10 – 1:20]
+> Video Input
+> Question:
+> What key events
+> happen in order?
+> High-Lighted
+> Step-wise Temporal Reasoning Clues
+
+…     
+
+> 1. Visually Faithful Reasoning
+> Step-wise Clue-Ground Truth Alignment
+> Clue #1
+> Clue #2
+> Clue #3
+> Predicted Clue Ground Truth
+> IoU=0.55
+> IoU=0.92
+> IoU=0.88
+> 2. Faster Outcome Convergence
+> Clue IoU Avg
+> 3. Stronger Video Understanding
+> RL Training Steps
+> Avg Reward Performance
+> Grounding Reasoning General
+> Process Feedback Outcome
+> -based
+> Traditional Ours
+
+Fig. 1: TimeThink vs. Traditional Video-CoT. (Left) Traditional Video-CoT relies on outcome-based rewards that supervise only the final answer, providing limited guidance for temporal evidence discovery. TimeThink instead models reasoning as a sequence of temporal clue steps , where each step references a candidate time interval in the video. (Right) Step-wise temporal process rewards supervise these clues, enabling (1) temporally grounded reasoning, (2) faster RL convergence, and (3) stronger video understanding. 
+
+Unlike static images, videos encode dynamic processes where events unfold over time and critical evidence may appear only within brief segments of a long se-quence. Consequently, effective video reasoning requires models to progressively inspect and verify temporally localized evidence rather than relying solely on global semantic impressions of the video. To improve reasoning capabilities, recent work has begun to apply reinforce-ment learning (RL) to Video-LLMs [15, 31, 49, 68]. Algorithms such as Group Relative Policy Optimization (GRPO) [44] enable models to explore multiple reasoning trajectories and optimize them using reward signals. In these frame-works, the model generates intermediate reasoning steps before producing a fi-nal answer, and the learning objective encourages trajectories that lead to cor-rect predictions. While such approaches have shown promising improvements in reasoning ability, existing RL-based methods primarily rely on outcome-based rewards that evaluate only the final prediction, such as answer correctness or task-specific localization metrics. To address this limitation, we propose to explicitly guide the discovery of tem-poral evidence during reasoning. We observe that many video reasoning tasks can be naturally decomposed into a sequence of localized inspections along the timeline, where each step focuses on verifying whether a short temporal interval contains evidence relevant to the query. Rather than requiring explicit supervi-sion of the entire reasoning trajectory, which is difficult to obtain at scale, we TimeThink: Reasoning with Time for Video LLMs 3
+
+instead guide the reasoning process through lightweight temporal references that indicate where the model should inspect the video. Based on this insight, we introduce TimeThink , a reinforcement learning framework that learns temporally grounded reasoning in Video-LLMs. The cen-tral idea of TimeThink is to treat temporal clue steps as the fundamental opti-mization primitive for video reasoning. Instead of generating an unconstrained reasoning trajectory, the model is encouraged to iteratively reference short tem-poral intervals in the video and verify whether they contain evidence relevant to the query. Each reasoning step therefore corresponds to inspecting a candidate time span that may support or refute the current hypothesis. To guide this behavior, we design a step-wise temporal process reward that evaluates the alignment between the referenced interval and the evidence seg-ments associated with the query. This reward provides localized credit assign-ment for individual reasoning steps, encouraging the model to progressively iden-tify informative temporal regions while reasoning. Compared with outcome-only rewards that supervise only the final prediction, this process-level feedback di-rectly promotes temporally grounded reasoning and reduces reliance on coarse global correlations. In addition to the process reward, we introduce a joint process–outcome op-timization objective that balances temporal reasoning quality with task-level correctness. The process reward encourages accurate discovery of temporal evi-dence during intermediate reasoning, while the outcome reward ensures that the final response remains aligned with the target task objective. Together, these sig-nals enable the model to learn reasoning trajectories that are both temporally faithful and task-effective. To support scalable process reward computation, we construct TimeThink-RFT-20K , a dataset of video question–answer pairs augmented with automat-ically derived temporal evidence segments. These evidence segments provide su-pervision signals for evaluating temporal clue steps during RL training. We evaluate TimeThink across a diverse set of video reasoning, general video understanding, and temporal grounding benchmarks. TimeThink con-sistently improves both temporal localization accuracy and reasoning perfor-mance. Across seven benchmarks, TimeThink achieves state-of-the-art perfor-mance among open-source video RL models and consistently outperforms base-lines restricted solely to outcome rewards, demonstrating the effectiveness of process-level temporal supervision. Our contributions are summarized as follows: 
+
+– We introduce temporal clue steps as a reasoning primitive for video LLMs, modeling video reasoning as a sequence of temporally grounded evidence inspections. 
+
+– We propose TimeThink, a reinforcement learning framework that employs a step-wise temporal process reward and a joint process–outcome optimization objective to encourage temporally grounded reasoning. 4 H. Li et al. 
+
+– Extensive experiments across multiple video reasoning, grounding, and un-derstanding benchmarks demonstrate that TimeThink significantly improves both temporal localization and general video reasoning performance. 
+
+– We will release the code, models, and the dataset to facilitate reproducible research on temporally grounded video reasoning. 
+
+2 Related Work 
+
+2.1 Video Large Language Models 
+
+Recent advancements in Large Language Models (LLMs) have driven the rapid development of Video Large Language Models (Video-LLMs) [12, 13, 30, 32, 38]. The prevailing alignment paradigm heavily relies on Supervised Fine-Tuning (SFT) [2, 34, 55, 66]. While SFT establishes strong zero-shot capabilities on gen-eral video question-answering [16, 30, 38, 39, 54, 62], it inherently struggles with complex temporal reasoning and precise localization, often overfitting to linguis-tic priors and visual biases. To overcome these limitations, recent Video-LLM research [15, 31, 33] emulates reasoning-centric LLMs [19, 24, 58] by adopting Reinforcement Learning (RL). Unlike the deterministic constraints of SFT, RL captures comprehensive alignment supervision by empowering models to actively explore diverse reasoning trajectories. 
+
+2.2 Video Reinforcement Fine-Tuning 
+
+Recent Reinforcement Fine-Tuning (RFT) efforts in Video-LLMs largely follow two trajectories. The first focuses on enhancing general multimodal capabili-ties. Models like Video-R1 [15] and VideoChat-R1 [31] scale RL to the video domain by structuring complex suites of task-specific outcome rewards to opti-mize diverse skills. However, these outcome-centric approaches require arduous manual design and struggle to scale efficiently across heterogeneous benchmarks. The second trajectory targets the temporal reasoning bottleneck using targeted IoU-based rewards. For instance, TimeZero [50] utilizes strict Temporal IoU outcome rewards, while TempSamp-R1 [33] integrates temporal alignment con-straints directly into advantage estimation. Despite their efficacy in precise lo-calization, these highly specialized optimizations consistently fail to transfer ac-quired grounding capabilities to broader, open-ended video understanding tasks. 
+
+3 Video Reasoning with Temporal Clues 
+
+Given a video V and a textual query x, a Video-LMM is required to produce a response sequence y. In our formulation, the response is structured into an intermediate reasoning trajectory and a final answer: 
+
+y = ( ythink , y ans ) , (1) TimeThink: Reasoning with Time for Video LLMs 5Video Stream     
+
+> 0s 30s 60s 90s 120s
+
+Query 
+
+Question: How many times did the white cat attack the person in the video? Think step by step. 
+
+Ground Truth Clues ( 𝑬𝑬 𝒕𝒕 )
+
+[0:35-0:42]: Bites and scratches hand. 
+
+[1:10-1:20]: Scratches from under the car. 
+
+[0:03-0:18]: Attacks black cat from behind. 
+
+Ground Truth Answer 
+
+Answer: The white cat attacked the person twice, specifically at [0:35 - 0:42] and [1:10 - 1:20]. 
+
+TimeThink-Zero 
+
+(Video-LLM) 
+
+𝝅𝝅 𝜽𝜽 
+
+<think>  Step-wise Reward 
+
+Analyze [0:00-0:30] : The white cat appears in the camera and scratches the black cat from behind. No person visible. 
+
+Checking [0:34-0:45] : The cat bites and scratches the hand, marking the 1st attack on the person. 
+
+Analyze [1:15-1:19] : Cat hides under car, looking scared and scratches person again. Evidence confirms 2 attacks in total. 
+
+Reward: [ 𝑅𝑅 𝑐𝑐𝑐𝑐𝑐𝑐𝑐𝑐  
+
+> (𝑘𝑘=1 )
+
+]
+
+Advantage ( 𝐴𝐴 𝑖𝑖 ,1𝑠𝑠𝑠𝑠 𝑐𝑐 𝑠𝑠 )
+
+Reward: [ 𝑅𝑅 𝑐𝑐𝑐𝑐𝑐𝑐𝑐𝑐  
+
+> (𝑘𝑘=2 )
+
+]
+
+Advantage ( 𝐴𝐴 𝑖𝑖 ,2𝑠𝑠𝑠𝑠 𝑐𝑐 𝑠𝑠 )
+
+Reward: [ 𝑅𝑅 𝑐𝑐𝑐𝑐𝑐𝑐𝑐𝑐  
+
+> (𝑘𝑘=3 )
+
+]
+
+Advantage ( 𝐴𝐴 𝑖𝑖 ,3𝑠𝑠𝑠𝑠 𝑐𝑐 𝑠𝑠 )
+
+Final Answer: It attacked the person twice. 
+
+Outcome Reward ( 𝑅𝑅 𝑎𝑎𝑎𝑎 𝑠𝑠 )
+
+Format Reward ( 𝑅𝑅 𝑓𝑓𝑓𝑓 𝑠𝑠 )
+
+Step-wise Temporal Process Reward ( 𝑅𝑅 𝑐𝑐𝑐𝑐𝑐𝑐𝑐𝑐  
+
+> (𝑘𝑘 )
+
+)
+
+Reward Hierarchy  Reward & Advantages  Optimization 
+
+𝑅𝑅 1
+
+𝑅𝑅 1
+
+𝑅𝑅 𝐺𝐺 
+
+Advantage Compute 
+
+Token-Level Advantage Calculation  Policy Update 
+
+𝐽𝐽 𝜃𝜃 
+
+Maximize 𝐽𝐽 𝜃𝜃 
+
+with KL Penalty 
+
+𝐴𝐴 𝑖𝑖 ,𝑠𝑠  = �𝐴𝐴 𝑖𝑖 𝑔𝑔 𝑐𝑐 𝑔𝑔𝑔𝑔 𝑎𝑎𝑐𝑐 
+
+𝐴𝐴 𝑖𝑖 𝑔𝑔 𝑐𝑐 𝑔𝑔𝑔𝑔 𝑎𝑎𝑐𝑐  + 𝜆𝜆𝐴𝐴 𝑖𝑖 ,𝑘𝑘 𝑠𝑠𝑠𝑠 𝑐𝑐 𝑠𝑠 
+
+> …
+
+𝐴𝐴 𝑖𝑖 𝑔𝑔 𝑐𝑐 𝑔𝑔𝑔𝑔 𝑎𝑎𝑐𝑐 
+
+𝐴𝐴 𝑖𝑖 ,𝑘𝑘 𝑠𝑠𝑠𝑠 𝑐𝑐 𝑠𝑠 
+
+Policy Update 
+
+> Step 1
+> Step 2
+> Step 3
+
+𝑅𝑅 𝑔𝑔 𝑐𝑐 𝑔𝑔𝑔𝑔 𝑎𝑎𝑐𝑐  = 𝑅𝑅 𝑎𝑎𝑎𝑎 𝑠𝑠  + 𝑅𝑅 𝑓𝑓𝑓𝑓 𝑠𝑠 
+
+Global Outcome Reward 
+
+Fig. 2: Architecture of TimeThink. The framework processes input video and textual queries through a Video-LLM. During the reinforcement learning phase, the model generates an intermediate reasoning trajectory, which is supervised by a step-wise process reward alongside outcome-based rewards to optimize the policy πθ .
+
+where ythink denotes the reasoning process enclosed in a <think> block and yans 
+
+represents the final answer enclosed in a <answer> block. The reasoning trajectory is composed of a sequence of temporally anchored reasoning units 
+
+ythink = ( s1, s 2, ..., s K ) , (2) where each sk denotes a temporal reasoning step that operates on a specific portion of the video, e.g., verifying whether an event occurs, locating when it happens, or ruling out irrelevant intervals. We associate each step with a tem-poral clue span 
+
+pk = ( tstart k , t end k ) , (3) which specifies the video interval referenced by that step. Intuitively, video reasoning unfolds as a sequence of localized inspections over the temporal structure of the video. At each step, the model examines a short interval, extracts relevant observations, and incrementally aggregates these clues to derive the final answer. A typical reasoning trajectory therefore consists of several temporally grounded observations followed by a concise conclusion. 
+
+4 TimeThink Framework 
+
+Training Video-LLMs to generate temporally grounded reasoning trajectories is non-trivial. Although modern video foundation models possess strong visual and language capabilities, they are typically optimized with outcome-level objectives that evaluate only the final prediction. Such supervision provides little guidance on how the model should identify and verify relevant temporal evidence during intermediate reasoning. 6 H. Li et al. 
+
+To address this limitation, we introduce TimeThink , a reinforcement learn-ing framework for learning temporally grounded reasoning in Video-LLMs. Built on top of a pre-trained Video-LMM, TimeThink optimizes the reasoning trajec-tory using reward signals that evaluate both the final prediction and the temporal evidence referenced during reasoning. Instead of supervising the entire reasoning trace explicitly, the model is encouraged to discover grounded reasoning behav-iors through reinforcement learning. 
+
+4.1 Temporal Clue Step as the Optimization Primitive 
+
+A key design choice in TimeThink is to treat temporally grounded reasoning steps as fundamental optimization units. As introduced in Sec. 3, the reasoning trajectory constitutes a sequence of temporal clue steps, where each step inspects specific video intervals and extracts observations relevant to the query. Rather than evaluating the reasoning trajectory only at the sequence level, TimeThink attaches learning signals directly to these clue steps. This design enables localized credit assignment during training and encourages the model to progressively identify informative temporal regions while reasoning. Based on this formulation, we introduce a step-wise temporal process reward that evaluates the quality of temporal clues referenced during reasoning. 
+
+4.2 Step-wise Temporal Process Reward 
+
+Given the temporal clue step abstraction, the next question is how to evaluate the quality of these steps during training. TimeThink introduces a step-wise temporal process reward that measures whether the temporal interval referenced in a reasoning step corresponds to relevant visual evidence. Let Egt denote the set of ground-truth temporal segments associated with the query. For each reasoning step that references a temporal clue pk, we compute the reward based on the temporal overlap between the referenced interval and the ground-truth evidence: 
+
+R(k) 
+
+> clue
+
+= max 
+
+> g∈Egt
+
+IoU (pk, g ), (4) where IoU (·) denotes temporal intersection-over-union between two intervals. This reward evaluates whether the temporal interval inspected at a reason-ing step aligns with relevant visual evidence. Steps referencing intervals that overlap with ground-truth segments receive higher rewards, while inspections of irrelevant regions yield low or zero reward. The IoU formulation naturally balances temporal coverage and localization precision. Consequently, the model cannot trivially maximize the reward by ex-panding the predicted interval, since overly long spans reduce the overlap ratio. Importantly, the reward is computed based on the temporal interval refer-enced in each reasoning step rather than the textual content itself. This design provides fine-grained credit assignment during training while allowing the model to flexibly explore intermediate reasoning trajectories in natural language. TimeThink: Reasoning with Time for Video LLMs 7
+
+4.3 Joint Process–Outcome Optimization 
+
+The temporal process reward supervises whether the model inspects relevant evidence during reasoning, while the final response must still satisfy outcome-level objectives such as answer correctness and output format. Since these signals differ in both granularity and scale, TimeThink combines them through a token-level advantage construction under the GRPO training paradigm. Given an input prompt x, we sample a group of G responses {yi}Gi=1 . For each response, we compute a global outcome reward R(i) 
+
+> global
+
+= R(i) 
+
+> ans
+
++ R(i)
+
+> f mt
+
+, where 
+
+Rans evaluates the final answer correctness (e.g., exact match or task-specific metrics) and Rf mt encourages adherence to the required output structure (e.g., proper <think> and <answer> tags). We then form the standardized global advantage by group-wise normalization: 
+
+Aglobal i = R(i) 
+
+> global
+
+− μglobal 
+
+σglobal + ϵ , (5) where μglobal and σglobal are computed over the G sampled responses. In parallel, for each response yi, we compute step rewards {R(k)
+
+> clue
+
+} for all temporal clue steps. Because the number of steps varies across responses, we aggregate all valid step rewards across the group and normalize them to obtain step-level advantages: 
+
+Astep i,k = R(k) 
+
+> clue
+
+− μstep 
+
+σstep + ϵ , (6) where μstep and σstep are computed over the flattened set of step rewards. We construct a token-wise advantage that aligns with the two-block output structure. Tokens in the <think> block are additionally shaped by the step-level grounding signal, while tokens in the <answer> block are optimized only with the global outcome signal. Let k(t) denote the index of the temporal clue step that token t belongs to within ythink i . We define 
+
+Ai,t =
+
+(Aglobal i + λA step i,k (t), t ∈ ythink i ,Aglobal i , t ∈ yans i . (7) Here, λ controls the strength of process supervision, with a default value of 0.5. The policy parameters are then optimized under the GRPO objective with a KL regularization term that constrains the policy from drifting too far from a fixed reference model πref :
+
+J(θ) = E
+
+ 1
+
+G
+
+> G
+
+X
+
+> i=1
+> |yi|
+
+X
+
+> t=1
+
+(Ai,t log πθ (yi,t |x, y i,<t ) − βD KL (πθ || πref )) 
+
+ . (8) Through this joint optimization, TimeThink improves answer correctness and encourages temporally grounded reasoning trajectories, enabling the model to progressively identify and verify relevant visual evidence during inference. 8 H. Li et al. 
+
+4.4 Two-Stage Reinforcement Fine-Tuning 
+
+We adopt a two-stage reinforcement fine-tuning (RFT) strategy to train Time-Think, which first establishes temporally grounded reasoning behavior and then generalizes it to broader video understanding tasks. 
+
+Stage 1: Temporal-Grounded RFT. We first train the model on the TimeThink-RFT-20K dataset (introduced in Sec. 5) to encourage temporally grounded reasoning. During this stage, the model is encouraged to reference tem-poral clues when generating intermediate reasoning within the <think> block. Training is guided by the temporal process reward Rclue together with outcome rewards for answer correctness and output format. This stage encourages the model to inspect relevant video intervals and ground its reasoning in temporal evidence. 
+
+Stage 2: Generalized Outcome RFT. After the model acquires stable temporal reasoning behavior, we expand the training distribution to include the full LLaVA-Video-178K dataset together with 77K timestamp-grounded samples from DiDeMo [1] and ActivityNet Captions [26]. In this stage, the strict temporal process reward is relaxed and training primarily relies on outcome-level rewards. This allows the model to apply the learned reasoning strategy to a broader range of open-ended video understanding tasks while maintaining flexibility in its reasoning trajectories. 
+
+5 TimeThink-RFT-20K Dataset 
+
+To support process-level supervision for temporally grounded reasoning, we con-struct the TimeThink-RFT-20K dataset. Each instance contains a video ques-tion–answer pair and temporal evidence segments indicating where relevant vi-sual information appears. These annotations are used to compute the step-wise temporal process reward during reinforcement learning. Each sample is represented as (Q, A, {(sk, e k)}Kk=1 ), where Q denotes the question, A the answer, and (sk, e k) the temporal boundaries of video segments that contain evidence relevant to answering the question. We derive the dataset from LLaVA-Video-178K [67], which provides diverse video question–answer pairs. For each video, we first segment it into candidate temporal clips using 
+
+PySceneDetect [5], which detects shot boundaries and produces fine-grained temporal segments. We then employ a teacher model, Qwen3-VL-235B [3], to estimate the seman-tic relevance between each candidate clip and the corresponding question–answer pair. The teacher assigns a relevance score in the range [0 , 10] , and clips with scores above a predefined threshold are retained as temporal evidence candidates. After removing videos with excessive fragmentation or ambiguous evidence, we obtain a dataset of approximately 20K samples. The resulting annotations provide coarse temporal evidence associated with each Q-A pair. These segments are used to compute the temporal process reward during reinforcement learning, which evaluates the overlap between predicted clues and evidence intervals. This TimeThink: Reasoning with Time for Video LLMs 9
+
+design allows the model to learn temporally grounded reasoning from approxi-mate evidence without requiring dense manual annotations. 
+
+6 Experiment 
+
+In this section, we detail the experimental setup and dataset configurations, followed by a comprehensive comparison with state-of-the-art methods across multiple video understanding benchmarks. 
+
+Implementation Details. TimeThink builds upon the robust, non-reasoning Qwen2.5-VL-7B [47] backbone, directly applying Group Relative Policy Opti-mization (GRPO) without relying on a Supervised Fine-Tuning (SFT) cold-start. Video inputs are sampled at 2 frames per second (fps) to preserve comprehensive temporal dynamics while maintaining the native resolution for optimal spatial perception. Following the foundational backbone architecture, this configuration supports a maximum visual sequence length of 24K tokens and an overall max-imum context window of 32K tokens. The policy is optimized using a learning rate of 1 × 10 −6, a global batch size of 64, and a GRPO group size of 8. Training is executed via the advanced ms-swift [70] framework; the first and second stages require one day and three days, respectively, utilizing 32 NVIDIA H100 GPUs. Comprehensive hyperparameter configurations are detailed in the Appendix. 
+
+Training Data. Our training paradigm entirely bypasses the conventional SFT cold-start, initiating directly with a two-stage GRPO pipeline. During the first stage, we utilize our curated TimeThink-RFT-20K dataset to enforce rig-orous adherence to the prescribed structural format, concurrently training the model to ground its intermediate reasoning trajectory using critical temporal clues. In the subsequent stage, we transition to the LLaVA-Video-178K [67] dataset, which serves as a foundational corpus for generalized video comprehen-sion. Furthermore, we augment this distribution with 77K timestamp-grounded samples from DiDeMo [1] and ActivityNet Captions [26] to further enhance the model’s proficiency in identifying and extracting key temporal information. 
+
+6.1 Main Results 
+
+We evaluate TimeThink across a comprehensive suite of video-language bench-marks, categorized as follows: 1) Video Reasoning Benchmarks, including VideoM-MMU [20], VSIBench [60], and MMVU [69]; 2) General Video Understanding, comprising MLVU [72], VideoMME [16], LongVideoBench [52], and MVBench [29]; 3) Temporal Video Benchmarks, utilizing Charades-STA [18], CGBench [6], and NExT-GQA [53]. We benchmark the proposed TimeThink framework against state-of-the-art Supervised Fine-Tuning (SFT) and Reinforcement Learning (RL) methodologies, ensuring a rigorous comparison by employing the identical Qwen-2.5-VL-7B [4] backbone architecture across all baseline models. Furthermore, to guarantee standardized evaluations and ensure full reproducibility, all quantita-tive assessments are conducted utilizing the unified evaluation protocols provided by the lmms-eval framework [27, 64]. 10 H. Li et al. 
+
+Table 1: Zero-Shot Grounded VideoQA on CGBench. The results in bold indicate the best performance. Method Size mIoU R@IoU A@IoU                                                     
+
+> Proprietary Models
+> GPT-4o [23] –5.62 8.30 4.38 Gemini-1.5-Pro [45] –3.95 5.81 2.53
+> Supervised Fine-Tuning Models
+> Qwen2-VL [47] 72B 3.58 5.32 2.54 ShareGPT4Video [7] 16B 1.85 2.65 1.01 VideoCCAM [14] 14B 2.63 3.53 1.76 LLaVA-OV [36] 13B 1.63 1.78 1.01 Videochat2 [30] 7B 1.28 1.98 0.94 MiniCPM-v2.6 [21] 8B 2.35 2.96 1.35 LongVA [65] 7B 2.94 3.86 1.78 InternVL2 [11] 7B 3.91 5.05 2.64 Qwen2.5-VL-SFT 7B 4.01 5.54 3.31
+> Reinforcement Fine-Tuning Models
+> Qwen2.5-VL-GRPO 7B 4.88 7.39 3.85
+> TimeThink (Ours) 7B 5.55 8.27 4.01
+
+Table 2: Zero-Shot Grounded VideoQA on NExT-GQA. The results in bold indicate the best performance. Method Size mIoU mIoP Acc@GQA                                                         
+
+> Supervised Fine-Tuning Models
+> FrozenBiLM NG+ [59] 890M 9.6 24.2 17.5 VIOLETv2 [17] --23.6 12.8 SeViLA [61] 4B 21.7 29.5 16.6 LangRepo [25] 8×7B 18.5 27.1 14.9 VideoStreaming [42] 8.3B 19.4 30.8 18.1 LLoVi [63] 1.8T -24.3 24.3 HawkEye [51] 7B 25.7 33.4 23.5 Grounding-VideoLLM [46] 4B 21.1 34.5 26.7 Qwen2.5-VL-SFT 7B 28.6 35.8 27.7
+> Reinforcement Fine-Tuning Models
+> VideoChat-TPO [57] 7B 27.7 35.6 25.5 VideoMind [37] 1.5B 28.6 35.6 25.2 VideoMind [37] 7B 31.4 39.0 28.2 Qwen2.5-VL-GRPO 7B 34.0 37.4 28.2
+> TimeThink (Ours) 7B 35.8 40.3 29.1
+
+6.2 Grounding Task Evaluation 
+
+To comprehensively evaluate the enhancements in video understanding intro-duced by our reasoning constraints, we systematically assess the model’s tempo-ral localization capabilities across three benchmarks: Charades-STA, CGBench, and NExT-GQA. For the temporal grounding task on Charades-STA, the eval-uation metrics (mIoU, R@0.5, and R@0.7) strictly measure the model’s preci-sion in predicting exact temporal boundaries for given language queries. For grounded Video Question Answering, CGBench utilizes metrics (mIoU, R@IoU, and A@IoU) to assess the model’s segment retrieval efficacy and its ability to couple semantic answer correctness with valid temporal evidence ( tIoU > 0). Conversely, NExT-GQA emphasizes fine-grained grounding consistency and pe-nalizes redundant predictions; its metrics (IoU, IoP, and Acc@GQA) mandate high prediction validity ( IoP ≥ 0.5) alongside accurate answers, effectively eval-uating the model’s capacity to avoid overly conservative, long-span predictions. 
+
+Performance on Grounded VideoQA. As demonstrated in Tab. 1 and Tab. 2, our method vastly outperforms existing SFT approaches on CGBench, surpassing InternVL2 by 1.64% in mIoU, 3.22% in R@IoU, and 1.37% in A@IoU. This substantiates that TimeThink not only delivers accurate semantic answers but also exhibits exceptional temporal localization capabilities. Notably, Time-Think maintains a definitive advantage in mIoU and R@IoU, approaching the performance of GPT-4o and exceeding that of Gemini-1.5-Pro, further under-scoring the critical importance of applying process rewards. On NExT-GQA, our model yields improvements of 1.8% in mIoU, 2.9% in mIoP, and 0.9% in Acc@GQA compared to the Qwen2.5VL-GRPO baseline. Concurrently, it sur-passes all existing Reasoning Fine-Tuning (RFT) models, establishing a new state-of-the-art among open-source models. TimeThink: Reasoning with Time for Video LLMs 11 
+
+Table 3: Zero-Shot Temporal Ground-ing on Charades-STA. The results in 
+
+bold indicate the best performance. Method Size R@0.5 R@0.7 mIoU                                                        
+
+> Proprietary Models
+> GPT-4o [23] –--35.7
+> Supervised Fine-Tuning Models
+> VTimeLLM [22] 13B 34.3 14.7 34.6 Qwen2.5-VL [4] 72B --50.9 Qwen2.5-VL [4] 7B --43.6 HawkEye [51] 7B 31.4 14.5 34.7 ChatVTG [43] 7B 33.0 15.9 34.9 TimeMarker [8] 8B 51.0 26.9 48.4 TimeSearch [41] 7B 52.4 24.5 48.6 Qwen2.5-VL-SFT 7B 58.1 33.0 51.8
+> Reinforcement Fine-Tuning Models
+> VideoChat-TPO [57] 7B 40.2 20.8 38.1 VideoMind [37] 7B 59.1 31.2 50.2 Qwen2.5-VL-GRPO 7B 59.4 34.4 52.4
+> TimeThink (Ours) 7B 64.1 38.1 55.3 1K 5K 10K 20K
+> Stage 1 Data Scale
+> 0.0
+> 0.5
+> 1.0
+> 1.5
+> 2.0
+> 2.5
+> 3.0
+> Performance Gain over 1K (%)
+> Relative Performance Gain via Data Scaling
+> Charades-STA
+> VideoMME
+> MLVU
+> VideoMMMU
+
+Fig. 3: Data Scaling Gains. Rela-tive performance improvements achieved across multiple benchmarks when scaling the Stage 1 data from 1K to 20K, evalu-ated after identical Stage 2 training. 
+
+Performance on Temporal Grounding. As shown in Tab. 3, incorpo-rating IoU-based rewards for video clues during the intermediate reasoning pro-cess significantly enhances zero-shot grounding capabilities. On Charades-STA, our method substantially outperforms existing supervised fine-tuning (SFT) ap-proaches in the zero-shot setting, achieving an mIoU of 55.3%, which repre-sents an absolute improvement of 5.1% over the state-of-the-art VideoMind [37] method. Furthermore, to mitigate any potential bias arising from the data scale across training stages, we subjected our backbone model, Qwen2.5VL, to both SFT and GRPO. The empirical results demonstrate that our proposed approach significantly surpasses both the SFT and GRPO baselines in terms of R@0.5 and R@0.7, highlighting that the integration of temporal process rewards profoundly enhances the model’s localization precision and visual fidelity. 
+
+6.3 Reasoning Task Evaluation 
+
+As demonstrated in Tab. 4, our proposed method achieves state-of-the-art per-formance among RL-based methods on five benchmarks and secures the second-highest scores on two others. This highlights the efficiency and robust generaliza-tion capabilities of our approach across diverse video tasks. Within the reason-ing domain, specifically on the VideoMMMU knowledge modeling benchmark, our model attains a performance of 52.6%. This outperforms the Qwen2.5-VL baseline by 2.3% and surpasses Video-R1, which relies on a substantially larger dataset of 425K instances. On the VSIBench spatial reasoning task, our model matches the performance of strong SFT baselines and outperforms alternative RL methods, confirming the preservation of spatial fidelity. 12 H. Li et al. 
+
+Table 4: Performance on zero-shot video-language benchmarks. We evaluate TimeThink on 3 video reasoning benchmarks and 4 general video benchmarks. The results in bold and underline values indicate the best and second-best performance among Reinforcement Fine-Tuning Models, respectively.                                                                                                                    
+
+> Model Size Reasoning Tasks General Tasks VideoMMMU VsiBench MMVU MLVU VideoMME LongVideo MVBench
+> Proprietary Models
+> GPT-4V [40] ----49.2 59.5 59.1 43.7 GPT-4o [23] -61.2 34.0 67.4 64.6 71.9 66.7 -Gemini-1.5-Pro [45] -53.9 48.8 65.4 -75.0 64.0 -
+> Supervised Fine-Tuning Models
+> VILA-1.5 [35] 40B 34.0 31.2 --60.1 --LLaVA-OV [36] 7B 33.9 32.4 54.7 63.7 58.2 56.3 56.7 InternVL2.5 [10] 8B 60.8 38.9 60.8 68.9 64.2 60.0 72.0 Qwen-2.5-VL [4] 7B 50.3 37.7 67.2 67.9 66.1 61.3 68.1 Qwen2.5-VL-SFT 7B 49.4 34.8 65.6 66.0 63.6 59.1 65.4
+> Reinforcement Fine-Tuning Models
+> Qwen2.5-VL-GRPO 7B 50.1 36.7 66.0 66.2 64.3 59.5 67.5 Video-R1 [15] 7B 52.4 37.1 63.8 67.7 61.4 57.6 64.8 VideoChat-R1 [31] 7B 52.0 33.0 64.8 62.5 64.1 54.3 66.2 VideoChat-R1.5 [56] 7B 49.6 36.1 67.0 65.3 65.2 61.4 67.6 VideoRFT [48] 7B 51.1 36.8 68.5 66.6 59.8 57.0 62.1
+> TimeThink (Ours) 7B 52.6 37.8 67.2 67.8 65.5 60.8 69.7
+
+Furthermore, on general video benchmarks, our method achieves scores of 67.8 on MLVU, 65.5 on VideoMME, and 69.7 on MVBench, establishing a new state-of-the-art among RFT Models and narrowing the performance gap with strong SFT baselines. To isolate our improvements from potential data scaling benefits, we train SFT and GRPO versions of the Qwen2.5-VL backbone. Com-pared to the Qwen2.5-VL GRPO model, our method yields an average improve-ment of 1.6% across three reasoning tasks and 1.58% across four general tasks. This underscores that incorporating our process-oriented reward into the reason-ing trajectory not only preserves the generalization capabilities of the backbone model but also extends its proficiency in complex reasoning tasks. 
+
+6.4 Ablation Study 
+
+To dissect the efficacy of our proposed components, we conduct extensive ab-lations across multiple dimensions (Tab. 5). We employ Qwen2.5-VL fine-tuned via SFT on the identical dataset as our baseline. The visual context length is constrained to 8K tokens, with video inputs sampled at 2 frames per second (fps) up to a maximum of 64 frames. 
+
+Effect of Process Reward. To validate the impact of our proposed pro-cess reward, we compare the standard video GRPO configuration (a) against our approach incorporating Rclue (b). As observed, the integration of Rclue yields a substantial 5.0% improvement on the Charades-STA temporal grounding task compared to (a). Furthermore, it improves performance on the general video benchmarks, showing gains of 0.5% on VideoMME and 2.5% on MLVU, as well as a 2.1% increase on the VideoMMMU reasoning task. These results indicate that constraining temporal information during the reasoning process effectively TimeThink: Reasoning with Time for Video LLMs 13                                                            
+
+> Table 5: Ablation on design choices of TimeThink. Model Factors Charades STA VideoMME MLVU VideoMMMU
+> mIoU acc acc acc (-) Qwen2.5-VL-SFT 48.8 61.4 59.8 48.1
+> Reward
+> (a) R=Rans +Rf mt 49.3 63.9 64.2 49.6 (b) R=Rans +Rf mt +Rclue 54.3 64.4 66.7 51.7
+> Training Strategy
+> (c) Only Stage 1 52.4 63.7 65.6 50.9 (d) Only Stage 2 50.8 63.4 64.8 49.9 (e) Stage 1 + Stage 2 54.3 64.4 66.7 51.7
+> Process Reward Type
+> (f) Binary Reward 51.1 63.7 65.0 50.5 (g) mIoU Reward 52.9 64.2 65.9 51.2 (h) TimeThink 54.3 64.4 66.7 51.7
+
+enhances performance across multiple video-centric tasks, particularly those de-manding precise temporal grounding. 
+
+Effect of Training Strategy. We evaluate several distinct training strate-gies. As demonstrated in Tab. 5, training exclusively in Stage 1 (c) using only the 20K dataset with temporal clues is sufficient to achieve state-of-the-art zero-shot performance on Charades-STA. Furthermore, this strategy yields substantially greater improvements than training exclusively in Stage 2 (d) with a larger vol-ume of conventional data. Ultimately, adopting the complete two-stage training paradigm equips the model with process-oriented temporal reasoning while fully leveraging the synergistic benefits of both stages to attain optimal performance. 
+
+Effect of Data Scaling. As illustrated in Fig. 3, we observe that integrat-ing Rclue during Stage 1 effectively enhances the temporal video capabilities of GRPO. Specifically, we partition the 20K dataset into subsets of 1K, 5K, 10K, and 20K instances to train Stage 1 models at varying data scales, followed by Stage 2 training on the corresponding data. The empirical results demonstrate that scaling the Stage 1 data yields consistent performance improvements across both stages. Notably, performance on temporal tasks exhibits substantial gains, while general capabilities also show measurable enhancements. This trend un-derscores the scalability and versatility of our proposed approach. 
+
+Effect of Process Reward Type. To determine the optimal temporal constraint strategy, we evaluate four step-wise reward variants: (a) standard GRPO; (f) Binary Reward (1 if IoU exceeds a threshold, 0 otherwise); (g) mIoU Reward (mean IoU against all ground-truth spans); and (h) TimeThink (Max IoU). As demonstrated in the results, TimeThink (h) achieves superior perfor-mance across all metrics, whereas (f) and (g) exhibit severe vulnerabilities to reward hacking. Specifically, the Binary Reward (f) suffers from reward sparsity, lacking the fine-grained gradients necessary for precise boundary refinement. Conversely, the mIoU Reward (g) introduces target misalignment: since a single reasoning step should localize only one specific event, penalizing it for missing 14 H. Li et al. Question: How many times did the black dog appear on camera while the brown dog was getting a bath?         
+
+> Appear Leaves Appear Leaves Appear
+> [6.3s - 8.1s] [8.1s – 9.0s] [9.0s – 14.5s] [14.5s – 18.0s] [18.0s – 20.6s]
+> `
+
+Qwen2.5-VL-7B (GRPO)     
+
+> <think> Analyzing [0.0s – 5.0s]: The black dog appears briefly in the background as the brown dog is being washed. Analyzing [5.0s – 9.0s]: The black dog is seen again in the background, standing near the brown dog who is still being washed. Analyzing [9.0s – 18.0s]: The black dog continues to be present in the background. Based on the analysis, the black dog appeared twice in the camera while the brown dog was showering. </think>
+> <answer> 2 </answer>
+> <think> Analyzing [0.0s – 6.6s]: The black dog is not visible during this part of the video. The brown dog is being washed by a person. Checking [6.6s – 8.8s]: The black dog is standing next to the brown dog, which is being washed. The black dog appears to be watching the brown dog being washed. Analyzing the video in [9.0s – 10.8s]: The black dog reappears briefly in the background. Checking [10.8s – 19.6s]: The black dog is not visible again during this part of the video. Analyzing [19.6s – 21.3s]: The black dog is seen walking around while the brown dog is being washed. Based on these observations, the black dog appeared 3 times in total while the brown dog was showering. </think>
+> <answer> 3 </answer>
+> mIoU : 0.28
+> mIoU: 0.63
+
+TimeThink-7B 
+
+> Leaves
+> [0.0s – 6.3s]
+
+Fig. 4: Qualitative comparisons on grounded QA. The GRPO baseline yields an incorrect answer with an unfaithful reasoning trajectory. In contrast, TimeThink provides the correct answer while achieving a significantly higher mIoU for query-grounded segments, supported by a detailed and precise reasoning process. 
+
+other ground-truths forces the model to generate excessively long, exhaustive captions to artificially maximize coverage. TimeThink’s continuous Max IoU formulation intrinsically resolves these issues by accurately rewarding localized precision and effectively mitigating overly conservative predictions. 
+
+6.5 Qualitative Results 
+
+To illustrate our method’s efficacy, Fig. 4 presents qualitative NExT-GQA ex-amples using identical prompts and a 4 fps input. Compared to the GRPO baseline, TimeThink not only answers correctly but also generates a detailed, visually faithful reasoning trajectory with heightened sensitivity to scene tran-sitions and action boundaries. Furthermore, TimeThink dynamically adapts to temporal resolution: evaluating at 8 fps yields noticeably more precise reason-ing timestamps, whereas the standard GRPO model rigidly produces identical outputs regardless of frame rate. 
+
+7 Conclusion 
+
+We presented TimeThink , a reinforcement learning framework for temporally grounded reasoning in Video Large Language Models. By treating temporal clue steps as fundamental reasoning units supervised via step-wise process rewards, our approach shifts optimization from final outcomes to intermediate evidence discovery. This process-oriented perspective provides a promising direction for improving reliable multimodal reasoning. TimeThink: Reasoning with Time for Video LLMs 15 
+
+References 
+
+1. Anne Hendricks, L., Wang, O., Shechtman, E., Sivic, J., Darrell, T., Russell, B.: Localizing moments in video with natural language. In: Proceedings of the IEEE international conference on computer vision. pp. 5803–5812 (2017) 2. Ataallah, K., Shen, X., Abdelrahman, E., Sleiman, E., Zhu, D., Ding, J., Elhoseiny, M.: Minigpt4-video: Advancing multimodal llms for video understanding with in-terleaved visual-textual tokens. arXiv preprint arXiv:2404.03413 (2024) 3. Bai, S., Cai, Y., Chen, R., Chen, K., Chen, X., Cheng, Z., Deng, L., Ding, W., Gao, C., Ge, C., et al.: Qwen3-vl technical report. arXiv preprint arXiv:2511.21631 (2025) 4. Bai, S., Chen, K., Liu, X., Wang, J., Ge, W., Song, S., Dang, K., Wang, P., Wang, S., Tang, J., et al.: Qwen2. 5-vl technical report. arXiv preprint arXiv:2502.13923 (2025) 5. Castellano, B.: PySceneDetect: Video Cut Detection and Analysis Tool (2026), 
+
+https : / / github . com / Breakthrough / PySceneDetect , software available from https://www.scenedetect.com 6. Chen, G., Liu, Y., Huang, Y., He, Y., Pei, B., Xu, J., Wang, Y., Lu, T., Wang, L.: Cg-bench: Clue-grounded question answering benchmark for long video under-standing. arXiv preprint arXiv:2412.12075 (2024) 7. Chen, L., Wei, X., Li, J., Dong, X., Zhang, P., Zang, Y., Chen, Z., Duan, H., Lin, B., Tang, Z., et al.: Sharegpt4video: Improving video understanding and generation with better captions. arXiv preprint arXiv:2406.04325 (2024) 8. Chen, S., Lan, X., Yuan, Y., Jie, Z., Ma, L.: Timemarker: A versatile video-llm for long and short video understanding with superior temporal localization ability. arXiv preprint arXiv:2411.18211 (2024) 9. Chen, S., Li, H., Wang, Q., Zhao, Z., Sun, M., Zhu, X., Liu, J.: Vast: A vision-audio-subtitle-text omni-modality foundation model and dataset. Advances in Neural Information Processing Systems 36 , 72842–72866 (2023) 10. Chen, Z., Wang, W., Cao, Y., Liu, Y., Gao, Z., Cui, E., Zhu, J., Ye, S., Tian, H., Liu, Z., et al.: Expanding performance boundaries of open-source multimodal models with model, data, and test-time scaling. arXiv preprint arXiv:2412.05271 (2024) 11. Chen, Z., Wang, W., Tian, H., Ye, S., Gao, Z., Cui, E., Tong, W., Hu, K., Luo, J., Ma, Z., et al.: How far are we to gpt-4v? closing the gap to commercial multimodal models with open-source suites. Science China Information Sciences 67 (12), 220101 (2024) 12. Cheng, Z., Leng, S., Zhang, H., Xin, Y., Li, X., Chen, G., Zhu, Y., Zhang, W., Luo, Z., Zhao, D., et al.: Videollama 2: Advancing spatial-temporal modeling and audio understanding in video-llms. arXiv preprint arXiv:2406.07476 (2024) 13. Dai, W., Li, J., Li, D., Tiong, A.M.H., Zhao, J., Wang, W., Li, B., Fung, P., Hoi, S.: Instructblip: Towards general-purpose vision-language models with instruction tuning (2023) 14. Fei, J., Li, D., Deng, Z., Wang, Z., Liu, G., Wang, H.: Video-ccam: Enhancing video-language understanding with causal cross-attention masks for short and long videos. arXiv preprint arXiv:2408.14023 (2024) 15. Feng, K., Gong, K., Li, B., Guo, Z., Wang, Y., Peng, T., Wu, J., Zhang, X., Wang, B., Yue, X.: Video-r1: Reinforcing video reasoning in mllms. arXiv preprint arXiv:2503.21776 (2025) 16 H. Li et al. 16. Fu, C., Dai, Y., Luo, Y., Li, L., Ren, S., Zhang, R., Wang, Z., Zhou, C., Shen, Y., Zhang, M., et al.: Video-mme: The first-ever comprehensive evaluation benchmark of multi-modal llms in video analysis. arXiv preprint arXiv:2405.21075 (2024) 17. Fu, T.J., Li, L., Gan, Z., Lin, K., Wang, W.Y., Wang, L., Liu, Z.: An empirical study of end-to-end video-language transformers with masked visual modeling. In: Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition. pp. 22898–22909 (2023) 18. Gao, J., Sun, C., Yang, Z., Nevatia, R.: Tall: Temporal activity localization via language query. In: Proceedings of the IEEE international conference on computer vision. pp. 5267–5275 (2017) 19. Guo, D., Yang, D., Zhang, H., Song, J., Wang, P., Zhu, Q., Xu, R., Zhang, R., Ma, S., Bi, X., et al.: Deepseek-r1: Incentivizing reasoning capability in llms via reinforcement learning. arXiv preprint arXiv:2501.12948 (2025) 20. Hu, K., Wu, P., Pu, F., Xiao, W., Zhang, Y., Yue, X., Li, B., Liu, Z.: Video-mmmu: Evaluating knowledge acquisition from multi-discipline professional videos. arXiv preprint arXiv:2501.13826 (2025) 21. Hu, S., Tu, Y., Han, X., He, C., Cui, G., Long, X., Zheng, Z., Fang, Y., Huang, Y., Zhao, W., et al.: Minicpm: Unveiling the potential of small language models with scalable training strategies. arXiv preprint arXiv:2404.06395 (2024) 22. Huang, B., Wang, X., Chen, H., Song, Z., Zhu, W.: Vtimellm: Empower llm to grasp video moments. In: Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition. pp. 14271–14280 (2024) 23. Hurst, A., Lerer, A., Goucher, A.P., Perelman, A., Ramesh, A., Clark, A., Os-trow, A., Welihinda, A., Hayes, A., Radford, A., et al.: Gpt-4o system card. arXiv preprint arXiv:2410.21276 (2024) 24. Jaech, A., Kalai, A., Lerer, A., Richardson, A., El-Kishky, A., Low, A., Helyar, A., Madry, A., Beutel, A., Carney, A., et al.: Openai o1 system card. arXiv preprint arXiv:2412.16720 (2024) 25. Kahatapitiya, K., Ranasinghe, K., Park, J., Ryoo, M.S.: Language repository for long video understanding. In: Findings of the Association for Computational Lin-guistics: ACL 2025. pp. 5627–5646 (2025) 26. Krishna, R., Hata, K., Ren, F., Fei-Fei, L., Carlos Niebles, J.: Dense-captioning events in videos. In: Proceedings of the IEEE international conference on computer vision. pp. 706–715 (2017) 27. Li, B., Zhang, P., Zhang, K., Pu, F., Du, X., Dong, Y., Liu, H., Zhang, Y., Zhang, G., Li, C., Liu, Z.: Lmms-eval: Accelerating the development of large multimoal models (March 2024), https://github.com/EvolvingLMMs-Lab/lmms-eval 
+
+28. Li, H., Zhang, Y., Guo, L., Yue, X., Liu, J.: Breaking the encoder barrier for seamless video-language understanding. arXiv preprint arXiv:2503.18422 (2025) 29. Li, K., Wang, Y., He, Y., Li, Y., Wang, Y., Liu, Y., Wang, Z., Xu, J., Chen, G., Luo, P., et al.: Mvbench: A comprehensive multi-modal video understanding benchmark. arXiv preprint arXiv:2311.17005 (2023) 30. Li, K., Wang, Y., He, Y., Li, Y., Wang, Y., Liu, Y., Wang, Z., Xu, J., Chen, G., Luo, P., et al.: Mvbench: A comprehensive multi-modal video understanding benchmark. In: Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition. pp. 22195–22206 (2024) 31. Li, X., Yan, Z., Meng, D., Dong, L., Zeng, X., He, Y., Wang, Y., Qiao, Y., Wang, Y., Wang, L.: Videochat-r1: Enhancing spatio-temporal perception via reinforcement fine-tuning. arXiv preprint arXiv:2504.06958 (2025) TimeThink: Reasoning with Time for Video LLMs 17 32. Li, Y., Wang, C., Jia, J.: Llama-vid: An image is worth 2 tokens in large lan-guage models. In: European Conference on Computer Vision. pp. 323–340. Springer (2025) 33. Li, Y., Cheng, J., Jia, S., Kuang, H., Jiao, S., Hou, Q., Cheng, M.M.: Tempsamp-r1: Effective temporal sampling with reinforcement fine-tuning for video llms. arXiv preprint arXiv:2509.18056 (2025) 34. Lin, B., Ye, Y., Zhu, B., Cui, J., Ning, M., Jin, P., Yuan, L.: Video-llava: Learn-ing united visual representation by alignment before projection. arXiv preprint arXiv:2311.10122 (2023) 35. Lin, J., Yin, H., Ping, W., Molchanov, P., Shoeybi, M., Han, S.: Vila: On pre-training for visual language models. In: Proceedings of the IEEE/CVF conference on computer vision and pattern recognition. pp. 26689–26699 (2024) 36. Liu, H., Li, C., Wu, Q., Lee, Y.J.: Visual instruction tuning. Advances in neural information processing systems 36 (2024) 37. Liu, Y., Lin, K.Q., Chen, C.W., Shou, M.Z.: Videomind: A chain-of-lora agent for long video reasoning. arXiv preprint arXiv:2503.13444 (2025) 38. Maaz, M., Rasheed, H., Khan, S., Khan, F.S.: Video-chatgpt: Towards de-tailed video understanding via large vision and language models. arXiv preprint arXiv:2306.05424 (2023) 39. Mangalam, K., Akshulakov, R., Malik, J.: Egoschema: A diagnostic benchmark for very long-form video language understanding. Advances in Neural Information Processing Systems 36 , 46212–46244 (2023) 40. OpenAI: Gpt-4 technical report. ArXiv abs/2303.08774 (2023) 41. Pan, J., Zhang, R., Wan, X., Zhang, Y., Lu, M., She, Q.: Timesearch: Hierarchical video search with spotlight and reflection for human-like long video understanding. arXiv preprint arXiv:2504.01407 (2025) 42. Qian, R., Dong, X., Zhang, P., Zang, Y., Ding, S., Lin, D., Wang, J.: Streaming long video understanding with large language models. Advances in Neural Information Processing Systems 37 , 119336–119360 (2024) 43. Qu, M., Chen, X., Liu, W., Li, A., Zhao, Y.: Chatvtg: Video temporal grounding via chat with video dialogue large language models. In: Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition. pp. 1847–1856 (2024) 44. Shao, Z., Wang, P., Zhu, Q., Xu, R., Song, J., Bi, X., Zhang, H., Zhang, M., Li, Y., Wu, Y., et al.: Deepseekmath: Pushing the limits of mathematical reasoning in open language models. arXiv preprint arXiv:2402.03300 (2024) 45. Team, G., Georgiev, P., Lei, V.I., Burnell, R., Bai, L., Gulati, A., Tanzer, G., Vin-cent, D., Pan, Z., Wang, S., et al.: Gemini 1.5: Unlocking multimodal understanding across millions of tokens of context. arXiv preprint arXiv:2403.05530 (2024) 46. Wang, H., Xu, Z., Cheng, Y., Diao, S., Zhou, Y., Cao, Y., Wang, Q., Ge, W., Huang, L.: Grounded-videollm: Sharpening fine-grained temporal grounding in video large language models. arXiv preprint arXiv:2410.03290 (2024) 47. Wang, P., Bai, S., Tan, S., Wang, S., Fan, Z., Bai, J., Chen, K., Liu, X., Wang, J., Ge, W., Fan, Y., Dang, K., Du, M., Ren, X., Men, R., Liu, D., Zhou, C., Zhou, J., Lin, J.: Qwen2-vl: Enhancing vision-language model’s perception of the world at any resolution. arXiv preprint arXiv:2409.12191 (2024) 48. Wang, Q., Yu, Y., Yuan, Y., Mao, R., Zhou, T.: Videorft: Incentivizing video reasoning capability in mllms via reinforced fine-tuning. arXiv preprint arXiv:2505.12434 (2025) 49. Wang, Y., Wang, Z., Xu, B., Du, Y., Lin, K., Xiao, Z., Yue, Z., Ju, J., Zhang, L., Yang, D., et al.: Time-r1: Post-training large vision language model for temporal video grounding. arXiv preprint arXiv:2503.13377 (2025) 18 H. Li et al. 50. Wang, Y., Xu, B., Yue, Z., Xiao, Z., Wang, Z., Zhang, L., Yang, D., Wang, W., Jin, Q.: Timezero: Temporal video grounding with reasoning-guided lvlm. arXiv e-prints pp. arXiv–2503 (2025) 51. Wang, Y., Meng, X., Liang, J., Wang, Y., Liu, Q., Zhao, D.: Hawkeye: Train-ing video-text llms for grounding text in videos. arXiv preprint arXiv:2403.10228 (2024) 52. Wu, H., Li, D., Chen, B., Li, J.: Longvideobench: A benchmark for long-context interleaved video-language understanding. Advances in Neural Information Pro-cessing Systems 37 , 28828–28857 (2024) 53. Xiao, J., Yao, A., Li, Y., Chua, T.S.: Can i trust your answer? visually grounded video question answering. In: Proceedings of the IEEE/CVF Conference on Com-puter Vision and Pattern Recognition. pp. 13204–13214 (2024) 54. Xu, D., Zhao, Z., Xiao, J., Wu, F., Zhang, H., He, X., Zhuang, Y.: Video question answering via gradually refined attention over appearance and motion. In: ACM Multimedia (2017) 55. Xu, L., Zhao, Y., Zhou, D., Lin, Z., Ng, S.K., Feng, J.: Pllava: Parameter-free llava extension from images to videos for video dense captioning. arXiv preprint arXiv:2404.16994 (2024) 56. Yan, Z., Li, X., He, Y., Yue, Z., Zeng, X., Wang, Y., Qiao, Y., Wang, L., Wang, Y.: Videochat-r1. 5: Visual test-time scaling to reinforce multimodal reasoning by iterative perception. arXiv preprint arXiv:2509.21100 (2025) 57. Yan, Z., Li, Z., He, Y., Wang, C., Li, K., Li, X., Zeng, X., Wang, Z., Wang, Y., Qiao, Y., et al.: Task preference optimization: Improving multimodal large language models with vision task alignment. In: Proceedings of the Computer Vision and Pattern Recognition Conference. pp. 29880–29892 (2025) 58. Yang, A., Li, A., Yang, B., Zhang, B., Hui, B., Zheng, B., Yu, B., Gao, C., Huang, C., Lv, C., et al.: Qwen3 technical report. arXiv preprint arXiv:2505.09388 (2025) 59. Yang, A., Miech, A., Sivic, J., Laptev, I., Schmid, C.: Zero-shot video question an-swering via frozen bidirectional language models. Advances in Neural Information Processing Systems 35 , 124–141 (2022) 60. Yang, J., Yang, S., Gupta, A.W., Han, R., Fei-Fei, L., Xie, S.: Thinking in space: How multimodal large language models see, remember, and recall spaces. In: Pro-ceedings of the Computer Vision and Pattern Recognition Conference. pp. 10632– 10643 (2025) 61. Yu, S., Cho, J., Yadav, P., Bansal, M.: Self-chained image-language model for video localization and question answering. arXiv preprint arXiv:2305.06988 (2023) 62. Yu, Z., Xu, D., Yu, J., Yu, T., Zhao, Z., Zhuang, Y., Tao, D.: Activitynet-qa: A dataset for understanding complex web videos via question answering. In: Pro-ceedings of the AAAI Conference on Artificial Intelligence. vol. 33, pp. 9127–9134 (2019) 63. Zhang, C., Lu, T., Islam, M.M., Wang, Z., Yu, S., Bansal, M., Bertasius, G.: A simple llm framework for long-range video question-answering. In: Proceedings of the 2024 Conference on Empirical Methods in Natural Language Processing. pp. 21715–21737 (2024) 64. Zhang, K., Li, B., Zhang, P., Pu, F., Cahyono, J.A., Hu, K., Liu, S., Zhang, Y., Yang, J., Li, C., Liu, Z.: Lmms-eval: Reality check on the evaluation of large multimodal models (2024), https://arxiv.org/abs/2407.12772 
+
+65. Zhang, P., Zhang, K., Li, B., Zeng, G., Yang, J., Zhang, Y., Wang, Z., Tan, H., Li, C., Liu, Z.: Long context transfer from language to vision. arXiv preprint arXiv:2406.16852 (2024) TimeThink: Reasoning with Time for Video LLMs 19 66. Zhang, Y., Li, H., Liu, J., Yue, X.: Explore the limits of omni-modal pretraining at scale. arXiv preprint arXiv:2406.09412 (2024) 67. Zhang, Y., Wu, J., Li, W., Li, B., Ma, Z., Liu, Z., Li, C.: Video instruction tuning with synthetic data. arXiv preprint arXiv:2410.02713 (2024) 68. Zhao, J., Wei, X., Bo, L.: R1-omni: Explainable omni-multimodal emotion recog-nition with reinforcement learning. arXiv preprint arXiv:2503.05379 (2025) 69. Zhao, Y., Zhang, H., Xie, L., Hu, T., Gan, G., Long, Y., Hu, Z., Chen, W., Li, C., Xu, Z., et al.: Mmvu: Measuring expert-level multi-discipline video understanding. In: Proceedings of the Computer Vision and Pattern Recognition Conference. pp. 8475–8489 (2025) 70. Zhao, Y., Huang, J., Hu, J., Wang, X., Mao, Y., Zhang, D., Jiang, Z., Wu, Z., Ai, B., Wang, A., et al.: Swift: a scalable lightweight infrastructure for fine-tuning. In: Proceedings of the AAAI Conference on Artificial Intelligence. vol. 39, pp. 29733– 29735 (2025) 71. Zhao, Z., Lu, H., Huo, Y., Du, Y., Yue, T., Guo, L., Wang, B., Chen, W., Liu, J.: Needle in a video haystack: A scalable synthetic evaluator for video mllms. arXiv preprint arXiv:2406.09367 (2024) 72. Zhou, J., Shu, Y., Zhao, B., Wu, B., Xiao, S., Yang, X., Xiong, Y., Zhang, B., Huang, T., Liu, Z.: Mlvu: A comprehensive benchmark for multi-task long video understanding. arXiv preprint arXiv:2406.04264 (2024) TimeThink: Reasoning with Time for Video LLMs 1
+
+# TimeThink: Reasoning with Time for Video LLMs 
+
+Supplementary Material 8 Additional Ablation Studies 
+
+8.1 Impact of the Annotation Model 
+
+To construct the TimeThink-RFT-20K dataset, we utilize an automated vision-language annotator to estimate the semantic relevance between candidate tem-poral clips and the question-answer pairs. In Table 6, we investigate how the capacity of the annotation model affects the quality of the generated process rewards and the subsequent downstream performance. As shown in Table 6, employing different annotation models for temporal clue scoring results in relatively stable downstream performance. While scal-ing the annotator from Qwen3-VL-8B to Qwen3-VL-235B-A22B yields slight improvements, particularly in the Charades-STA grounding task (from 53.2 to 54.3), the performance on general video QA (VideoMME) and video reasoning (VideoMMMU) remains largely consistent. This observation indicates that the effectiveness of our approach does not heavily depend on the scale or capacity of the annotation model. Instead, the primary performance gains are attributed to the TimeThink framework itself—specifically, the mechanism of incorporating step-wise temporal process rewards to guide intermediate reasoning. Even with a lightweight 8B annotator, the proposed method achieves competitive results, confirming the robustness and intrinsic value of our reasoning constraint design.           
+
+> Table 6: Impact of different annotation models for temporal clue scoring.
+> Performance is evaluated on VideoMME, VideoMMMU, and Charades-STA.
+> Annotation Model VideoMME VideoMMMU Charades-STA
+> Qwen3-VL-8B 63.9 51.4 53.2 Qwen3-VL-30B-A3B 64.1 51.3 54.0 Qwen3-VL-235B-A22B 64.4 51.7 54.3
+
+8.2 Sensitivity of Process Reward Weight ( λ)
+
+The hyperparameter λ controls the strength of the step-wise temporal process reward relative to the global outcome reward during GRPO optimization. Table 7 details the performance variations across different values of λ.As demonstrated, increasing λ places greater emphasis on the intermedi-ate temporal reasoning process ( Rclue ). A higher λ (e.g., 0.7) encourages the model to focus strictly on temporal boundary alignment, which slightly boosts 2 H. Li et al. 
+
+the video grounding performance (Charades-STA reaches 54.5). However, higher values ( λ ≥ 0.7) lead to a slight degradation in general video QA (VideoMME) and complex reasoning (VideoMMMU). This implies that over-penalizing the intermediate temporal spans might restrict the model’s linguistic flexibility and overfit its global semantic reasoning to strict temporal boundaries. Conversely, a lower λ (e.g., 0.1) provides insufficient guidance for temporal evidence discov-ery, affecting grounding accuracy. Ultimately, we adopt λ = 0 .5 as the default setting to achieve a reasonable balance between accurate temporal localization and general video understanding capabilities.                 
+
+> Table 7: Ablation on the process reward weight ( λ).
+> λVideoMME VideoMMMU Charades-STA
+> 0.163.8 50.3 52.8
+> 0.364.3 51.5 53.4
+> 0.564.4 51.7 54.3
+> 0.763.9 50.9 54.5
+> 1.064.0 51.1 54.3
+
+9 Prompt Templates 
+
+This section provides the exact prompt templates utilized during the temporal evidence data generation and the two-stage reinforcement fine-tuning process. 
+
+9.1 Data Generation Prompt 
+
+To automatically derive temporal evidence segments for TimeThink-RFT-20K, we prompt the teacher model to score the relevance of a candidate video clip (segmented via PySceneDetect) to a given Question-Answer pair. To prevent hallucinations and ensure accurate local evaluation, we provide the full video context alongside the specific candidate clip. The prompt template is structured as follows: TimeThink: Reasoning with Time for Video LLMs 3
+
+System: You are an expert video annotator. Evaluate the semantic relevance between the candidate clip and the QA pair based on the provided Full Video Context. Follow these strict requirements: 1. Understand the Target QA: Determine the exact visual/semantic evidence re-quired. 2. Evaluate the Candidate Clip: Determine if the specific clip contains this evi-dence. Use the Full Video Context for background, but base your score strictly on the Candidate Video Clip. 3. Scoring Criteria (0 to 10 Scale): - 10 : Perfect Relevance. Clear, unambiguous, and complete evidence. - 7-9 : High Relevance. Strong evidence, might lack minor context. - 4-6 : Partial Relevance. Partial, ambiguous, or indirect evidence. - 1-3 : Low Relevance. Mostly irrelevant, tangential elements present. - 0: No Relevance. Completely irrelevant. 4. Provide concise REASONS (1-3 sentences) explaining the score before out-putting the SCORE. 
+
+User: 
+
+INPUT DATA: Target QUESTION: {question} Target ANSWER: {answer} Full Video Context (For background understanding only): {full_video_content} Candidate Video Clip ([{clip_start_time} - {clip_end_time}] seconds): {clip_content} STRICT OUTPUT FORMAT: REASONS: <Your concise reasoning> SCORE: <An integer between 0 and 10> 
+
+9.2 Stage 1: Temporal-Grounded RFT Prompt 
+
+During the first stage, the model is strictly enforced to generate step-wise tem-poral reasoning clues enclosed in a <think> block. 
+
+User: {Question} Please think step by step. For each reasoning step, you must explicitly reference the relevant time interval in the format [start_time - end_time]. Enclose your entire reasoning process within <think> and </think> tags. After evaluating all necessary segments, provide the final answer within the <answer> </answer> tags. 
+
+9.3 Stage 2: Generalized Outcome RFT Prompt 
+
+In the second stage, the model generalizes to broader open-ended tasks. The strict formatting constraint is slightly relaxed, allowing for more flexible reason-ing while maintaining the two-block structure. 4 H. Li et al. 
+
+User: {Question} Please analyze the video and think step by step to derive the correct answer. You can reference the relevant time interval in the format [start_time - end_time] if necessary to support your observation. Put your reasoning process inside <think> and </think> tags. Finally, output your concise conclusion inside <answer> and </answer> tags. 
+
+10 Implementation Details 
+
+10.1 Training Configuration 
+
+Table 8 provides a comprehensive summary of the hyperparameters employed in the training of TimeThink. We directly apply Group Relative Policy Optimiza-tion (GRPO) on the non-reasoning Qwen2.5-VL-7B backbone. 
+
+Table 8: Hyperparameter configuration for TimeThink training. The model undergoes a two-stage reinforcement fine-tuning protocol. 
+
+Hyperparameter Value 
+
+Model Configuration 
+
+Backbone Qwen2.5-VL-7B Max Visual Sequence Length 24,576 Max Context Length 32,768 
+
+Training Optimization 
+
+Global Batch Size 64 GRPO Group Size 8Learning Rate (lr) 1 × 10 −6
+
+Optimizer AdamW LR Schedule 1e-6 Weight Decay 0.05 
+
+Data & Hardware 
+
+Input FPS 2Compute Resources 32 × NVIDIA H100 Training Time (Stage 1) ≈ 1 Day Training Time (Stage 2) ≈ 3 Days 
+
+Our training methodology initiates directly with a two-stage GRPO pipeline, bypassing the conventional Supervised Fine-Tuning (SFT) cold-start. During the first stage, we utilize the TimeThink-RFT-20K dataset to train the model to ground its intermediate reasoning trajectory. In the second stage, we transition to the LLaVA-Video-178K dataset for generalized video comprehension. We also augment this distribution with 77K timestamp-grounded samples from DiDeMo and ActivityNet Captions to enhance the extraction of key temporal information. TimeThink: Reasoning with Time for Video LLMs 5
+
+11 Evaluation Settings 
+
+We evaluate TimeThink across a suite of video-language benchmarks: 1) Video Reasoning Benchmarks, including VideoMMMU, VSIBench, and MMVU; 2) General Video Understanding, comprising MLVU, VideoMME, Long VideoBench, and MVBench; and 3) Temporal Video Benchmarks, utilizing Charades-STA, CGBench, and NEXT-GQA. Table 9 details the frame sampling configurations. All quantitative assess-ments are conducted using the unified evaluation protocols provided by the lmms-eval framework to ensure standardized evaluations.                         
+
+> Table 9: Evaluation settings summary for each benchmark. FPS denotes the sampling frames per second, and # F represents the maximum number of sampling frames allowed.
+> Benchmark FPS # F (Max Frames)
+> Video Reasoning
+> VideoMMMU 1512 VSIBench 2256 MMVU 1512
+> General Video Understanding
+> MLVU 1512 VideoMME 2256 Long VideoBench 1512 MVBench 2128
+> Temporal Video
+> Charades-STA 4128 CGBench 2512 NEXT-GQA 2256
+
+12 Additional Samples 
+
+As illustrated in Figure 5, the TimeThink-RFT-20K dataset provides precise, query-aware temporal grounding. For instance, in a video depicting the assembly of a toy train, the continuous sequence is partitioned into four distinct tempo-ral clips. A query regarding the “initial setting” explicitly anchors its evidence in the first clip (0.00s - 1.73s). Conversely, a query addressing a subsequent action—such as events occurring after the train’s face is attached—identifies relevant clues exclusively within the latter segments. Furthermore, a holistic query concerning the “main theme” correctly aggregates evidence across the en-tire video timeline. This exemplar demonstrates how our dataset supplies fine-grained, question-specific temporal supervision, compelling the model to dynam-6 H. Li et al. 
+
+ically align its reasoning process with the appropriate temporal intervals based on the specific semantic context of the query. 
+
+13 Limitations 
+
+Our model demonstrates strong performance and temporal coherence on open-domain tasks. However, a specific limitation emerges when processing hour-long videos using frames sampled with large time intervals. Under these extreme long-context conditions, executing dense captioning forces the model to compre-hensively traverse the entire extensive video sequence. This exhaustive temporal grounding behavior consequently results in excessively long text outputs, which may impact reading efficiency and inference speed. TimeThink: Reasoning with Time for Video LLMs 7Answer 1: The larger train model is now equipped with a gray face with big eyes and a cheerful 
+
+Question  1: What happens after the toy train ‘s face is placed onto the front of the train model? 
+
+Relevant  Clues : [(3.3 , 4.4), (4.4 , 8.97 )]
+
+0.00 s 1.73s  3.30 s 4.40s ✂️ ✂️ ✂️ 
+
+Clip 1 Clip 2 Clip 3  Clip 4
+
+Answer  2: Setting up a plastic wrap trap 
+
+Question  2: What is the initial setting of the video? 
+
+Relevant  Clues : [(0.0 , 1.73 )]
+
+Answer 3: Train building 
+
+Question  3: What is the main theme of the video? 
+
+Relevant  Clues : [( 0.0 , 1.73 ), { (1.73 , 3.3 ), ( 3.3 , 4.4 ), ( 4.4 , 8.97 )] 
+
+8.97s Question 1:  Where is the text 'The wand and hose extend to 4.4 metres ‘ displayed in relation to the vacuum cleaner? 
+
+Answer 1:  The text is displayed while a woman extends the wand and hose to clean stairs and high places. 
+
+Answer 3:  The wand and hose extend to 4.4 metres, allowing the vacuum cleaner to clean stairs and high places. 
+
+Question 2:  What technology does the Dyson DC33 Multi Floor vacuum cleaner use? 
+
+Answer 2:  The Dyson DC33 Multi Floor vacuum cleaner uses Dyson's patented Root Cyclone ™ technology. 
+
+00.00s  12.05s  23.46s  33.21s 
+
+54.07s  56.88s 41.79s  64.43s 
+
+Question 3: What feature allows the vacuum cleaner to clean stairs and high places? 
+
+Relevant Clues: [(28.15, 39.77)] 
+
+Relevant Clues: [(00.00, 08.60)] 
+
+Relevant Clues: [(39.77, 48.50)] 
+
+Fig. 5: Exemplars from the TimeThink-RFT-20K dataset. Each video sequence is systematically segmented into multiple candidate clips. Distinct question-answer pairs are explicitly grounded with their respective, contextually relevant temporal clues.

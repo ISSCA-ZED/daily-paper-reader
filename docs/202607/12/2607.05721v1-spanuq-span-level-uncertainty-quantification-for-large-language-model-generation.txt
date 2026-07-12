@@ -1,0 +1,1056 @@
+Title: SpanUQ: Span-Level Uncertainty Quantification for Large Language Model Generation
+
+URL Source: https://arxiv.org/pdf/2607.05721v1
+
+Published Time: Wed, 08 Jul 2026 00:27:25 GMT
+
+Number of Pages: 27
+
+Markdown Content:
+# SPAN UQ: Span-Level Uncertainty Quantification for Large Language Model Generation 
+
+Yimeng Zhang 1∗
+
+, Yingying Zhuang 1, Ziyi Wang 2, Yuxuan Lu 2, Pei Chen 1,Aman Gupta 1, Zhe Su 1, Ming Tan 1, Zhilin Zhang 1, Qun Liu 1, Manikandarajan Ramanathan 1,Rajashekar Maragoud 1, Edward Vul 1, Jing Huang 1, Dakuo Wang 21Amazon, 2Northeastern University 
+
+## Abstract 
+
+Uncertainty estimation is essential not only for the trustworthy deployment of large language models (LLMs) but also as a foundation for self-refinement in LLM generation. However, existing approaches operate at suboptimal granularities: token-level scores lack semantic coherence, while sequence-level scores fail to localize errors. We formalize Span-Level Uncertainty Estimation (SLUE), a new task that targets the natural granularity for uncertainty: semantically coherent text spans, each conveying a single assessable unit of meaning. To address this task, we introduce S PAN UQ, a lightweight ( ∼25M parameter) probe that distills the uncertainty knowledge from expensive multi-sample inference into a single forward pass over LLM hidden states. SPAN UQ employs a DETR-style span decoder to simultaneously detect spans and estimate their uncertainty via a Mixture of Beta distribution, trained with a principled combination of Beta NLL regression and contrastive ranking objectives. We construct S PAN UQ-B ENCH , the first span-level uncertainty benchmark comprising 20K prompts, ∼293K annotated spans, and continuous soft labels derived from multi-sample claim verification. Experiments on five LLM backbones show that S PAN UQ consistently achieves the best span-level uncertainty quality (AUROC 0.908–0.944, MAE 0.110–0.129), outperforming the strongest probe baseline and all sampling-based methods while being 10 –20 × faster. Its DETR-based span detector attains 0.910 F1, surpassing the best heuristic by 39.4%, enabling precise error localization that sequence-level methods cannot provide. The framework generalizes across five LLMs spanning two model families (AUROC 0.908–0.944), and we additionally observe that sequence-level uncertainty is partially decomposable: the learned importance-weighted span composition achieves ρseq = 0 .839 , suggesting that span-level estimation subsumes sequence-level as a special case. The project page is available at https://damon-demon.github.io/SpanUQ.html. 
+
+## 1 Introduction 
+
+Large language models (LLMs) generate fluent and coherent text across a wide range of tasks, yet their propensity to produce factually incorrect statements, commonly termed hallucinations, remains a critical barrier to deployment in high-stakes domains such as healthcare, legal analysis, and scientific research [ 1 ]. A fundamental step toward trustworthy LLM deployment is the ability to estimate 
+
+how uncertain the model is about each piece of information it generates. Existing approaches to uncertainty estimation operate at two extremes of granularity. Token-level methods compute scores for individual tokens using predictive entropy or learned probes [ 2– 4]. While computationally efficient, these scores are semantically incomplete: a single token rarely constitutes a verifiable 
+
+> ∗Corresponding author Preprint. arXiv:2607.05721v1 [cs.CL] 7 Jul 2026
+
+fact, and function words receive scores that carry no informational value. Sequence-level methods 
+
+produce a single score for the entire response by sampling multiple outputs and measuring their semantic dispersion [ 5 – 7]. These methods capture meaningful semantic uncertainty but require                                   
+
+> Query: “Who is Marie Curie?”
+> Response: Marie Curie was a Polish physicist who won the Nobel Prize in 1901.
+> (a) Token-Level Uncertainty: hard to interpret
+> Marie Curie was aPolish physicist who won the Nobel Prize in 19 01 .
+> (b) Sequence-Level Uncertainty: cannot localize which part is unreliable
+> Marie Curie was a Polish physicist who won the Nobel Prize in 1901. u= 0 .52
+> (c) Span-Level Uncertainty (Ours): interpretable and localizable
+> Marie Curie was a Polish physicist
+> u=0 .08
+> who won the Nobel Prize
+> u=0 .12
+> in 1901
+> u=0 .81
+> .
+> u∈[0 ,1] : uncertainty score 01
+
+Figure 1: Comparison of uncertainty estimation granularities for an LLM response containing a factual error (the Nobel Prize in Physics was awarded in 1903, not 1901). (a) Token-level methods assign per-token scores that are noisy and hard to interpret. (b) Sequence-level methods produce a single score, unable to localize which part is unre-liable. (c) Our span-level approach identifies claim spans and assigns each an uncertainty score, enabling precise hallucination localization. 
+
+10 –20 × inference cost and cannot localize which parts 
+
+of a response are unreli-able. Consider the exam-ple in Fig. 1 : an LLM gen-erates “Marie Curie was a Polish physicist who won the Nobel Prize in 1901.” Atoken-level method (a) as-signs separate scores to ev-ery token; function words like “was” and “a” receive low but meaningless scores, while “physicist” receives a moderate score despite be-ing correct, simply because it is a less predictable con-tinuation. A sequence-level method (b) collapses the en-tire response into a single score ( u=0 .52 ), averaging correct and incorrect claims into an unactionable middle ground. What users actually need is uncer-tainty at the level of spans (c): “Polish physicist” ( u=0 .08 , confident), “the Nobel Prize” ( u=0 .12 ,confident), and “1901” ( u=0 .81 , uncertain), since the Nobel Prize in Physics was awarded in 1903, not 1901. We define a span as a contiguous text segment that conveys a single, coherent unit of meaning whose uncertainty can be independently assessed. In practice, spans often correspond to what the fact-checking literature calls claims or atomic facts [8 ], but the concept is more general: any sub-sentential fragment carrying a self-contained piece of information qualifies. In the example above, “Polish physicist”, “the Nobel Prize”, and “1901” are each a span. Unlike tokens, which are sub-word units without standalone meaning, and unlike full sequences, which may bundle multiple assertions of varying reliability, spans are the natural unit for uncertainty estimation: each carries exactly one assessable piece of information, making its uncertainty score directly interpretable and actionable. This observation leads us to formalize Span-Level Uncertainty Estimation (SLUE) as a new task: given a single LLM forward pass, jointly detect spans and assign continuous uncertainty scores to each. To address this task, we introduce S PAN UQ ( Fig. 2 ), a lightweight ( ∼25M-parameter) probe that 
+
+distills the uncertainty knowledge captured by expensive multi-sample inference into a single forward pass over frozen LLM hidden states. We construct S PAN UQ-B ENCH , the first span-level uncertainty benchmark with 20K queries and 293K spans across five domains, and evaluate on five LLMs (Qwen3-14B/8B/4B/30B-A3B, Mistral-7B) spanning 4B–30B parameters with both dense and mixture-of-experts architectures. Our main contributions are as follows. (1) Problem Formulation. We formalize SLUE as a new task that bridges the gap between token-level and sequence-level uncertainty estimation, operating at the natural granularity of verifiable claims. (2) Framework. We introduce S PAN UQ, combining a DETR-style span decoder, Mixture of Beta uncertainty estimation, and Uncertainty-Conditioned Iterative Refinement into a lightweight probe ( ∼25M parameters) that distills multi-sample uncertainty into a single forward pass. (3) Benchmark. We construct S PAN UQ-B ENCH , the first span-level uncertainty benchmark with continuous soft labels, spanning five domains and 20K queries, together with a multi-sample distillation pipeline that automatically decomposes LLM responses into atomic spans and derives continuous uncertainty labels. (4) Empirical Results. Experiments on five LLM backbones show that S PAN UQ consistently achieves the best span-level uncertainty quality (AUROC 0.908–0.944, MAE 0.110–0.129), outperforming the strongest probe baseline and all sampling-based methods while being 10 –20 × faster. Additionally, we observe that sequence-level uncertainty is partially decomposable into span-level components ( ρseq = 0 .839 ), suggesting that span-level estimation subsumes sequence-level as a special case. 22 Related Work 
+
+Uncertainty Estimation in LLM Generation. Uncertainty estimation for LLMs has been studied at multiple granularities. At the token level , predictive entropy serves as a natural baseline [ 2 ], and lightweight hidden-state probes can improve upon it [ 3, 9 ]. However, factual correctness is rarely a property of individual tokens: a hallucinated claim such as “ born in Paris ” is incorrect as a unit, yet token-level scores assign independent values to each word. To capture broader semantics, sequence-level methods aggregate uncertainty over entire generations. Semantic Entropy [ 5 ] clusters sampled outputs by meaning and computes entropy over the clusters; Kernel Language Entropy [ 10 ] replaces discrete clustering with kernel-based similarity. Other directions include epistemic–aleatoric decom-position [ 11 ], claim-level entailment graphs [ 12 ], and self-calibration via verbalized confidence [ 7]. 
+
+Sentence-level approaches [ 13 ] partially localize uncertainty but rely on syntactic boundaries that may not align with semantic units. UncertaintyRAG [ 14 ] takes a step toward span-level estimation by computing a signal-to-noise ratio (SNR) over token self-information within fixed sliding windows; however, its spans are defined by rigid windows (length 20, stride 10) rather than learned semantic boundaries, and the resulting scores are used for RAG chunk retrieval rather than generation-quality assessment. All of these methods produce either a single score per generation or per-token scores, leaving a gap at the span level , the natural granularity of factual claims. S PAN UQ fills this gap by jointly detecting variable-length spans and assigning continuous uncertainty scores to each. 
+
+Hallucination Detection. A parallel line of work asks whether LLM internal representations encode truthfulness signals. Hidden-state probes can detect hallucinations invisible to output-based methods [ 15 , 16 ], and Semantic Entropy Probes [ 17 ] distill multi-sample signals into single-pass classifiers. These approaches establish that hidden states are rich sources of factuality information, but they operate at the token or sentence level and produce binary rather than continuous estimates. From the output side, external-knowledge methods such as FActScore [ 8 ] and SAFE [ 18 ] decompose generations into atomic claims and verify each against a knowledge source, while SelfCheckGPT [ 19 ]measures cross-sample consistency without retrieval. FAVA [ 20 ] fine-tunes a model to detect and edit hallucinated spans, and the Mu-SHROOM shared task [ 21 ] benchmarks span-level hallucination detection, though participating systems rely on heuristic span extraction. A key distinction is that hallucination detection is binary and often requires external verification, whereas uncertainty estimation produces continuous confidence scores from internal signals alone. S PAN UQ bridges the two by learning continuous uncertainty from hidden states, achieving AUROC >0.93 for binary hallucination prediction as a byproduct. 
+
+Span Detection. Span detection has a rich history, from named entity recognition [ 22 ] to coreference resolution [ 23 ] and relation extraction [ 24 ]. Traditional BIO labeling cannot represent overlapping spans, a limitation for uncertainty estimation where multiple claims may coexist within a sentence. Recent set-prediction approaches inspired by DETR [ 25 ] address this: CLUE [ 26 ] uses a DETR-style architecture for claim-level uncertainty, and HaluNet [ 27 ] applies a similar paradigm to hallucination span detection. S PAN UQ adopts the DETR framework but differs in two respects: (1) we detect 
+
+uncertainty-relevant spans, i.e., any semantically complete unit whose factuality can be assessed, rather than named entities or predefined claim types; and (2) the span detector is jointly trained with the uncertainty scorer, learning boundaries that are maximally informative for uncertainty estimation. 
+
+## 3 Method: S PAN UQ 
+
+We present S PAN UQ, a framework that estimates uncertainty at the span level from a single forward pass through a frozen large language model. The core idea is to distill the uncertainty knowledge captured by expensive multi-sample inference into a lightweight module that operates directly on LLM hidden states. Given a response y = ( y1, . . . , y T ) generated by an LLM for an input prompt x, S PAN UQ simultaneously (i) detects semantically meaningful spans {sk = ( bk, e k)}Kk=1 
+
+and (ii) estimates a continuous uncertainty score uk ∈ [0 , 1] for each span, where 0 denotes full confidence and 1 denotes maximal uncertainty. Fig. 2 provides an overview and Fig. A1 illustrates the end-to-end span-level uncertainty estimation process with a concrete example (see App. A for full design rationale). Training requires ground-truth spans and uncertainty labels: each span corresponds to a contiguous text segment expressing a single verifiable assertion, and its label u∗ 
+
+> k
+
+∈ [0 , 1] measures the fraction of stochastic samples in which the assertion is unsupported (details in Sec. 4.1 ). We first 3Frozen         
+
+> LLM
+> H(ℓ1)
+> H(ℓ2)
+> H(ℓ3)
+> hidden states
+> Mean Fusion
+> Project
+> d→dp
+> Transformer Encoder Z
+> Span Queries Q
+> DETR Decoder
+> Enrichment Gate
+> content pool Boundary
+> MoB ˆu
+> {(bk, e k,ˆuk)}
+> a set of detected spans with uncertainty
+> UCIR Refinement
+> q(2)
+
+Figure 2: Overview of the S PAN UQ architecture. Given a frozen LLM’s hidden states from three selected layers, the probe fuses, projects, and encodes token representations, then uses a DETR-style decoder with learnable span queries to simultaneously detect spans and estimate their uncertainty via Mixture of Beta (MoB) heads. Uncertainty-Conditioned Iterative Refinement (UCIR, dashed) feeds Round-1 estimates back through the shared decoder for a second pass. Each output tuple (bk, e k, ˆuk)
+
+denotes the beginning position, end position, and estimated uncertainty of a detected span. The trainable probe adds only ∼25M parameters ( <0.2% of the LLM). describe the model architecture ( Sec. 3.1 ), then the training procedure ( Sec. 3.2 ) and inference with iterative refinement ( Sec. 3.3 ). 
+
+3.1 Model Architecture 
+
+The S PAN UQ module is a lightweight probe ( ∼25M parameters) attached to a frozen LLM backbone. It consists of five components: multi-layer fusion, a token encoder, a DETR-style span decoder, span feature enrichment, and prediction heads. 
+
+Multi-Layer Fusion. Different LLM layers encode different aspects of uncertainty: early layers capture syntax while mid-to-late layers encode factual knowledge [ 16 ]. Our layer probing study reveals that uncertainty information peaks in layers 20–26 of Qwen3-14B (40 total), following an inverted-U curve. We select three clustered layers from this peak zone via a lightweight single-layer probing sweep on each backbone; for other models, the optimal zone shifts proportionally with depth (App. B.6, Tab. A11). Given hidden states H(ℓ) ∈ RT ×d from selected layers L = {ℓ1, ℓ 2, ℓ 3}, we obtain the fused hidden states ¯H as follows: 
+
+¯H = 1
+
+|L| 
+
+X
+
+> ℓ∈L
+
+H(ℓ) ∈ RT ×d. (1) 
+
+Token Encoder. The fused hidden states ¯H are projected to a lower dimension dp and contextualized through a 2-layer Transformer encoder to obtain the content pool Z:
+
+Z = TransformerEnc  Wproj ¯H + P  ∈ RT ×dp , (2) where Wproj ∈ Rdp×d is a linear projection and P denotes sinusoidal positional encodings. 
+
+DETR-Style Span Decoder. Inspired by DETR [ 25 ], we formulate span detection as a set prediction problem. A set of N =32 learnable span queries Q ∈ RN ×dp , which are content-agnostic embedding vectors that each learn to bind to one candidate span and analogous to object queries in DETR [ 25 ], attend to the token sequence through a 3-layer Transformer decoder. This capacity comfortably exceeds the typical span count per response ( ∼15), ensuring sufficient detection slots while keeping computation tractable. The decoder produces the refined query set ˆQ:
+
+ˆQ = TransformerDec (Q, Z) ∈ RN ×dp , (3) where each layer applies self-attention among span queries (modeling inter-span dependencies) followed by cross-attention over Z. This design naturally handles overlapping spans and enables parallel detection in a single pass. Following DETR, we use the Hungarian algorithm [ 28 ] to find an optimal one-to-one assignment ˆσ between predicted and ground-truth spans. The matching cost for each prediction–target pair sums three terms: (i) L1 boundary distance plus Generalized IoU [ 29 ], (ii) absolute uncertainty error, and (iii) binary cross-entropy of the validity score (details in App. D.1 ). 
+
+Span Feature Enrichment. The decoder queries capture where a span is but lack direct access to the 
+
+content within the predicted region. To bridge this gap, we introduce a differentiable soft boundary 4mask that extracts span-level content from the token features Z. Given predicted boundaries (ˆbk, ˆek),we define a mask mk(t) over token positions: 
+
+mk(t) = σ τ (t − ˆbk) · σ τ (ˆ ek − t), (4) where σ is the sigmoid function and τ controls boundary sharpness. Intuitively, mk(t) ≈ 1 for tokens inside the predicted span and decays smoothly to 0 outside, enabling gradient flow through the boundary predictions. We then pool token features via mask-weighted attention, yielding content vector ck:
+
+ck =
+
+> T
+
+X
+
+> t=1
+
+αk,t · zt, αk,t ∝ mk(t) · exp   ˆq⊤ 
+
+> k
+
+Wazt/pdp
+
+, (5) where the mask mk(t) restricts attention to the predicted region while the query–token dot product selects the most informative tokens within it. The pooled content is fused with the query via a gated residual connection to produce the enriched query ˜qk:
+
+˜qk = ˆ qk + σ Wg ˆqk + bg
+
+ ⊙ ck, (6) which adaptively controls how much span content contributes. This gating is especially useful for short spans where the query alone may suffice. 
+
+Prediction Heads. Each enriched query ˜qk is passed to three heads. Span regression predicts normalized boundaries (ˆbk, ˆek) = σ(MLP reg ( ˆ qk)) from the pre-enrichment query to avoid circular dependency. Validity classification predicts pvalid  
+
+> k
+
+= σ(MLP val ( ˜ qk)) to distinguish real spans from unused slots (i.e., queries not matched to any span). Mixture of Beta (MoB) uncertainty estimation 
+
+models span uncertainty as: 
+
+p(uk | ˜qk) = 
+
+> J
+
+X
+
+> j=1
+
+πk,j · Beta (uk; αk,j , β k,j ), (7) with J = 3 components and αmin = 0 .5 to allow U-shaped distributions that capture the bimodal nature of uncertainty. The predicted score is the mixture mean ˆuk = P 
+
+> j
+
+πk,j αk,j /(αk,j + βk,j ).Span-level scores are aggregated to a sequence-level estimate via importance-weighted pooling: 
+
+ˆuseq =
+
+> N
+
+X
+
+> k=1
+
+wk · ˆuk, wk = softmax k
+
+ pvalid  
+
+> k
+
+· MLP imp ( ˜ qk), (8) providing a principled decomposition of sequence-level uncertainty into span-level components. 
+
+3.2 Training Two-Phase Strategy. We adopt a two-phase training strategy: (1) a warmup phase (epochs 1– Ew)that trains only span detection components (regression + validity) to establish reliable boundaries; and (2) a joint phase (epochs Ew+1– E) that activates all components with the full loss: 
+
+L = λreg Lreg + λval Lval 
+
+| {z }
+
+> span detection
+
++ λuq LMoB + λcon Lcon + λrank Lrank 
+
+| {z }
+
+> uncertainty estimation
+
++λaux Laux . (9) 
+
+Loss Components. The span regression loss Lreg combines L1 and Generalized IoU losses over Hungarian-matched span pairs. The validity loss Lval is binary cross-entropy over all span queries. The MoB NLL loss LMoB maximizes the likelihood of ground-truth uncertainty under the predicted mixture (Eq. 7): 
+
+LMoB = − 1
+
+M
+
+> M
+
+X
+
+> i=1
+
+log 
+
+> J
+
+X
+
+> j=1
+
+πi,j · Beta (u∗
+
+> ˆσ(i)
+
+; αi,j , β i,j ), (10) where M is the number of matched spans and ˆσ the Hungarian assignment. The contrastive ranking loss Lrank preserves ordinal structure among span pairs within the same sequence: 
+
+Lrank = 1
+
+|P| 
+
+X
+
+> (i,j )∈P
+
+max  0, −sign (u∗ 
+
+> i
+
+− u∗ 
+
+> j
+
+) · (ˆ ui − ˆuj ) + m, (11) 5where P is a set of span pairs with sufficiently different ground-truth uncertainty (see App. D.1 for the stratified sampling strategy) and m is the margin. The consistency loss Lcon = ∥ˆuseq − u∗
+
+> seq
+
+∥22
+
+enforces agreement between span-aggregated and ground-truth sequence-level uncertainty (with detached gradients to prevent interference). Auxiliary losses Laux apply the same objectives to intermediate decoder layers following DETR. Full formulations of all components and loss weights are in App. D.1 .
+
+3.3 Inference with Iterative Refinement 
+
+At inference time, S PAN UQ requires only a single LLM forward pass to extract hidden states, followed by a lightweight forward pass through the S PAN UQ module. No sampling, multiple forward passes, or external knowledge retrieval is needed. Since initial uncertainty estimates from a single decoder pass may be coarse, Uncertainty-Conditioned Iterative Refinement (UCIR) feeds Round 1 estimates back into the decoder for a refinement round: 
+
+q(2)  
+
+> k
+
+= q(1)  
+
+> k
+
++ MLP cond 
+
+ ˆu(1)  
+
+> k
+
+, ˆν(1)  
+
+> k
+
+, p (1) 
+
+> k
+
+, (12) where ˆν(1)  
+
+> k
+
+is the effective precision and p(1)  
+
+> k
+
+the validity probability. The conditioned queries pass through the same decoder (shared weights), giving the final uncertainty estimate ˆuk:
+
+ˆuk = α · ˆu(2)  
+
+> k
+
++ (1 − α) · ˆu(1)  
+
+> k
+
+, (13) with α = 0 .7. Both rounds contribute to the training loss (Round 1 with reduced weight). UCIR adds 
+
+<15% inference overhead since the decoder is shared. The full inference pipeline : 1) extract hidden states from layers L; 2) fuse, project, and encode; 3) decode span queries and predict boundaries, validity, and uncertainty; 4) apply UCIR; 5) filter by validity threshold and output {(bk, e k, ˆuk)}. The entire module adds <5% latency to the LLM forward pass. 
+
+## 4 Experiments 
+
+We evaluate S PAN UQ on span-level uncertainty estimation quality, calibration, span detection accuracy, and ablation of each architectural component. All main experiments use Qwen3-14B as the backbone LLM; the full model adds only 24.4M trainable parameters ( <0.2% of the LLM). 
+
+4.1 Dataset: S PAN UQ-B ENCH 
+
+Evaluating span-level uncertainty requires ground-truth annotations at the span granularity, which no existing benchmark provides. We construct S PAN UQ-B ENCH , a benchmark with training labels derived from multi-sample distillation and test labels from human annotation. 
+
+Data Collection. We collect LLM-generated texts from five domains using Qwen3-14B as the primary backbone: 1) Long-form QA (42%) from Natural Questions [ 30 ]; 2) TriviaQA (25%) from the unfiltered split [ 31 ]; 3) ELI5 (15%) from Reddit explanatory questions; 4) Biography generation (10%) following the FActScore protocol [ 8], with entities stratified by Wikipedia popularity; and 5) FELM 
+
+(8%) aggregating challenging examples from FELM [ 32 ], TruthfulQA [ 33 ], and HaluEval [ 34 ]. The resulting dataset contains 20k prompts spanning factoid, explanatory, and reasoning questions. 
+
+Labels via Multi-Sample Distillation. For each prompt, we generate a primary response with greedy decoding ( T = 0 ), which serves as the probe input (providing hidden states and span positions). Separately, we sample S = 20 diverse responses at temperature T = 1 .0, decompose each into atomic claims using an LLM judge, verify claims against Wikipedia, and compute a soft label u∗ 
+
+> k
+
+∈ [0 , 1] as the fraction of samples in which span sk is unsupported: 
+
+u∗ 
+
+> k
+
+= 1 − 1
+
+S
+
+> S
+
+X
+
+> s=1
+
+1[span sk is supported in sample s]. (14) The probe thus learns to distill the uncertainty knowledge from 20 stochastic samples into a single deterministic forward pass. For Qwen3-14B, the resulting training set contains ∼17,500 examples with ∼256K span-level soft labels. The distribution is bimodal: most spans cluster near u ≈ 0
+
+(consistently correct) or u ≈ 1 (consistently wrong), with a meaningful tail of intermediate values. For evaluation, we apply the same distillation pipeline to responses generated with greedy decoding (T = 0 ). We validated a 10% random sample of the test set, confirming that the automatic labels are reliable. Full data collection details ( App. C.1 ), multi-sample distillation pipeline ( App. C.2 ), test set construction ( App. C.3 ), and benchmark statistics ( App. C.4 ) are provided in the Appendix. 6Table 1: Span-level uncertainty estimation across five LLM backbones spanning two model families, three scales, and both dense and MoE architectures. Token-level methods aggregate token scores within each span; sequence- and claim-level methods broadcast a single score to all spans in the sequence. ∗MLP Probe uses ground-truth span boundaries (oracle setting). Best in bold , second best underlined (per model).                                                                                                                                  
+
+> Qwen3-14B Qwen3-8B Qwen3-4B Qwen3-30B-A3B Mistral-7B Method AUROC ↑MAE ↓ρs↑AUROC ↑MAE ↓ρs↑AUROC ↑MAE ↓ρs↑AUROC ↑MAE ↓ρs↑AUROC ↑MAE ↓ρs↑
+> Token Entropy 0.603 0.230 0.097 0.580 0.226 0.111 0.575 0.272 0.119 0.592 0.196 0.097 0.569 0.231 0.109 MLP Probe ∗0.881 0.139 0.575 0.884 0.149 0.612 0.873 0.179 0.626 0.893 0.120 0.575 0.863 0.146 0.562 Verbalized Conf. 0.593 0.187 0.131 0.574 0.217 0.155 0.595 0.267 0.141 0.598 0.167 0.117 0.498 0.171 −0.026 SelfCheckGPT-NLI 0.808 0.158 0.471 0.801 0.182 0.473 0.782 0.215 0.479 0.813 0.147 0.455 0.816 0.154 0.499 P(True) 0.526 0.197 0.087 0.546 0.233 0.121 0.529 0.273 0.122 0.541 0.194 0.123 0.505 0.199 0.005 FActScore 0.625 0.178 0.181 0.762 0.197 0.405 0.714 0.233 0.390 0.701 0.169 0.306 0.661 0.182 0.297 SPAN UQ 0.939 0.110 0.685 0.930 0.129 0.692 0.944 0.126 0.754 0.936 0.110 0.647 0.908 0.126 0.637
+
+4.2 Experimental Setup Models. All core experiments use Qwen3-14B (dense, 14B parameters) [ 35 ] as the primary backbone. Hidden states are extracted from layers 22, 24, and 26 (out of 40 total) and fused via element-wise mean, following our layer importance probing study ( App. B.6 ). The LLM is frozen throughout; only the S PAN UQ module is trained. To evaluate cross-model generalization, we train separate S PAN UQ probes on four additional LLMs: Qwen3-8B, Qwen3-4B, Qwen3-30B-A3B (MoE), and Mistral-7B-Instruct-v0.3. Each model generates its own responses and hidden states; the data construction pipeline ( Sec. 4.1 ) and training procedure are identical, with layer selection and projection dimensions tuned per model via hyperparameter sweep ( App. B.6 ). Full model specifications are in App. D.2 .
+
+Training Details. We train on 17,494 samples ( ∼256K valid spans) with batch size 16 on a single NVIDIA H100 80GB GPU. Training proceeds in two phases: a 15-epoch warmup phase that trains only the span detection components (token encoder, DETR decoder, regression head, validity head), followed by a 25-epoch joint phase that also activates the MoB uncertainty head, contrastive ranking loss, and UCIR refinement. We use AdamW with learning rate 10 −4, weight decay 0.01 , and cosine annealing. Early stopping monitors dev AUROC with patience 5. Training curves and computational cost analysis are in App. D.4 and D.5 .
+
+Evaluation Metrics. We report metrics spanning discrimination, regression, and correlation. AU-ROC measures binary hallucination detection (threshold u ≥ 0.5). MAE is the mean absolute error between predicted ˆu and ground-truth u∗. Spearman ( ρ) correlation captures ranking quality at both span and sequence levels; we abbreviate ρs ≡ ρspan in tables. AUROC @0 .3 is the sequence-level AUROC treating sequences with mean uncertainty ≥ 0.3 as positive. Detection F1 is the harmonic mean of span detection precision ( Prec ) and recall ( Rec ) under IoU ≥ 0.3 matching. ECE (Expected Calibration Error) measures the gap between predicted uncertainty and observed error rate. 
+
+Baselines. We compare against methods spanning four granularity levels. Token-level : Token Entropy 
+
+(mean token-level entropy from output logits, aggregated over GT spans) and MLP Probe (3-layer MLP trained on the same span features as S PAN UQ, with oracle span boundaries). Sequence-level :
+
+Semantic Entropy (SE) [ 5 ] (NLI-based clustering of 10 sampled responses), SelfCheckGPT-NLI [19 ](NLI-based self-consistency over 10 samples), Verbalized Confidence (prompting the LLM to self-assess factual confidence on a 0–100 scale), P(True) [ 2 ] (probability the LLM assigns to “True” when asked whether its answer is correct), INSIDE [ 13 ] (eigenvalue decomposition of Jaccard similarity matrices over sampled responses), and KLE [10 ] (kernel-based language entropy using RBF kernels on NLI embeddings). Claim-level : FActScore [8 ] (fraction of claims not supported by self-verification, computed from our claim decomposition pipeline). For end-to-end evaluation ( Sec. 4.4 ), we also pair the MLP probe with heuristic span detectors including sliding windows, sentence boundaries, NER entities, and token-level thresholding. For span-level evaluation ( Tab. 1 ), sequence- and claim-level baselines broadcast their scores to all spans within the sequence. For sequence-level evaluation (Tab. A1 in the Appendix), S PAN UQ aggregates span predictions via importance-weighted top-k.
+
+4.3 Main Results Span-Level Analysis (Tab. 1). SPAN UQ achieves an AUROC of 0.939 , outperforming the strongest probe baseline (MLP Probe, 0.881) by 5.8 absolute points and the best multi-sample method (SelfCheckGPT-NLI, 0.808) by 13.1 points, while requiring only a single forward pass. Sequence-level methods suffer from a fundamental granularity mismatch when broadcast to spans: SelfCheckGPT-NLI achieves reasonable AUROC (0.808) but assigns the same score to all spans within a sequence, limiting its span-level Spearman correlation to 0.471. FActScore (0.625 AUROC) achieves only 0.181 Spearman correlation, indicating that its binary self-verification outputs fail to 7capture fine-grained uncertainty ranking. P(True) performs near chance (AUROC = 0.526), because the LLM overwhelmingly predicts “True” (93.8% of claims), yielding almost no discriminative signal. SPAN UQ also achieves the lowest MAE ( 0.110 ), owing to the Mixture of Beta output distribution (App. B.7 ). These trends hold consistently across all five backbones, including three Qwen3 scales (14B/8B/4B) and entity popularity strata ( App. B.5 ). The Spearman correlation of 0.685 represents a 19.1% relative improvement over the MLP Probe (0.575), demonstrating that S PAN UQ preserves fine-grained uncertainty ordering across spans. 
+
+Sequence-Level Aggregation. When aggregated to the sequence level ( Tab. A1 in the Appendix), SPAN UQ achieves AUROC @0 .3 = 0 .948 and Spearman ρ = 0 .851 , competitive with or surpassing all dedicated sequence-level methods including SelfCheckGPT-NLI ( ρ = 0 .805 ) which requires 10 ×
+
+generation cost. The MLP Probe with oracle span boundaries slightly outperforms S PAN UQ at the sequence level ( ρ = 0 .858 ), but this advantage disappears when ground-truth spans are unavailable. SPAN UQ’s span-level superiority (AUROC: 0.939 vs. 0.881) and end-to-end detection capability (Sec. 4.4 ) make it the only practical solution for fine-grained uncertainty estimation. Notably, this span-to-sequence decomposability is consistent across all five backbones (Spearman ρseq ≥ 0.775 ;
+
+App. B.3 ), confirming that fine-grained span predictions capture sufficient structure for reliable sequence-level inference. More details can be found in App. B.1 . Qualitative examples illustrating span-level predictions are in App. B.4 .
+
+4.4 End-to-End Span Detection 
+
+A key advantage of S PAN UQ is its ability to simultaneously detect uncertain spans and estimate their uncertainty, without requiring pre-defined span boundaries. Tab. 2 compares S PAN UQ’s DETR-based span detector against heuristic alternatives, where each method’s detected spans are scored by the same MLP probe for a controlled comparison. Table 2: End-to-end span detection comparison. Each method detects spans, scored by an identical MLP probe. Bold : best; underline: best heuristic.                                                        
+
+> Span Method Prec ↑Rec ↑F1 ↑AUROC ↑MAE ↓ρs↑
+> Slide Win (10) 0.415 0.932 0.574 0.840 0.153 0.522 Slide Win (20) 0.614 0.699 0.653 0.853 0.152 0.540 Slide Win (40) 0.708 0.415 0.524 0.860 0.158 0.549 Sent. Boundary 0.849 0.479 0.613 0.861 0.152 0.556 Token Thr (0.7) 0.325 0.480 0.388 0.815 0.150 0.463 NER (spaCy) 0.397 0.396 0.396 0.777 0.205 0.470 BIO Tagger 0.046 0.260 0.079 0.763 0.165 0.398 SPAN UQ (Ours) 0.857 0.970 0.910 0.927 0.142 0.736
+
+Detection Quality. SPAN UQ’s DETR detector achieves a detection F1 of 0.910 , surpassing the best heuristic (Sliding Window 20, F1 = 0.653) by 39.4%. It maintains both high precision (0.857) and high re-call (0.970), whereas heuristic meth-ods face a precision–recall trade-off: sentence boundaries achieve high precision (0.849) but low re-call (0.479), while small sliding win-dows achieve high recall (0.932) but low precision (0.415). 
+
+Impact on Uncertainty Estimation. The downstream AUROC gap is even more striking: S PAN UQ achieves 0.927 versus the best heuristic’s 0.861 (+7.7%). The span-level correlation ρspan shows the largest gap: 0.736 versus 0.556 (+32.4%), demonstrating that learned span detection is essential for preserving fine-grained uncertainty ordering. 
+
+BIO Tagger Failure. The BIO sequence tagger, the standard approach in span extraction tasks, performs worst (F1 = 0.079, AUROC = 0.763). This is because BIO tagging produces non-overlapping spans, but ground-truth uncertainty spans frequently overlap (a single token may belong to multiple claims). The BIO tagger detects 165K candidate spans but only 7,663 match ground truth, yielding a precision of merely 4.6%. This motivates our DETR-based set prediction approach, which naturally handles overlapping spans via parallel query decoding. 
+
+4.5 Ablation Study Table 3: Component ablation. Each row adds one component to the previous configuration.                            
+
+> Configuration AUROC ↑ECE ↓MAE ↓ρs↑ρseq ↑
+> Base DETR + Single Beta 0.907 0.058 0.154 0.673 0.765 + Enrichment Gate 0.920 0.052 0.144 0.725 0.729 + MoB ( K=3 )0.933 0.020 0.116 0.760 0.846 + UCIR (1 round) 0.939 0.013 0.106 0.790 0.839
+
+We ablate each component of SPAN UQ by progressively adding modules to the base DETR architec-ture. Tab. 3 reports test-set results; all runs share identical hyperparam-eters except the ablated component. 
+
+Enrichment Gate. Adding the span enrichment gate improves AUROC by 1.3% (0.907 →0.920) and 
+
+ρspan by 5.2% (0.673 →0.725), confirming that providing the uncertainty scorer with direct access to span content is beneficial. Notably, ρseq decreases slightly (0.765 →0.729): the enrichment gate 8sharpens span-level estimates, which can redistribute probability mass among spans within a sequence and introduce minor inconsistencies in the aggregated sequence score. 
+
+Mixture of Beta (MoB). Replacing the single Beta distribution with a K=3 mixture yields the largest single improvement: +1.3% AUROC (0.920 →0.933), −62% ECE (0.052 →0.020), and −19% MAE (0.144 →0.116). The MoB distribution captures the multi-modal nature of uncertainty: certain spans cluster near u=0 , hallucinated spans near u=1 , and partially uncertain spans form an intermediate mode. A single Beta cannot represent this structure. MoB is also nearly self-calibrated (raw ECE = 0.020, T =1 .05 ), whereas the single Beta requires aggressive temperature correction ( T =0 .83 ) to reduce its raw ECE from 0.052 to 0.029. We provide detailed analyses of layer selection strategy and MoB hyperparameters in App. B.6 and B.7 , along with a span enrichment analysis (gate vs. concat vs. add fusion, attention vs. mean pooling) in App. B.8 .
+
+Uncertainty-Conditioned Iterative Refinement (UCIR). A single UCIR round provides the second-largest improvement: +0.6% AUROC (0.933 →0.939) and +3.0% ρspan (0.760 →0.790). UCIR allows the model to refine its uncertainty estimates by conditioning on its own initial predictions, effectively implementing a “second look” that corrects systematic errors. The shared decoder reuses detection weights with only a lightweight MLP adapter and residual connection ( α=0 .7), amounting to negligible parameter overhead. The improvement is most pronounced for ρspan , suggesting that UCIR primarily improves the ranking of uncertainty estimates: conditioning on the initial estimate allows the model to identify and correct systematic biases, e.g., spans initially predicted as moderately uncertain but that should be highly uncertain based on their content. The marginal ρseq decrease (0.846 →0.839) mirrors the enrichment gate pattern: span-focused refinement slightly perturbs the per-span scores that feed into sequence-level aggregation, but the effect is small ( <1%) and is offset by substantial gains on all other metrics. Table 4: Span boundary prediction: regression vs. pointer. Same DETR architecture (nq=32, enc2+dec3).                 
+
+> Method AUROC ↑MAE ↓Prec ↑Rec ↑ρs↑
+> Pointer (cross-attn) 0.888 0.167 0.767 0.970 —†
+> Regression (L1+GIoU) 0.922 0.143 0.838 0.970 0.725
+
+Regression vs. Pointer for Span De-tection. Tab. 4 compares our con-tinuous regression head against the more common cross-attention pointer mechanism. Regression outperforms the pointer by 3.4% AUROC and 7.1% precision while maintaining identical recall (0.970). The pointer mechanism suffers from discretization artifacts: argmax over cross-attention weights cannot represent fractional positions and struggles with long spans where attention is diffuse. Regression directly predicts continuous start/end coordinates, enabling smoother gradient flow and more precise boundary localization. Ad-ditional analyses on robustness across hyperparameter configurations and sensitivity to individual hyperparameters are in App. B.2 and D.3 .
+
+## 5 Conclusion 
+
+We formalized Span-Level Uncertainty Estimation (SLUE) and introduced S PAN UQ, a lightweight (∼25M-parameter) probe that distills multi-sample uncertainty into a single forward pass over frozen LLM hidden states, combining a DETR-style span decoder, Mixture of Beta head, and Uncertainty-Conditioned Iterative Refinement. Together with S PAN UQ-B ENCH , the first span-level uncertainty benchmark (293K spans, five domains), experiments on five LLMs (4B–30B, dense and MoE) show that S PAN UQ achieves AUROC 0.908–0.944 and MAE 0.110–0.129 while being 10 –20 × faster than sampling-based methods. The DETR detector attains 0.910 F1, surpassing the best heuristic by 39.4%, and the learned span-to-sequence composition ( ρseq = 0 .839 ) suggests that span-level estimation subsumes sequence-level as a special case. 
+
+Limitations. SPAN UQ cannot capture uncertainty from the generation process itself and requires white-box access to hidden states. The multi-sample label construction pipeline is compute-intensive, though this is a one-time cost. Our evaluation focuses on factual uncertainty in English; extending to other languages and uncertainty types (e.g., reasoning) remains future work. 
+
+Broader Impacts. Reliable span-level uncertainty estimation can improve the trustworthiness of LLM-powered systems in high-stakes domains such as healthcare, legal analysis, and education, by enabling users to identify and verify uncertain claims before acting on them. However, overreliance on uncertainty scores carries risks: users may uncritically trust spans marked as “confident,” even when the model is confidently wrong. We caution that S PAN UQ estimates epistemic uncertainty from hidden-state patterns and does not guarantee factual correctness; it should complement, not replace, human judgment and external verification. 9References 
+
+[1] Z. Ji, N. Lee, R. Frieske, T. Yu, D. Su, Y. Xu, E. Ishii, Y. J. Bang, A. Madotto, and P. Fung, “Survey of hallucination in natural language generation,” ACM computing surveys , vol. 55, no. 12, pp. 1–38, 2023. [2] S. Kadavath, T. Conerly, A. Askell, T. Henighan, D. Drain, E. Perez, N. Schiefer, Z. Hatfield-Dodds, N. DasSarma, E. Tran-Johnson et al. , “Language models (mostly) know what they know,” arXiv preprint arXiv:2207.05221 , 2022. [3] E. Fadeeva, A. Rubashevskii, A. Shelmanov, S. Petrakov, H. Li, H. Mubarak, E. Tsymbalov, G. Kuzmin, A. Panchenko, T. Baldwin et al. , “Fact-checking the output of large language models via token-level uncertainty quantification,” in Findings of the Association for Computational Linguistics: ACL 2024 , 2024, pp. 9367–9385. [4] T. Zhang, H. Shi, Y. Wang, H. Wang, X. He, Z. Li, H. Chen, L. Han, K. Xu, H. Zhang et al. ,“Tokur: Token-level uncertainty estimation for large language model reasoning,” arXiv preprint arXiv:2505.11737 , 2025. [5] L. Kuhn, Y. Gal, and S. Farquhar, “Semantic uncertainty: Linguistic invariances for uncertainty estimation in natural language generation,” arXiv preprint arXiv:2302.09664 , 2023. [6] X. Qiu and R. Miikkulainen, “Semantic density: Uncertainty quantification for large language models through confidence measurement in semantic space,” Advances in neural information processing systems , vol. 37, pp. 134 507–134 533, 2024. [7] M. Xiong, Z. Hu, X. Lu, Y. Li, J. Fu, J. He, and B. Hooi, “Can llms express their uncertainty? an empirical evaluation of confidence elicitation in llms,” arXiv preprint arXiv:2306.13063 ,2023. [8] S. Min, K. Krishna, X. Lyu, M. Lewis, W.-t. Yih, P. Koh, M. Iyyer, L. Zettlemoyer, and H. Hajishirzi, “Factscore: Fine-grained atomic evaluation of factual precision in long form text generation,” in Proceedings of the 2023 Conference on Empirical Methods in Natural Language Processing , 2023, pp. 12 076–12 100. [9] A. Vazhentsev, L. Rvanova, I. Lazichny, A. Panchenko, M. Panov, T. Baldwin, and A. Shelmanov, “Token-level density-based uncertainty quantification methods for eliciting truthfulness of large language models,” in Proceedings of the 2025 Conference of the Nations of the Americas Chapter of the Association for Computational Linguistics: Human Language Technologies (Volume 1: Long Papers) , 2025, pp. 2246–2262. [10] A. Nikitin, J. Kossen, Y. Gal, and P. Marttinen, “Kernel language entropy: Fine-grained uncertainty quantification for llms from semantic similarities,” Advances in Neural Information Processing Systems , vol. 37, pp. 8901–8929, 2024. [11] Y. A. Yadkori, I. Kuzborskij, A. György, and C. Szepesvári, “To believe or not to believe your llm,” arXiv preprint arXiv:2406.02543 , 2024. [12] L. Da, T. Chen, L. Cheng, and H. Wei, “Llm uncertainty quantification through directional entailment graph and claim level response augmentation,” arXiv preprint arXiv:2407.00994 ,2024. [13] C. Chen, K. Liu, Z. Chen, Y. Gu, Y. Wu, M. Tao, Z. Fu, and J. Ye, “Inside: Llms’ internal states retain the power of hallucination detection,” arXiv preprint arXiv:2402.03744 , 2024. [14] Z. Li, J. Xiong, F. Ye, C. Zheng, X. Wu, J. Lu, Z. Wan, X. Liang, C. Li, Z. Sun et al. , “Un-certaintyrag: Span-level uncertainty enhanced long-context modeling for retrieval-augmented generation,” arXiv preprint arXiv:2410.02719 , 2024. [15] A. Azaria and T. Mitchell, “The internal state of an llm knows when it’s lying,” in Findings of the Association for Computational Linguistics: EMNLP 2023 , 2023, pp. 967–976. [16] H. Orgad, M. Toker, Z. Gekhman, R. Reichart, I. Szpektor, H. Kotek, and Y. Belinkov, “Llms know more than they show: On the intrinsic representation of llm hallucinations,” arXiv preprint arXiv:2410.02707 , 2024. 10 [17] J. Kossen, J. Han, M. Razzak, L. Schut, S. Malik, and Y. Gal, “Semantic entropy probes: Robust and cheap hallucination detection in llms,” arXiv preprint arXiv:2406.15927 , 2024. [18] J. Wei, C. Yang, X. Song, Y. Lu, N. Hu, J. Huang, D. Tran, D. Peng, R. Liu, D. Huang et al. ,“Long-form factuality in large language models,” Advances in Neural Information Processing Systems , vol. 37, pp. 80 756–80 827, 2024. [19] P. Manakul, A. Liusie, and M. Gales, “Selfcheckgpt: Zero-resource black-box hallucination detection for generative large language models,” in Proceedings of the 2023 conference on empirical methods in natural language processing , 2023, pp. 9004–9017. [20] A. Mishra, A. Asai, V. Balachandran, Y. Wang, G. Neubig, Y. Tsvetkov, and H. Ha-jishirzi, “Fine-grained hallucination detection and editing for language models,” arXiv preprint arXiv:2401.06855 , 2024. [21] R. Vázquez, T. Mickus, E. Zosa, T. Vahtola, J. Tiedemann, A. Sinha, V. Segonne, F. Sánchez-Vega, A. Raganato, J. Libovick `y et al. , “Semeval-2025 task 3: Mu-shroom, the multilingual shared-task on hallucinations and related observable overgeneration mistakes,” in Proceedings of the 19th International Workshop on Semantic Evaluation (SemEval-2025) , 2025, pp. 2472–2497. [22] G. Lample, M. Ballesteros, S. Subramanian, K. Kawakami, and C. Dyer, “Neural architectures for named entity recognition,” in Proceedings of the 2016 conference of the North American chapter of the association for computational linguistics: human language technologies , 2016, pp. 260–270. [23] K. Lee, L. He, M. Lewis, and L. Zettlemoyer, “End-to-end neural coreference resolution,” in 
+
+Proceedings of the 2017 conference on empirical methods in natural language processing , 2017, pp. 188–197. [24] D. Wadden, U. Wennberg, Y. Luan, and H. Hajishirzi, “Entity, relation, and event extraction with contextualized span representations,” in Proceedings of the 2019 conference on empirical methods in natural language processing and the 9th international joint conference on natural language processing (emnlp-ijcnlp) , 2019, pp. 5784–5789. [25] N. Carion, F. Massa, G. Synnaeve, N. Usunier, A. Kirillov, and S. Zagoruyko, “End-to-end object detection with transformers,” in European conference on computer vision . Springer, 2020, pp. 213–229. [26] Y.-H. Wang, A. Bai, C.-P. Tsai, and C.-J. Hsieh, “Clue: Concept-level uncertainty estimation for large language models,” arXiv preprint arXiv:2409.03021 , 2024. [27] C. Tong, Q. Zhang, J. Gao, L. Jiang, Y. Liu, and N. Sun, “Halunet: Multi-granular uncer-tainty modeling for efficient hallucination detection in llm question answering,” arXiv preprint arXiv:2512.24562 , 2025. [28] H. W. Kuhn, “The hungarian method for the assignment problem,” Naval research logistics quarterly , vol. 2, no. 1-2, pp. 83–97, 1955. [29] H. Rezatofighi, N. Tsoi, J. Gwak, A. Sadeghian, I. Reid, and S. Savarese, “Generalized inter-section over union: A metric and a loss for bounding box regression,” in Proceedings of the IEEE/CVF conference on computer vision and pattern recognition , 2019, pp. 658–666. [30] T. Kwiatkowski, J. Palomaki, O. Redfield, M. Collins, A. Parikh, C. Alberti, D. Epstein, I. Polosukhin, J. Devlin, K. Lee et al. , “Natural questions: a benchmark for question answering research,” Transactions of the Association for Computational Linguistics , vol. 7, pp. 453–466, 2019. [31] M. Joshi, E. Choi, D. S. Weld, and L. Zettlemoyer, “Triviaqa: A large scale distantly supervised challenge dataset for reading comprehension,” in Proceedings of the 55th Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) , 2017, pp. 1601–1611. [32] Y. Zhao, J. Zhang, I. Chern, S. Gao, P. Liu, J. He et al. , “Felm: Benchmarking factuality evaluation of large language models,” Advances in Neural Information Processing Systems ,vol. 36, pp. 44 502–44 523, 2023. 11 [33] S. Lin, J. Hilton, and O. Evans, “Truthfulqa: Measuring how models mimic human falsehoods,” in Proceedings of the 60th annual meeting of the association for computational linguistics (volume 1: long papers) , 2022, pp. 3214–3252. [34] J. Li, X. Cheng, X. Zhao, J.-Y. Nie, and J.-R. Wen, “Halueval: A large-scale hallucination evaluation benchmark for large language models,” in Proceedings of the 2023 conference on empirical methods in natural language processing , 2023, pp. 6449–6464. [35] A. Yang, A. Li, B. Yang, B. Zhang, B. Hui, B. Zheng, B. Yu, C. Gao, C. Huang, C. Lv et al. ,“Qwen3 technical report,” arXiv preprint arXiv:2505.09388 , 2025. 12 Appendix 
+
+## A Architectural Design Details of S PAN UQ 
+
+Fig. A1 illustrates the end-to-end span-level uncertainty estimation process in S PAN UQ, from initial-ization to final uncertainty output. This appendix expands on the architectural overview in Sec. 3.1 by providing design rationale and implementation details for each stage. 
+
+Stage 1: Initialization 
+
+nn.Embedding( N , dp)
+
+q1 q2 q3 · · · q32 
+
+N =32 content-agnostic “span prototypes”, each qk ∈ Rdp 
+
+(dp=512 )
+
+Stage 2: Token Encoder 
+
+Multi-Layer Hidden-State Fusion 
+
+LLM Hidden States H(ℓ)
+
+Layers 22, 24, 26 
+
+(mean fusion) 
+
+Linear Proj → dp
+
++ token entropy 
+
+as extra feature 
+
+per token 
+
+was born as Derek Dele.. Harris on Aug 12 , 1926 ... 
+
+Output: Z ∈ RT ×dp (token features) 
+
+Stage 3: DETR-Style Span Decoder 
+
+Self-Attention 
+
+Inter-span dependencies 
+
+queries attend to each other 
+
+Cross-Attention 
+
+Q=Q, K,V =Z
+
+localize span positions 
+
+FFN + LayerNorm ×3
+
+> +residual
+
+Q
+
+e.g. ˆq2 attends to “Derek Delevan Harris” tokens via cross-attn 
+
+ˆQ ∈ R32 ×dp (position-aware refined queries) 
+
+Stage 4: Prediction Heads ˆQ
+
+Boundary Regression 
+
+ˆqk
+
+> MLP
+
+−−−→ σ(·) → (ˆbk , ˆek ) ∈ [0 , 1] 2
+
+Ex: ˆq2 → (ˆb2=0 .18 , ˆe2=0 .31) Maps to “ Derek Delevan Harris ”
+
+Span Enrichment Gate 
+
+Soft boundary mask: 
+
+mk (t)= σ(τ (t−ˆbk )) ·σ(τ (ˆ ek −t)) 
+
+> mk
+
+Mask-weighted attn-pool → ck
+
+Enriched queries: ˜qk = gk ck +(1 −gk ) ˆ qk
+
+Ex: g2=0 .72 (content-heavy) 
+
+(ˆbk , ˆek )
+
+Validity Classification 
+
+˜qk
+
+> MLP
+
+−−−→ σ(·) → pvalid 
+
+> k
+
+✓ ˜q2 → 0.97 (real span) ✗ ˜q28 → 0.03 (no span) 
+
+MoB Uncertainty 
+
+˜qk
+
+> MLP
+
+−−−→ { (πj , α j , β j )}Kj=1 
+
+ˆuk = P 
+
+> j
+
+πjαjαj +βj
+
+e.g. ˆu2=0 .94 u
+
+> Beta 1
+> Beta 2
+> Beta 3
+> Mix
+
+˜qk
+
+˜qk
+
+Stage 5: Output 
+
+“John Derek was born as Derek Delevan Harris on August 12, 1926 , in Hollywood, California . He was the son of a director and won the Golden Globe for his debut film ...” high ˆu: hallucinated low ˆu: factual 
+
+Filtered out (validity < 0.5): 
+
+ˆq1, ˆq3, ˆq4, ˆq5, ˆq20 , . . . , ˆq32 
+
+27 of 32 queries → no span detected 
+
+Sequence-Level Aggregation 
+
+ˆuseq =  
+
+> P
+> k pvalid
+> k·ˆuk
+> P
+> k pvalid
+> k
+
+= 0.81 
+
+Detected Spans (validity > 0.5): 
+
+Query Detected Span Valid ˆu u∗ Verdict 
+
+ˆq2 Derek Delevan Harris 0.97 0.94 1.0 ✗ hallucinated 
+
+ˆq7 August 12, 1926 0.95 0.89 0.95 ✗ hallucinated 
+
+ˆq11 Hollywood, California 0.93 0.03 0.0 ✓ factual 
+
+ˆq15 won the Golden Globe 0.91 0.95 1.0 ✗ hallucinated 
+
+ˆq19 son of a director 0.88 0.95 1.0 ✗ hallucinated 
+
+UCIR Round 2 
+
+Figure A1: Span query lifecycle in S PAN UQ. Stage 1 : N =32 learnable span queries are initialized as content-agnostic prototypes. Stage 2 : A token encoder fuses multi-layer hidden states with token entropy, producing the token feature pool Z ∈ RT ×dp . Stage 3 : A 3-layer DETR decoder refines queries via self-attention (inter-span dependencies) and cross-attention over Z (span localization), yielding position-aware ˆQ. Z is shared between cross-attention and span enrichment (T-shaped data flow on the right). Stage 4 : Four prediction heads operate on each query: boundary regression predicts start/end positions (ˆbk, ˆek); span enrichment applies a differentiable soft mask to attention-pool Z
+
+into a content vector, fused with the query via a learned gate to produce ˜qk; validity classification 
+
+scores whether the query corresponds to a real span; MoB uncertainty outputs K=3 Beta components whose weighted mean gives ˆuk. Stage 5 : Valid spans (score > 0.5) are retained and aggregated into a sequence-level uncertainty via importance-weighted averaging. The dashed purple arrow indicates the UCIR feedback loop (Sec. 3.3). The example shows a biography of John Derek: S PAN UQ assigns high uncertainty ( ˆu ≥ 0.89 ) to hallucinated claims and low uncertainty ( ˆu = 0 .03 ) to the factual birthplace. 13 A.1 Stage 1: Span Query Initialization 
+
+SPAN UQ initializes N learnable span queries Q ∈ RN ×dp as content-agnostic embedding vectors (Xavier uniform). At the start of training, no query “knows” which span it will eventually detect; specialization emerges entirely through learning. 
+
+Why learnable queries instead of input-derived proposals? An alternative design would derive candidate spans from the input, e.g., via a sliding window, constituency parse, or BIO sequence tagger. We deliberately avoid this for three reasons. First, input-derived proposals impose a fixed segmentation before the model has seen the full context, which precludes overlapping spans and makes the detector sensitive to segmentation errors. Second, a BIO tagger produces spans sequentially and cannot model inter-span dependencies in parallel. Third, learnable queries decouple the number 
+
+of detection slots from the input length, keeping the decoder cost constant regardless of sequence length. 
+
+Choosing N . The number of queries N sets an upper bound on how many spans can be detected per response. In our benchmark, the average response contains ∼15 spans (31,332 test spans across 2,000 queries for Qwen3-14B), with a 95th-percentile of ∼28. We set N =32 to comfortably cover the tail while keeping the decoder’s O(N 2) self-attention cost negligible. A hyperparameter sweep (Tab. A12) confirms that N =16 already achieves comparable AUROC (0.905 vs. 0.910 for N =32 ), indicating that the model gracefully degrades when a few spans exceed the slot budget. Queries that do not bind to any span are suppressed by the validity head (Sec. A.4). 
+
+Content-agnostic initialization. Because all queries start from the same random distribution, no query is biased toward a particular position or span type. During training, the combination of Hungarian matching (which assigns each ground-truth span to the best-matching query) and decoder self-attention (which encourages queries to diversify) drives the queries to specialize. Empirically, we observe that after training, different queries tend to cover different positional ranges of the response, though this specialization is soft and adaptive rather than hard-coded. 
+
+A.2 Stage 2: Token Encoder and Feature Pool 
+
+Before the span decoder can attend to the response, the raw LLM hidden states must be compressed and contextualized into a shared feature pool Z (Eq. 2). 
+
+Multi-layer fusion. Different layers of a Transformer LLM encode qualitatively different informa-tion: early layers capture syntax and positional structure, middle layers encode factual associations, and late layers specialize in next-token prediction [ 16 ]. Uncertainty signals are distributed across this hierarchy. For instance, a factually incorrect span may appear confident in the final layer (high next-token probability) yet show conflicting activations in mid-layers where factual recall occurs. By fusing layers from the peak uncertainty zone (identified via single-layer probing; see App. B.6), we capture complementary signals that no single layer provides. We use simple mean fusion (Eq. 1) rather than learned weighted fusion or concatenation-projection. Our ablation (Tab. A5) shows that mean fusion matches or exceeds learned alternatives while adding zero parameters, likely because the three selected layers are already close in representation space and a learned weighting offers little additional expressiveness. 
+
+Projection and contextualization. The fused hidden states ¯H ∈ RT ×d are linearly projected from the LLM dimension d (e.g., 5,120 for Qwen3-14B) to a much smaller dp=512 . This 10 ×
+
+compression is critical: it reduces the decoder’s memory and compute cost quadratically, and acts as an information bottleneck that forces the model to retain only uncertainty-relevant features. The projected tokens are then passed through a 2-layer Transformer encoder with sinusoidal positional encodings. This encoder serves two purposes: (i) it re-contextualizes the projected tokens so that each position is aware of its neighbors (important because the LLM’s own positional information is partially lost after projection), and (ii) it provides a non-linear transformation that adapts the frozen LLM features to the uncertainty estimation task. 
+
+The shared feature pool Z. The encoder output Z ∈ RT ×dp serves as the shared “memory” for two downstream consumers: the decoder’s cross-attention (Stage 3) and the span feature enrichment 14 module (Stage 4). This T-shaped data flow is deliberate. Sharing Z ensures that the boundary predictions (which depend on cross-attention over Z) and the content features (which are pooled from Z) operate in the same representation space, avoiding the need for an additional alignment step. It also means that gradients from both the boundary loss and the uncertainty loss flow back through the same encoder, encouraging Z to encode both positional and semantic information. 
+
+A.3 Stage 3: DETR-Style Span Decoder 
+
+The decoder is the core of S PAN UQ’s detection mechanism. It transforms the N content-agnostic queries into N content-aware span representations ˆQ via iterative cross-attention over Z (Eq. 3). 
+
+Decoder architecture. Each of the 3 decoder layers applies, in order: (i) multi-head self-attention among the N queries, (ii) multi-head cross-attention from queries to the token pool Z, and (iii) a position-wise feed-forward network. Layer normalization is applied before each sub-layer (pre-norm), and residual connections wrap each sub-layer. 
+
+Self-attention: inter-query coordination. Self-attention allows queries to “see” each other. This serves two functions. First, it enables competition : if two queries attend to the same region of Z,self-attention lets them negotiate so that one shifts to a different span, reducing duplicate detections. Second, it enables cooperation : queries covering adjacent or overlapping spans can share contextual information, which is useful when a long sentence contains multiple interleaved claims. Without self-attention, each query would operate in isolation, and the model would need to rely entirely on the Hungarian matching loss to discourage duplicates, a much weaker signal. 
+
+Cross-attention: binding queries to spans. Cross-attention is the mechanism by which each query “finds” its span in the token sequence. Each query computes attention weights over all T token positions in Z, and the resulting weighted sum becomes the query’s updated representation. Over multiple decoder layers, the attention pattern sharpens: in early layers, a query may attend broadly to a sentence-level region; by the final layer, attention concentrates on the specific tokens that constitute the span. This progressive refinement is analogous to how DETR’s object queries gradually localize from coarse regions to tight bounding boxes. 
+
+Why 3 decoder layers? We follow the DETR convention of using a small number of decoder layers (the original DETR uses 6 for the more complex 2D object detection task). Our ablation shows that 2 layers underperform (AUROC 0.901 vs. 0.910 for 3 layers), while 4 layers provide no further gain, suggesting that 3 layers suffice for the 1D span detection problem. Each additional layer adds cross-attention and self-attention, so the cost grows linearly in the number of layers. 
+
+Handling overlapping spans. Unlike BIO-based sequence taggers, which assign exactly one label per token and therefore cannot represent overlapping spans, the DETR formulation places no constraint on the spatial relationship between queries. Two queries can predict spans that partially or fully overlap, because each query independently regresses its own (bk, e k) boundaries. This is important in practice: for example, in the sentence “Marie Curie was a Polish-French physicist who won the Nobel Prize in Physics in 1903,” the spans “Polish-French physicist” and “the Nobel Prize in Physics” may share boundary tokens depending on the granularity of claim decomposition. 
+
+Auxiliary losses on intermediate layers. Following DETR, we apply the same prediction heads and losses to the output of each intermediate decoder layer (not just the final layer), with a reduced weight λaux =0 .5. This provides direct supervision to early layers, accelerating convergence and improving gradient flow through the deep decoder stack. Without auxiliary losses, the early decoder layers receive only indirect gradients through the final layer, which can slow training significantly. 
+
+A.4 Stage 4: Prediction Heads and Span Enrichment 
+
+After decoding, each query ˆqk is passed through four prediction heads. The design of these heads reflects a careful separation of concerns: boundary prediction uses the pre-enrichment query, while uncertainty and validity prediction use the enriched query. 15 Boundary regression. The boundary head is a 3-layer MLP that maps ˆqk to normalized coordinates 
+
+(ˆbk, ˆek) ∈ [0 , 1] 2 via sigmoid activation. We use regression rather than pointer-based (cross-attention argmax) boundary prediction for two reasons. First, regression produces continuous coordinates that are fully differentiable, enabling the downstream enrichment module to backpropagate through the boundaries. A pointer-based approach would require argmax (non-differentiable) or Gumbel-softmax (noisy gradients). Second, regression naturally handles variable-length sequences: the normalized coordinates are resolution-independent, so the same model works for short and long responses without re-scaling logits. The boundary head operates on the pre-enrichment query ˆqk rather than the enriched query ˜qk. This avoids a circular dependency: the enrichment module (Eq. 4–6) needs boundary predictions to compute the soft mask, so the boundaries must be available before enrichment occurs. 
+
+Span feature enrichment. The decoder queries capture where a span is (via cross-attention patterns) but lack direct access to the content within the predicted region. This distinction matters because uncertainty estimation requires understanding what a span says , not just where it is. The enrichment module bridges this gap through a two-step process. 
+
+Step 1: Soft boundary masking (Eq. 4). Given the predicted boundaries (ˆbk, ˆek), we construct a differentiable mask mk(t) over token positions using a product of two sigmoids with sharpness τ =10 .This mask is approximately 1 inside the span and 0 outside, with smooth transitions at the boundaries. The smoothness is essential: it allows gradients to flow from the uncertainty loss back through the mask to the boundary predictions, creating a feedback loop where better boundaries lead to better content features, which in turn lead to better uncertainty estimates. 
+
+Step 2: Mask-weighted attention pooling (Eq. 5). Rather than simply averaging the masked token features (which would weight all in-span tokens equally), we use learned attention pooling. The query ˆqk attends to the token features Z, but the attention weights are restricted to the masked region. This allows the model to focus on the most informative tokens within the span. For example, in the span “won the Nobel Prize in Physics in 1903,” the tokens “Physics” and “1903” carry more factual content than “won” or “the,” and the attention mechanism can learn to upweight them. 
+
+Step 3: Gated residual fusion (Eq. 6). The pooled content vector ck is added to the original query ˆqk
+
+via a gated residual connection: a linear projection followed by sigmoid produces an element-wise gate σ(Wg ˆqk + bg ) ∈ [0 , 1] d, which modulates the content vector before adding it to the query. The gate controls how much each dimension of the enriched content contributes to the final representation. This is particularly important for short spans (1–2 tokens), where the query’s cross-attention already captures most of the content and the enrichment adds little new information. For longer spans, the gate opens wider, allowing the pooled content to complement the query’s coarser representation. Our ablation (Tab. A7) confirms that gated fusion outperforms both simple addition and concatenation. 
+
+Validity classification. The validity head is a single linear layer followed by sigmoid, predicting 
+
+pvalid  
+
+> k
+
+∈ [0 , 1] . Since N =32 queries are always instantiated but a typical response contains only ∼15 spans, roughly half the queries are “unused” and must be suppressed. During training, the Hungarian matching assigns each ground-truth span to one query; unmatched queries receive a target of 0. Following DETR, we downweight the “no-object” class by a factor of 0.1 in the binary cross-entropy loss to account for the class imbalance (many more unmatched than matched queries). At inference time, queries with pvalid  
+
+> k
+
+< 0.5 are discarded. 
+
+Mixture of Beta (MoB) uncertainty estimation. The uncertainty head predicts the parameters of a Mixture of Beta distribution (Eq. 7) from the enriched query ˜qk.
+
+Why Beta, not Gaussian? Uncertainty scores are bounded in [0 , 1] , making the Beta distribution a natural choice. A Gaussian would require clipping or sigmoid transformation, losing the principled probabilistic interpretation. Moreover, the Beta distribution can express a rich family of shapes: uniform ( α=β=1 ), unimodal symmetric ( α=β> 1), skewed ( α̸ = β), and U-shaped ( α, β< 1). 
+
+Why a mixture? A single Beta component cannot capture multimodal uncertainty patterns. Consider a span that is correct in 70% of sampled responses and completely wrong in 30%: its ground-truth uncertainty distribution is bimodal, concentrated near 0 and 1. A single Beta must compromise with a broad, flat distribution, losing calibration. A mixture of J=3 components can place one component near 0, another near 1, and a third at an intermediate value, faithfully representing the bimodal 16 structure. We set αmin =0 .5 (rather than the default 1.0) to allow U-shaped components, which are essential for capturing this bimodality. 
+
+Parameterization. The MoB head is a 2-layer MLP that outputs 3J values per query: mixture weights πk,j (via softmax), and shape parameters αk,j , β k,j (via softplus + αmin ). The predicted uncertainty score is the mixture mean ˆuk = P 
+
+> j
+
+πk,j αk,j /(αk,j + βk,j ). The effective precision 
+
+ˆνk = P 
+
+> j
+
+πk,j (αk,j + βk,j ) serves as a confidence measure for the uncertainty estimate itself, used in UCIR (Sec. 3.3). 
+
+Sequence-level aggregation. Span-level scores are aggregated into a single sequence-level uncer-tainty estimate via importance-weighted pooling (Eq. 8). The importance weight for each span is the product of its validity probability and a learned importance score from a single-layer MLP. This design ensures that invalid (suppressed) queries contribute negligibly to the sequence score, and that spans carrying more informational weight (e.g., a central factual claim vs. a hedging phrase) are weighted more heavily. 
+
+A.5 Stage 5: Filtering, UCIR, and Output Validity filtering. At inference time, we retain only queries with pvalid  
+
+> k
+
+≥ 0.5. This threshold is not tuned; it simply reflects the natural decision boundary of the sigmoid. In practice, the validity distribution is strongly bimodal (most queries have pvalid > 0.9 or < 0.1), so the exact threshold has little effect. 
+
+Uncertainty-Conditioned Iterative Refinement (UCIR). A single decoder pass produces reason-able but sometimes coarse uncertainty estimates, particularly for ambiguous spans where the model is uncertain about its own uncertainty. UCIR addresses this by feeding Round 1 predictions back into the decoder for a second pass (Eq. 12). The intuition is as follows. After Round 1, each query has an initial uncertainty estimate ˆu(1)  
+
+> k
+
+, a precision ˆν(1)  
+
+> k
+
+, and a validity score p(1)  
+
+> k
+
+. These three scalars are mapped through a small MLP to produce a conditioning vector, which is added to the query embedding. The conditioned queries then pass through the same decoder (shared weights), producing refined predictions. This is analogous to iterative bounding-box refinement in object detection [ 25 ]: the second pass can correct errors from the first pass because it has access to the first-pass estimates as additional context. The final prediction combines both rounds via a fixed convex combination (Eq. 13) with α=0 .7, up-weighting the refined Round 2 estimate while retaining the Round 1 estimate as a regularizer. Both rounds contribute to the training loss, with Round 1 receiving a reduced weight to encourage the model to improve in Round 2 rather than relying solely on Round 1. UCIR adds less than 15% inference overhead because the decoder weights are shared and the conditioning MLP is tiny (3 scalars → dp dimensions). Our ablation (Tab. 3) shows that UCIR improves AUROC by 0.6 percentage points, with the largest gains on spans where Round 1 predictions have low precision ˆν(1)  
+
+> k
+
+.
+
+Output format. The final output is a set of span predictions {(bk, e k, ˆuk)}Kk=1 , where K ≤ N is the number of valid spans, bk and ek are token-level boundary indices (obtained by de-normalizing the regressed coordinates), and ˆuk ∈ [0 , 1] is the estimated uncertainty score. The sequence-level score ˆuseq is also available as a by-product of the importance-weighted aggregation. The entire pipeline, from hidden state extraction to final output, adds less than 5% latency to the LLM forward pass. 
+
+## B Additional Experimental Results 
+
+B.1 Sequence-Level Evaluation 
+
+While S PAN UQ is designed for span-level uncertainty estimation, we also evaluate its sequence-level performance by aggregating span predictions via importance-weighted top-k mean. Tab. A1 compares SPAN UQ against dedicated sequence-level baselines. S PAN UQ achieves AUROC @0 .3 = 0 .948 and Spearman ρ = 0 .851 , outperforming all dedicated sequence-level methods. SelfCheckGPT-NLI is the strongest sequence-level baseline (Spearman = 0 .805 , AUROC @0 .3 = 0 .908 ), but requires 10 sampled responses and NLI inference, a 10 × generation cost overhead. Semantic Entropy (SE) achieves moderate correlation (Spearman = 0 .606 ) but poor normalized MAE ( 0.427 †), indicating 17 that even after min-max scaling, its entropy values are poorly calibrated to the [0 , 1] uncertainty range. INSIDE and KLE produce negatively correlated estimates (Spearman = −0.331 and −0.145 ,respectively), suggesting that their graph-based uncertainty measures capture a different notion of diversity than factual uncertainty. The MLP Probe, when aggregated from oracle span-level predictions, achieves the strongest sequence-level performance (Spearman = 0 .858 , Pearson = 0 .867 ,AUROC @0 .3 = 0 .956 , MAE = 0 .071 ), slightly surpassing S PAN UQ. This confirms that span-to-sequence aggregation is a powerful strategy: even a simple probe benefits from fine-grained span-level predictions. However, the MLP Probe relies on ground-truth span boundaries at test time, which are unavailable in practice. In contrast, S PAN UQ jointly detects spans and estimates uncertainty end-to-end, and its span-level superiority (AUROC: 0.939 vs. 0.881, Spearman: 0.685 vs. 0.575) demonstrates substantially richer uncertainty representations at the granularity that matters most for interpretability and actionability. Table A1: Sequence-level uncertainty estimation on the S PAN UQ-B ENCH test set (2,000 sequences). Sequence-level ground truth is the mean span uncertainty per sequence; AUROC @0 .3 treats sequences with hallucination rate ≥ 0.3 as positive. S PAN UQ and span-level baselines aggregate span predictions via importance-weighted mean. MAE † denotes min-max normalized scores (raw outputs not in [0 , 1] ). 
+
+> ∗
+
+MLP Probe uses ground-truth span boundaries (oracle setting). Best in bold , second best underlined .                                             
+
+> Granularity Method Spearman ↑Pearson ↑AUROC @0 .3↑MAE ↓
+> Token MLP Probe ∗0.858 0.867 0.956 0.071
+> Sequence Verbalized Conf. 0.322 0.229 0.641 0.166 P(True) 0.140 0.185 0.552 0.172 SE (10 samples) 0.606 0.521 0.805 0.427 †
+> INSIDE (Jaccard) −0.331 −0.314 0.315 0.246 †
+> KLE −0.145 −0.041 0.425 0.784 †
+> SelfCheckGPT-NLI 0.805 0.750 0.908 0.097 Claim FActScore 0.489 0.505 0.779 0.138 Span SPAN UQ 0.851 0.839 0.948 0.077
+
+B.2 Robustness Across Hyperparameter Configurations 
+
+Rather than reporting variance over random seeds (which primarily captures initialization noise), we assess robustness by examining the spread of results across the 24–28 hyperparameter configurations evaluated per model during the sweep ( App. D.3 ). This provides a more informative measure of sensitivity, as it captures the effect of architectural and optimization choices. Across all five models, the IQR of dev AUROC is at most 0.030 (Mistral-7B), indicating that S PAN UQ is not overly sensitive to hyperparameter choices. Even the worst configuration for each model substantially outperforms the strongest baseline (MLP Probe with oracle boundaries), confirming that the architectural design, rather than careful tuning, drives the performance gains. Table A2: Robustness of S PAN UQ across hyperparameter configurations. For each model, we report the best, median, and worst dev AUROC across all sweep configurations, along with the interquartile range (IQR). The narrow IQR ( ≤0.03) indicates that S PAN UQ is robust to hyperparameter choices.                         
+
+> Model Best Median Worst IQR
+> Qwen3-14B 0.941 0.930 0.897 0.018 Qwen3-8B 0.928 0.910 0.883 0.021 Qwen3-4B 0.944 0.918 0.895 0.024 Qwen3-30B-A3B 0.935 0.920 0.893 0.022 Mistral-7B 0.928 0.879 0.852 0.030
+
+B.3 Decomposability Analysis: Span-to-Sequence Aggregation 
+
+A key advantage of span-level uncertainty estimation is the ability to decompose sequence-level uncertainty into interpretable span-level components. We analyze this decomposability property across all five LLM backbones. 18 Aggregation Method. Given predicted span uncertainties {ˆuk}Kk=1 and learned importance weights 
+
+{wk}Kk=1 (from the sequence aggregation head), the sequence-level uncertainty is computed as: 
+
+ˆuseq = PKk=1 ˜wk ˆuk, where ˜wk = softmax (wk) are normalized importance weights. The ground-truth sequence-level uncertainty is u∗ 
+
+> seq
+
+= 1
+
+> K
+
+PKk=1 u∗
+
+> k
+
+.Table A3: Decomposability analysis: correlation between aggregated span-level predictions and sequence-level ground truth across five LLM backbones. Higher values indicate that span-level predictions successfully capture sequence-level uncertainty patterns.                            
+
+> Model Spearman ρseq ↑Pearson rseq ↑AUROC @0 .3↑MAE seq ↓
+> Qwen3-14B 0.851 0.839 0.948 0.077 Qwen3-8B 0.857 0.793 0.936 0.108 Qwen3-4B 0.846 0.802 0.936 0.218 Qwen3-30B-A3B 0.848 0.735 0.929 0.111 Mistral-7B 0.775 0.745 0.917 0.103
+
+Cross-Model Consistency. Tab. A3 shows that span-to-sequence decomposability holds consistently across all five models. The Qwen3 family achieves Spearman ρseq ≥ 0.846 , while Mistral-7B shows a slightly lower but still strong correlation ( ρseq = 0 .775 ). This confirms that the decomposability property is not an artifact of a single model family. 
+
+Comparison with Sequence-Level Baselines. On Qwen3-14B, S PAN UQ’s aggregated span predic-tions ( ρseq = 0 .851 ) outperform all dedicated sequence-level methods: Semantic Entropy ( ρ = 0 .606 ), SelfCheckGPT-NLI ( ρ = 0 .805 ), and Verbalized Confidence ( ρ = 0 .322 ). This demonstrates that fine-grained span-level modeling captures richer uncertainty structure that benefits even coarse-grained evaluation. 
+
+MAE seq Bias in Qwen3-4B. The 4B model exhibits elevated MAE seq (0.218) despite strong ranking correlation ( ρ = 0 .846 ). This reflects a systematic positive bias in the sequence aggregation head: the 4B probe tends to overestimate sequence-level uncertainty by ∼0.2 on average. We attribute this to the smaller model’s higher base hallucination rate, which shifts the learned aggregation weights toward higher uncertainty. This bias does not affect ranking-based metrics (AUROC, ρ), confirming that the span-level predictions themselves are well-estimated. 
+
+B.4 Qualitative Examples 
+
+We present three representative examples from the S PAN UQ-B ENCH test set to illustrate S PAN UQ’s behavior across different uncertainty patterns. For each example, we show the LLM response with ground-truth span annotations and S PAN UQ’s predictions. 
+
+Example 1: Biography with Mixed Uncertainty (Qwen3-14B). Prompt: “Write a biography of John Derek.” The model generates a detailed biography containing both factual and hallucinated content. S PAN UQ correctly assigns high uncertainty to fabricated claims about the subject’s birth name ( ˆu = 0 .94 , u∗ = 1 .0), birth date ( ˆu = 0 .89 , u∗ = 0 .95 ), and parentage ( ˆu = 0 .95 , u∗ = 1 .0), while assigning low uncertainty to verifiable facts about the subject’s career ( ˆu = 0 .03 , u∗ = 0 .0). The mean absolute error across 12 matched spans is 0.12, and the model correctly ranks all high-uncertainty spans above low-uncertainty ones. 
+
+Example 2: Mostly Factual Response (Qwen3-14B). Prompt: “Why was it illegal for black people to attend the University of Alabama in 1973?” The model generates a largely accurate historical account with 17 spans, 15 of which have u∗ < 0.1. S PAN UQ correctly assigns near-zero uncertainty to the factual spans ( ˆu ∈ [0 .01 , 0.12] ), demonstrating accurate estimation on confident predictions. The single moderately uncertain span (“Kennedy sent federal troops,” u∗ = 0 .71 ) receives a lower prediction ( ˆu = 0 .09 ), representing a failure case where the model underestimates uncertainty for a historically nuanced claim. 
+
+Example 3: Failure Case (Implicit Compositional Errors). We observe that S PAN UQ occasionally struggles with compositional hallucinations where individual facts are correct but their combination is wrong. For instance, in a biography response, the claim “He appeared in films such as The Manchurian Candidate ” ( u∗ = 0 .0) is correctly identified as factual ( ˆu = 0 .03 ), but a nearby span attributing a specific role to the subject in that film ( u∗ = 0 .0) receives elevated uncertainty ( ˆu = 0 .85 ). This 19 suggests that the model’s hidden states encode uncertainty about entity-role associations even when the individual entities are well-known, pointing to a limitation in distinguishing entity-level from relation-level confidence. 
+
+Summary. Across the test set, S PAN UQ achieves MAE < 0.15 on 78% of spans and correctly ranks high-uncertainty spans above low-uncertainty ones in 94% of within-sequence pairs. The primary failure mode is underestimation of uncertainty for historically nuanced or temporally sensitive claims, which constitute ∼5% of the test set. 
+
+B.5 Entity Popularity Analysis 
+
+We analyze S PAN UQ’s performance stratified by entity popularity in the biography domain, where entities are categorized as head (>100K Wikipedia page views/month), torso (10K–100K), or tail 
+
+(<10K). As expected, tail entities exhibit slightly lower AUROC (0.937 vs. 0.953 for head) and higher MAE (0.137 vs. 0.111), reflecting the greater difficulty of estimating uncertainty for less well-known entities. However, the degradation is modest: even on tail entities, S PAN UQ achieves AUROC 
+
+> 0.93 , substantially outperforming all baselines. This suggests that the model’s hidden states encode meaningful uncertainty signals even for entities outside its training distribution. Interestingly, the average ground-truth uncertainty is similar across popularity tiers (0.293–0.322), which differs from the ∼3× gap observed in the full training set. This is because the test set is stratified by uncertainty bin, ensuring balanced representation across uncertainty levels within each domain. The raw (unstratified) training data shows a clearer popularity–uncertainty gradient: tail entities average 
+
+u∗ = 0 .48 vs. u∗ = 0 .16 for head entities. Table A4: Performance of S PAN UQ (Qwen3-14B) on the biography domain stratified by entity popu-larity. Tail entities have slightly higher average uncertainty and lower AUROC, but the degradation is modest ( <2 points).                          
+
+> Popularity Prompts Spans Avg. u∗AUROC ↑MAE ↓Pearson ↑
+> Head 52 1,386 0.293 0.953 0.111 0.872 Torso 84 2,150 0.322 0.951 0.128 0.856 Tail 64 1,416 0.311 0.937 0.137 0.829
+
+B.6 Layer Selection Analysis 
+
+We conduct a systematic layer importance study to determine which LLM layers carry the strongest uncertainty signal ( Tab. A5 ). 
+
+Inverted-U Curve. Single-layer probing reveals an inverted-U pattern: AUROC peaks at layers 20–26 (0.893–0.897), with early layers (0–10) scoring 0.832–0.862 and final layers (35–39) declining to 0.870–0.882. This suggests that uncertainty information is concentrated in the mid-to-late layers, where the model has processed enough context to form uncertainty judgments but before the final layers specialize for next-token prediction. 
+
+Clustered > Spread. Combining three adjacent peak-zone layers (22+24+26) outperforms three spread layers (19+29+39) by 0.5% AUROC and 1.2% ρspan . This indicates that the uncertainty signal is locally coherent within the peak zone, and combining nearby layers captures complementary aspects of the same representation. 
+
+Mean ≈ Concat. Mean fusion matches concatenation across all configurations (within 0.1% AU-ROC), despite using 3× fewer parameters. We adopt mean fusion for all subsequent experiments due to its parameter efficiency. 
+
+Diminishing Returns. Expanding from 3 to 7 layers (20–26) yields negligible improvement (+0.0% AUROC, +0.2% ρspan ), confirming that 3 well-chosen layers suffice. 
+
+B.7 Mixture of Beta Analysis Tab. A6 analyzes the MoB distribution design choices: 20 Table A5: Layer importance probing results (Qwen3-14B). Each row trains an MLP probe (5120 →512 →256 →1) on hidden states from the specified layer(s). “Mean” and “Concat” denote fusion strategies for multi-layer configurations. 
+
+Layer Configuration Fusion AUROC ↑ ρspan ↑ MAE ↓
+
+Single-layer probes (top 5) 
+
+Layer 24 (best single) — 0.897 0.672 0.135 Layer 26 — 0.894 0.664 0.140 Layer 21 — 0.894 0.665 0.137 Layer 23 — 0.893 0.668 0.136 Layer 22 — 0.893 0.664 0.138 
+
+Multi-layer probes 
+
+Layers 19, 29, 39 (spread) Mean 0.899 0.674 0.138 Layers 19, 29, 39 (spread) Concat 0.900 0.676 0.137 Layers 22, 24, 26 (cluster) Mean 0.904 0.686 0.137 
+
+Layers 22, 24, 26 (cluster) Concat 0.904 0.684 0.137 Layers 20–26 (7 layers) Mean 0.904 0.688 0.136 
+
+Number of Components. K=3 provides the best balance: K=2 lacks expressiveness (AUROC 0.920), while K=5 slightly overfits (0.928 vs. 0.933 for K=3 with ffn1024). Intuitively, three components correspond to the three natural uncertainty modes: certain (u ≈ 0), uncertain (u ≈ 0.3–
+
+0.7), and hallucinated (u ≈ 1). 
+
+Calibration Advantage. MoB dramatically improves calibration: raw ECE drops from 0.051 (single Beta) to 0.020 ( K=3 ), a 61% reduction. After temperature scaling, the gap narrows but persists (0.029 vs. 0.015). The single Beta requires aggressive temperature correction ( T =0 .83 ), while MoB is nearly self-calibrated ( T =1 .05 ). 
+
+Enriched Head Capacity. Increasing the enriched uncertainty head from ffn512 to ffn1024 yields the largest single improvement within the MoB sweep (+0.9% AUROC, +2.5% ρspan ), suggesting that the richer MoB output benefits from a more expressive prediction head. Table A6: Mixture of Beta (MoB) component analysis. K: number of mixture components. αmin :minimum concentration parameter. KL: KL divergence regularization weight. All models use the enrichment gate + ffn1024 configuration. 
+
+Configuration AUROC ↑ ECE ↓ ECE cal ↓ MAE ↓ ρspan ↑
+
+Single Beta (baseline) 0.918 0.051 0.029 0.144 0.721 MoB K=2 0.919 0.037 0.012 0.148 0.725 MoB K=3 (base) 0.924 0.020 0.018 0.126 0.735 MoB K=5 0.928 0.023 0.017 0.119 0.747 
+
+K=3 , αmin =0 .5 0.931 0.020 0.020 0.122 0.748 
+
+K=3 , KL =0 .01 0.932 0.024 0.020 0.118 0.755 
+
+K=3 , ffn1024 0.933 0.020 0.015 0.116 0.760 
+
+Table A7: Span feature enrichment ablation. All models use the base DETR + regression configuration. “Fusion” denotes how pooled span features are combined with query representations. “Pool” denotes the pooling strategy over tokens within the predicted span. 
+
+Fusion Pool AUROC ↑ ECE ↓ MAE ↓ ρspan ↑
+
+None (no enrichment) — 0.907 0.058 0.154 0.673 Gate Attention 0.920 0.052 0.144 0.725 
+
+Gate Mean 0.897 0.061 0.159 0.641 Concat Attention 0.914 0.035 0.134 0.699 Add Attention 0.919 0.047 0.148 0.728 Gate Attn + ffn512 0.917 0.053 0.146 0.706 
+
+21 B.8 Span Enrichment Analysis Tab. A7 ablates the span feature enrichment module ( Sec. 3.1 ). 
+
+Enrichment Value. Adding span enrichment with gated fusion improves AUROC by 1.3% (0.907 →0.920) and ρspan by 5.2% (0.673 →0.725). The enrichment module pools token-level features within the predicted span region using a differentiable soft mask, providing the uncertainty scorer with direct access to the content of each span rather than relying solely on the abstract query representation. 
+
+Gated Fusion. Gated fusion achieves the best AUROC (0.920), outperforming concatenation (0.914) and closely matching addition (0.919). The learned gate allows the model to adaptively control how much span content information to incorporate. This is especially useful during early training when span boundaries are imprecise. 
+
+Attention Pooling. Learned attention pooling substantially outperforms mean pooling (0.920 vs. 0.897 AUROC, 0.725 vs. 0.641 ρspan ), as it can focus on the most informative tokens within each span rather than treating all positions equally. 
+
+## C Dataset Details 
+
+This section provides full details of the S PAN UQ-B ENCH benchmark construction, complementing the overview in Sec. 4.1 .
+
+C.1 Data Collection Details 
+
+We collect 20,000 prompts from five domains to ensure diverse hallucination patterns. 
+
+Long-Form QA (8,400 prompts, 42%). We sample real Google search questions from Natural Questions (NQ-Open) [ 30 ], filtering for questions requiring multi-sentence answers. These are predominantly factoid (98% start with who/what/when/where), with median prompt length of 9 words. Qwen3-14B generates responses averaging 122 words. 
+
+TriviaQA (5,000 prompts, 25%). We sample from the TriviaQA unfiltered split [ 31 ], which provides trivia questions with verified reference answers. Answer types span entities (44%), persons (39%), phrases (15%), and dates/numbers (2%). Responses are shorter (avg. 81 words), making this domain useful for calibration with mostly confident, correct spans. 
+
+ELI5 (3,000 prompts, 15%). We sample explanatory questions from the ELI5 (Explain Like I’m 5) Reddit dataset. These are dominated by “why” (38%) and “how” (21%) questions requiring long-form reasoning. Responses average 349 words (the longest across domains) and hallucinations tend to be subtle reasoning errors rather than factual fabrications, testing the model’s ability to detect distributed uncertainty. 
+
+Biography (2,000 prompts, 10%). Following the FActScore protocol [ 8], we prompt Qwen3-14B to generate biographies for 2,000 entities stratified by Wikipedia page-view popularity: 30% head (>100K views/month), 40% torso (10K–100K), and 30% tail ( <10K). Three prompt templates are used equally: “Write a biography of X,” “Tell me a bio of X,” and “Tell me about X.” Tail entities exhibit ∼3× higher hallucination rates than head entities, providing rich training signal. 
+
+FELM (1,600 prompts, 8%). We aggregate challenging examples from three sources: FELM [ 32 ](53%, spanning world knowledge, reasoning, math, science, and writing), TruthfulQA [ 33 ] (45%, targeting common misconceptions), and HaluEval [34] (2%). This is the most diverse domain, with the highest proportion of math/reasoning questions (13%). 
+
+Multi-Model Extension. For cross-model evaluation ( Tab. 1 ), we regenerate responses for the same 20,000 prompts using each backbone LLM (Qwen3-8B, Qwen3-4B, Qwen3-30B-A3B, Mistral-7B-Instruct-v0.3). Each model’s training labels are constructed independently via the same multi-sample distillation pipeline, ensuring that the uncertainty labels reflect each model’s own knowledge boundaries. Test set evaluation uses a shared split index derived from the Qwen3-14B data to ensure comparable evaluation across models. 22 C.2 Multi-Sample Distillation Pipeline 
+
+The training label construction pipeline consists of four stages: 
+
+Stage 1: Multi-Sample Generation. For each of the 800 prompts, we generate S = 20 independent responses at temperature T = 1 .0 using nucleus sampling ( p = 0 .95 ). The high temperature encourages diverse outputs that reveal the model’s uncertainty: spans that vary across samples are uncertain by construction. 
+
+Stage 2: Claim Decomposition. Each response is decomposed into atomic claims using an LLM judge (Claude Opus via the Woods Creek endpoint). A claim is defined as a single, verifiable factual assertion, e.g., “Barack Obama was born in Hawaii” rather than “Barack Obama was born in Hawaii and graduated from Harvard.” The decomposition prompt instructs the judge to: (1) split compound sentences into atomic claims, (2) resolve coreferences to produce self-contained claims, and (3) preserve the original span boundaries in the response text. On average, each response yields 12–18 atomic claims. 
+
+Stage 3: Claim Verification. Each atomic claim is verified against Wikipedia using the same LLM judge. The judge receives the claim and the relevant Wikipedia passage(s) retrieved via BM25, and classifies the claim as supported , unsupported , or ambiguous . Ambiguous claims (e.g., outdated information, subjective statements) are treated as partially supported with weight 0.5. Approximately 4.3% of verification calls return empty responses; these are automatically retried. 
+
+Stage 4: Cross-Generation Alignment and Soft Label Computation. Claims from the S = 20 
+
+samples are aligned across generations using semantic similarity (NLI-based entailment). For each span sk in the reference response (sample 1), the empirical uncertainty is computed as: 
+
+u∗ 
+
+> k
+
+= 1 − 1
+
+S
+
+> S
+
+X
+
+> s=1
+
+⊮[span sk is supported in sample s], (15) where a span is “supported in sample s” if a semantically equivalent claim in sample s is verified as correct. This yields a continuous soft label u∗ 
+
+> k
+
+∈ [0 , 1] that captures graded uncertainty. 
+
+Label Distribution. The resulting distribution is bimodal: approximately 62% of spans have u∗ < 0.1
+
+(consistently correct across samples), 18% have u∗ > 0.9 (consistently incorrect), and 20% fall in the intermediate range 0.1 ≤ u∗ ≤ 0.9. The intermediate spans are valuable for training, as they require the model to learn fine-grained uncertainty distinctions rather than simple binary classification. 
+
+C.3 Test Set Construction and Quality Validation Test Set Construction. The test set is constructed using the same multi-sample distillation pipeline as the training set. The key difference is that test responses are generated with greedy decoding (T = 0 ) for deterministic outputs, while the 20 verification samples are still generated at T = 1 .0.This ensures that test-time uncertainty labels reflect the model’s inherent knowledge boundaries on its most likely output, rather than sampling variability. The test set contains 2,000 prompts (200 biography, 841 long-form QA, 500 TriviaQA, 299 ELI5, 160 FELM) with 31,332 span-level soft labels. 
+
+Quality Validation Protocol. To validate the reliability of the automatic pipeline, three co-authors independently reviewed a stratified random sample of 200 test examples (10% of the test set, balanced across domains and uncertainty bins). For each example, reviewers checked: (1) Span boundary correctness : whether the automatically identified spans correspond to meaningful, verifiable claims; (2) Factuality accuracy : whether the pipeline’s binary factuality judgment (correct vs. incorrect) matches human assessment; and (3) Uncertainty plausibility : whether the continuous uncertainty score u ∈ [0 , 1] is reasonable given the claim’s verifiability. 
+
+Validation Results. The reviewers confirmed that the automatic pipeline produces reliable labels across all three criteria. The vast majority of automatically identified spans correspond to valid, meaningful claims. Disagreements between the pipeline and human judgment were primarily limited to temporally sensitive claims (e.g., “X is the CEO of Y” where the information may be outdated) and ambiguous quantitative statements. These edge cases constitute a small fraction of the overall dataset and do not affect the reliability of the benchmark for evaluating uncertainty estimation methods. 23 C.4 Benchmark Statistics 
+
+Table A8: Statistics of S PAN UQ-B ENCH (Qwen3-14B backbone). The benchmark spans five domains with stratified splits preserving domain and uncertainty-bin proportions. All labels are soft uncertainty scores from the multi-sample distillation pipeline.                     
+
+> Split Prompts Spans Avg. Spans/P Avg. Words/Resp.
+> Train 17,494 272,086 15.6 173 Dev 500 7,967 15.9 —Test 2,000 31,332 15.7 174
+> Total 19,994 311,385 15.6 —
+
+Table A9: Per-domain breakdown of S PAN UQ-B ENCH . Biography and long-form QA are the two largest domains; ELI5 provides open-ended diversity; FELM and TriviaQA contribute factoid and reasoning challenges.                                    
+
+> Domain Train Dev Test Total Avg. Words/Resp.
+> Biography 1,750 50 200 2,000 323 Long-Form QA 7,348 210 841 8,399 122 TriviaQA 4,375 124 500 4,999 81 ELI5 2,624 76 299 2,999 349 FELM 1,397 40 160 1,597 217
+> Total 17,494 500 2,000 19,994 173
+
+Domain Characteristics. The five domains cover a spectrum of hallucination patterns: Biography 
+
+(10%) generates long-form text about entities stratified by Wikipedia popularity (30% head / 40% torso / 30% tail), where tail entities exhibit ∼3× higher hallucination rates. Long-form QA (42%) uses real Google search queries from Natural Questions [ 30 ], predominantly factoid (98%). TriviaQA 
+
+(25%) provides trivia questions with verified reference answers [ 31 ]. ELI5 (15%) contains explanatory “why/how” questions from Reddit, producing subtle reasoning errors rather than factual fabrications. 
+
+FELM (8%) aggregates challenging examples from FELM [ 32 ], TruthfulQA [ 33 ], and HaluEval [ 34 ], targeting known misconceptions and math reasoning. 
+
+Uncertainty Distribution. Splits are stratified by domain × uncertainty bin (low: u < 0.1, mid: 
+
+0.1 ≤ u < 0.4, high: u ≥ 0.4) to ensure balanced representation. Across the full dataset, approxi-mately 62% of spans have low uncertainty, 20% mid, and 18% high. 
+
+Quality Validation. To validate the automatic labels, three co-authors independently reviewed a random sample of 200 test examples (10% of the test set), checking span boundary correctness, factuality label accuracy, and uncertainty score plausibility. The reviewers confirmed that the pipeline produces reliable labels, with disagreements primarily limited to temporally sensitive claims and ambiguous quantitative statements (see App. C.3 for the full protocol). 
+
+## D Implementation Details 
+
+D.1 Loss Function Details 
+
+This section provides the full formulations of each loss component in Eq. 9. 
+
+Span Regression Loss. The regression loss combines L1 distance and Generalized IoU (GIoU) [ 29 ]over matched span pairs from the Hungarian assignment ˆσ:
+
+Lreg =
+
+> M
+
+X
+
+> i=1
+
+∥ˆbi − b∗
+
+> ˆσ(i)
+
+∥1 + λgiou · L GIoU (ˆbi, b∗
+
+> ˆσ(i)
+
+), (16) where ˆbi = ( ˆbi, ˆei) are predicted boundaries, b∗ are ground-truth boundaries, and M is the number of matched pairs. GIoU extends standard IoU to handle non-overlapping spans by penalizing the gap between them. 24 Validity Classification Loss. Binary cross-entropy over all N span queries: 
+
+Lval = − 1
+
+N
+
+> N
+
+X
+
+> k=1
+
+yk log pvalid  
+
+> k
+
++ (1 − yk) log(1 − pvalid  
+
+> k
+
+), (17) where yk = 1 if span query k is matched to a ground-truth span and yk = 0 otherwise (unused slot). 
+
+MoB Negative Log-Likelihood. See Eq. 10 in the main text. To avoid numerical instability at u = 0 
+
+or u = 1 , we clamp ground-truth labels to [ϵ, 1 − ϵ] with ϵ = 10 −4.
+
+Consistency Loss. The consistency loss enforces agreement between the span-aggregated sequence-level prediction and the ground-truth sequence-level uncertainty: 
+
+Lcon = ∥ˆuseq − u∗
+
+> seq
+
+∥22, (18) where u∗ 
+
+> seq
+
+= 1
+
+> K
+
+PKk=1 u∗ 
+
+> k
+
+is the mean ground-truth span uncertainty. Gradients from Lcon are detached from the span-level predictions to prevent the sequence-level objective from interfering with span-level learning. 
+
+Contrastive Ranking Loss. See Eq. 11 in the main text. We use margin m = 0 .1. In practice, rather than enumerating all valid pairs, we employ stratified sampling : spans are partitioned into a high-uncertainty group ( u∗ > τ hi = 0 .3) and a low-uncertainty group ( u∗ < τ lo = 0 .1), and up to 256 (high, low) pairs are randomly sampled per batch. If either group contains fewer than 2 spans, we fall back to the top-25% vs. bottom-25% of spans ranked by u∗. This strategy focuses the ranking signal on clearly separable pairs and avoids noisy gradients from near-identical labels. 
+
+Loss Weights. The default loss weights are: λreg = 5 .0, λval = 2 .0, λuq = 4 .0, λcon = 1 .0,
+
+λrank = 0 .5, λaux = 0 .4. During the warmup phase (epochs 1–15), only Lreg and Lval are active. 
+
+D.2 Model Specifications Tab. A10 summarizes the LLM backbones used in our experiments, and Tab. A11 details the S PAN UQ probe configuration selected for each model via hyperparameter sweep ( Sec. D.3 ). 
+
+Model Type Params Layers dmodel Heads KV Heads Vocab 
+
+Qwen3-14B Dense 14.8B 40 5120 40 8 151,936 Qwen3-8B Dense 8.2B 36 4096 32 8 151,936 Qwen3-4B Dense 4.0B 36 2560 32 8 151,936 Qwen3-30B-A3B MoE 30.5B (3.3B active) 48 2048 16 4 151,936 Mistral-7B-Instruct-v0.3 Dense 7.2B 32 4096 32 8 32,768 
+
+Table A10: LLM backbone specifications. All models use grouped-query attention (GQA). Qwen3-30B-A3B is a Mixture-of-Experts model with 3.3B active parameters per token. 
+
+Model Probe Params Layers Used dproj nq Batch LR 
+
+Qwen3-14B 27.04M [22, 24, 26] 512 32 16 10 −4
+
+Qwen3-8B 26.51M [18, 20, 22] 512 32 16 10 −4
+
+Qwen3-4B 17.18M [22, 24, 26] 512 32 16 10 −4
+
+Qwen3-30B-A3B 25.46M [30, 34, 38] 512 32 16 10 −4
+
+Mistral-7B 26.50M [12, 14, 16] 512 16 32 2×10 −4
+
+Table A11: S PAN UQ probe configurations (best per model from hyperparameter sweep). All probes share: 2-layer encoder, 3-layer decoder, 8 attention heads, dffn =2048 , MoB K=3 , UCIR α=0 .7,span enrichment with gate fusion. 
+
+D.3 Hyperparameter Sensitivity 
+
+We conduct a systematic hyperparameter sweep with 24–28 configurations per model, varying layer selection, projection dimension ( dproj ∈ { 256 , 512 }), number of span queries ( nq ∈ { 16 , 32 }), 25 Table A12: Hyperparameter sensitivity analysis. For each hyperparameter, we report the mean dev AUROC across all configurations using that value, averaged over five models. ∆ denotes the range (max − min) across values.                     
+
+> Hyperparameter Values Mean AUROC ∆
+> dproj 256 / 512 0.898 / 0.916 0.018
+> nq(span queries) 16 / 32 0.905 / 0.910 0.005 Batch size 16 / 32 0.908 / 0.907 0.001 Learning rate 5×10 −5/10 −4/2×10 −40.904 / 0.910 / 0.908 0.006
+
+batch size ( ∈ { 16 , 32 }), and learning rate ( ∈ { 5×10 −5, 10 −4, 2×10 −4}). Tab. A12 summarizes the sensitivity of dev AUROC to each hyperparameter, averaged across all five models. 
+
+Key Findings. (1) Projection dimension is the most impactful hyperparameter ( ∆ = 0 .018 ): 
+
+dproj = 512 consistently outperforms 256 across all models, suggesting that the uncertainty signal requires sufficient representational capacity. (2) Batch size has negligible effect ( ∆ = 0 .001 ), indicating that the training dynamics are stable across batch sizes. (3) Learning rate 10 −4 is optimal for most models, though Mistral-7B benefits from a higher rate ( 2×10 −4), likely reflecting differences in hidden-state scale across model families. 
+
+D.4 Training Curves Tab. A13 reports the training dynamics for the best S PAN UQ probe configuration on each LLM backbone. All models use a two-phase schedule: 15 warmup epochs (span detection only) followed by up to 25 joint epochs (span detection + uncertainty estimation), with early stopping (patience 5) on dev AUROC.                                      
+
+> Model Epochs Best Ep. Dev AUROC Dev MAE Dev ρsWall Time
+> Qwen3-14B 38 (15w+23j) 33 0.9412 0.1031 0.7932 9.3h Qwen3-8B 40 (15w+25j) 39 0.9275 0.1257 0.7699 5.2h Qwen3-4B 38 (15w+23j) 33 0.9444 0.1219 0.8225 4.0h Qwen3-30B-A3B 39 (15w+24j) 34 0.9350 0.1020 0.7433 3.7h Mistral-7B 28 (15w+13j) 23 0.9279 0.1142 0.7312 2.7h
+
+Table A13: Training summary for the best S PAN UQ probe per model. “w” = warmup epochs, “j” = joint epochs. All training on a single NVIDIA H100 80GB GPU. Dev metrics are reported at the best epoch (selected by AUROC). 
+
+Key observations. (1) All models exhibit a sharp phase transition at the warmup →joint boundary (epoch 16): dev AUROC jumps from ∼0.55 –0.65 to ∼0.85 + within 2–3 joint epochs, confirming that the warmup phase successfully pre-trains span detection before uncertainty estimation begins. (2) Qwen3-4B achieves the highest dev AUROC (0.9444) despite having the smallest probe (17.18M parameters), suggesting that smaller LLMs with lower dmodel can produce equally informative hidden-state representations for uncertainty estimation. (4) Mistral-7B trains fastest (2.7h) due to its larger batch size (32) and early convergence (epoch 23). 
+
+D.5 Computational Cost Tab. A14 provides a detailed computational cost breakdown for S PAN UQ. 
+
+Training Efficiency. The S PAN UQ probe trains in 2.7–9.3 hours on a single H100 GPU, depending on the backbone model size (which determines dmodel and thus the input dimension). The 14B model requires the longest training due to its larger projection layer ( 5120 → 512 ), while Mistral-7B trains fastest due to its larger batch size (32) and early convergence. The LLM backbone is frozen 
+
+during training: only the lightweight probe (17–27M parameters) is updated, requiring no gradient computation through the LLM. 
+
+Inference Overhead. At inference time, S PAN UQ adds <3% latency to the LLM forward pass. The dominant cost is the LLM generation itself (2–5s per prompt); the probe computation (projection, 26 Table A14: Computational cost breakdown. Data construction is a one-time cost shared across all models. Probe training and inference are per-model costs. All timings on NVIDIA H100 80GB GPUs.                             
+
+> Stage Details Cost
+> One-time data construction (per LLM backbone)
+> Multi-sample generation 20 samples ×20K prompts, 8 ×H100 ∼40 GPU-h Claim decomposition ∼300K API calls (Claude Opus) ∼$450 Hidden state extraction Single forward pass, 20K prompts ∼0.5 GPU-h
+> Probe training (single GPU)
+> Qwen3-14B 38 epochs (15w + 23j), 14 min/epoch 9.3h Qwen3-8B 40 epochs (15w + 25j), 8 min/epoch 5.2h Qwen3-4B 38 epochs (15w + 23j), 6 min/epoch 4.0h Qwen3-30B-A3B 39 epochs (15w + 24j), 6 min/epoch 3.7h Mistral-7B 28 epochs (15w + 13j), 6 min/epoch 2.7h
+> Inference (per prompt)
+> LLM forward pass Response generation (greedy) 2–5s Hidden state caching Extract from 3 layers <10ms SPAN UQ probe Projection + DETR + UCIR <50ms
+> Total overhead Probe / LLM forward pass <3%
+
+DETR encoding/decoding, UCIR refinement) takes <50ms. This is 10 –20 × faster in total wall-clock time than sampling-based methods (e.g., Semantic Entropy, SelfCheckGPT) that require 10–20 additional forward passes. 
+
+Comparison with Baselines. Semantic Entropy requires S = 10 sampled responses plus NLI-based clustering, costing ∼10 × the generation budget. SelfCheckGPT-NLI similarly requires S = 10 
+
+samples plus S × K NLI inference calls (where K is the number of sentences). FActScore requires claim decomposition and verification via an external LLM, adding ∼5s per claim. In contrast, SPAN UQ operates on cached hidden states from a single forward pass, making it the most efficient method among all approaches that achieve AUROC > 0.85 .27
