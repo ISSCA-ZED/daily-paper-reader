@@ -6,34 +6,28 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-07-12
-- 运行时间：2026-07-12 20:00:59 UTC
+- 最新运行日期：2026-07-13
+- 运行时间：2026-07-13 21:24:48 UTC
 - 运行状态：成功
-- 本次总论文数：4
+- 本次总论文数：2
 - 精读区：1
-- 速读区：3
+- 速读区：1
 
 ### 今日简报（AI）
-今日处理4篇论文，精读1篇Transformer可解释性研究（8.0分），速读3篇涵盖问答推理与不确定性量化。  
-最值得关注方向：注意力机制可解释性设计（精读论文）及面向问答的适应性检索推理（速读论文）。  
-普通读者建议：优先精读《Legible-by-Construction》掌握Transformer可解释性思路，再结合《Interpretable Uncertainty》了解不确定性在问答中的应用。
-- 详情：[/202607/12/README](/202607/12/README)
+1) 今日精读一篇《记忆知识为何无法泛化至新任务》的机理分析（9.0分），速读一篇LLM越狱内部归因图解析（7.0分）。  
+2) 核心发现：微调中模型过度依赖记忆而非学习通用规则，从而导致泛化失败；越狱攻击可通过因果归因图精准定位脆弱的内部节点。  
+3) 下一步可重点关注“训练数据多样性”与“安全对齐机制”的设计，以平衡记忆保留与泛化能力。
+- 详情：[/202607/13/README](/202607/13/README)
 
 ### 精读区论文标签
-1. [Legible-by-Construction: Attention and End-to-End Transformers](/202607/12/2607.04319v1-legible-by-construction-attention-and-end-to-end-transformers)  
-   标签：评分：8.0/10、query:key-tokens
-   evidence：通过sigmoid门控注意力值实现关键token的隐藏状态分析
+1. [Towards Mechanistically Understanding Why Memorized Knowledge Fails to Generalize in Large Language Model Finetuning](/202607/13/2607.08393v1-towards-mechanistically-understanding-why-memorized-knowledge-fails-to-generalize-in-large-language-model-finetuning)  
+   标签：评分：9.0/10、query:key-tokens
+   evidence：使用自我修补干预追踪激活的因果作用
 
 ### 速读区论文标签
-1. [Interpretable Uncertainty for Adaptive Retrieval and Reasoning in Question Answering](/202607/12/2607.07380v1-interpretable-uncertainty-for-adaptive-retrieval-and-reasoning-in-question-answering)  
+1. [Mechanistic Interpretability of LLM Jailbreaks via Internal Attribution Graphs](/202607/13/2607.07903v1-mechanistic-interpretability-of-llm-jailbreaks-via-internal-attribution-graphs)  
    标签：评分：7.0/10、query:key-tokens
-   evidence：从隐藏状态中提取显式知识信号用于自适应检索与推理
-2. [TimeThink: Reasoning with Time for Video LLMs](/202607/12/2607.05089v1-timethink-reasoning-with-time-for-video-llms)  
-   标签：评分：6.0/10、query:key-tokens
-   evidence：将时间线索步骤视为视频推理中的关键优化原语
-3. [SpanUQ: Span-Level Uncertainty Quantification for Large Language Model Generation](/202607/12/2607.05721v1-spanuq-span-level-uncertainty-quantification-for-large-language-model-generation)  
-   标签：评分：6.0/10、query:key-tokens
-   evidence：利用LLM隐藏状态量化span级不确定性
+   evidence：内部计算图能够对推理令牌上的对抗扰动进行因果追踪
 
 
 <div class="dpr-home-promo-card">
