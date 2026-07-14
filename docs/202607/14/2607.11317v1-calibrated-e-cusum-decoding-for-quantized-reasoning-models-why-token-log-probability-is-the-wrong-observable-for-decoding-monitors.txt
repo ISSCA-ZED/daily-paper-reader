@@ -1,0 +1,235 @@
+Title: Calibrated e-CUSUM Decoding for Quantized Reasoning Models: Why Token Log-Probability Is the Wrong Observable for Decoding Monitors
+
+URL Source: https://arxiv.org/pdf/2607.11317v1
+
+Published Time: Tue, 14 Jul 2026 02:13:47 GMT
+
+Number of Pages: 10
+
+Markdown Content:
+# Calibrated e-CUSUM Decoding for Quantized Reasoning Models: Why Token Log-Probability Is the Wrong Observable for De-coding Monitors 
+
+El Hassane Ettifouri eettifouri@novelis.io Novelis Research, Paris, France ORCID: https: // orcid. org/ 0000-0001-5299-9053 
+
+Ayoub Belfatmi abelfatmi@novelis.io Novelis Research, Paris, France ORCID: https: // orcid. org/ 0009-0005-4010-794X 
+
+Mahaman Sanoussi Yahaya Alassan syahaya@novelis.io Novelis Research, Paris, France ORCID: https: // orcid. org/ 0009-0006-0825-4701 
+
+Walid Dahhane wdahhane@novelis.io Novelis Research, Paris, France ORCID: https: // orcid. org/ 0000-0001-5387-3380 
+
+# Abstract 
+
+Low-bit quantization makes small reasoning models cheap to deploy but degrades their chain-of-thought, and a recurring folk remedy is to monitor the decoder and intervene when generation “goes wrong”. A natural candidate for such a monitor is a martingale built from token log-probabilities, controlled by a concentration inequality. We show, both analytically and empirically, that this observable is the wrong basis for a decoder monitor: the increment 
+
+log p(wt) + Ht is a mean-zero martingale by construction under the model’s own sampling law , so it is blind to exactly the failure it is meant to catch—confident repetition—and, when naively checked throughout generation, it does not provide a useful sequential alarm. We replace it with a training-free decoding controller built on two ingredients that are in-dividually standard but, to our knowledge, not previously combined for this purpose: (i) a degeneration-aware alarm score that fuses token uncertainty with an explicit verbatim-repetition signal, and (ii) a calibrated e-process-based sequential detector. The raw product process is Ville-valid under a conditional-mean null; the deployed CUSUM-floored statis-tic is treated more cautiously as an empirical change detector because the alarm score is history-dependent and autocorrelated. On GSM8K with DeepSeek-R1-Distill-Qwen-1.5B, the controller reduces the observed verbatim-degeneration signals in this pilot and, once calibrated, becomes a selective detector of failing traces ( ϕ ≈ 0.3, precision ≈ 0.6 versus a 
+
+0.38 base rate) rather than firing on 93% of generations as the uncalibrated version does. We report a positive but statistically inconclusive accuracy trend (INT4: 63% → 69% , paired McNemar p = 0 .18 at n=100 ), an honest token-budget cost of +28% , and the observation— counter to the motivating intuition—that on GSM8K the dominant failure of these models is non-termination, not looping. We release the decoder, the calibration and re-scoring tools, and all traces. This is a preliminary study whose main contribution is methodological: a clear account of why a tempting token-level observable is inadequate, and a calibrated, honestly-evaluated replacement. 1arXiv:2607.11317v1 [cs.AI] 13 Jul 2026 1 Introduction 
+
+Distilled reasoning models such as DeepSeek-R1-Distill (DeepSeek-AI, 2025) put competitive mathematical reasoning within reach of commodity hardware, and 4-bit post-training quantization pushes them further, onto a single consumer GPU or even a CPU. The price is well documented: low-bit quantization degrades mathematical reasoning disproportionately, inflating method and execution errors and lengthening chains of thought, with errors that tend to appear early and cascade (Li et al., 2025; Liu et al., 2025). This points to a different intervention point. Rather than waiting for a finished answer and re-ranking it, one can act while the reasoning trace is still being generated. Because a handful of early tokens is often enough to send a quantized model down a bad path, a decoder-side monitor may catch the trajectory and redirect it before the mistake propagates into the final answer. The obvious way to formalize this is as sequential testing. The decoder hands us a full distribution at each step, so it is tempting to form a token-level statistic, sum it as generation proceeds, and raise an alarm once a martingale deviation bound is crossed. Concretely, one takes the token log-probability Xt = log p(wt | w<t )
+
+as the running quantity, subtracts its conditional expectation, and flags the trajectory when the cumulative sum drifts outside an Azuma–Hoeffding band (Hoeffding, 1963). This is appealing, it sounds rigorous, and— as we show—it does not work as a decoding monitor. More precisely, the martingale formalism is not the problem: the problem is the observable . Centering a token log-probability under the model’s own sampling law produces a valid martingale, but one that measures self-consistency of sampling rather than trajectory health. The purpose of this paper is first to explain why this observable cannot work, precisely, and then to give a replacement that is both defensible and honestly evaluated. Our analysis is elementary but, we think, clarifying. When wt is sampled from the same (tempered, trun-cated) distribution used to compute the Shannon entropy Ht, the increment Dt = Xt − E[Xt | F t−1] = log p(wt) + Ht has conditional mean exactly zero. The cumulative sum Mn = ∑ 
+
+> t
+
+Dt is therefore a gen-uine martingale—but a martingale with respect to the model’s own generative law , which measures the self-consistency of sampling and carries no information about correctness. In a confident repetition loop the chosen token has p ≈ 1, so log p ≈ 0 and Ht ≈ 0, giving Dt ≈ 0: the monitor is silent precisely when the model is confidently wrong. Azuma’s band, in turn, reacts only to high-variance (high-entropy) stretches, i.e. to uncertainty, not to error. We take this failure seriously as a design constraint and build a controller that avoids it (Section 3). It rests on two pieces. First, an alarm score at ∈ [0 , 1] that combines normalized token uncertainty with an explicit verbatim-repetition signal; the repetition channel is what lets the monitor see confident loops that the log-probability martingale cannot. Second, a calibrated e-process-based detector. The raw product 
+
+Eraw  
+
+> n
+
+= ∏
+
+> t
+
+(1+ λ(at −μ0)) has a genuine Ville-style, time-uniform false-alarm guarantee under the conditional null E[at | F t−1] ≤ μ0. The implemented controller uses a CUSUM-floored log statistic for change detection; 
+
+at being strongly history-dependent, we report its operating point empirically rather than treating it as an exact e-process. Far from a technicality, this calibration does most of the work: a badly chosen baseline makes the alarm trip on nearly everything, while a calibrated one stays quiet except on the traces that genuinely warrant a closer look. Our evaluation uses GSM8K (Cobbe et al., 2021) with DeepSeek-R1-Distill-Qwen-1.5B, in both FP16 and INT4. We read the outcomes conservatively: they do not all line up, but taken together they point to the following: 
+
+• Token log-probability is the wrong signal for this monitor. It overlooks confident loops in our sanity check, and on real traces the uncalibrated version alarms on nearly every generation (93 –95% ; Sections 4 and 6). 
+
+• Calibration is what buys selectivity here. Fixing μ0 at the 90 th percentile of at over healthy FP16 traces converts an indiscriminate alarm into one reaching ϕ ≈ 0.3 and precision ≈ 0.6, against a 0.38 base rate. 
+
+• The controller reduces the verbatim-degeneration signals we measure in this pilot (INT4 mean consecutive repetition falls from 0.010 to 0.003 ; severe loops from 1% to 0% ) and trims non-2termination a little. With severe loops so infrequent at n = 100 , we read this as descriptive rather than as a population-level result. 
+
+• The accuracy effect is positive but not yet significant (68 → 72 FP16, 63 → 69 INT4; paired McNemar p = 0 .48 and p = 0 .18 ), at a token cost of +28% . We do not claim an accuracy improvement on this evidence. 
+
+• The motivating intuition is partly wrong. On GSM8K, verbatim loops are rare ( ≤ 4% of tokens even on failing traces); the dominant failure mode is non-termination (up to 49% of incorrect INT4 traces exhaust the budget), a phenomenon independently reported by Lotfi et al. (2026). We view this as a preliminary study. Its lasting contribution is methodological: a precise account of why an attractive token-level observable is inadequate, and a calibrated empirical e-CUSUM alternative evaluated without overclaiming. All code, calibration tools, and traces are released to support the larger-scale study the accuracy question ultimately needs. 
+
+# 2 Related Work 
+
+Quantization and reasoning. Several recent studies quantify how low-bit post-training quantization erodes reasoning, showing sharp accuracy drops, longer chains of thought, and early cascading errors under 4-bit settings (Li et al., 2025; Liu et al., 2025); the observation that errors appear early and propagate is what motivates intervening during decoding rather than re-ranking completed generations. Most directly related to our own findings, Lotfi et al. (2026) report that quantized models over-sample “overthinking” markers (wait , but , alternatively ) at high-entropy positions and, in up to 52% of failures, reach the correct answer in intermediate steps yet never commit to it; they mitigate this with a training-free logit penalty on those markers. Our independent finding that non-termination dominates INT4 failures on GSM8K corroborates theirs, and we return in Section 6 to a tension it creates for marker-based remediation. These works motivate an inference-time remedy that avoids the expensive quantization-aware retraining they also discuss. 
+
+Confidence- and entropy-based test-time control. A growing line uses model-internal signals to steer or filter reasoning. DeepConf (Fu et al., 2025) aggregates token-level confidence to filter whole traces before majority voting. The reasoning-path deviation monitor (Guan et al., 2026) is the closest prior work to ours: it is likewise training-free and reads token entropy online, but it thresholds a fixed local-to-global entropy ratio and only terminates the reasoning block, whereas we add a signal entropy cannot supply (verbatim repetition), backtrack and re-explore rather than terminate, and calibrate an empirical false-alarm operating point. Work on underthinking (Wang et al., 2025) and on entropy minimization (Agarwal et al., 2025) likewise ties entropy to reasoning quality. In short, our controller differs from this family on three axes: it acts within 
+
+a single trace by backtracking rather than filtering or terminating; its alarm score is degeneration-aware , not entropy-only; and detection is a calibrated sequential test rather than a fixed threshold. 
+
+Degeneration and self-correction. Neural text degeneration and the self-reinforcing nature of repetition are long-studied (Holtzman et al., 2020), with data-centric (Li et al., 2023) and decoding-time (Zhu et al., 2023) accounts of the self-reinforcement that drives it, and recent analyses specific to reasoning models (Duan et al., 2026). This literature is the reason we do not rely on entropy alone: varied text has high entropy, so an entropy monitor cannot flag a confident loop, which is precisely when a dedicated repetition signal is needed. On the intervention side, appending correction markers such as “Wait” can elicit self-correction without fine-tuning (Tsui, 2025; Yang et al., 2025), and truncated sampling schemes such as min-p (Nguyen et al., 2024) preserve fluency better than raising temperature—indeed, inflating temperature on an anomaly, as an earlier version of our own decoder did, increases randomness exactly when the model is already off-track. Our remediation uses these building blocks. Self-consistency (Wang et al., 2023) is the standard compute-scaling baseline we compare against. 
+
+Anytime-valid inference. Testing by betting and game-theoretic statistics provide sequential tests that remain valid under optional stopping via Ville’s inequality (Ville, 1939; Shafer, 2021; Ramdas et al., 2023), 3and conformal test martingales instantiate this for exchangeability monitoring (Vovk et al., 2005). Closest in application, WATCH monitors deployed models online with weighted-conformal test martingales (Prinster et al., 2025), and adaptive conformal inference by betting controls miscoverage sequentially (Podkopaev et al., 2024). We adapt this anytime-valid machinery to the token stream of a single decoder, while keeping a clear distinction between the raw e-process, which is Ville-valid under its conditional null, and the deployed e-CUSUM statistic, whose threshold is calibrated and reported empirically. Restart-valid e-detectors, which combine e-processes started at successive times and can yield nonasymptotic false-alarm control for sequential change detection (Shin et al., 2024), are the natural formal route for turning our practical CUSUM-style monitor into a fully valid change detector. 
+
+# 3 Method 
+
+3.1 An alarm score that sees degeneration 
+
+At each step the decoder produces logits, from which we form a sampling distribution using temperature and min-p truncation (Nguyen et al., 2024). From this distribution we read the Shannon entropy Ht and, after sampling wt, its log-probability. At each step, the controller reduces the decoder state to a bounded alarm score at ∈ [0 , 1] :
+
+at = min (1, w rep rt + went ut
+
+), wrep = 0 .7, w ent = 0 .3. (1) The term ut flags entropy spikes relative to the recent history of Ht. The term rt flags verbatim repetition by looking, in a sliding window, at how much of the text is covered by recurring n-grams. Crucially, rt
+
+approaches 1 during a loop even when the distribution is peaked and Ht ≈ 0; this is the signal that a log-probability martingale structurally cannot provide. 
+
+3.2 From a raw e-process to an implemented e-CUSUM detector 
+
+We monitor at using a betting construction (Shafer, 2021). Given a baseline level μ0 (the “healthy” mean of at; see Section 3.3) and a betting fraction λ ∈ (0 , 1) , define the raw nonnegative product process 
+
+Eraw  
+
+> n
+
+=
+
+> n
+
+∏
+
+> t=1
+
+(1 + λ (at − μ0)), log Eraw  
+
+> n
+
+=
+
+> n
+
+∑
+
+> t=1
+
+log (1 + λ(at − μ0)). (2) Because at ∈ [0 , 1] , μ0 ∈ [0 , 1] , and λ ∈ (0 , 1) , each factor is positive. Under the conditional null that generation is healthy in the sense E[at | F t−1] ≤ μ0 at every token, each factor has conditional mean at most 
+
+1. Thus Eraw  
+
+> n
+
+is a nonnegative supermartingale and Ville’s inequality gives the time-uniform guarantee 
+
+Pr (∃n : Eraw  
+
+> n
+
+≥ 1/δ ) ≤ δ. (3) Unlike an Azuma band tested every k tokens, (3) is valid when the raw process is queried at every token. The deployed detector uses a CUSUM-floored log statistic, 
+
+S0 = 0 , Sn = max (0, S n−1 + log (1 + λ(an − μ0))) , (4) and raises an alarm when Sn ≥ τ . This floor makes the controller target sustained rises of at above the healthy baseline rather than banking negative drift. We use it as an e-process-inspired change detector, not as a literal supermartingale: the reset in (4), together with the history-dependence of at, means that its false-alarm behaviour must be calibrated and reported empirically. 
+
+3.3 Offline calibration of the baseline 
+
+Guarantee (3) is only meaningful if μ0 is a true upper bound on the healthy conditional mean of at. Setting 
+
+μ0 too low makes the product process drift upward on all traces and destroys selectivity—this, we will see, is exactly what happened in our first run. We therefore calibrate μ0 offline: we take healthy reference traces 4(correct and non-truncated FP16 generations), pool their per-token at, and set μ0 to a high quantile (we use the 90 th percentile). This is a pragmatic marginal calibration, not a certificate of the conditional bound in (3). Because at is computed from running entropy statistics and sliding-window repetition, it is strongly history-dependent and autocorrelated; there can be decoder states for which E[at | F t−1] > μ 0 even if the marginal healthy level is below μ0. We therefore treat the false-alarm rate of the implemented e-CUSUM detector as an empirical operating point to be reported, not as a direct consequence of Ville’s inequality. 
+
+3.4 Remediation 
+
+When Sn crosses the calibrated threshold τ , the controller backtracks by truncating the last k tokens and rebuilding a clean key–value cache, then resumes with a graded, training-free response inspired by the self-correction literature (Tsui, 2025; Yang et al., 2025): it widens or tightens min-p rather than inflating temperature (Nguyen et al., 2024), and on repeated alarms it injects a short correction marker (“ Wait, let me re-check the previous step. ”). A budget caps the number of interventions. Normal steps use the incremental KV cache; only the (infrequent) backtracks recompute, which keeps the per-token cost close to standard decoding. These roles are kept separate in the implementation: a first module reads the logits and recent tokens and emits (ut, r t, a t); a second maintains both the raw product and the CUSUM statistic; a third carries out the intervention itself—truncation, cache rebuild, and the sampling-parameter changes. The same trace can therefore be replayed for detector evaluation without rerunning the model or applying the intervention. 
+
+# 4 Why token log-probability is the wrong observable 
+
+We can see the limitation of log p(wt) + Ht directly in a simple controlled sanity check: it does not react reliably when the model enters a confident loop. We construct synthetic token streams for four regimes calibrated to real behaviour: healthy (moderate entropy, varied tokens), confident loop (peaked distribution, 
+
+log p ≈ 0, verbatim repetition), uncertain drift (sustained high entropy, no repetition), and drift-then-collapse 
+
+(rising uncertainty that collapses into a loop—the trajectory we observe on trick prompts). We run the log-probability martingale (the Azuma monitor of the earlier decoder) and our calibrated e-CUSUM detector on each and record the detection rate. This experiment is not intended as a competitive benchmark: the regimes are constructed to isolate the mechanism, in particular the difference between entropy-only monitoring and an explicit repetition channel. Figure 1 shows the outcome of this sanity check. The log-probability martingale raises an alarm on 63% of 
+
+healthy streams—a false-alarm rate that already disqualifies it—yet detects the confident loop only 42% of the time, and that only by the accident of a random walk crossing its band. The calibrated detector, by contrast, does not fire on healthy or on pure uncertain drift, and detects the confident loop and the realistic collapse in 100% of these constructed cases. This is not evidence of broad empirical dominance; it is a mechanism check. The asymmetry is not a tuning artifact: it follows from the analysis above. A monitor centered on the model’s own entropy cannot, in principle, react to a token the model is confident about, whether that token is right or catastrophically wrong. 
+
+# 5 Experimental setup 
+
+Model and data. We use DeepSeek-R1-Distill-Qwen-1.5B (DeepSeek-AI, 2025) in FP16 and in 4-bit NF4 quantization (Dettmers et al., 2023), on the first 100 GSM8K test problems (Cobbe et al., 2021), with a 
+
+2048 -token generation budget and fixed seeds. We compare vanilla min-p sampling against the same decoder with the controller enabled ( v3 ); the two share sampling code and differ only in whether the controller may intervene, which isolates its effect. Hardware is a single NVIDIA RTX A4000. 
+
+Controller configuration. Unless otherwise stated, the alarm score uses wrep = 0 .7 and went = 0 .3. The baseline is calibrated to μ0 = 0 .41 from healthy FP16 reference traces, after an initial uncalibrated run used 
+
+μ0 = 0 .15 . The alarm threshold is parameterized by the nominal δ = 0 .05 but interpreted through the 5healthy confident loop uncertain drift drift-then-collapse 
+
+0
+
+50 
+
+100 
+
+> 63
+> 42
+> 92
+> 57
+> 0
+> 100
+> 0
+> 100
+> Detection rate (%)
+
+log-prob martingale (v2) calibrated e-CUSUM (ours) 
+
+Figure 1: Controlled sanity check on synthetic token streams ( 100 per regime). The log-probability mar-tingale both cries wolf on healthy text and misses confident loops; the calibrated e-CUSUM abstains on healthy and pure-uncertainty streams and catches the two constructed degeneration regimes. For healthy 
+
+and uncertain drift a low bar is the desired behaviour. Table 1: GSM8K, DeepSeek-R1-Distill-Qwen-1.5B, n = 100 , 2048 -token budget. “Consec. rep.” is the verbatim consecutive-repetition rate; “Sev. loop” is the fraction with consec. rep. > 0.3; “Trunc.” is the no-EOS rate. Accuracy differences are not statistically significant (McNemar p = 0 .48 FP16, p = 0 .18 INT4). Dtype Method Acc. (%) Tokens Trunc. (%) Consec. rep. Sev. loop (%) s/ex FP16 vanilla 68.0 1174 28 0.002 0 15.5 FP16 v3 (ours) 72.0 1510 31 0.003 0 20.4 INT4 vanilla 63.0 997 22 0.010 1 13.8 INT4 v3 (ours) 69.0 1282 19 0.003 0 17.9 empirical false-alarm rate of the CUSUM statistic. Backtracking, intervention budget, min-p adjustments, and marker injection are fixed before evaluation and shared across FP16 and INT4 unless explicitly ablated; the exact configuration files are released with the traces. 
+
+Metrics. We report accuracy (final answer via \boxed{} then last number), cost (mean generated tokens) , and two degeneration measures. Mathematical chains of thought being naturally repetitive, a global n-gram coverage statistic is a poor degeneration signal—it exceeds 0.6 even on correct answers—so we use instead the consecutive-repetition rate (the fraction of the sequence occupied by the longest verbatim block repeated back-to-back), which isolates true loops, together with the truncation rate (generations that reach the budget without emitting EOS). We assess accuracy differences with the paired McNemar test, appropriate for two decoders on the same items. 
+
+# 6 Results 
+
+6.1 Main comparison 
+
+Table 1 collects the run. The accuracy numbers move in the right direction— +4 points in FP16 and +6 in INT4, with INT4+v3 essentially matching FP16 vanilla—but the paired test does not support a claim of improvement: of the discordant items, the controller fixes 10 and breaks 4 in INT4 (McNemar p = 0 .18 ) and fixes 11 and breaks 7 in FP16 ( p = 0 .48 ). At n = 100 this is suggestive at most. The controller also adds 
+
+28% to the token count and 30% to wall-clock time, so any eventual accuracy claim will have to be made against a compute-matched baseline. 6uncalibrated ( μ0=0 .15 ) calibrated ( μ0=0 .41 )
+
+0
+
+0.5
+
+1 0.95 
+
+> 0.2
+> 0.93
+> 0.46
+> Rate (INT4 vanilla traces)
+
+false-alarm rate (lower better) recall on bad traces (higher better) 
+
+Figure 2: Offline calibration of μ0 turns a non-selective alarm (fires on ∼ 94% of everything) into a detector that trades a lower empirical false-alarm rate for meaningful recall. Even after calibration the false-alarm rate stays above the nominal δ = 0 .05 , which is why we report the CUSUM detector at its empirical operating point. 
+
+6.2 Observed degeneration and failure modes 
+
+On INT4 the degeneration metrics shift the way we intended, though the magnitudes stay small. Consecutive repetition drops from 0.010 to 0.003 , severe loops from 1% to 0% , and truncation from 22% to 19% . Since the severe-loop figure rests on a single trace at n = 100 , we report it as descriptive and leave its stability to bootstrap intervals or a larger run. The direction nonetheless matches what the controller is designed to do, and even its small size is telling: verbatim loops turn out to be rare on GSM8K, against the intuition that initially motivated the method. For FP16, consecutive repetition is already at the noise floor ( 0.002 under vanilla and 0.003 under v3), so the slight uptick is not a real degradation; if anything it underlines that these metrics need bootstrap intervals or larger runs before they can carry population-level claims. Splitting the vanilla INT4 traces by outcome exposes the true failure mode: consecutive repetition is 0.002 on correct answers but 0.024 on incorrect ones, and truncation 6% versus 49% , with the incorrect answers consuming far more tokens ( 1286 vs 828 ). What breaks this quantized model on grade-school math is thus not a tight verbatim loop but an inability to stop—it keeps rambling without ever committing to an answer—consistent with Lotfi et al. (2026), who find that quantized models often reach the correct answer in intermediate steps yet fail to emit it, and with the broader observation that quantization lengthens chains of thought (Li et al., 2025). 
+
+6.3 Calibration is what makes the monitor usable 
+
+Our first run used an uncalibrated baseline μ0 = 0 .15 . The mean of at on the healthy FP16 traces is 0.23 and its 90 th percentile 0.41 , so the baseline was far below the healthy level and the score accumulation drifted upward on essentially every trace. The consequence, visible in Figure 2, is a monitor that fires on 93 –95% 
+
+of generations with precision at the base rate—useless as a detector, and actively harmful as a controller, since indiscriminate intervention is what breaks the 4–7 previously-correct answers noted above. Re-scoring vanilla traces with the calibrated μ0 = 0 .41 and the nominal δ = 0 .05 yields a more selective detector: on INT4, precision 0.61 and recall 0.46 (ϕ = 0 .28 ); on FP16, precision 0.57 and recall 0.56 (ϕ = 0 .32 ), against a 0.38 base rate of bad traces. We are candid that the empirical false-alarm rate under calibration ( ≈ 0.20 )still exceeds the nominal δ: the marginal-quantile calibration does not certify the conditional null of (3), and the CUSUM floor in (4) is not itself a raw e-process. We therefore present the method as a calibrated e-CUSUM change detector with a measured operating point rather than one enjoying an exact guarantee at the stated δ.77 Limitations 
+
+This is a single-model, single-dataset, single-seed study at n = 100 ; the accuracy effect is not statistically significant and we do not claim it. The formal Ville guarantee applies to the raw product process only under the conditional null E[at | F t−1] ≤ μ0 at every token. Our deployed statistic should be interpreted more cautiously. First, μ0 is calibrated from marginal healthy traces, not from a certified upper bound on the conditional mean. Since at is history-dependent and autocorrelated, there may be decoder states for which 
+
+E[at | F t−1] > μ 0, so the raw product is not certified to be a supermartingale on real traces. Second, the CUSUM floor improves change-detection behaviour but further separates the implemented monitor from a literal e-process. A strict disjoint calibration/evaluation split, conditional calibration, a more conservative betting rule, or restart-valid e-detector construction (Shin et al., 2024) is needed before making an exact statement at the stated δ. Because the controller spends 28% more tokens, a fair accuracy comparison needs compute-matched baselines—best-of-n or self-consistency at the same budget—which we have implemented but not yet run at scale. Until we do, the positive accuracy trend cannot be told apart from the effect of simply generating more tokens.The reduction in degeneration is small in absolute terms, since verbatim loops are uncommon on GSM8K to begin with; turning the observed shifts into firm statistical claims will take bootstrap intervals and larger runs. Whether the controller earns its keep on harder benchmarks—MATH (Lightman et al., 2023), AIME, GPQA, where non-termination and drift are more frequent—is precisely the question left open. Two ablations matter most. The first is to tease apart entropy-only, repetition-only, and combined alarms on real traces: the synthetic sanity check isolates the mechanism but does not, on its own, establish what rt contributes in deployment. The second is to pit backtracking against plainer termination or early-exit rules, which would sharpen the contrast with entropy-threshold methods. A sharper tension sits in our remediation itself: it inserts a “Wait” correction marker, whereas Lotfi et al. (2026) show that quantized models already over-produce precisely these markers at high-entropy positions, and that penalizing them helps. Whether marker injection aids recovery or compounds non-termination is therefore an open empirical question our current data cannot settle; a marker-free remediation (min-p modulation alone, or a marker 
+
+penalty in the spirit of Lotfi et al. 2026) is a priority ablation. We release the harness so these gaps can be closed. 
+
+# 8 Conclusion 
+
+We set out to build a mathematically-grounded monitor for quantized reasoning decoders and found, first, that the obvious token-level observable—centered log-probability under the model’s own sampling law—is inadequate for the task, being blind by construction to confident degeneration and non-selective in practice. We replaced it with a degeneration-aware, calibrated e-CUSUM controller whose raw betting construction has an anytime-valid interpretation under a conditional null, and showed that calibration is the decisive step separating a useless alarm from a selective one. On GSM8K the controller reduces observed verbatim-degeneration signals and points to non-termination, not looping, as the real failure mode of these small quantized models; its effect on accuracy is encouraging but, at this scale, statistically inconclusive. We present the work in that honest register: a clarifying negative result about a tempting observable, a calibrated empirical replacement, and an experimental protocol ready to test the accuracy question where it is most likely to matter. 
+
+# Broader Impact 
+
+The method is an inference-time decoding controller that adds no new generative capability; its aim is to make small, cheaply-deployable reasoning models more reliable, which has a modest positive efficiency and accessibility angle (recovering quality without retraining or larger hardware). The main risk of any reliability tool is over-trust: our monitor controls degeneration and trajectory drift, which are correlated with but not equivalent to correctness, and it must not be presented to end users as a guarantee of correct answers. We have been explicit that the formal statistical guarantee applies only under the stated conditional null, and that the deployed CUSUM detector is reported through empirical false-alarm behaviour rather than as a 8guarantee of answer correctness. We see no specific dual-use or data-privacy concerns beyond those common to open reasoning models; all data used are public and contain no personal information. 
+
+# Reproducibility Statement 
+
+All components—the decoder, the offline μ0 calibration, the raw e-process and e-CUSUM re-scoring metrics (consecutive-repetition and truncation), the synthetic diagnostic of Section 4, and the full token-level traces underlying Tables and Figures—are released with fixed seeds and exact configurations. The main run is reproducible on a single consumer GPU. 
+
+# References 
+
+Shivam Agarwal et al. The unreasonable effectiveness of entropy minimization in llm reasoning. arXiv preprint arXiv:2505.15134 , 2025. Karl Cobbe et al. Training verifiers to solve math word problems. arXiv preprint arXiv:2110.14168 , 2021. DeepSeek-AI. Deepseek-r1: Incentivizing reasoning capability in llms via reinforcement learning. arXiv preprint arXiv:2501.12948 , 2025. Tim Dettmers, Artidoro Pagnoni, Ari Holtzman, and Luke Zettlemoyer. Qlora: Efficient finetuning of quantized llms. arXiv preprint arXiv:2305.14314 , 2023. Zenghao Duan, Liang Pang, Zihao Wei, Wenbin Duan, Yuxin Tian, Shicheng Xu, Jingcheng Deng, Zhiyi Yin, and Xueqi Cheng. Circular reasoning: Understanding self-reinforcing loops in large reasoning models. 
+
+arXiv preprint arXiv:2601.05693 , 2026. Yichao Fu et al. Deep think with confidence. arXiv preprint arXiv:2508.15260 , 2025. Weixin Guan, Liang Li, Jiapeng Liu, Bing Li, Peng Fu, Chengyang Fang, Xiaoshuai Hao, Can Ma, and Weiping Wang. Mitigating overthinking in large reasoning language models via reasoning path deviation monitoring. arXiv preprint arXiv:2603.14251 , 2026. Wassily Hoeffding. Probability inequalities for sums of bounded random variables. Journal of the American Statistical Association , 58(301):13–30, 1963. Ari Holtzman, Jan Buys, Li Du, Maxwell Forbes, and Yejin Choi. The curious case of neural text degener-ation. In International Conference on Learning Representations (ICLR) , 2020. Huayang Li, Tian Lan, Zihao Fu, Deng Cai, Lemao Liu, Nigel Collier, Taro Watanabe, and Yixuan Su. Repetition in repetition out: Towards understanding neural text degeneration from the data perspective. In Advances in Neural Information Processing Systems (NeurIPS) , 2023. Zhen Li, Yupeng Su, Songmiao Wang, Runming Yang, Congkai Xie, Aofan Liu, Ming Li, Jiannong Cao, Yuan Xie, Ngai Wong, and Hongxia Yang. Quantization meets reasoning: Exploring and mitigating degradation of low-bit llms in mathematical reasoning. arXiv preprint arXiv:2505.11574 , 2025. Hunter Lightman et al. Let’s verify step by step. arXiv preprint arXiv:2305.20050 , 2023. Ruikang Liu et al. Quantization hurts reasoning? an empirical study on quantized reasoning models. arXiv preprint arXiv:2504.04823 , 2025. Sanae Lotfi, Polina Kirichenko, Steven Li, and Zechun Liu. Quantized reasoning models think they need to think longer, but they do not. arXiv preprint arXiv:2606.00206 , 2026. Minh Nguyen et al. Turning up the heat: Min-p sampling for creative and coherent llm outputs. arXiv preprint arXiv:2407.01082 , 2024. 9Aleksandr Podkopaev, Darren Xu, and Kuang-Chih Lee. Adaptive conformal inference by betting. arXiv preprint arXiv:2412.19318 , 2024. Drew Prinster, Xing Han, Anqi Liu, and Suchi Saria. WATCH: Adaptive monitoring for AI deployments via weighted-conformal martingales. arXiv preprint arXiv:2505.04608 , 2025. Aaditya Ramdas, Peter Grünwald, Vladimir Vovk, and Glenn Shafer. Game-theoretic statistics and safe anytime-valid inference. Statistical Science , 38(4):576–601, 2023. Glenn Shafer. Testing by betting: A strategy for statistical and scientific communication. Journal of the Royal Statistical Society: Series A , 184(2):407–431, 2021. Jaehyeok Shin, Aaditya Ramdas, and Alessandro Rinaldo. E-detectors: A nonparametric framework for sequential change detection. The New England Journal of Statistics in Data Science , 2(2):229–260, 2024. doi: 10.51387/23-NEJSDS51. URL https://doi.org/10.51387/23-NEJSDS51 .Ken Tsui. Self-correction bench: Uncovering and addressing the self-correction blind spot in large language models. arXiv preprint arXiv:2507.02778 , 2025. Jean Ville. Étude critique de la notion de collectif. Gauthier-Villars, Paris , 1939. Vladimir Vovk, Alexander Gammerman, and Glenn Shafer. Algorithmic Learning in a Random World .Springer, 2005. Xuezhi Wang, Jason Wei, Dale Schuurmans, Quoc Le, Ed Chi, Sharan Narang, Aakanksha Chowdhery, and Denny Zhou. Self-consistency improves chain of thought reasoning in language models. In International Conference on Learning Representations (ICLR) , 2023. Yue Wang et al. Thoughts are all over the place: On the underthinking of o1-like llms. arXiv preprint arXiv:2501.18585 , 2025. Xiao-Wen Yang et al. Step back to leap forward: Self-backtracking for boosting reasoning of language models. arXiv preprint arXiv:2502.04404 , 2025. Wenhong Zhu, Hongkun Hao, and Rui Wang. Penalty decoding: Well suppress the self-reinforcement effect in open-ended text generation. In Proceedings of EMNLP , 2023. 10
