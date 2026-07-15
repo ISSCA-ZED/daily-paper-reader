@@ -1,0 +1,54 @@
+{
+  "label": "2026-07-15",
+  "date": "2026-07-15",
+  "generated_at": "2026-07-15T19:52:26",
+  "count": 3,
+  "papers": [
+    {
+      "paper_id": "202607/15/2607.12279v1-a-shared-subcircuit-lets-llms-count-down-across-tasks",
+      "section": "deep",
+      "title_en": "A Shared Subcircuit Lets LLMs Count Down Across Tasks",
+      "authors": "Jacob Dunefsky, Wes Gurnee, Emmanuel Ameisen",
+      "date": "2026-07-14",
+      "pdf": "https://arxiv.org/pdf/2607.12279v1",
+      "score": "9.0",
+      "evidence": "通过隐藏状态分析和因果追踪识别倒计时子电路",
+      "tldr": "大语言模型在执行需要追踪剩余token的任务时，依赖于一个通用的计数倒计时子电路。通过在Llama-3.1-70B-Instruct中逆向工程，发现该子电路比较当前位置与目标长度并估算剩余时间。其表示几何与先前在另一任务中发现的motif相同，表明该子电路跨模型共享。无监督探针进一步揭示该子电路在多种自然语言任务中被复用，包括目标长度隐含于上下文的情况。这项工作展示了逆向工程子电路如何解释行为从单一示例到多任务及模型的泛化。",
+      "tags": "query:key-tokens",
+      "abstract_en": "Writing a sentence of exactly twelve words; ending a DNA sequence at the right codon; formatting an ASCII table. These are all tasks that language models can do that requires tracking how many tokens remain before a target. In this work, we identify in Llama-3.1-70B-Instruct a general mechanism for performing these tasks: a \"countdown subcircuit\" that compares the current position to a goal length and estimates the time remaining until then. We first isolate a countdown subcircuit in a controlled setting, in which the model is tasked with writing a fixed-length sentence ending in a specified word. We then investigate the geometry of the representations used by the subcircuit, and find that the subcircuit uses an identical motif previously identified in a frontier LLM on a separate task, thus suggesting that this motif is shared across models. Finally, we use unsupervised probing on a natural language dataset to find a variety of other tasks where this subcircuit is used, including tasks where the goal length is inferred from context rather than explicitly stated. Our work suggests that reverse-engineering subcircuits allows us to understand how behaviors generalize from a single example to many different tasks and even models.",
+      "source": "arxiv",
+      "selection_source": "fresh_fetch"
+    },
+    {
+      "paper_id": "202607/15/2607.12425v1-where-reasoning-matters-rethinking-latent-reasoning-in-semantic-id-based-generative-recommendation",
+      "section": "deep",
+      "title_en": "Where Reasoning Matters: Rethinking Latent Reasoning in Semantic ID-based Generative Recommendation",
+      "authors": "Shangxin Yang, Min Gao, Zongwei Wang, Junliang Yu",
+      "date": "2026-07-14",
+      "pdf": "https://arxiv.org/pdf/2607.12425v1",
+      "score": "8.0",
+      "evidence": "位置信息增益度量推理中token的重要性",
+      "tldr": "语义ID生成推荐中，每个令牌的潜推理步数均匀分配导致计算浪费。本文提出IBA框架，通过位置信息增益动态分配推理步数：高信息增益位置分配更多步数，低增益位置减少步数。在多个数据集上，IBA持续提升基线模型性能，在相同计算量下获得更高推荐精度，实现了更好的精度-计算权衡。该工作揭示了潜推理步数分配的关键作用，为高效生成式推荐提供了新思路。",
+      "tags": "query:key-tokens",
+      "abstract_en": "Semantic ID-based generative recommendation predicts an item by generating a short sequence of semantic ID tokens, where each token is produced autoregressively. Latent reasoning has recently been introduced to improve this process through additional hidden-state computation before each token decision. This raises a practical question: when one item is represented by a sequence of semantic ID tokens, should each token receive the same fixed number of latent refinement steps, or should these steps be allocated more effectively across positions? We study this question through position-wise information-gain (IG), which measures how much each semantic ID position reduces the uncertainty of the target item. We observe that earlier semantic ID positions usually provide higher information-gain, while later positions contribute less additional information. We further analyze that applying more refinement to high-IG positions tends to bring larger expected benefits. Based on this observation, we propose IBA, an Information-Gain Budget Allocation framework for semantic ID-based generative recommendation. IBA treats latent refinement steps as a limited computational resource and learns how to allocate them across semantic ID positions, assigning more refinement to informative positions and less to positions with smaller contribution. Experiments on multiple public datasets show that IBA consistently improves strong generative recommendation baselines and achieves a better accuracy--computation trade-off than fixed or poorly matched step allocations.",
+      "source": "arxiv",
+      "selection_source": "fresh_fetch"
+    },
+    {
+      "paper_id": "202607/15/2607.12815v1-visual-access-boundaries-in-vision-language-model-reasoning",
+      "section": "quick",
+      "title_en": "Visual Access Boundaries in Vision-Language Model Reasoning",
+      "authors": "Hiroto Osaka, Shohei Taniguchi, Gouki Minegishi, Kai Yamashita, Masahiro Suzuki, Yutaka Matsuo",
+      "date": "2026-07-14",
+      "pdf": "https://arxiv.org/pdf/2607.12815v1",
+      "score": "7.0",
+      "evidence": "通过因果干预定义视觉访问边界，分析生成token与图像token的注意力",
+      "tldr": "视觉语言模型（VLM）的链式思维（CoT）推理是否需要持续访问图像token？本研究提出Visual Access Sweep因果干预方法，定义Visual Access Boundary（VAB）作为保持任务准确率的最小访问区域。在Qwen2.5-VL和InternVL3等模型上实验发现，CoT的VAB层与无CoT基线仅相差最多两层，表明CoT并非通过延长图像token访问提升性能，而是依赖语言侧对图像派生隐状态的计算。进一步发现，CoT仅在模型可靠读出视觉属性时有效，瓶颈在于感知读出而非计数能力。",
+      "tags": "query:key-tokens",
+      "abstract_en": "Chain-of-Thought (CoT) prompting is widely used as a test-time scaling strategy for Vision-Language Models (VLMs), but it remains unclear what is extended when VLMs generate longer reasoning traces. We ask whether CoT requires continued access to image tokens, or whether it mainly operates over visual information already made available earlier in the forward pass. We introduce Visual Access Sweep, a causal intervention that masks attention from generated-token queries to image-token keys along layer depth and generation time, and define the Visual Access Boundary (VAB) as the minimal access region that preserves task accuracy. Across six model configurations from Qwen2.5-VL and InternVL3, both no-CoT direct answering and CoT prompting exhibit finite VABs. In Qwen2.5-VL-32B and InternVL3 at 14B and 38B scales, when CoT is evaluated against the no-CoT full-access target, its VAB layer differs from the no-CoT boundary by at most two layers, despite substantially longer generations. This suggests that CoT does not primarily improve performance by prolonging direct image-token access throughout the reasoning trace, but by extending language-side computation over image-derived hidden-state information. We further show that CoT gains are constrained by perceptual readout. CoT helps when the queried visual attribute can be reliably read out by the model, but not when that readout is unreliable. A symbolic-attribute oracle shows that CoT can improve counting once ground-truth attributes are supplied as text, while a single-object probe-vs-decode check shows that hard attributes can be linearly recoverable from hidden states yet difficult for the model itself to output. Together, these analyses place the bottleneck at readout rather than counting.",
+      "source": "arxiv",
+      "selection_source": "fresh_fetch"
+    }
+  ],
+  "errors": []
+}
