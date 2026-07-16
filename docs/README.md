@@ -6,29 +6,26 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-07-15
-- 运行时间：2026-07-15 19:52:19 UTC
+- 最新运行日期：2026-07-16
+- 运行时间：2026-07-16 21:06:50 UTC
 - 运行状态：成功
-- 本次总论文数：3
-- 精读区：2
+- 本次总论文数：2
+- 精读区：1
 - 速读区：1
 
 ### 今日简报（AI）
-今日精读两篇高分论文，发现LLM跨任务计数存在共享子电路，并重新审视了语义ID生成式推荐中的隐含推理；速读揭示了视觉语言模型的视觉访问边界。建议重点关注共享子电路如何提升LLM多任务泛化能力，以及推理在推荐系统中是否真正有效。
-- 详情：[/202607/15/README](/202607/15/README)
+今天精读了一篇黑盒前提依赖测试论文，速读了一篇语义漂移研究。最值得关注的是通过谓词替换审计LLM思维链前提依赖性。建议关注如何用这种方法提升AI推理系统的可靠性。
+- 详情：[/202607/16/README](/202607/16/README)
 
 ### 精读区论文标签
-1. [A Shared Subcircuit Lets LLMs Count Down Across Tasks](/202607/15/2607.12279v1-a-shared-subcircuit-lets-llms-count-down-across-tasks)  
-   标签：评分：9.0/10、query:key-tokens
-   evidence：通过隐藏状态分析和因果追踪识别倒计时子电路
-2. [Where Reasoning Matters: Rethinking Latent Reasoning in Semantic ID-based Generative Recommendation](/202607/15/2607.12425v1-where-reasoning-matters-rethinking-latent-reasoning-in-semantic-id-based-generative-recommendation)  
+1. [Interventional Grounding Audits: Black-Box Premise-Dependency Tests for LLM Chain-of-Thought via Predicate Substitution](/202607/16/2607.13069v1-interventional-grounding-audits-black-box-premise-dependency-tests-for-llm-chain-of-thought-via-predicate-substitution)  
    标签：评分：8.0/10、query:key-tokens
-   evidence：位置信息增益度量推理中token的重要性
+   evidence：通过前提因果干预测试推理步骤的依赖性
 
 ### 速读区论文标签
-1. [Visual Access Boundaries in Vision-Language Model Reasoning](/202607/15/2607.12815v1-visual-access-boundaries-in-vision-language-model-reasoning)  
+1. [Semantic Drift and the Stability of Operator Control in Reasoning-Class Decision Support Systems](/202607/16/2607.09790v1-semantic-drift-and-the-stability-of-operator-control-in-reasoning-class-decision-support-systems)  
    标签：评分：7.0/10、query:key-tokens
-   evidence：通过因果干预定义视觉访问边界，分析生成token与图像token的注意力
+   evidence：对LLM中隐藏推理链及其漂移的分析
 
 
 <div class="dpr-home-promo-card">
