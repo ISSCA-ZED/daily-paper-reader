@@ -1,0 +1,54 @@
+{
+  "label": "2026-07-20",
+  "date": "2026-07-20",
+  "generated_at": "2026-07-20T21:15:18",
+  "count": 3,
+  "papers": [
+    {
+      "paper_id": "202607/20/2607.15178v1-t2mlr-transformer-with-temporal-middle-layer-recurrence",
+      "section": "deep",
+      "title_en": "T^2MLR: Transformer with Temporal Middle-Layer Recurrence",
+      "authors": "Ziyang Cai, Xingyu Zhu, Yihe Dong, Yinghui He, Sanjeev Arora",
+      "date": "2026-07-16",
+      "pdf": "https://arxiv.org/pdf/2607.15178v1",
+      "score": "8.0",
+      "evidence": "隐藏中层循环用于中间推理状态",
+      "tldr": "Transformer自回归解码导致中间推理状态难以跨步持久，限制了推理能力。本文提出T^2MLR架构，通过将前一个token的中间层表示递归注入当前token的早期层，使抽象中间计算持续传递。实验表明，该方法在预训练和多跳推理中优于基线，且仅对20%的中间层施加循环即可超越全层循环。更重要的是，可改造现有1.7B模型并微调，显著提升数学推理，降低了实际部署门槛。",
+      "tags": "query:key-tokens",
+      "abstract_en": "Transformer reasoning is limited by autoregressive decoding, which repeat edly compresses rich hidden computation through token space and makes it difficult for intermediate reasoning states to persist across time. We in troduce Transformers with Temporal Middle-Layer Recurrence (T2MLR), a transformers-based latent reasoning architecture that fuses a cached middle layer representation from the previous token directly into an earlier layer of the current token position, enabling abstract intermediate computation to persist across decoding steps with little inference overhead. Across natural-language pretraining and multi-hop reasoning finetuning, T2MLR consistently outperforms data- and parameter-matched Transformer base lines. Moreover, applying recurrence to only a localized middle-layer block (as little as 20% of the network) often outperforms full-layer recurrence. Im portantly, T2MLR does not require pretraining from scratch: retrofitting the recurrent pathway into an existing pretrained 1.7B Transformer and briefly finetuning substantially improves math reasoning, lowering the barrier to practical adoption. These results suggest that effective latent reasoning in Transformers does not require looping over all layers as in previous works, but can instead emerge more strongly from targeted middle-layer recurrence.",
+      "source": "arxiv",
+      "selection_source": "fresh_fetch"
+    },
+    {
+      "paper_id": "202607/20/2607.15555v1-llms-encode-relevance-as-a-layer-wise-cross-lingual-signal",
+      "section": "quick",
+      "title_en": "LLMs Encode Relevance as a Layer-Wise Cross-Lingual Signal",
+      "authors": "Pietro Bernardelle, Samaneh Mohtadi, Stefano Civelli, Joel Mackenzie, Gianluca Demartini",
+      "date": "2026-07-17",
+      "pdf": "https://arxiv.org/pdf/2607.15555v1",
+      "score": "7.0",
+      "evidence": "隐藏状态探测用于token级相关性信号",
+      "tldr": "大型语言模型(LLM)在信息检索中常被用作相关性评估器，但其内部如何表示相关性尚不明确。本研究通过提取指令微调LLM每层残差流激活，训练线性探针预测查询-文档相关性。结果显示，相关性信号随层深逐渐增强，在中后期层达到最可线性解码；验证选择的探针性能匹配或优于模型直接生成的相关性判断，且更好地保持系统排名。跨语言实验表明，相关性表示具有一定可迁移性但较弱。该工作提供了表示层面视角，可诊断相关性信号出现位置及判断失败原因。",
+      "tags": "query:key-tokens",
+      "abstract_en": "Large language models (LLMs) are increasingly used in information retrieval (IR) pipelines as relevance judges and re-rankers. Yet most analyses remain output-centric, evaluating generated labels or scores while offering limited insight into how relevance is represented inside the model. In this work, we study whether query-document (q-d) relevance is linearly decodable from residual-stream activations in instruction-tuned LLMs, how this signal compares with generated relevance judgments, and whether it transfers across languages. Using the TREC DL20 and MIRACL evaluation collections, we guide medium-scale LLMs (4-9B parameters) with UMBRELA-style relevance judgment prompts, extract last-token activations from every transformer layer, and train linear probes to predict relevance labels. We compare probe predictions with generated judgments and use TREC DL20 to test whether probe-derived pseudo-labels preserve system rankings against human judgments. Our results suggest that q-d relevance is encoded as a depth-dependent signal: probe performance is weak in early layers and strongest in middle-to-late layers, indicating that relevance becomes more linearly accessible after contextual integration. Most importantly, in several models, validation-selected probes match or outperform generated judgments and better preserve system rankings, revealing a separation between internal relevance representation and external expression. Multilingual experiments suggest partial cross-language portability, although transfer remains weaker than within-language decoding. Overall, this work provides a representation-level perspective on LLM-based relevance assessment. Layer-wise probing can help diagnose where relevance emerges, when generated judgments fail to reflect internally available evidence, and how relevance representations vary across languages, datasets, and model families.",
+      "source": "arxiv",
+      "selection_source": "fresh_fetch"
+    },
+    {
+      "paper_id": "202607/20/2607.10578v1-laguerre-geometry-for-interpreting-large-language-models",
+      "section": "quick",
+      "title_en": "Laguerre Geometry for Interpreting Large Language Models",
+      "authors": "Chunwei Ma, Russell Wolfinger",
+      "date": "2026-07-12",
+      "pdf": "https://arxiv.org/pdf/2607.10578v1",
+      "score": "6.0",
+      "evidence": "用于token隐藏轨迹分析的拉盖尔几何",
+      "tldr": "现有LLM概念表示假设（单点、线性方向、高斯簇）无法解释结构涌现。本文提出Laguerre几何，将概念精确定义为区域（Laguerre-Voronoi单元或其并集），严格定义、度量并分离概念，并揭示概念包含与层级等细粒度结构。进一步分解transformer每层为分段线性算子，发现token隐藏轨迹由静态自包含流树和动态注意力跳跃传输耦合控制。由此无训练Geometric Lens可直接读出任意层隐藏向量所编码的精确概念，Laguerre Autoencoder统一可视化决策几何与推理轨迹。该方法不仅提供精确解释，还能在上下文干扰下恢复正确事实token，实现可操作性解读，代码已开源。",
+      "tags": "query:key-tokens",
+      "abstract_en": "Existing hypotheses represent a concept in an LLM as a single point, a linear direction, or a Gaussian cluster, yet it remains unclear how and why such structures emerge. Here, we show that concept geometry can be precisely characterized via Laguerre Geometry, in which a concept is defined as a region--a Laguerre-Voronoi cell or a union of cells--allowing us to strictly define, measure, and separate concepts. Building on this formulation, we show that finer-grained concept structures, such as inclusion and hierarchy, are naturally revealed by the Laguerre weights. We then push this geometry inside the transformer. Decomposing each layer into piecewise-linear operators, we show that a token's hidden trajectory is governed by two coupled mechanisms: a static tree of self-contained piecewise-linear flow, and a dynamic transport that hops the trajectory across trees when cross-token attention fires. This decomposition yields Geometric Lens, a training-free, hyperparameter-free method for reading out the exact concept a hidden vector encodes at any layer. We also develop Laguerre Autoencoder, a 2D visualizer that renders both the decision geometry and a model's full reasoning trajectory in one view. Finally, we move beyond explanatory geometry toward actionable interpretability, showing that Geometric Lens recovers the correct factual token when a model is prompted with in-context interference. The code is available on GitHub.",
+      "source": "arxiv",
+      "selection_source": "fresh_fetch"
+    }
+  ],
+  "errors": []
+}

@@ -1,0 +1,1465 @@
+Title: Laguerre Geometry for Interpreting Large Language Models
+
+URL Source: https://arxiv.org/pdf/2607.10578v1
+
+Published Time: Tue, 14 Jul 2026 01:03:48 GMT
+
+Number of Pages: 26
+
+Markdown Content:
+# Laguerre Geometry for Interpreting Large Language Models 
+
+A P REPRINT 
+
+Chunwei Ma *1 and Russell D. Wolfinger †1 1JMP Statistical Discovery, Cary, NC, USA July 14, 2026 
+
+## ABSTRACT 
+
+Existing hypotheses represent a concept in an LLM as a single point, a linear direction, or a Gaussian cluster, yet it remains unclear how and why such structures emerge. Here, we show that concept geometry can be precisely characterized via Laguerre Geometry, in which a concept is defined as a region—a Laguerre-Voronoi cell or a union of cells—allowing us to strictly define, measure, and separate concepts. Building on this formulation, we show that finer-grained concept structures, such as inclusion and hierarchy, are naturally revealed by the Laguerre weights. We then push this geometry inside the transformer. Decomposing each layer into piecewise-linear operators, we show that a token’s hidden trajectory is governed by two coupled mechanisms: a static tree of self-contained piecewise-linear flow, and a dynamic transport that hops the trajectory across trees when cross-token attention fires. This decomposition yields Geometric Lens , a training-free, hyperparameter-free method for reading out the exact concept a hidden vector encodes at any layer. We also develop 
+
+Laguerre Autoencoder , a 2D visualizer that renders both the decision geometry and a model’s full reasoning trajectory in one view. Finally, we move beyond explanatory geometry toward actionable interpretability, showing that Geometric Lens recovers the correct factual token when a model is prompted with in-context interference. The code is available on GitHub ♯.
+
+## 1 Introduction 
+
+Large Language Models (LLMs) have achieved remarkable breakthroughs not only in general question-answering and conversation, but also in coding [Li et al., 2022, Chen et al., 2021], mathematical reasoning [Romera-Paredes et al., 2024], multimodal (image, audio, and video) generation [Wu et al., 2023], and scientific discovery [Ghareeb et al., 2026, Aygün et al., 2026]. Yet, although every atomic internal computation within an LLM is ontologically well understood, the reason these computations, when composed, give rise to a high degree of intelligence remains largely epistemologically opaque—warranting deeper scientific inquiry. A typical LLM is built on decoder-only transformers and trained autoregressively, with the model optimized to correctly predict the next token given a preceding piece of text. How this simple training objective gives rise to emergent capabilities such as comprehension and reasoning remains one of the central mysteries of LLMs. In moving from next-token probability distributions to emergent capabilities, the first natural question is how concepts are organized within an LLM’s internal representations. To answer this question, an intensively studied idea is the linear representation hypothesis (LRH) [Mikolov et al., 2013a, Elhage et al., 2022, Nanda et al., 2023, Gurnee et al., 2024, Park et al., 2023]—the informal hypothesis that semantic concepts are represented linearly in the representation spaces of LLMs. LRH has been widely substantiated across various contexts, including linear probes [Hewitt & Manning, 2019, Tenney et al., 2019], vector arithmetic [Mikolov et al., 2013b, Park et al., 2023, Zou et al., 2023], intervention and activation steering [Li et al., 2023, Turner et al., 2023], 
+
+> ∗
+
+chunwei.ma@jmp.com 
+
+> †
+
+russ.wolfinger@jmp.com 
+
+> ♯
+
+https://github.com/horsepurve/Geometric-Lens arXiv:2607.10578v1 [cs.AI] 12 Jul 2026 Laguerre Geometry for Interpreting Large Language Models concentric subsumption internal tangent         
+
+> intersecting external tangent disjoint
+> (A) Oriented spheres in Laguerre Geometry 0.6 0.7 0.8 0.9 1.0 1.1
+> Distance to '_Dogs'
+> 0.500
+> 0.525
+> 0.550
+> 0.575
+> 0.600
+> 0.625
+> 0.650
+> (Laguerre weights)
+> _furry
+> _canine
+> _puppies _puppy
+> _barking
+> _leash
+> Dog
+> _beasts
+> _breeds
+> _Pets
+> _mammalian
+> _Animals
+> _Dogs
+> (B) Hyponyms/hypernyms in Phi-2
+> found by Laguerre Geometry (C) An example
+> Laguerre-Voronoi Diagram
+
+Figure 1: (A) A demonstration of all possible conditions of two oriented hyperspheres in Laguerre Geometry. (B) The hyponyms and hypernyms of the token _Dogs discovered in the Phi-2 model. Without Laguerre weights, distance to the unembedding vector alone (x-axis) cannot distinguish hyponyms from hypernyms. See 9 for the full figure. (C) An example Laguerre-Voronoi Diagram in R2. In this work, a concept under LRH is defined as an entire cell, rather than a single point, vector, or direction. and circuit tracing [Gurnee et al., 2026a, Templeton et al., 2026, Sofroniew et al., 2026]. However, four questions remain unresolved under this hypothesis: (I) What is the definition of a concept? (II) How is a concept represented, and in which representation space? (III) What concrete geometric structure carries it? (IV) Why should this structure be linear, and to what extent does linearity hold? In this paper, we categorize LRH into two branches according to the representation space in which it is applied: (1) 
+
+Token classification layer —the final linear projection layer of an LLM, which serves as the classification head and is trained with a cross-entropy loss, as in a standard deep neural network. A concept here is typically defined as a contrastive direction [Park et al., 2023], a whitened unembedding vector [Park et al., 2025], or the final hidden vector of a token [Xiong, 2026]. Most existing geometric analyses of LLMs focus on this layer. (2) Intermediary layers following each transformer block. LRH is the hypothesis underlying sparse autoencoders (SAEs) [Kantamneni et al., 2025, Bhalla et al., 2025, Hindupur et al., 2026, Bhalla et al., 2026], where high-level concepts are assumed to be linearly separable by latent units. A concept in this setting is defined as a latent direction that activates in response to a specific semantic meaning. Some recent works challenge this vector/direction-based definition of concept in favor of clusters or regions. For instance, Zhao et al. [2025], Shafran et al. [2026] model concepts as mixtures of Gaussian distributions, offering an alternative to SAEs. However, in these approaches a "region" remains an empirically defined cluster of activations, lacking an exact geometric structure. From a reductionist standpoint, understanding the high-level phenomena of a system requires first understanding its most elemental constituent pieces. Prior work has shown that a feedforward neural network (FNN) with piecewise-linear activations partitions its input space into numerous piecewise linear regions [Montúfar et al., 2014]; since FNNs account for the majority of an LLM’s parameters, this same decomposition exists within LLMs as well. However, it remains unclear how this underlying geometry connects to the high-level semantic meanings encoded by an LLM. In this paper, we propose a geometric framework that unifies low-level geometric decomposition with high-level semantic organization, connected via two complementary passes: top-down, we identify the semanticity-carrying regions in the top unembedding layer and progressively subdivide the space in lower layers; bottom-up, we track the region a prompt visits as it propagates from the input embedding layer to upper layers, assigning a meaning to each intermediate vector. In doing so, we move beyond hypothesis to concrete geometric objects that naturally exist within any transformer-based LLM. This instantiation of LRH allows us to precisely define both concepts and linearity in the final and intermediary representation spaces. Most existing geometric frameworks for LLM interpretability represent a concept via its unembedding vector—that is, as a single high-dimensional point. Laguerre Geometry extends this point to a high-dimensional hypersphere, admitting a much richer set of oriented contact conditions between two or more hyperspheres (e.g., disjoint, tangent, intersecting, contained, and concentric) [Imai et al., 1985, Aurenhammer, 1987, Bobenko et al., 2021]. In this paper, we ask: can 2Laguerre Geometry for Interpreting Large Language Models extending concept points (vectors, directions) to concept hyperspheres reveal richer semantic knowledge embedded in a trained LLM? To answer this, we make the following contributions: • We show that the embedding layer of an LLM induces a Laguerre-Voronoi Diagram (LVD) in the representation space. This diagram lets us strictly define concepts, linearity, and the relationships between them as concrete geometric objects. Laguerre Geometry also provides a powerful tool for modeling conceptual hierarchy. • Moving from the "outer" embedding layer to the "inner" transformer blocks, we develop Geometric Lens , which uncovers the Laguerre region in which each hidden vector resides. We further develop Laguerre Autoencoder , a 2D visualization method that jointly renders the LLM’s hidden representations alongside their corresponding LVD regions. • We construct datasets, evaluation metrics, and experiments to assess linearity and hierarchy under different hypotheses, and to evaluate hidden-state elucidation across different lenses. We further show that our geometric framework effectively mitigates in-context interference. 
+
+## 2 Related Works 
+
+2.1 Geometric and Mechanistic Interpretability of LLMs 
+
+One of the most crucial open problems in LLM research is a scientific theory of how high-order intelligence emerges from training, and interpretability is a critical step toward this goal. Mechanistic Interpretability (MI) [Sharkey et al., 2025] seeks to reverse-engineer the actual computation learned by a network, down to the level of individual elements and how they compose. LRH serves as a working assumption underlying many MI methods. For example, sparse autoencoders (SAEs) are built to recover an overcomplete basis of linearly-encoded, monosemantic "features" (i.e., concepts) [Li et al., 2025, Muchane et al., 2025, Engels et al., 2025, Kantamneni et al., 2025, Bhalla et al., 2026]. LRH also underlies contrastive activation steering [Panickssery et al., 2023, Bigelow et al., 2025], which assumes a single direction vector points directly from a concept (e.g., "deception") to its contrastive counterpart (e.g., "honesty"). Beyond simple linear directions, the linearity assumed by LRH has also been extended to more complex structures, such as simplices [Park et al., 2025] or lattices [Xiong, 2026], argued to exist within trained LLMs. Two issues remain, however. (1) Some of these geometric structures have not been benchmarked against a random null model: for instance, Golechha et al. [2025] show that the orthogonality and polytope structures reported in Park et al. [2025] arise trivially in high-dimensional spaces, even for random, semantically meaningless concept sets. (2) Most geometric perspectives remain explanatory, characterizing a specific geometric structure without offering a route to actionable intervention for MI. 
+
+2.2 Computational Geometry for Deep Neural Networks 
+
+Our work is motivated by prior findings that deep feedforward neural networks (DNNs) with piecewise-linear activation functions partition their input space into piecewise-linear response regions, the number of which grows exponentially faster than in shallow counterparts [Pascanu et al., 2013, Montúfar et al., 2014, Arora et al., 2016, Serra et al., 2018, Hanin & Rolnick, 2019, Xiong et al., 2020, 2024, Gaines & Bi, 2026]. The number of maximal linear regions serves as a classical metric for both spatial partitioning and expressivity. Balestriero et al. [2019] showed that the exact response structure induced by a single neuron with piecewise-affine activations (e.g., (leaky-)ReLU, MaxOut, Abs) is a Power Diagram [Aurenhammer, 1987]—an equivalent formulation of the LVD—with subsequent applications in RNNs [Wang et al., 2018] and GANs [Balestriero et al., 2020]. Ma et al. [2022] applied cluster-induced Voronoi diagrams to the decision layer of a DNN, showing that a well-trained DNN with frozen parameters retains sufficient capacity to accommodate new, unseen classes [Ma et al., 2023]. In our work, we show that this same Voronoi structure exists throughout LLMs as well, and we establish it as a foundation for concept organization. 
+
+2.3 Tropical Geometry for Deep Neural Networks 
+
+Tropical Geometry offers an analytical and algebraic framework for quantifying linear regions in DNNs via tropical algebra (the max-plus semiring) [Zhang et al., 2018, Maragos et al., 2021]. More recently, several works have bridged tropical algebra with attention mechanisms [Alpay & Senturk, 2026, Hashemi et al., 2026, Su et al., 2026]. Notably, Su & Liu [2026] modeled a single attention head by fixing the key vectors {kj } and treating the query space as the free domain, such that the fixed set of keys partitions the query space into a Power Diagram with associated weights 
+
+∥kj ∥2—thereby incorporating the attention mechanism into the Tropical framework. However, quantifying the number of regions for expressivity does not by itself yield interpretability. Rather than counting regions, we draw on linear subdivision theory to associate each region with a concept and track the trajectory of concepts across regions, in service of actionable interpretability. Our direction is therefore complementary to the Tropical Geometry viewpoint on LLMs. 3Laguerre Geometry for Interpreting Large Language Models 
+
+## 3 Preliminary 
+
+We begin with the necessary background on LLMs and the LVD. 
+
+Large Language Models. We focus on decoder-only, GPT-like transformer-based LLMs Vaswani et al. [2017], Radford et al. [2018], and consider a frozen pretrained language model M with L layers and vocabulary V = {e1, ..., e|V| }.Given an input sequence of T tokens S = ⟨s1, ..., s T ⟩, we represent the input as a matrix X ∈ RT ×d, whose i-th row is the embedding vector of the i-th token in the sequence, and where d denotes the hidden dimension of M’s representations. At layer ℓ ∈ [1 , . . . , L ], we denote by h(ℓ) 
+
+> i
+
+∈ Rd the hidden representation (also called the residual stream) at position i ∈ [1 , . . . , T ], obtained by running M on S. Each transformer layer consists of a multi-head attention block (MHA) followed by a feed-forward network block (MLP). The MHA first reads the residual stream and produces an update ∆attn (ℓ) 
+
+> i
+
+, which is added back to it; the resulting vector is then passed through the MLP to produce a second update ∆mlp (ℓ) 
+
+> i
+
+:
+
+∆attn (ℓ) 
+
+> i
+
+= MHA (ℓ)(h(ℓ) 
+
+> i
+
+), (1) 
+
+∆mlp (ℓ) 
+
+> i
+
+= MLP (ℓ)(h(ℓ) 
+
+> i
+
++ ∆ attn (ℓ) 
+
+> i
+
+). (2) Both updates are then added back to the residual stream: 
+
+h(ℓ+1)  
+
+> i
+
+= h(ℓ) 
+
+> i
+
++ ∆ attn (ℓ) 
+
+> i
+
++ ∆ mlp (ℓ) 
+
+> i
+
+. (3) We use ∆ to emphasize that each block’s output is an incremental refinement added to the residual stream, rather than a replacement of it. After the L-th transformer layer, a linear projection layer (also called the unembedding layer), parameterized by W ∈ Rd×|V| and b ∈ R|V| , is applied to the final residual stream to produce the model’s output: 
+
+M(X{1,...,i }) = softmax (Fun (h(L) 
+
+> i
+
+)) , Fun (h(L) 
+
+> i
+
+) = W h (L) 
+
+> i
+
++ b. (4) 
+
+Laguerre-Voronoi Diagram. As an extension of the Voronoi Diagram (VD), the Laguerre-Voronoi Diagram (LVD) represents each site as a center-weight pair, and a collection of V sites partitions the space Rd into V disjoint cells. We first give the formal definition of an LVD, and later show how an LLM naturally induces an LVD in its representation space. 
+
+Definition 3.1 (Laguerre-Voronoi Diagram Imai et al. [1985], Aurenhammer [1987]) . Let Ω = {ω1, ..., ω V } be a partition of Rd into a set of centers C = {c1, ..., cV }, such that ∪Vr=1 ωr = Rd and ωr ∩ ωr′ = ∅ for all r̸ = r′. Each center cr is further associated with a scalar weight νr ∈ R. The set of triples {(ω1, c1, ν 1), ..., (ωV , cV , ν V )} then defines a Laguerre-Voronoi Diagram (LVD), also known as a Power Diagram, where each cell is given by 
+
+ωr = {z ∈ Rd : ℜ(z) = r}, r ∈ { 1, ..., V }, (5) and ℜ : Rd → { 1, ..., V } assigns each point to its owning cell via 
+
+ℜ(z) = arg min  
+
+> j∈{ 1,...,V }
+
+d(z, cj )2 − νj . (6) Here d(·, ·) denotes a distance function; throughout this paper, we take d to be the Euclidean distance. The quantity minimized in Eq. equation 6 is called the Laguerre distance. When all weights are equal, i.e., νj = νj′ for all 
+
+j, j ′ ∈ { 1, ..., V }, the LVD collapses to an ordinary VD. 
+
+## 4 Methodology 
+
+As discussed above, while the geometric structure of (ReLU-based) deep neural networks is well understood [Pascanu et al., 2013, Montúfar et al., 2014, Arora et al., 2016, Balestriero et al., 2019, Montúfar et al., 2022], transformers are considerably harder to characterize geometrically due to their parallel architecture. Isolating the computation graph at a single token position i reduces the LLM to a multiple-input ( X{1,...,i }), single-output (the (i + 1) -th token) system. In what follows, we first restrict our analysis to a single input token, then extend it to multiple input tokens, and finally develop a tool to visualize the trajectories of all tokens in a 2D plane. 
+
+4.1 Explaining the Geometry of a Single-Input LLM 
+
+Existing geometric analyses of LLMs largely operate in the final representation space, after the L-th transformer block [Jiang et al., 2024, Park et al., 2025, Xiong, 2026]. In this section, we first show that the unembedding layer itself carries rich geometric structure, revealed by its parameters W , b, and then propagate this structure back to the intermediary layers. 4Laguerre Geometry for Interpreting Large Language Models 
+
+4.1.1 Unembedding Layer Partitions the Representation Space as a Laguerre-Voronoi Diagram 
+
+The geometry of linear projection layers has been studied extensively as the final decision layer of a deep neural network [Ma et al., 2022, 2023], where its Power Diagram structure was first revealed by Balestriero et al. [2019]. We apply this structure to the unembedding layer of an LLM, which maps the final hidden representation to the next-token distribution. We argue that this structure carries substantially richer information than the unembedding vectors alone, revealing semantic knowledge that the vectors themselves cannot. 
+
+Theorem 4.1 (Unembedding Layer is a Laguerre-Voronoi Diagram) . The unembedding layer of an LLM, parameterized by W , b, partitions the representation space Rd into a Laguerre-Voronoi Diagram with centers {c1, ..., cj , ..., cV } and weights {ν1, ..., ν j , ..., ν V } given by: 
+
+cj = 12 Wj , (7) 
+
+νj = bj + 14 ∥Wj ∥22, (8) 
+
+where V = |V| , i.e., the number of cells equals the vocabulary size of the LLM. 
+
+Proof is in Appendix A.1.1. It is worth noting that, although prevailing LLMs typically set b ≡ 0 to reduce parameter count, the LVD structure (as opposed to a plain VD) persists as long as the weights νj are not identical across j. This condition holds generically in practice, since νj depends on ∥Wj ∥22, which varies across tokens even when b ≡ 0.
+
+Concept Geometry of LLMs. Prior definitions of concepts rely on binary attributes involving a pair of objects [Park et al., 2025] (e.g., {"is mammal", "not mammal"} or "mammal ⇒bird"). Inspired by Laguerre Geometry, we instead define a concept as a single Laguerre-Voronoi cell (e.g., ω"dog" or ω"cat" ), and a category as the union of multiple cells (e.g., "pet" = {ω"dog" , ω "cat" , ω "bird" , ... }). A cell may be reused across different categories (e.g., "cat" belongs to both "pet" and "mammal"), and a category such as "pet" is itself a higher-order concept. 
+
+Definition 4.1 (Concept) . A concept Cj is defined as a Laguerre-Voronoi cell, characterized by the tuple (ωj , cj , ν j ):
+
+Cj = {z ∈ Rd : ∥z − cj ∥22 − νj < ∥z − cj′ ∥22 − νj′ , ∀j′̸ = j}. (9) This definition bridges an abstract semantic concept with a concrete geometric object (a convex polyhedron); accordingly, we use "concept" and "cell" interchangeably throughout the remainder of the paper. A category, in turn, is defined as the union of a finite number of such cells: 
+
+Definition 4.2 (Category) . A category UM, containing a set of M concepts M = {C1, ..., C M }, is the union of their respective cells: UM = SMm=1 ωm.We are now in a position to answer the open questions on LRH raised in the Introduction: (I) a concept is defined as a cell, or a union of cells; (II) these cells reside within the LVD induced by the unembedding layer; and (III) linearity refers to the linear separability of two concepts (or categories), as formalized below. 
+
+Theorem 4.2 (Linear Separability of Concepts) . By the Hyperplane Separation Theorem, any two concepts Cj , C j′ , for all j, j ′ ∈ { 1, ..., V }, are linearly separable in Rd.
+
+Theorem 4.3 (Linear Separability of Categories) . Any two categories UM = SMm=1 ωm and UN = SNn=1 ωn are linearly separable if and only if there exist a vector v ∈ Rd, a scalar α ∈ R, a margin ϵ ∈ R>0, and sets of non-negative multipliers λm, μ n ∈ RV −1 
+
+> ≥0
+
+, for all m ∈ { 1, ..., M } and n ∈ { 1, ..., N }, such that: 
+
+A(m)T λm = v, β (m)T λm ≤ α − ϵ, where A(m) 
+
+> j
+
+= 2( cj − cm)T , β (m) 
+
+> j
+
+= ∥cj ∥2 − νj − ∥ cm∥2 + νm, ∀j̸ = m, and 
+
+A(n)T μn = −v, β (n)T μn ≤ − α − ϵ, where A(n) 
+
+> j
+
+= 2( cj − cn)T , β (n) 
+
+> j
+
+= ∥cj ∥2 − νj − ∥ cn∥2 + νn, ∀j̸ = n.
+
+Proof is in Appendix A.1.2. As shown in Theorem 4.3, the linear separability of two categories is fully determined by the cell centers and weights of both categories, and the resulting feasibility system can be solved via linear programming. 
+
+Laguerre Geometry Reveals Concept Hierarchy. Concepts naturally exhibit inclusion and hierarchy, e.g., "dog" 
+
+⊂ "mammal" ⊂ "animal". While such asymmetric relations are difficult to detect between two points alone, our region-based concept definition allows a domination relationship to be inferred directly from the centers c and weights ν.The Laguerre-Voronoi Diagram was originally introduced as the subdivision induced by a set of hyperspheres {(cj , r j )},where rj is the radius of the j-th hypersphere [Imai et al., 1985]; the distance from a point to this hypersphere is given by (d(z, cj )2 − r2 
+
+> j
+
+)1/2, i.e., the length of the tangent segment from z to the hypersphere. If cell j fully contains cell 
+
+j′, the center of cell j′ falls within cell j’s region ωj . Based on this intuition, we define a domination score and a corresponding domination condition: 
+
+Definition 4.3 (Domination Score) . The degree to which concept Cj dominates Cj′ is measured by: Domination (j → j′) = νj − νj′ − ∥ cj − cj′ ∥2. (10) 5Laguerre Geometry for Interpreting Large Language Models 
+
+Theorem 4.4 (Concept Domination) . For two concepts Cj (ωj , cj , ν j ) and Cj′ (ωj′ , cj′ , ν j′ ), Cj dominates Cj′ (i.e., 
+
+ωj′ ⊆ ωj ) if Domination (j → j′) > 0.
+
+Proof is in Appendix A.1.3. Notably, our domination scores can be inferred directly from the unembedding layer itself, without relying on a separately pre-defined attribute set and attribute directions, as required by Xiong [2026]. 
+
+4.1.2 Transformer Layers Partition the Representation Spaces into ϵ-Effective Piecewise-Linear Regions 
+
+We have shown that the unembedding layer partitions the representation space into an LVD, with each cell associated with a token. The next question is what partition is induced by an LLM at each transformer layer. Here, we highlight a connection to the line of work on LLM "lenses" (e.g., Logit Lens [nostalgebraist, 2020], Tuned Lens [Belrose et al., 2023], Future Lens [Pal et al., 2023], and Patchscopes [Ghandeharioun et al., 2024]), which aim to interpret the semantic meaning of each hidden residual-stream vector. A central difficulty with such lenses, however, is that there is no ground truth for the "true" meaning of a hidden representation, so different lenses can only be benchmarked indirectly, via downstream tasks such as attribute extraction [Ghandeharioun et al., 2024]. We argue that the partitions revealed in this section not only chart a geometric landscape of the representation space at each layer, but also map each response region to its corresponding Laguerre cell at the final layer, thereby attaching a semantic meaning to every hidden region (and hence every hidden vector). Crucially, this meaning is deduced from geometric structure, rather than from the heuristic decoding used in prior lenses. To this end, in the following sections we (1) review the partition theory for an ordinary deep neural network, (2) extend this theory to LLMs with MLP and attention blocks, and (3) further extend it to non-piecewise-linear activation functions. C(R)= 
+
+Figure 2: An example piecewise-linear space subdivision induced by a one-layer ReLU network with three classes •, •, and 
+
+# •. Each region in the 2D input space is as-signed a label, e.g., C(R) = •. See §A.2 for more details. 
+
+Space Partition for LLMs with Piecewise-Linear Activations. It is well known that a deep neural network (DNN) with piecewise-linear ac-tivation functions (e.g., ReLU, leaky-ReLU, MaxOut) and affine preacti-vation functions partitions its input space into numerous small piecewise-linear regions. The following theorem is a straightforward reformulation of Theorem 2.1 in Arora et al. [2016], together with the definition of linear (response) regions from Montúfar et al. [2014] and Pascanu et al. [2013]; we omit the bound on the number of regions for brevity. 
+
+Definition 4.4 (Linear Region [Montúfar et al., 2014]) . A linear region of a piecewise-linear function F : Rin → Rout is a maximal connected subset of the input space Rin on which F is linear. 
+
+Theorem 4.5 (DNN Piecewise-Linear Partition) . Let F be a feedforward neural network composed of unit operators, defining a function F :
+
+Rin → Rout of the form 
+
+F (x) = fout ◦ gL ◦ fL ◦ · · · ◦ g1 ◦ f1(x), (11) 
+
+where fℓ is an affine preactivation function parameterized by Wℓ, bℓ, for 
+
+ℓ ∈ { 1, ..., L }, and gℓ is a piecewise-linear activation function. Then F
+
+partitions the input space Rin , as well as each intermediary space, into piecewise-linear regions. 
+
+For example, Figure 2 illustrates the precise space partitioning induced by a one-layer ReLU network. Building on this, we can develop a piecewise-linear partition for a single-input transformer. 
+
+Theorem 4.6 (Single-Input Transformer Piecewise-Linear Partition) . Let F be an L-layer transformer model with feedforward networks {MLP (ℓ)}, each using a piecewise-linear activation function; value matrices {W V (ℓ)} and output matrices {W O(ℓ)}, for ℓ ∈ { 1, ..., L }; and a language modeling head Fun , given by: 
+
+F (x) = Fun ◦ ML ◦ AL ◦ · · · ◦ Mℓ ◦ Aℓ ◦ · · · ◦ M1 ◦ A1(x), (12) 
+
+Mℓ(x) = x + MLP (ℓ)(x), (13) 
+
+Aℓ(x) = x + xW V (ℓ)W O(ℓ). (14) 
+
+Then F partitions the input space, as well as each intermediary representation space, into piecewise-linear regions. Proof Sketch. We decompose the model F into piecewise-affine operators, namely the MLP and attention blocks. An MLP block with a shortcut connection remains piecewise linear. For the attention layers, since the input consists of a 6Laguerre Geometry for Interpreting Large Language Models single token with no other context to attend to, the attention output reduces to a linear transformation of the input. Full proof is in Appendix A.1.4. 
+
+Extending to Non-Piecewise-Linear Activations. Most modern LLMs use smooth, non-linear activation functions, such as the Gaussian Error Linear Unit (GELU) in GPT and the Swish-Gated Linear Unit (SwiGLU) in LLaMA, for which the linear partition theorem above does not directly hold. To address this, we introduce a relaxation that replaces each smooth activation function with a piecewise-linear approximation, so that the notion of a region still applies to these LLMs. 
+
+Proposition 4.1 (Linearization of Non-Piecewise-Linear Activations) . Let D be a dataset and let F (x) = fout ◦ gL ◦
+
+fL ◦ · · · ◦ g1 ◦ f1(x) be a feedforward network in which {gℓ}ℓ∈{ 1,...,L } are smooth, non-piecewise-linear activation functions. By the Universal Approximation Theorem [Cybenko, 1989, Hornik et al., 1989, Funahashi, 1989], there exists a family of multi-layer ReLU networks {ˆgℓ}ℓ∈{ 1,...,L } such that the composition 
+
+ˆF (x) = fout ◦ ˆgL ◦ fL ◦ · · · ◦ ˆg1 ◦ f1(x)
+
+satisfies 
+
+sup 
+
+> x∈D
+
+∥F (x) − ˆF (x)∥ < ϵ. 
+
+We use a separate ReLU-based network ˆgℓ to approximate and replace each smooth activation function gℓ. For sufficiently small ϵ, the curved decision boundaries of F are well approximated by the piecewise-linear boundaries induced by ˆF . We refer to this relaxation as ϵ-effective with respect to a dataset D, since natural language occupies only a subset of the full input space Rin : many regions of Rin are semantically or grammatically invalid for any real-world natural language dataset, so approximation error need only be controlled where real data actually lies. Under this linearization, ˆF (x) is guaranteed to preserve the classification of every data-label pair in D.Under this view, the computation of a full transformer can be seen as a flow of hidden points through the response regions of each space, from the first input space (the embedding space), through the representation space at each layer 
+
+ℓ, up to the final space (the unembedding space). Flows that terminate in the same Laguerre-Voronoi cell form a tree structure (see also Figure 2(c) in Montúfar et al. [2014]). To track every region visited during a forward pass, we assign a "label" to each region — namely, the label of the final region (i.e., a Laguerre-Voronoi cell) that the flow ultimately reaches. 
+
+Definition 4.5 (Region Correspondence) . Let h be a hidden vector at layer ℓ, and let R(ℓ)(h) denote the linear region it resides in at this layer. We assign a label C to this region as 
+
+C(R(ℓ)(h)) = arg max  
+
+> j∈{ 1,...,V }
+
+G(ℓ) 
+
+> j
+
+(h), (15) where G(ℓ) = fout ◦ gL ◦ fL ◦ · · · ◦ gℓ ◦ fℓ, and fout is a classification head with V classes, over which an LVD is defined as in Theorem 4.1. In the context of an LLM, j corresponds to the top-1 predicted token from the language modeling head. We reuse the letter C because this definition likewise attaches a semantic concept to each linear region in a hidden space. Thus far, we have shown that the unembedding space is partitioned into a diagram of concepts, and that each intermediary space is partitioned into a diagram of concepts as well. 
+
+4.2 Explaining the Geometry of a Multiple-Input LLM 
+
+Unlike an MLP block, the non-linearity of an MHA block resides in the softmax operation, which is difficult to interpret or approximate with a (piecewise-)linear operation. To obtain a geometric landscape for the internals of a multiple-input LLM, the main innovation of this paper is to separate the cross-attention stream from the residual stream (while retaining the self-attention stream). This separation lets us decompose the residual stream at token position i into a flow within a piecewise-linear function F , together with transport terms between response regions. 
+
+4.2.1 Decomposition of a Multiple-Input LLM into Response Regions and Inter-Region Transport 
+
+Consider an LLM F (·) taking X{1,...,i } (written as X for brevity) as input, where each attention block at layer ℓ has value matrix W V (ℓ), output matrix W O(ℓ), and H heads. The value vectors at layer ℓ are given by V (ℓ) = X(ℓ)W V (ℓ).In the τ -th attention head, the weighted sum is π(ℓ,τ )V (ℓ,τ ), where π(ℓ,τ ) ∈ Ri, V (ℓ,τ ) ∈ Ri×dh , and dh = d/H . Here, 
+
+π(ℓ,τ ) 
+
+> s
+
+, s ∈ { 1, ..., i }, ℓ ∈ { 1, ..., L }, τ ∈ { 1, ..., H },
+
+is the attention weight between the i-th token and the s-th token. The output of the attention block is thus 
+
+∆attn (ℓ) 
+
+> i
+
+= Concat ({π(ℓ,τ )V (ℓ,τ )}τ ∈{ 1,...,H })W O(ℓ). (16) 7Laguerre Geometry for Interpreting Large Language Models 0 10 20 30       
+
+> Layers
+> 0.1
+> 0.0
+> 0.1
+> 0.2
+> 0.3
+> 0.4
+> 0.5
+> PC1
+> (A) Logit Lens
+> 010 20 30
+> Layers
+> 0.1
+> 0.0
+> 0.1
+> 0.2
+> 0.3
+> 0.4
+> 0.5
+> PC1
+> (B) Patchscopes
+> 010 20 30
+> Layers
+> 0.1
+> 0.0
+> 0.1
+> 0.2
+> 0.3
+> 0.4
+> 0.5
+> PC1
+> _the
+> _a
+> _not
+> ___
+> _called
+> _Paris
+> _London
+> _Vienna
+> _Beijing
+> (C) Geometric Lens
+> Mean trajectories along the layers of Phi-2 on the country dataset
+
+Figure 4: The mean trajectories along the layers of the Phi-2 model on the country dataset. The [25%, 75%] and [5%, 95%] percentile intervals are shown in shadows. The y-axis indicates the first principal component of the token embedding matrix. For example, some representative tokens are shown on the right-hand side. (A) Logit Lens still fluctuates during the final stage of the prediction (layer 25 to layer 32). (B) Patchscopes shows a premature convergence to the final token around layer 18. (C) The Geometric Lens is stable once it reaches the correct token. 
+
+Figure 3: Schematic illustration of inter-region transport within an LLM. The orange arrows in-dicate the flow from a single token "is" and the blue arrows denote the entire prompt "The capital of France is". This lets us decompose the full transformer computation into a flow "inside" the piecewise-linear network of Theorem 4.6, together with transport between regions of different labels. Specifically, we dissect a transformer block into three steps. (i) At the beginning of layer ℓ, the hidden vector h(ℓ) 
+
+> i
+
+arrives at a region R(ℓ)(h(ℓ) 
+
+> i
+
+). In the absence of contextual tokens (as in Theorem 4.6), h(ℓ) 
+
+> i
+
+passes through Aℓ and Mℓ, and all of its subsequent regions share the same label. (ii) In the multiple-input setting, however, h(ℓ) 
+
+> i
+
+is displaced by an incremental vector 
+
+∆ = ∆ attn (ℓ) 
+
+> i
+
+− h(ℓ) 
+
+> i
+
+W V (ℓ)W O(ℓ),
+
+arriving at a new region R(ℓ)(h(ℓ) 
+
+> i
+
++ ∆) , which may carry a different label. (iii) The new hidden vector h(ℓ) 
+
+> i
+
++ ∆ continues to flow through exactly the same piecewise-linear network F (·), but has moved from the tree rooted at C(R(ℓ)(h(ℓ) 
+
+> i
+
+)) to a tree rooted at a different LVD cell. Note also that, in the later layers of an LLM, the incremental vector ∆ may not change the label of the new linear region, indicating that the LLM is converging toward its final answer. See Figure 3 for an illustration. This dissection shows that, for any hidden vector h(ℓ) 
+
+> i
+
+at layer ℓ, passing it through the remaining network G(ℓ) alone — that is, isolating it from all contextual effects at subsequent layers {ℓ, ..., L } —reveals the label of its response region, giving a way to decipher the semantic meaning of any hidden representation. We refer to this procedure as the Geometric Lens for inspecting LLM hidden representations. 
+
+4.2.2 Geometric Lens for Residual Stream Elucidation 
+
+Before introducing the Geometric Lens, we first revisit existing methods for eliciting a distribution over the vocabulary from a latent vector. • Logit Lens. [nostalgebraist, 2020] An LLM makes its prediction from the final hidden vector via the model head 
+
+Fun (h(L) 
+
+> i
+
+). Logit Lens directly "moves" the hidden vector h(ℓ) 
+
+> i
+
+at layer ℓ to the final space at layer L, generating the vocabulary logits as yLogitLens (h(ℓ) 
+
+> i
+
+) = Fun (h(ℓ) 
+
+> i
+
+). This yields a coarse decoding, due to representation drift across layers. 8Laguerre Geometry for Interpreting Large Language Models • Tuned Lens. [Belrose et al., 2023] To mitigate this representation drift, Tuned Lens additionally learns an affine transformation from each layer to the final layer, i.e., yTunedLens (h(ℓ) 
+
+> i
+
+) = yLogitLens (A(ℓ)h(ℓ) 
+
+> i
+
++ b(ℓ)). However, Tuned Lens requires substantial training data (e.g., the Pile validation set [Gao et al., 2020]) to learn this mapping for each layer. • Patchscopes. [Ghandeharioun et al., 2024] As a more versatile decoding method, Patchscopes instead feeds h(ℓ) 
+
+> i
+
+,as a hidden vector, into a separate model ˜M alongside a leading prompt (e.g., "The multi-tokens present here are " ), inducing the next token as the decoding of h(ℓ) 
+
+> i
+
+. This method depends heavily on the choice of model ˜M, the target prompt design, and the patching position (i.e., from layer ℓ in M to layer ℓ′ in ˜M). • Geometric Lens (ours). To decode h(ℓ) 
+
+> i
+
+, we directly apply Eq. equation 15 to obtain the label of its response region, 
+
+C(R(ℓ)(h(ℓ) 
+
+> i
+
+)) . To do so, we force the self-attention weight to 1 at every subsequent layer, i.e., 
+
+π(ℓ′,τ ) 
+
+> s
+
+=
+
+ 1, if s = i, 
+
+0, otherwise , ∀ℓ′ ∈ { ℓ, ..., L }, ∀τ ∈ { 1, ..., H },
+
+so that the contextual incremental vector ∆ = 0 at every layer after ℓ. We then run a forward pass to obtain 
+
+yGeometricLens (h(ℓ) 
+
+> i
+
+) = G(ℓ)(h(ℓ) 
+
+> i
+
+).
+
+4.2.3 Laguerre Autoencoder for 2D Visualization of Laguerre Geometry 
+
+Figure 5: Schematic illustration of the Laguerre Autoencoder. To visually inspect the Laguerre Geometry of LLMs proposed above, we need a tool that can jointly visualize (1) final-layer representations, (2) intermediary-layer representations, (3) representation trajectories, (4) LVD cells, and (5) decision boundaries. To this end, we design a simple yet effective autoencoder with cyclic connections and the LVD in the loop. For a hidden vector h in the final layer, with ground-truth label y(h) (i.e., its LVD cell), an encoder maps it to a point in the R2 plane, h′ = E(h), and a decoder maps h′ back to Rd as ˆh = D(h′). To train the autoencoder, the loss combines two terms: a reconstruction loss between h and ˆh, and a second term encouraging the reconstructed point ˆh to fall within the same region as the original point. The total loss is thus 
+
+φ1 ∥h − D(E(h)) ∥22 + φ2 CrossEntropy (Fun (D(E(h))) , y (h)) , (17) where φ1 and φ2 are hyperparameters balancing the two losses. We call this the Laguerre Autoencoder (LAE), since it incorporates the final-layer Laguerre-Voronoi Diagram into the optimization, encouraging hidden vectors within the same cell to be mapped into the same 2D region (Figure 5). For a hidden vector h(ℓ) 
+
+> i
+
+in an intermediary layer, we pass it through the piecewise-linear portion of the LLM up to the final layer (see Theorem 4.6), and use ˜G(ℓ)(h(ℓ) 
+
+> i
+
+) as a proxy for h(ℓ) 
+
+> i
+
+at the final layer, where 
+
+˜G(ℓ) = gL ◦ fL ◦ · · · ◦ gℓ ◦ fℓ.
+
+With the LAE, we visualize both intermediary and final representations within the same diagram, enabling visual inspection and diagnosis of the LLM’s computation trajectories. Table 1: Error rates for linear probing experiments with different definitions of concepts by Categorical Geometry [Park et al., 2025], Lattice Geometry [Xiong, 2026], and Laguerre Geometry (ours). 
+
+Phi-2 Gemma-2-2B Datasets animal ↔ plant event ↔ cognition animal ↔ plant event ↔ cognition error ↓ (shuffle) error ↓ (shuffle) error ↓ (shuffle) error ↓ (shuffle) Categorical Geometry 0.121 ±0.053 0.500 0.213 ±0.022 0.499 0.087 ±0.020 0.496 0.218 ±0.021 0.500 Lattice Geometry 0.145 ±0.060 0.491 0.192 ±0.021 0.499 0.148 ±0.024 0.499 0.226 ±0.021 0.499 Laguerre Geometry 0.111 ±0.052 0.481 0.180 ±0.021 0.500 0.108 ±0.024 0.497 0.206 ±0.022 0.490 
+
+9Laguerre Geometry for Interpreting Large Language Models 
+
+## 5 Experiments 
+
+In this section, we empirically investigate: (1) whether, and how, different concept definitions affect the linear separability of two linearly separable categories; (2) whether Laguerre Geometry can detect subsumption and hierarchical relations in a pretrained LLM, and how it compares to previous methods; and (3) both qualitative and quantitative comparisons of different lenses, evaluating their ability to decipher hidden meanings when an LLM is prompted with in-context interference. Throughout this section, we use our proposed Laguerre Autoencoder as a diagnostic tool to jointly illustrate both representation trajectories and decision regions. 
+
+5.1 Linear Separability under Different Concept Definitions Dataset Construction and Experimental Setup. To construct category datasets, we follow a strategy similar to Xiong [2026], generating concept sets from the WordNet hierarchy [Miller, 1995]. Two datasets correspond to physical domains ( Animal and Plant ), and two correspond to abstract domains ( Event and Cognition ). For example, the 
+
+Animal category contains 93 unique concepts (for the Phi-2 tokenizer), including { _dog , _cat , _bird , ...} (see §A.2). Our experiment rests on the assumption that, for two predefined, separable sets of concepts, a better definition of concept should yield better linear separability . We quantitatively compare three concept definitions: whitened unembedding vectors [Park et al., 2025], final hidden representations [Xiong, 2026], and Laguerre-Voronoi cells as regions (ours). To the best of our knowledge, this is the first quantitative benchmark of concept definitions in LLMs. To make the different concept hypotheses comparable, we use linear probing [Belinkov, 2022] to test the linear separability of two sets. For a pair of contrastive sets, e.g., Animal ↔ Plant , we sample an equal number of concepts from each set and encode them under all three methods. Since a Laguerre-Voronoi diagram is the projection of a convex hull in a lifted space, we define the lifted point of a cell with center cj and weight νj as ∥cj ∥2 − νj , and use this as its representation in the probing experiment. These lifted points serve as an empirical surrogate for Theorem 4.3. See §A.2 for further implementation details. 
+
+Region-Based Concept Definitions Yield Better Linear Separability. We test the linear separability of two randomly sampled concept sets drawn from two categories (e.g., {"_cat", "_dog", "_bird",...} vs. {"_corn", "_rose", "_pine",...}) across four LLMs: Phi-2 [Javaheripi et al., 2023], Gemma-2-2B [Gemma Team et al., 2024], Pythia-70M [Biderman et al., 2023], and Gemma-3-270M [Gemma Team, 2025]. Results are shown in Table 1 and Table 4 as the mean and standard deviation over 500 runs. On Phi-2, Laguerre Geometry exhibits the strongest linear discrimination ability, achieving an error rate of 0.111 on Animal vs. Plant and 0.180 on Event vs. Cognition — surpassing Categorical Geometry (0.121 and 0.213) and Lattice Geometry (0.145 and 0.192). This demonstrates that introducing Laguerre weights improves the linear separability of distinct concept categories. As a null baseline, we randomly mix the concepts from the two categories and repeat the probing under the same setting; all methods degrade to an error rate of 0.5, confirming that linear separability is not trivially achieved for two random concept sets. Table 2: Accuracy of hierarchical relations discovered by the Lattice Geometry and the Laguerre Geometry.                                           
+
+> Models Phi-2 Pythia-70M Datasets animal plant event cognition animal plant event cognition Lattice Geometry [Xiong, 2026] 0.5583 0.4186 0.4920 0.5261 0.4623 0.3415 0.4824 0.4991
+> (Random) 0.4833 0.5116 0.5128 0.5135 0.5094 0.5366 0.5226 0.4896 Laguerre Geometry 0.7333 0.8837 0.7237 0.5874 0.9245 0.9024 0.5577 0.4520 (Random) 0.5057 0.5164 0.5164 0.5106 0.5402 0.5377 0.5443 0.5384
+
+5.2 Unsupervised Discovery of Hierarchical Concept Structures in LLMs Experimental Setup. The inclusion score of Xiong [2026] depends on a predefined set of attributes (e.g., "can fly," "has fur," "lays eggs" for animals), requiring GPT-4o to generate the attribute schema and populate the object–attribute matrix. By contrast, our domination score is attribute-free, requiring only the model parameters themselves. In our Laguerre Geometry framework, the domination score (Def. 4.3) is a relative score. To convert it into a discriminant score, we subtract a random baseline. Specifically, for concept j = animal and j′ = dog , their domination relation is determined by Domination (j → j′) − 1
+
+|J | 
+
+X 
+
+> j′′ ∈J ⊆V
+
+Domination (j → j′′ ).
+
+10 Laguerre Geometry for Interpreting Large Language Models 0 5 10 15 20 25 30                                
+
+> 0
+> 2
+> 4
+> 6
+> 8
+> log(rank+1)
+> Logit Lens
+> 0510 15 20 25 30
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> Token Probability
+> 0510 15 20 25 30
+> 0
+> 2
+> 4
+> 6
+> 8
+> log(rank+1)
+> Patchscopes
+> 0510 15 20 25 30
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> Token Probability
+> 0510 15 20 25 30
+> Layers
+> 0
+> 2
+> 4
+> 6
+> 8
+> log(rank+1)
+> Geometric Lens
+> 0510 15 20 25 30
+> Layers
+> 0.0
+> 0.2
+> 0.4
+> 0.6
+> 0.8
+> Paris
+> _Paris
+> Token Probability
+> (A) Token ranks and probabilities for the prompt
+> "The capital of France is" Logit Lens
+> Patchscopes
+> Geometric Lens Geometric Lens
+> _Paris
+> Paris :
+> A
+> _a
+> _the
+> _not
+> _also
+> _New
+> _called
+> ##
+> _London
+> _cool
+> _Paris
+> _hello
+> Output
+> Paris
+> Laguerre-Voronoi cells
+> (B) Joint visualization of trajectories and regions
+
+Figure 6: Visualization of trajectories for the prompt The capital of France is . (A) Log rank (left column) and probability (right column) of the two tokens _Paris (solid lines) and Paris (dotted lines), elicited by three lenses: Logit Lens, Patchscopes, and Geometric Lens. Geometric Lens is the only lens that detects both the factually correct 
+
+token Paris and the switching phase between _Paris and Paris . (B) Trajectories in the final representation space, produced by the three lenses and visualized via the Laguerre Autoencoder. This difference compares the domination score from animal to dog against its average score toward a random set of background tokens; a genuine domination relation should score higher than this background baseline. See §A.2 for further details. 
+
+Concept Hierarchy is Encoded in Laguerre Weights. Before the large-scale experiment, we first examine a case study. Using _Dogs as the target concept, we retrieve both its hyponyms and hypernyms, using either the full domination score or the center distance alone (i.e., ∥cj − cj′ ∥2, the distance between two embedding vectors). Results are shown in Figure 1(B) and Figure 9(A, B). The domination score correctly identifies hyponyms, such as {"puppy", "furry", "barking", ...}, and hypernyms, such as {"Pets", "mammalian", "Animals", ...}. In contrast, using distance alone (i.e., without the Laguerre weight ν), hyponyms and hypernyms cannot be distinguished. Similar results hold for other concepts (Figure 9(C, D)). For large-scale evaluation, we use the same four datasets: Animal , Plant , Event , and Cognition . All concepts within a category serve as its ground-truth hyponyms. On Phi-2 and Pythia-70M, our domination score achieves accuracy ranging from 58.74% to 88.37% on Phi-2, and from 45.20% to 92.45% on Pythia-70M — consistently outperforming Lattice Geometry. The discovery of hierarchical relations [Sakata et al., 2026, Xiong, 2026] sheds light on how high-level, complex structures emerge from auto-regressive LLM pretraining. We leave the extension to more sophisticated phenomena, such as logic and reasoning, to future work. 
+
+5.3 Comparing Different Lenses in Regular Forward Passes and Under In-Context Interference Dataset and Experimental Setup. We compare our Geometric Lens against Logit Lens [nostalgebraist, 2020] and Patchscopes [Ghandeharioun et al., 2024], excluding training-dependent methods such as Tuned Lens [Belrose et al., 2023] and Future Lens [Pal et al., 2023] from our comparison. J-Lens [Gurnee et al., 2026b] depends on the sparsity level, and its decomposition is non-unique. For Patchscopes, the target prompt is itself a hyperparameter, with no established optimal choice. By contrast, our Geometric Lens is hyperparameter-free and yields a unique representation decoding, since a trained model uniquely determines the space partitioning at each layer. 
+
+Analysis of Trajectories Produced by Different Lenses. We use the prompt " The capital of France is " to illustrate the differing trajectories produced by each lens. As shown in Figure 10, Patchscopes converges to the final token _Paris as early as the 6th layer and maintains this prediction through the final, 32nd layer. Both Logit Lens and 11 Laguerre Geometry for Interpreting Large Language Models 0 5 10 15 20 25 30                            
+
+> Layers
+> 0
+> 2
+> 4
+> 6
+> 8
+> 10
+> log(rank+1)
+> top-1: _Lyon
+> Logit Lens Patchscopes Geometric Lens
+> 0510 15 20 25 30
+> Layers
+> 0
+> 2
+> 4
+> 6
+> 8
+> 10
+> top-2: _Marse
+> 0510 15 20 25 30
+> Layers
+> 0
+> 2
+> 4
+> 6
+> 8
+> 10
+> top-3: _Paris
+> 0510 15 20 25 30
+> Layers
+> 0
+> 2
+> 4
+> 6
+> 8
+> 10 top-4: _"
+> 0510 15 20 25 30
+> Layers
+> 0
+> 2
+> 4
+> 6
+> 8
+> 10
+> top-5: _'
+> The ranks of the top-5 tokens along the layers
+
+Figure 7: Monitored log ranks of the top-5 final tokens for the prompt " You are in a fictional world where Marseille and Lyon have swapped their names. The Louvre Museum is located in the city of ". Geometric Lens detects that _Paris is ranked first at a middle layer. The corresponding 2D visualization is shown in Figure 8. Geometric Lens arrive at _Paris around the 24th/25th layer, but the tokens elicited by Geometric Lens are more diverse. The full trajectories from Geometric Lens, across all token positions, are visualized via the Laguerre Autoencoder in Figure 11. The first path, generated by the token "The", collapses to a single point, confirming that all its intermediary hidden vectors correspond to the same decision cell. As more tokens are incorporated, the trajectory passes through an increasing number of Laguerre cells. To quantify the diversity of tokens elicited by each lens, we construct a dataset of 249 countries and their capitals (see §A.2 for details), and map each token to the first principal component of the embedding matrix. Results are shown in Figure 4. The figure shows that Patchscopes tends to converge to the final token at very early layers, whereas both Geometric Lens and Logit Lens arrive at the final token only in the last several layers; however, Geometric Lens is more stable during the final stage, while exhibiting greater diversity during the early stage. We demonstrate the practical usefulness of these observations in the next section. Logit Lens 
+
+> Patchscopes
+> Geometric Lens
+> _Lyon
+> _Paris
+> ~
+> _
+> _the
+> _of
+> _l
+> _"
+> _â
+> _'
+> ...
+> _cat
+> _Cat
+> _Paris
+> scape
+> _â
+> _hello
+> caps
+> _Lyon
+> Laguerre-Voronoi cells
+> Laguerre Autoencoder for inspecting in-context interference
+
+Figure 8: Laguerre Autoencoder visualization of the prompt "You are in a fictional world where Marseille and Lyon have swapped their names. The Louvre Museum is located in the city of ". Geometric Lens passes through 
+
+_Paris before reaching _Lyon .
+
+Intermediary Representations Are Not Artifacts, but Carry Useful Meaning. Existing lenses operate under the assumption that every intermediary representation should ideally encode the same concept as the final layer. Tuned Lens, for instance, minimizes the KL divergence between the probability distribution produced by the lens at each interme-diary layer and the final distribution produced by the frozen model. In this paper, we challenge this assumption, arguing instead that a hidden representation intentionally carries di-verse, evolving meanings — and that this diversity can itself be leveraged usefully. For a token appearing in a lens’s output trajectory, we distin-guish factual correctness from grammatical correctness. For the prompt " The capital of France is ", for example, both " _Paris " and " Paris " are factually correct , but only "_Paris " (with a leading space) is grammatically correct. We track both tokens across all layers for all three lenses: Logit Lens, Patchscopes, and Geometric Lens. Results are shown in Figure 6(A), where an interesting trend emerges — one visible only through Geometric Lens: in the earlier layers, the ranks of " _Paris " and " Paris " rise at a similar rate; in the middle layers, " Paris " takes priority, reaching the top-1 rank around layers 20–25; in the final layers, the rank of " Paris " drops sharply, and " _Paris " emerges as the sole correct token. There is a pronounced peak in " Paris "’s probability between layers 20 and 25, a peak absent for both Logit Lens and Patchscopes. We further use the Laguerre Autoencoder to jointly visualize the trajectories and Laguerre cells in Figure 6(B). This 2D visualization makes clear that the three lenses follow markedly different trajectories: Patchscopes takes the shortest path of the three; Logit Lens passes through fewer cells; and Geometric Lens traces the 12 Laguerre Geometry for Interpreting Large Language Models most complex path, passing through the greatest number of regions. Notably, Geometric Lens is the only lens whose trajectory starts from generic tokens ("_a" and "_the"), passes through the factually correct token " Paris ", and finally settles in the " _Paris " cell — consistent with the intuition that an LLM gradually refines its answer across layers. This suggests that the LLM first retrieves all factually correct candidates in its earlier layers, and only later resolves both factual and grammatical correctness. Geometric Lens is the only lens that reveals this mechanism. Table 3: Comparison of different lenses on the task of recovering the correct token under in-context interference.                                                                 
+
+> Models Phi-2 Gemma-2-2B Gemma-2-9B Llama-3.1-8B Datasets Paris London Berlin Paris London Berlin Paris London Berlin Paris London Berlin Greedy (top-1) 0.00 0.01 0.00 0.03 0.15 0.19 0.00 0.03 0.02 0.01 0.02 0.00 Logit Lens 0.05 0.15 0.00 0.07 0.52 0.16 0.32 0.01 0.24 0.07 0.19 0.01 Patchscopes 0.55 0.25 0.13 0.09 0.39 0.27 0.41 0.03 0.29 0.02 0.03 0.02 Geometric Lens 0.56 0.31 0.49 0.25 0.61 0.59 0.41 0.06 0.50 0.13 0.28 0.36
+
+Geometric Lens Reveals a Model’s Internal Reasoning under In-Context Interference. In this section, we focus on prompts of the form: " You are in a fictional world where Marseille and Lyon have swapped their names. The Louvre Museum is located in the city of ", where a prefix mentioning two irrelevant cities A and B precedes a fact about a third city, C. We find that most models answer with the misleading city A or B more than 90% of the time — a phenomenon we term in-context interference. The question we investigate is which lens, if any, is robust to this interference. To this end, we construct three datasets — Paris , London , and Berlin — each exhibiting in-context interference (see §A.2 for details). Motivated by the previous section’s finding that Geometric Lens’s tokens at layers 20–25 tend to be factually correct, we use the token at layer 20, rather than at the final layer, as the model’s output, and measure accuracy accordingly. Results are shown in Table 3. Strikingly, all three lenses substantially improve accuracy under this scheme. Geometric Lens achieves accuracies of 0.31–0.56 on Phi-2, 0.25–0.61 on Gemma-2-2B, 0.06–0.50 on Gemma-2-9B, and 0.13–0.36 on Llama-3.1-8B, outperforming both Patchscopes and Logit Lens in each case. We further investigate the token-switching phenomenon; an example from the Paris dataset is shown in Figures 7 and 8. Among the three lenses, Geometric Lens is the only one for which the correct token _Paris 
+
+ever attains the top-1 rank at a middle layer. The Laguerre Autoencoder visualization further shows that Geometric Lens is the only lens whose trajectory passes through the _Paris cell before finally settling in the _Lyon cell. These findings suggest that, although the final output token is always the same, different lenses can elicit markedly different trajectories at middle layers — and only the correct lens reveals the model’s true, and often complex, internal reasoning process. 
+
+## 6 Discussion and Conclusion 
+
+In this work, we unify several distinct directions in LLM research — the Linear Representation Hypothesis (LRH), concept geometry, piecewise-linear subdivision, lens-based hidden-representation elucidation, and in-context learning — within a single, holistic Laguerre Geometry framework. In doing so, we challenge two prevailing assumptions: the vector-based definition of a concept under LRH, and the absence of a principled ground truth for hidden representations. Beyond LRH, several more elaborate hypotheses have been proposed, including the Frame Representation Hypoth-esis [Valois et al., 2025], the Lattice Representation Hypothesis [Xiong, 2026], and the Platonic Representation Hypothesis [Bangachev et al., 2026]. Rather than proposing yet another such hypothesis, we instead establish a geometric framework in which LRH can be strictly defined and shown to arise naturally. A strict definition of concept is a prerequisite for grounding LRH in LLMs. By extending the piecewise-linear subdivision theory of DNNs to LLMs, we uncover their piecewise-linear structure and redefine concepts as regions within it. Regions — both the "outer" Laguerre-Voronoi cells and the "inner" linear regions — constitute the most basic geometric elements of each layer in an LLM (Theorem 4.6), and carry substantially richer geometric information than directions or vectors alone. Lenses have long remained heuristic, lacking a clear theory of what the "ground truth" for a hidden representation should be. In this paper, we argue that this ground-truth label should instead be derived from the piecewise-linear subdivision of the model itself. Our theory assigns a label to each response region, thereby making it possible to label every hidden vector contained within it. This labeling motivates a new lens, the Geometric Lens, which we validate empirically both in regular forward passes and under in-context interference. 13 Laguerre Geometry for Interpreting Large Language Models This paper lays a theoretical foundation for further examining how concepts are organized, using response regions as basic building blocks. As an initial step in establishing this geometric framework, we have not yet addressed causal intervention — that is, the controlling and steering of model behavior [Gurnee et al., 2026b]. In future work, we plan to apply this framework to behavior steering in LLMs. 
+
+## References 
+
+Faruk Alpay and Bilge Senturk. The geometry of thought: Disclosing the transformer as a tropical polynomial circuit. 
+
+arXiv preprint arXiv:2601.09775 , 2026. Raman Arora, Amitabh Basu, Poorya Mianjy, and Anirbit Mukherjee. Understanding deep neural networks with rectified linear units. arXiv preprint arXiv:1611.01491 , 2016. Franz Aurenhammer. Power diagrams: properties, algorithms and applications. SIAM journal on computing , 16(1): 78–96, 1987. Eser Aygün, Anastasiya Belyaeva, Gheorghe Comanici, Marc Coram, Hao Cui, Jake Garrison, Renee Johnston, Anton Kast, Cory Y McLean, Peter Norgaard, et al. An ai system to help scientists write expert-level empirical software. 
+
+Nature , pp. 1–3, 2026. Jimmy Lei Ba, Jamie Ryan Kiros, and Geoffrey E Hinton. Layer normalization. arXiv preprint arXiv:1607.06450 ,2016. Randall Balestriero, Romain Cosentino, Behnaam Aazhang, and Richard Baraniuk. The geometry of deep networks: Power diagram subdivision. Advances in Neural Information Processing Systems , 32:15832–15841, 2019. Randall Balestriero, Sebastien Paris, and Richard G Baraniuk. Max-affine spline insights into deep generative networks. In International Conference on Learning Representations , 2020. Kiril Bangachev, Guy Bresler, and Yury Polyanskiy. Representation alignment rests on linear structure. arXiv preprint arXiv:2605.28870 , 2026. Yonatan Belinkov. Probing classifiers: Promises, shortcomings, and advances. Computational Linguistics , 48(1): 207–219, 2022. Nora Belrose, Igor Ostrovsky, Lev McKinney, Zach Furman, Logan Smith, Danny Halawi, Stella Biderman, and Jacob Steinhardt. Eliciting latent predictions from transformers with the tuned lens. arXiv preprint arXiv:2303.08112 ,2023. Usha Bhalla, Alex Oesterling, Claudio Mayrink Verdun, Himabindu Lakkaraju, and Flavio P Calmon. Temporal sparse autoencoders: Leveraging the sequential nature of language for interpretability. arXiv preprint arXiv:2511.05541 ,2025. Usha Bhalla, Thomas Fel, Can Rager, Sheridan Feucht, Tal Haklay, Daniel Wurgaft, Siddharth Boppana, Matthew Kowal, Vasudev Shyam, Jack Merullo, et al. Do sparse autoencoders capture concept manifolds? arXiv preprint arXiv:2604.28119 , 2026. Biderman, S, Schoelkopf, H, Anthony, Q. G, Bradley, H, O’Brien, K, Hallahan, E, Khan, M. A, Purohit, S, Prashanth, U. S, Raff, E, and et al. Pythia: A suite for analyzing large language models across training and scaling. In 
+
+International Conference on Machine Learning (ICML) , 2023. Eric Bigelow, Daniel Wurgaft, YingQiao Wang, Noah Goodman, Tomer Ullman, Hidenori Tanaka, and Ekdeep Singh Lubana. Belief dynamics reveal the dual nature of in-context learning and activation steering. arXiv preprint arXiv:2511.00617 , 2025. Alexander I Bobenko, Carl OR Lutz, Helmut Pottmann, and Jan Techter. Non-Euclidean Laguerre geometry and incircular nets . Springer, 2021. Mark Chen, Jerry Tworek, Heewoo Jun, Qiming Yuan, Henrique Ponde De Oliveira Pinto, Jared Kaplan, Harri Edwards, Yuri Burda, Nicholas Joseph, Greg Brockman, et al. Evaluating large language models trained on code. arXiv preprint arXiv:2107.03374 , 2021. George Cybenko. Approximation by superpositions of a sigmoidal function. Mathematics of control, signals and systems , 2(4):303–314, 1989. Elhage, N, Hume, T, Olsson, C, Schiefer, N, Henighan, T, Kravec, S, Hatfield-Dodds, Z, Lasenby, R, Drain, D, Chen, C, and et al. Toy models of superposition. arXiv preprint arXiv:2209.10652 , 2022. Josh Engels, Eric Michaud, Isaac Liao, Wes Gurnee, and Max Tegmark. Not all language model features are one-dimensionally linear. In International Conference on Learning Representations , volume 2025, pp. 84591–84622, 2025. 14 Laguerre Geometry for Interpreting Large Language Models Ken-Ichi Funahashi. On the approximate realization of continuous mappings by neural networks. Neural networks , 2 (3):183–192, 1989. Blake B Gaines and Jinbo Bi. Characterizing the discrete geometry of relu networks. arXiv preprint arXiv:2606.07728 ,2026. Leo Gao, Stella Biderman, Sid Black, Laurence Golding, Travis Hoppe, Charles Foster, Jason Phang, Horace He, Anish Thite, Noa Nabeshima, et al. The pile: An 800gb dataset of diverse text for language modeling. arXiv preprint arXiv:2101.00027 , 2020. Gemma Team. Gemma 3 technical report, 2025. Gemma Team, Morgane Riviere, Shreya Pathak, Pier Giuseppe Sessa, Cassidy Hardin, Surya Bhupatiraju, Léonard Hussenot, Thomas Mesnard, Bobak Shahriari, Alexandre Ramé, et al. Gemma 2: Improving open language models at a practical size. arXiv preprint arXiv:2408.00118 , 2024. Asma Ghandeharioun, Avi Caciularu, Adam Pearce, Lucas Dixon, and Mor Geva. Patchscopes: A unifying framework for inspecting hidden representations of language models. arXiv preprint arXiv:2401.06102 , 2024. Ali Essam Ghareeb, Benjamin Chang, Ludovico Mitchener, Angela Yiu, Caralyn J Szostkiewicz, Dmytro Shved, Gavin J Gyimesi, Jon M Laurent, Samantha M Wright, Muhammed T Razzak, et al. A multi-agent system for automating scientific discovery. Nature , pp. 1–3, 2026. Satvik Golechha, Lucius Bushnaq, Euan Ong, Neeraj Kayal, and Nandi Schoots. Intricacies of feature geometry in large language models. In The Fourth Blogpost Track at ICLR 2025 , 2025. Gurnee, W., Tegmark, and M. Language models represent space and time. In Proceedings of the 12th International Conference on Learning Representations , 2024. Wes Gurnee, Emmanuel Ameisen, Isaac Kauvar, Julius Tarng, Adam Pearce, Chris Olah, and Joshua Batson. When models manipulate manifolds: The geometry of a counting task. arXiv preprint arXiv:2601.04480 , 2026a. Wes Gurnee, Nicholas Sofroniew, Adam Pearce, Mateusz Piotrowski, Isaac Kauvar, Runjin Chen, Anna Soligo, Paul Bogdan, Euan Ong, Rowan Wang, Ben Thompson, David Abrahams, Subhash Kantamneni, Emmanuel Ameisen, Joshua Batson, and Jack Lindsey. Verbalizable representations form a global workspace in language models. 
+
+Transformer Circuits Thread , 2026b. URL https://transformer-circuits.pub/2026/workspace/index. html .Boris Hanin and David Rolnick. Complexity of linear regions in deep networks. In International Conference on Machine Learning , pp. 2596–2604. PMLR, 2019. Baran Hashemi, Kurt Pasque, Chris Teska, and Ruriko Yoshida. Tropical attention: Neural algorithmic reasoning for combinatorial algorithms. Advances in Neural Information Processing Systems , 38:98631–98656, 2026. John Hewitt and Christopher D Manning. A structural probe for finding syntax in word representations. In Proceedings of the 2019 Conference of the North American Chapter of the Association for Computational Linguistics: Human Language Technologies, Volume 1 (Long and Short Papers) , pp. 4129–4138, 2019. Sai Sumedh R Hindupur, Ekdeep S Lubana, Thomas Fel, and Demba Ba. Projecting assumptions: The duality between sparse autoencoders and concept geometry. Advances in Neural Information Processing Systems , 38:11649–11699, 2026. Kurt Hornik, Maxwell Stinchcombe, and Halbert White. Multilayer feedforward networks are universal approximators. 
+
+Neural networks , 2(5):359–366, 1989. Hiroshi Imai, Masao Iri, and Kazuo Murota. Voronoi diagram in the laguerre geometry and its applications. SIAM Journal on Computing , 14(1):93–105, 1985. Sergey Ioffe and Christian Szegedy. Batch normalization: Accelerating deep network training by reducing internal covariate shift. In International conference on machine learning , pp. 448–456. pmlr, 2015. Mojan Javaheripi, Sébastien Bubeck, Marah Abdin, Jyoti Aneja, Sebastien Bubeck, Caio César Teodoro Mendes, Weizhu Chen, Allie Del Giorno, Ronen Eldan, Sivakanth Gopi, et al. Phi-2: The surprising power of small language models. Microsoft Research Blog , 1(3):3, 2023. Yibo Jiang, Goutham Rajendran, Pradeep Ravikumar, Bryon Aragam, and Victor Veitch. On the origins of linear representations in large language models. arXiv preprint arXiv:2403.03867 , 2024. Subhash Kantamneni, Joshua Engels, Senthooran Rajamanoharan, Max Tegmark, and Neel Nanda. Are sparse autoencoders useful? a case study in sparse probing. arXiv preprint arXiv:2502.16681 , 2025. 15 Laguerre Geometry for Interpreting Large Language Models Kenneth Li, Oam Patel, Fernanda Viégas, Hanspeter Pfister, and Martin Wattenberg. Inference-time intervention: Eliciting truthful answers from a language model. Advances in Neural Information Processing Systems , 36:41451– 41530, 2023. Yujia Li, David Choi, Junyoung Chung, Nate Kushman, Julian Schrittwieser, Rémi Leblond, Tom Eccles, James Keeling, Felix Gimeno, Agustin Dal Lago, et al. Competition-level code generation with alphacode. Science , 378 (6624):1092–1097, 2022. Yuxiao Li, Eric J Michaud, David D Baek, Joshua Engels, Xiaoqing Sun, and Max Tegmark. The geometry of concepts: Sparse autoencoder feature structure. Entropy , 27(4):344, 2025. Chunwei Ma, Ziyun Huang, Mingchen Gao, and Jinhui Xu. Few-shot learning via dirichlet tessellation ensemble. In 
+
+International Conference on Learning Representations , 2022. Chunwei Ma, Zhanghexuan Ji, Ziyun Huang, Yan Shen, Mingchen Gao, and Jinhui Xu. Progressive voronoi diagram subdivision enables accurate data-free class-incremental learning. In The Eleventh International Conference on Learning Representations , 2023. Petros Maragos, Vasileios Charisopoulos, and Emmanouil Theodosis. Tropical geometry and machine learning. 
+
+Proceedings of the IEEE , 109(5):728–755, 2021. Mikolov, T, Sutskever, I, Chen, K, Corrado, G. S, Dean, and J. Distributed representations of words and phrases and their compositionality. Advances in neural information processing systems , 2013a. Tomas Mikolov, Kai Chen, Greg Corrado, and Jeffrey Dean. Efficient estimation of word representations in vector space. arXiv preprint arXiv:1301.3781 , 2013b. George A Miller. Wordnet: a lexical database for english. Communications of the ACM , 38(11):39–41, 1995. Guido Montúfar, Razvan Pascanu, Kyunghyun Cho, and Yoshua Bengio. On the number of linear regions of deep neural networks. Advances in neural information processing systems , 27, 2014. Guido Montúfar, Yue Ren, and Leon Zhang. Sharp bounds for the number of regions of maxout networks and vertices of minkowski sums. SIAM Journal on Applied Algebra and Geometry , 6(4):618–649, 2022. Mark Muchane, Sean Richardson, Kiho Park, and Victor Veitch. Incorporating hierarchical semantics in sparse autoencoder architectures. arXiv preprint arXiv:2506.01197 , 2025. Nanda, N, Lee, A, Wattenberg, and M. Emergent linear representations in world models of self-supervised sequence models. In Proceedings of the 6th BlackboxNLP Workshop: Analyzing and Interpreting Neural Networks for NLP ,2023. nostalgebraist. interpreting gpt: the logit lens, 2020. URL https://www.lesswrong.com/posts/ AcKRB8wDpdaN6v6ru/interpreting-gpt-the-logit-lens .Koyena Pal, Jiuding Sun, Andrew Yuan, Byron C Wallace, and David Bau. Future lens: Anticipating subsequent tokens from a single hidden state. In Proceedings of the 27th Conference on Computational Natural Language Learning (CoNLL) , pp. 548–560, 2023. Nina Panickssery, Nick Gabrieli, Julian Schulz, Meg Tong, Evan Hubinger, and Alexander Matt Turner. Steering llama 2 via contrastive activation addition. arXiv preprint arXiv:2312.06681 , 2023. Kiho Park, Yo Joong Choe, and Victor Veitch. The linear representation hypothesis and the geometry of large language models. arXiv preprint arXiv:2311.03658 , 2023. Kiho Park, Yo Joong Choe, Yibo Jiang, and Victor Veitch. The geometry of categorical and hierarchical concepts in large language models. In International Conference on Learning Representations , volume 2025, pp. 76441–76463, 2025. Razvan Pascanu, Guido Montufar, and Yoshua Bengio. On the number of response regions of deep feed forward networks with piecewise linear activations. arXiv preprint arXiv:1312.6098 , 2013. Alec Radford, Karthik Narasimhan, Tim Salimans, Ilya Sutskever, et al. Improving language understanding by generative pre-training. 2018. Bernardino Romera-Paredes, Mohammadamin Barekatain, Alexander Novikov, Matej Balog, M Pawan Kumar, Emilien Dupont, Francisco JR Ruiz, Jordan S Ellenberg, Pengming Wang, Omar Fawzi, et al. Mathematical discoveries from program search with large language models. Nature , 625(7995):468–475, 2024. Masaki Sakata, Benjamin Heinzerling, Takumi Ito, Sho Yokoi, and Kentaro Inui. Linear representations of hierarchical concepts in language models. arXiv preprint arXiv:2604.07886 , 2026. Thiago Serra, Christian Tjandraatmadja, and Srikumar Ramalingam. Bounding and counting linear regions of deep neural networks. In International conference on machine learning , pp. 4558–4566. PMLR, 2018. 16 Laguerre Geometry for Interpreting Large Language Models Or Shafran, Shaked Ronen, Omri Fahn, Shauli Ravfogel, Atticus Geiger, and Mor Geva. From directions to regions: Decomposing activations in language models via local geometry. arXiv preprint arXiv:2602.02464 , 2026. Lee Sharkey, Bilal Chughtai, Joshua Batson, Jack Lindsey, Jeff Wu, Lucius Bushnaq, Nicholas Goldowsky-Dill, Stefan Heimersheim, Alejandro Ortega, Joseph Bloom, et al. Open problems in mechanistic interpretability. arXiv preprint arXiv:2501.16496 , 2025. Nicholas Sofroniew, Isaac Kauvar, William Saunders, Runjin Chen, Tom Henighan, Sasha Hydrie, Craig Citro, Adam Pearce, Julius Tarng, Wes Gurnee, et al. Emotion concepts and their function in a large language model. arXiv preprint arXiv:2604.07729 , 2026. Ye Su and Yong Liu. Expressivity of transformers: A tropical geometry perspective. arXiv preprint arXiv:2604.14727 ,2026. Ye Su, Huayi Tang, Zixuan Gong, and Yong Liu. Sparsity is combinatorial depth: Quantifying moe expressivity via tropical geometry. arXiv preprint arXiv:2602.03204 , 2026. Adly Templeton, Tom Conerly, Jonathan Marcus, Jack Lindsey, Trenton Bricken, Brian Chen, Adam Pearce, Craig Citro, Emmanuel Ameisen, Andy Jones, et al. Scaling monosemanticity: Extracting interpretable features from claude 3 sonnet. arXiv preprint arXiv:2605.29358 , 2026. Ian Tenney, Patrick Xia, Berlin Chen, Alex Wang, Adam Poliak, R Thomas McCoy, Najoung Kim, Benjamin Van Durme, Samuel R Bowman, Dipanjan Das, et al. What do you learn from context? probing for sentence structure in contextualized word representations. arXiv preprint arXiv:1905.06316 , 2019. Alexander Matt Turner, Lisa Thiergart, Gavin Leech, David Udell, Juan J Vazquez, Ulisse Mini, and Monte MacDiarmid. Steering language models with activation engineering. arXiv preprint arXiv:2308.10248 , 2023. Pedro HV Valois, Lincon S Souza, Erica K Shimomoto, and Kazuhiro Fukui. Frame representation hypothesis: Multi-token llm interpretability and concept-guided text generation. Transactions of the Association for Computational Linguistics , 13:1436–1458, 2025. Vaswani, A, Shazeer, N, Parmar, N, Uszkoreit, J, Jones, L, Gomez, A. N, Kaiser, Ł, Polosukhin, and I. Attention is all you need. Advances in neural information processing systems , 2017. Zichao Wang, Randall Balestriero, and Richard Baraniuk. A max-affine spline perspective of recurrent neural networks. In International Conference on Learning Representations , 2018. Shengqiong Wu, Hao Fei, Leigang Qu, Wei Ji, and Tat-Seng Chua. Next-gpt: Any-to-any multimodal llm. arXiv preprint arXiv:2309.05519 , 2023. Bo Xiong. The lattice representation hypothesis of large language models. arXiv preprint arXiv:2603.01227 , 2026. Huan Xiong, Lei Huang, Mengyang Yu, Li Liu, Fan Zhu, and Ling Shao. On the number of linear regions of convolutional neural networks. In International Conference on Machine Learning , pp. 10514–10523. PMLR, 2020. Huan Xiong, Lei Huang, Wenston JT Zang, Xiantong Zhen, Guo-Sen Xie, Bin Gu, and Le Song. On the number of linear regions of convolutional neural networks with piecewise linear activations. IEEE Transactions on Pattern Analysis and Machine Intelligence , 46(7):5131–5148, 2024. Liwen Zhang, Gregory Naitzat, and Lek-Heng Lim. Tropical geometry of deep neural networks. In International Conference on Machine Learning , pp. 5824–5832. PMLR, 2018. Haiyan Zhao, Heng Zhao, Bo Shen, Ali Payani, Fan Yang, and Mengnan Du. Beyond single concept vector: Modeling concept subspace in llms with gaussian distribution. In International Conference on Learning Representations ,volume 2025, pp. 82998–83026, 2025. Andy Zou, Long Phan, Sarah Chen, James Campbell, Phillip Guo, Richard Ren, Alexander Pan, Xuwang Yin, Mantas Mazeika, Ann-Kathrin Dombrowski, et al. Representation engineering: A top-down approach to ai transparency. 
+
+arXiv preprint arXiv:2310.01405 , 2023. 17 Laguerre Geometry for Interpreting Large Language Models 
+
+## A Appendix 
+
+A.1 Proofs 
+
+In this section, we present the proof of the theorems. 
+
+A.1.1 Proof of Theorem 4.1 Lemma A.1. The vertical projection of the lower envelope of the hyperplanes {Πk(z) : W ⊤ 
+
+> k
+
+z + νk}Kk=1 onto the input space Rn induces the cells of an LVD. 
+
+Theorem 4.1 (Unembedding Layer is a Laguerre-Voronoi Diagram). The unembedding layer of an LLM, parameterized by W , b, partitions the representation space Rd into a Laguerre-Voronoi Diagram with centers {c1, ..., cj , ..., cV } and weights {ν1, ..., ν j , ..., ν V } given by: 
+
+cj = 12 Wj , (18) 
+
+νj = bj + 14 ∥Wj ∥22, (19) where V = |V| , i.e., the number of cells equals the vocabulary size of the LLM. 
+
+Proof. We first establish Lemma A.1 by deriving the correspondence between a hyperplane Πk(z) and the center of its associated cell in Rn. By definition, the assignment of a point z ∈ Rn to a cell is determined by comparing the quantities d(z, ck)2 − νk across all centers. Accordingly, we define the power function 
+
+p(z, S ) = ∥z − c∥22 − r2, (20) where S ⊆ Rn is a sphere with center c and radius r. Equivalently, the weight associated with a center can be interpreted as the squared radius, i.e., ν = r2.Next, let U denote the paraboloid y = ∥z∥22, and let Π( S) denote the transformation that maps a sphere S with center c
+
+and radius r to the hyperplane 
+
+Π( S) : y = 2 z⊤c − c⊤c + r2. (21) Aurenhammer [Aurenhammer, 1987] showed that Π is a bijection between arbitrary spheres in Rn and nonvertical hyperplanes in Rn+1 that intersect U .Let z′ denote the vertical projection of z onto U , and let z′′ denote its vertical projection onto Π( S). The power function can then be expressed as 
+
+p(z, S ) = d(z, z′) − d(z, z′′ ). (22) This characterization implies the following result (Lemma 4 in [Aurenhammer, 1987]): for two non-concentric spheres 
+
+S1 and S2 in Rn, the bisector of their power cells is given by the vertical projection of Π( S1) ∩ Π( S2) onto Rn.We therefore obtain a one-to-one correspondence between a sphere S and its associated hyperplane Π( S). Comparing Eq. (21) with the hyperplanes induced by the unembedding layer, {Πk(z) : W ⊤ 
+
+> k
+
+z + bk}Kk=1 , yields 
+
+c = 12 Wk,ν = r2 = bk + 14 ∥Wk∥22.
+
+(23) Although ν admits the geometric interpretation of a squared radius, i.e., ν = r2, it is not necessarily nonnegative for an arbitrary unembedding layer (or, more generally, an arbitrary multiclass linear classifier), since bk may take sufficiently negative values. 
+
+A.1.2 Proof of Theorem 4.3 Theorem 4.3 (Linear Separability of Categories). Any two categories UM = SMm=1 ωm and UN = SNn=1 ωn are linearly separable if and only if there exist a vector v ∈ Rd, a scalar α ∈ R, a margin ϵ ∈ R>0, and sets of non-negative multipliers λm, μ n ∈ RV −1 
+
+> ≥0
+
+, for all m ∈ { 1, ..., M } and n ∈ { 1, ..., N }, such that: 
+
+A(m)T λm = v, β (m)T λm ≤ α − ϵ, where A(m) 
+
+> j
+
+= 2( cj − cm)T , β (m) 
+
+> j
+
+= ∥cj ∥2 − νj − ∥ cm∥2 + νm, ∀j̸ = m, and 
+
+A(n)T μn = −v, β (n)T μn ≤ − α − ϵ, where A(n) 
+
+> j
+
+= 2( cj − cn)T , β (n) 
+
+> j
+
+= ∥cj ∥2 − νj − ∥ cn∥2 + νn, ∀j̸ = n.18 Laguerre Geometry for Interpreting Large Language Models 
+
+Proof. A cell associated with the site–weight pair (cm, ν m) is defined as 
+
+Cm = {z ∈ Rd : ∥z − cm∥2 − νm < ∥z − cj ∥2 − νj , ∀j̸ = m},
+
+which can be equivalently written as 
+
+Cm = {z ∈ Rd : 2( cj − cm)T z < ∥cj ∥2 − νj − ∥ cm∥2 + νm, ∀j̸ = m}.
+
+Define 
+
+A(m) 
+
+> j
+
+= 2( cj − cm)T , β(m) 
+
+> j
+
+= ∥cj ∥2 − νj − ∥ cm∥2 + νm, ∀j̸ = m. 
+
+Then, 
+
+Cm = {z : A(m)z ≤ β(m)}.
+
+Suppose that v defines a separating hyperplane between UM and UN, i.e., 
+
+vT z ≤ α − ϵ, ∀z ∈ UM,
+
+and 
+
+vT z ≥ α + ϵ, ∀z ∈ UN.
+
+Since UM = SMm=1 ωm, the first condition is equivalent to 
+
+vT z ≤ α − ϵ, ∀z ∈ ωm, ∀m ∈ { 1, . . . , M }.
+
+Applying Farkas’ lemma to the implication 
+
+A(m)z ≤ β(m) =⇒ vT z ≤ α − ϵ, 
+
+shows that it holds if and only if there exists λm ≥ 0 such that 
+
+A(m)T λm = v, β(m)T λm ≤ α − ϵ. 
+
+Similarly, for every n ∈ { 1, . . . , N },
+
+A(n)z ≤ β(n) =⇒ vT z ≥ α + ϵ, 
+
+holds if and only if there exists μn ≥ 0 such that 
+
+A(n)T μn = −v, β(n)T μn ≤ − α − ϵ. 
+
+A.1.3 Proof of Theorem 4.4 Theorem 4.4 (Concept Domination). For two concepts Cj (ωj , cj , ν j ) and Cj′ (ωj′ , cj′ , ν j′ ), Cj dominates Cj′ (i.e., 
+
+ωj′ ⊆ ωj ) if Domination (j → j′) > 0.
+
+Proof. For any point z, concept Cj dominates z over concept Cj′ if 
+
+∥z − cj ∥2 − νj < ∥z − cj′ ∥2 − νj′ .
+
+Setting z = cj′ gives 
+
+∥cj′ − cj ∥2 − νj < −νj′ ,
+
+or equivalently, 
+
+∥cj′ − cj ∥2 < ν j − νj′ .
+
+Since 
+
+−νj′ = min 
+
+> z
+
+ ∥z − cj′ ∥2 − νj′
+
+
+
+is the lowest possible Laguerre distance to cj′ , the above inequality implies that even at the point minimizing the Laguerre distance to concept Cj′ , the Laguerre distance to Cj is strictly smaller. Therefore, every point assigned to Cj′
+
+is also assigned to Cj , implying ωj′ ⊆ ωj .19 Laguerre Geometry for Interpreting Large Language Models 
+
+A.1.4 Proof of Theorem 4.6 
+
+We first establish that shortcut connections preserve piecewise-affine structure. 
+
+Lemma A.2 (Piecewise Affinity of Shortcut Connections) . If g(x) is piecewise affine, then f (x) = g(x) + x is also piecewise affine. 
+
+Proof. Suppose g is piecewise affine. Then, for each activation region Ωi, there exist a constant matrix Ai and vector 
+
+ci such that 
+
+g(x) = Aix + ci, x ∈ Ωi.
+
+Within the same region, 
+
+f (x) = g(x) + x = ( Ai + I)x + ci,
+
+which is affine. Since this holds for every activation region, f is piecewise affine. More generally, let 
+
+F = F2 ◦ f ◦ F1,
+
+where F1 and F2 are piecewise affine. Because the composition of piecewise-affine mappings is itself piecewise affine, 
+
+F remains piecewise affine. We now prove that a single-token transformer induces a piecewise-affine partition at every layer. 
+
+Theorem 4.6 (Single-input Transformer Piecewise-linear Partition). Let F be an L-layer transformer model with feedforward networks {MLP (ℓ)}, each using a piecewise-linear activation function; value matrices {W V (ℓ)} and output matrices {W O(ℓ)}, for ℓ ∈ { 1, ..., L }; and a language modeling head Fun , given by: 
+
+F (x) = Fun ◦ ML ◦ AL ◦ · · · ◦ Mℓ ◦ Aℓ ◦ · · · ◦ M1 ◦ A1(x), (24) 
+
+Mℓ(x) = x + MLP (ℓ)(x), (25) 
+
+Aℓ(x) = x + xW V (ℓ)W O(ℓ). (26) Then F partitions the input space, as well as each intermediary representation space, into piecewise-linear regions. 
+
+Proof. Consider a single input token. In this case, each attention head contains only one key-value pair, so the attention weight is identically equal to one. Consequently, the output of the multi-head attention module is simply the concatenation of the value vectors followed by the output projection: 
+
+∆attn (ℓ) = Concat 
+
+
+
+v(ℓ, 1) , . . . , v(ℓ,H )
+
+W O(ℓ),
+
+where 
+
+v(ℓ) = x(ℓ)W V (ℓ).
+
+Therefore, 
+
+∆attn (ℓ) = x(ℓ)W V (ℓ)W O(ℓ),
+
+and the attention block 
+
+Aℓ(x) = x + xW V (ℓ)W O(ℓ)
+
+is an affine transformation. Each feedforward block employs a piecewise-linear activation function and is therefore piecewise affine. By Lemma A.2, adding the residual connection preserves piecewise affinity, implying that Mℓ is piecewise affine. Finally, since every layer is the composition of an affine attention block and a piecewise-affine feedforward block, and compositions of piecewise-affine mappings remain piecewise affine, every intermediate representation space is partitioned into piecewise-affine regions. The language modeling head is affine, so the complete transformer F also induces a piecewise-affine partition of the input space. 
+
+Remark on RMSNorm and RoPE. Although other normalization methods (e.g., LayerNorm [Ba et al., 2016] and BatchNorm [Ioffe & Szegedy, 2015]) and positional encodings (e.g., absolute positional encoding) exist, we focus on RMSNorm and RoPE. Ignoring the numerical stabilization constant ϵ, parameter-free RMSNorm is given by 
+
+RMSNorm( x) = x
+
+q 1 
+
+> d
+
+∥x∥22
+
+,
+
+20 Laguerre Geometry for Interpreting Large Language Models 0.6 0.7 0.8 0.9 1.0 1.1 
+
+Distance to '_Dogs' 
+
+0.500 
+
+0.525 
+
+0.550 
+
+0.575 
+
+0.600 
+
+0.625 
+
+0.650  
+
+> (Laguerre weights)
+> _furry
+> _canine
+> _puppies _puppy
+> _barking
+> _leash
+> Dog
+> _beasts
+> _breeds
+> _Pets
+> _mammalian
+> _Animals
+
+_Dogs 
+
+(A) Distance to '_Dogs' 1.1 1.0 0.9 0.8 0.7 0.6 0.5 
+
+Domination Score of '_Dogs' 
+
+0.500 
+
+0.525 
+
+0.550 
+
+0.575 
+
+0.600 
+
+0.625 
+
+0.650 
+
+> (Laguerre weights)
+> _furry
+> _canine
+> _puppies
+> _puppy
+> _barking
+> _leash
+> Dog
+> _beasts
+> _breeds
+> _Pets
+> _mammalian
+> _Animals
+
+_Dogs 
+
+(B) Domination Score of '_Dogs' 0.70 0.75 0.80 0.85 0.90 0.95 
+
+Distance to '_linux' 
+
+0.45 
+
+0.50 
+
+0.55 
+
+0.60 
+
+0.65  
+
+> (Laguerre weights)
+> _FreeBSD
+> _Debian
+> _GNOME
+> _Ubuntu
+> _Emacs _gcc
+> _Firefox
+> linux
+> Linux Unix _GNU
+> _cpu
+> _filesystem
+> Software
+
+_linux 
+
+(C) Distance to '_linux' 1.00 0.95 0.90 0.85 0.80 0.75 0.70 
+
+Domination Score of '_linux' 
+
+0.45 
+
+0.50 
+
+0.55 
+
+0.60 
+
+0.65  
+
+> (Laguerre weights)
+> _FreeBSD
+> _Debian
+> _GNOME
+> _Ubuntu
+> _Emacs _gcc
+> _Firefox
+> linux
+> Linux
+> Unix _GNU
+> _cpu
+> _filesystem
+> Software
+
+_linux 
+
+(D) Domination Score of '_linux' 
+
+Figure 9: (A) Use distance to the embedding vector of "_Dogs" to retrieve its hyponyms/hypernyms. (B) Use the domination score of "_Dogs" to retrieve its hyponyms/hypernyms. (C) Use distance to the embedding vector of "_linux" to retrieve its hyponyms/hypernyms. (D) Use the domination score of "_linux" to retrieve its hyponyms/hypernyms. The embedding vectors, together with the Laguerre weights, jointly distinguish hyponyms/hypernyms. 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 
+
+> Logit Lens
+> _not
+> _also
+> _also
+> _also
+> _also
+> _also
+> _also
+> _also
+> _also
+> :
+> :
+> :
+> :
+> _called
+> :
+> _called
+> _called
+> _called
+> _not
+> :
+> :
+> :
+> :
+> _Paris
+> _Paris
+> _Paris
+> _Paris
+> _Paris
+> _Paris
+> _Paris
+> _Paris
+> _Paris
+> Patchscopes
+> _->
+> _a
+> _a
+> _the
+> _the
+> _Paris
+> _Paris
+> _Paris
+> _Paris
+> _Paris
+> _Paris
+> _Paris
+> _Paris
+> _Paris
+> _Paris
+> _Paris
+> _Paris
+> _Paris
+> _Paris
+> _Paris
+> _Paris
+> _Paris
+> _Paris
+> _Paris
+> _Paris
+> _Paris
+> _Paris
+> _Paris
+> _Paris
+> _Paris
+> _Paris
+> _Paris
+> Geometric Lens
+> _a
+> _not
+> _a
+> _called
+> _the
+> _in
+> _called
+> a
+> _called
+> ,
+> ",
+> ......
+> ##
+> Question
+> ##
+> ##
+> ##
+> ##
+> (
+> Paris
+> Paris
+> Paris
+> Paris
+> _Paris
+> _Paris
+> _Paris
+> _Paris
+> _Paris
+> _Paris
+> _Paris
+> _Paris
+
+Figure 10: The token revealed by different lenses at each layer for the prompt: "The capital of France is". Three methods generate different token trajectories along the layers. which rescales each hidden representation along its radial direction. Although RMSNorm is not affine, it preserves the assignment of representations to the piecewise-affine regions established by the preceding computations, affecting only their geometric embedding. RoPE modifies only the query and key projections, W Q and W K , while leaving W V and W O unchanged. Since the single-token attention block depends only on W V and W O , RoPE does not alter the induced partition. 
+
+A.2 Experiment Details Generation of Piecewise-Linear Subdivisions in the 2D Space. We generated three synthetic distributions in a two-dimensional input space: one Gaussian distribution and two circular distributions. A one-hidden-layer ReLU network with 12 hidden neurons was trained to classify the three classes. The network parameters were initialized from 21 Laguerre Geometry for Interpreting Large Language Models The 
+
+The capital 
+
+The capital of 
+
+The capital of France 
+
+The capital of France is 
+
+(
+
+,
+
+.
+
+~
+
+_the 
+
+_of 
+
+_in 
+
+_and 
+
+_is 
+
+_" 
+
+_U 
+
+_first 
+
+_most 
+
+_next 
+
+_called 
+
+_city 
+
+_study 
+
+_South 
+
+_Paris 
+
+Paris 
+
+> Laguerre-Voronoi cells
+
+Full trajectories for the Prompt 'The capital of France is' 
+
+Figure 11: The full trajectories from the Geometric Lens for all token positions for the prompt: " The capital of France is ". The first trajectory collapses into a single point. 0 5 10 15 20 25 30 
+
+> Layers
+
+0
+
+2
+
+4
+
+6
+
+8
+
+10 
+
+> log(rank+1)
+
+top-1: _Hamburg 
+
+Logit Lens Patchscopes Geometric Lens 
+
+0 5 10 15 20 25 30 
+
+> Layers
+
+0
+
+2
+
+4
+
+6
+
+8
+
+10 
+
+top-2: _Frankfurt 
+
+0 5 10 15 20 25 30 
+
+> Layers
+
+0
+
+2
+
+4
+
+6
+
+8
+
+10 top-3: _B 
+
+0 5 10 15 20 25 30 
+
+> Layers
+
+0
+
+2
+
+4
+
+6
+
+8
+
+10 top-4: _" 
+
+0 5 10 15 20 25 30 
+
+> Layers
+
+0
+
+2
+
+4
+
+6
+
+8
+
+10 
+
+top-5: _Berlin 
+
+The ranks of the top-5 tokens along the layers 
+
+Figure 12: The monitored log ranks of the top-5 final tokens for the prompt " You are in a fictional world where Hamburg and Frankfurt have swapped their names. The Bode Museum is located in the city of ". 22 Laguerre Geometry for Interpreting Large Language Models 0 5 10 15 20 25 30                           
+
+> Layers
+> 0
+> 2
+> 4
+> 6
+> 8
+> 10
+> log(rank+1)
+> top-1: _Manchester
+> Logit Lens Patchscopes Geometric Lens
+> 0510 15 20 25 30
+> Layers
+> 0
+> 2
+> 4
+> 6
+> 8
+> 10
+> top-2: _Edinburgh
+> 0510 15 20 25 30
+> Layers
+> 0
+> 2
+> 4
+> 6
+> 8
+> 10
+> top-3: _Downing
+> 0510 15 20 25 30
+> Layers
+> 0
+> 2
+> 4
+> 6
+> 8
+> 10
+> top-4: _Glasgow
+> 0510 15 20 25 30
+> Layers
+> 0
+> 2
+> 4
+> 6
+> 8
+> 10
+> top-5: _London
+> The ranks of the top-5 tokens along the layers
+
+Figure 13: The monitored log ranks of the top-5 final tokens for the prompt " You are in a fictional world where Edinburgh and Manchester have swapped their names. Downing Street is located in the city of ". Logit Lens 
+
+> Patchscopes
+> Geometric Lens
+> _Edinburgh
+> _London
+> ~
+> _the
+> _of
+> _in
+> _"
+> _'
+> ...
+> _London
+> _cat
+> _Cat
+> scape
+> _Manchester
+> _â
+> _Edinburgh
+> _hello
+> Laguerre-Voronoi cells
+> Laguerre Autoencoder for inspecting in-context interference
+
+Figure 14: The Laguerre Autoencoder visualization of the prompt: " You are in a fictional world where Edinburgh and Manchester have swapped their names. Downing Street is located in the city of ". a Gaussian distribution with mean 0 and standard deviation 0.5. Training was performed using SGD with a learning rate of 0.1 and a batch size of 32. Each hidden neuron partitions the input space into two half-spaces (gray lines in the figure), while the final decision boundary between two classes is projected onto the input space as a piecewise-linear curve composed of linear segments (red segments). Together, the hidden-layer partition and the classification polytope partition the input space into piecewise-linear regions. Unlike previous work, which quantifies the number of linear regions as a measure of network expressivity, we instead study the semantic label associated with each region. Specifically, we assign each linear region R a label C(R)
+
+corresponding to the label of the final classification Laguerre–Voronoi cell projected onto that region (e.g., the green region in the figure). This labeling induces a hierarchical tree structure consisting of V trees, each rooted at a top-level Laguerre–Voronoi cell, where V denotes the number of classes. The resulting structure enables us to trace both intra-tree transitions and inter-region (or equivalently, inter-tree) transitions. A similar tree representation was previously illustrated in Figure 2(c) of Montúfar et al. [2014]. 
+
+Generation of Category Data from the WordNet Hierarchy. We did not directly use the datasets constructed by Xiong [2026], as they are not publicly available. Instead, we followed their data construction procedure with several 23 Laguerre Geometry for Interpreting Large Language Models Logit Lens 
+
+> Patchscopes
+> Geometric Lens
+> _Hamburg
+> _Berlin
+> ~
+> _
+> _the
+> _of
+> _l
+> _B
+> _"
+> _R
+> _â
+> _'
+> _world
+> _cat
+> _Cat
+> scape
+> _Berlin
+> _â
+> _hello
+> caps
+> _Frankfurt
+> _Hamburg
+> lopp
+> Laguerre-Voronoi cells
+> Laguerre Autoencoder for inspecting in-context interference
+
+Figure 15: The Laguerre Autoencoder visualization of the prompt: " You are in a fictional world where Hamburg and Frankfurt have swapped their names. The Bode Museum is located in the city of ". refinements. Given a root synset (e.g., animal ), we recursively extract its subtree by traversing WordNet hyponym relations. This process produces a candidate set of words whose hypernyms descend from the selected root concept. We then perform a second filtering step to ensure that the primary sense of each word belongs to the target subtree. For example, the word schoolmaster appears as a hyponym of animal ; however, its three senses are “presiding officer of a school,” “educator,” and “food fish,” only the last of which belongs to the animal hierarchy. Such words are excluded to obtain clean, semantically coherent, and non-overlapping concept sets. Using this procedure, we construct four concept datasets corresponding to animal , plant , cognition , and event .For each language model, we further filter these datasets by retaining only words that correspond to a single vocabulary token under the model’s tokenizer. For example, for Phi-2, the resulting datasets contain 93 animal concepts, 48 plant concepts, 498 cognition concepts, and 1,302 event concepts. Because different language models employ different tokenizers, these counts may vary across models. Following prior work [Park et al., 2025], we consider only vocabulary tokens with a leading whitespace, denoted by “_” throughout the paper. Table 4: Error rates for linear probing experiments with different definitions of concepts by Categorical Geometry [Park et al., 2025], Lattice Geometry [Xiong, 2026], and Laguerre Geometry (ours).                                             
+
+> Pythia-70M Gemma-3-270M dataset animal ↔plant event ↔cognition animal ↔plant event ↔cognition error ↓(shuffle) error ↓(shuffle) error ↓(shuffle) error ↓(shuffle) Categorical Geometry 0.167 ± 0.058 0.498 0.241 ± 0.022 0.500 0.101 ± 0.031 0.495 0.237 ± 0.023 0.499 Lattice Geometry 0.196 ± 0.067 0.501 0.251 ± 0.024 0.502 0.120 ± 0.035 0.499 0.242 ± 0.025 0.500 Laguerre Geometry 0.179 ± 0.062 0.502 0.193 ± 0.020 0.494 0.128 ± 0.038 0.499 0.198 ± 0.022 0.500
+
+Probing Linear Separability under Different Concept Definitions. For each pair of categories, we randomly sample an equal number of concepts from each category and repeat the experiment 500 times. In every run, the sampled concepts are randomly split into training and test sets using a 60:40 ratio. Concept representations for Categorical Geometry and Lattice Geometry are obtained using their official implementations. For Laguerre Geometry, region representations are computed according to Theorem 4.1. A linear classifier is then trained to distinguish 40 concepts sampled from animal and 40 concepts sampled from plant .Although the concept datasets are constructed to maximize semantic purity, the resulting evaluation remains an approximation of true concept separability because vocabulary tokens may still be polysemous. For example, the token _dog may represent both the animal dog and occurrences within other words such as “dogma.” Consequently, 24 Laguerre Geometry for Interpreting Large Language Models token-level representations may not perfectly isolate individual concepts, which is a limitation of works using a token to represent a concept. Table 5: Accuracy of hierarchical relations discovered by the Lattice Geometry and the Laguerre Geometry.                                           
+
+> Models Gemma-2-2B Gemma-3-270M Datasets Animal Plant Event Cognition Animal Plant Event Cognition Lattice Geometry [Xiong, 2026] 0.4333 0.4706 0.5034 0.5173 0.5677 0.5244 0.5042 0.4767 (Random) 0.4833 0.5059 0.5241 0.5159 0.5197 0.4512 0.5181 0.5073 Laguerre Geometry 0.5667 0.6118 0.7479 0.6503 0.9607 0.9512 0.9822 0.9535
+> (Random) 0.5792 0.5774 0.5704 0.5784 0.4802 0.4594 0.4699 0.4589
+
+Experiment Details for Unsupervised Hierarchical Concept Inference in LLMs. The attribute schema and object–attribute matrix required to compute the soft inclusion score of Xiong [2026] are not publicly available. To facilitate a fair comparison with our attribute-free domination score, we approximate the unknown attribute directions using the principal components of the concept vectors when computing the inclusion scores for Lattice Geometry. Table 5 compares Laguerre Geometry and Lattice Geometry on Gemma-2 and Gemma-3. Our domination score achieves accuracies ranging from 0.5667 to 0.7479 on Gemma-2-2B and from 0.9512 to 0.9822 on Gemma-3-270M. In contrast, Lattice Geometry performs close to random guessing. One possible explanation is that the inclusion score relies on a predefined attribute set, which may encode concept-specific prior information unavailable in our approximation based solely on principal components. 
+
+Experiment Details for the Logit Lens, Patchscopes, and Geometric Lens. The Country dataset consists of 249 country names paired with their capitals using prompts of the form “ The capital of [country] is .” For in-context interference, we construct three datasets, Paris , London , and Berlin . For each target city C, we first use GPT-5.5 to generate 100 factual prompts related to that city, such as “ The Louvre Museum is located in the city of .” We then prepend two irrelevant city names, denoted A and B, before the fact associated with city C.Representative prompts from each dataset are provided below. In-Context Interference (Paris Dataset) 
+
+You are in a fictional world where Marseille and Lyon have swapped their names. The Louvre Museum is located in the city of Incorrect tokens: Marseille/Lyon. Correct token: Paris. 
+
+In-Context Interference (London Dataset) 
+
+You are in a fictional world where Edinburgh and Manchester have swapped their names. Downing Street is located in the city of Incorrect tokens: Edinburgh/Manchester. Correct token: London. 
+
+In-Context Interference (Berlin Dataset) 
+
+You are in a fictional world where Hamburg and Frankfurt have swapped their names. The Bode Museum is located in the city of Incorrect tokens: Hamburg/Frankfurt. Correct token: Berlin. 
+
+Empirically, prompts following this construction cause the language model to predict either city A or city B instead of the correct city C in over 90% of cases. We refer to this phenomenon as in-context interference . These datasets are used to compare the information revealed by different interpretability lenses under this setting. We implement Logit Lens and Geometric Lens using PyTorch and the Transformers library. For Patchscopes, we use the official implementation and adopt its default target prompt: “ cat->cat; 135->135; hello->hello; ? .” Al-ternative prompts, such as “ The multi-tokens present here are ” and “ Hello! Could you please tell me more about ,” are also possible; however, the choice of target prompt is not standardized, and its influence has not 25 Laguerre Geometry for Interpreting Large Language Models been systematically studied. To ensure a fair comparison, we therefore use the default prompt provided by the official implementation. For the training of the Laguerre Autoencoder, we used a symmetric architecture with encoder and decoder both having 3 layers (512-128-32) using ReLU activation and BatchNorm. We set φ1 = 1 .0 and φ2 = 20 .0 to train all LAEs for 50 epochs with a batch size of 32 and a learning rate of 0.001. Experiments on the London and Berlin datasets exhibit behavior consistent with the results reported in §5.3. As shown in Figures 14, 15, 12, and 13, for these cases, Geometric Lens is the only one of the three methods whose trajectory passes through the cell corresponding to the correct token before reaching the final prediction, demonstrating that the observed behavior generalizes across multiple datasets. 26
