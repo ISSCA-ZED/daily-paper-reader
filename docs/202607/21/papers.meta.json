@@ -1,0 +1,69 @@
+{
+  "label": "2026-07-21",
+  "date": "2026-07-21",
+  "generated_at": "2026-07-21T20:12:08",
+  "count": 4,
+  "papers": [
+    {
+      "paper_id": "202607/21/2607.12815v2-visual-access-boundaries-in-vision-language-model-reasoning",
+      "section": "deep",
+      "title_en": "Visual Access Boundaries in Vision-Language Model Reasoning",
+      "authors": "Hiroto Osaka, Shohei Taniguchi, Gouki Minegishi, Kai Yamashita, Masahiro Suzuki, Yutaka Matsuo",
+      "date": "2026-07-14",
+      "pdf": "https://arxiv.org/pdf/2607.12815v2",
+      "score": "8.0",
+      "evidence": "因果干预测量推理轨迹中图像token的重要性",
+      "tldr": "视觉语言模型在CoT推理中，图像令牌访问并非全程必需。通过Visual Access Sweep因果干预，发现CoT与无CoT的视觉访问边界层差异最多两层，说明CoT主要扩展语言侧对图像隐藏状态的计算，而非持续直接访问图像。CoT的效果受限于感知读出能力：当模型能可靠读出视觉属性时CoT有效，否则无效。瓶颈在于读出而非计数等任务。",
+      "tags": "query:key-tokens",
+      "abstract_en": "Chain-of-Thought (CoT) prompting is widely used as a test-time scaling strategy for Vision-Language Models (VLMs), but it remains unclear what is extended when VLMs generate longer reasoning traces. We ask whether CoT requires continued access to image tokens, or whether it mainly operates over visual information already made available earlier in the forward pass. We introduce Visual Access Sweep, a causal intervention that masks attention from generated-token queries to image-token keys along layer depth and generation time, and define the Visual Access Boundary (VAB) as the minimal access region that preserves task accuracy. Across six model configurations from Qwen2.5-VL and InternVL3, both no-CoT direct answering and CoT prompting exhibit finite VABs. In Qwen2.5-VL-32B and InternVL3 at 14B and 38B scales, when CoT is evaluated against the no-CoT full-access target, its VAB layer differs from the no-CoT boundary by at most two layers, despite substantially longer generations. This suggests that CoT does not primarily improve performance by prolonging direct image-token access throughout the reasoning trace, but by extending language-side computation over image-derived hidden-state information. We further show that CoT gains are constrained by perceptual readout. CoT helps when the queried visual attribute can be reliably read out by the model, but not when that readout is unreliable. A symbolic-attribute oracle shows that CoT can improve counting once ground-truth attributes are supplied as text, while a single-object probe-vs-decode check shows that hard attributes can be linearly recoverable from hidden states yet difficult for the model itself to output. Together, these analyses place the bottleneck at readout rather than counting.",
+      "source": "arxiv",
+      "selection_source": "fresh_fetch"
+    },
+    {
+      "paper_id": "202607/21/2607.17524v1-token-level-off-policy-learning-for-faithful-generation-under-distribution-shift",
+      "section": "deep",
+      "title_en": "Token-Level Off-Policy Learning for Faithful Generation Under Distribution Shift",
+      "authors": "Zitong Huang, Gustavo Lucas Carvalho, Deqing Fu, Robin Jia",
+      "date": "2026-07-20",
+      "pdf": "https://arxiv.org/pdf/2607.17524v1",
+      "score": "8.0",
+      "evidence": "token级正确性预测识别生成中的重要token",
+      "tldr": "针对分布偏移下生成忠实性不足的问题，提出Token-Level Off-Policy Labeling (TOPL)，将后训练转为token级正确性预测，避免直接训练模型生成离策略token的缺陷。在11个文档摘要数据集上展现出强分布外泛化，并有效迁移至机器翻译。消融实验证实token级信号优于序列级，且学习到的LoRA适配器可作为线性分类头和引导向量。",
+      "tags": "query:key-tokens",
+      "abstract_en": "We propose Token-Level Off-Policy Labeling (TOPL), an off-policy training paradigm that reframes post-training as a token-level correctness prediction task. Our key intuition is that by training the model to distinguish good and bad tokens in a response, we naturally guide the model towards generating good tokens, while avoiding the pitfalls that come with directly training the model to generate off-policy tokens. Experiments on document summarization tasks show that TOPL achieves strong out-of-distribution generalization across 11 datasets against a diverse set of sequence-level and token-level baselines. We further demonstrate that TOPL transfers effectively to machine translation, suggesting that its benefits generalize across different faithful generation tasks. Through ablation studies, we confirm that our token-level learning signal is critical to good performance; sequence-level analogues do not confer similar benefits. Finally, we show that TOPL induces interpretable model updates: the LoRA adapters learned through TOPL function as linear classification heads and steering vectors.",
+      "source": "arxiv",
+      "selection_source": "fresh_fetch"
+    },
+    {
+      "paper_id": "202607/21/2607.18100v1-can-we-break-llms-out-of-self-loops-fine-grained-reasoning-control-with-activation-steering",
+      "section": "deep",
+      "title_en": "Can We Break LLMs Out of Self-Loops? Fine-Grained Reasoning Control with Activation Steering",
+      "authors": "Sheldon Yu, Tong Yu, Xunyi Jiang, Rohan Surana, Gagan Mundada, Sungchul Kim, Lina Yao, Julian McAuley, Junda Wu",
+      "date": "2026-07-20",
+      "pdf": "https://arxiv.org/pdf/2607.18100v1",
+      "score": "8.0",
+      "evidence": "对推理标记的隐藏状态进行激活引导",
+      "tldr": "大型语言模型在扩展推理时易陷入自循环，浪费token且无法推进答案。现有提示方法缺乏细粒度控制。本文提出SOPHIA方法，通过将推理轨迹建模为潜在状态序列，统计状态转换并构建转向向量库，在推理时检测自循环并施加激活干预。实验证明该方法可有效打破自循环，提升任务准确率和token效率，实现推理过程的细粒度可控。",
+      "tags": "query:key-tokens",
+      "abstract_en": "Extended reasoning has become standard for frontier Large Language Models (LLMs), yet the trajectories these models produce remain largely uncontrollable. Existing methods for shaping how a model reasons are prompt based approaches and operate at the input level, offering no fine-grained control over the reasoning process itself. Related work analyzes and discovers latent transition dynamics in the reasoning traces from Large Language Models. Building on this, we statistically characterize these states, and show that failure trajectories get stuck in self-loops, exhausting the token budget without progress toward the final answer. To intervene on these failures, We propose SOPHIA: Steering Of reasoning Processes via Hidden-state Intervention and Activations. We treat each reasoning trace as a sequence of latent states rather than an unstructured texts, and investigate whether inference time interventions can provide fine-grained control over the self-looping reasoning process. We classify every prefix to a latent state, record step level transitions, and use them to construct a bank of steering vectors indexed by state pairs. At inference time, a controller infers the current state and, given a target state, retrieves the corresponding vector and can also detect self-loops online from the transition structure to prevent the model from sinking into a reasoning black hole. Through extensive experiments, our method reliably intervenes on self-loop failures, with steering vectors that generalize to different state pairs. End task accuracy and token efficiency indicate that fine-grained controllability results in better reasoning quality.",
+      "source": "arxiv",
+      "selection_source": "fresh_fetch"
+    },
+    {
+      "paper_id": "202607/21/2607.16806v1-token-wise-latent-streaming-from-slow-reasoners-to-fast-planners-for-dynamic-vision-language-navigation",
+      "section": "quick",
+      "title_en": "Token-Wise Latent Streaming from Slow Reasoners to Fast Planners for Dynamic Vision Language Navigation",
+      "authors": "Tianshuai Hu, Yangyi Zhong, Zeying Gong, Lingdong Kong, Xiaodong Mei, Guoyang Zhao, Xiaolu Liu, Song Wang, Rong Li, Junwei Liang",
+      "date": "2026-07-18",
+      "pdf": "https://arxiv.org/pdf/2607.16806v1",
+      "score": "7.0",
+      "evidence": "推理中关键token的隐藏状态分析",
+      "tldr": "动态视觉语言导航中，语言推理慢与实时规划存在矛盾，导致观测过时引发安全风险。本文提出SPARK-VLN双系统框架，通过逐token隐藏状态流式传输，将慢推理器的逐渐生成的意图注入快速专家规划器，实现边推理边规划。在人类中心动态社交基准上，该方法提升导航成功率与社交合规性，同时保持推理效率。",
+      "tags": "query:key-tokens",
+      "abstract_en": "Vision-Language Navigation in dynamic, human-centric environments exposes a fundamental tension: linguistic reasoning is slow and deliberative, whereas safe, socially compliant planning should be instant and reactive. The resulting observation staleness is safety-critical: a maneuver chosen during inference can already be unsafe by the time it executes. We observe that, long before a VLM finishes its inference, its intermediate hidden states already encode action-relevant intent. We propose SPARK-VLN, a dual-system framework for dynamic social VLN that streams the slow VLM reasoner's knowledge to a fast flow-matching expert planner throughout token generation, providing fresh and evolving guidance during inference. This design is realized by three modules: a Token-Wise Hidden Streamer that extracts intermediate hidden states along the token generation process, a Sequence-to-Slot Latent Bridge that projects them into fixed-size latent slots, and an Evolving Latent Conditioner that infuses them into the expert planner. We also introduce a human-centric benchmark suite for dynamic social vision-language navigation that keeps pedestrians and the robot active throughout inference and reports navigation success, social compliance, human collisions, and explicit staleness statistics. Across these settings, SPARK-VLN mproves navigation success and social compliance while sustaining inference efficiency. Webpage: https://hutslib.github.io/SPARK-VLN/.",
+      "source": "arxiv",
+      "selection_source": "fresh_fetch"
+    }
+  ],
+  "errors": []
+}
