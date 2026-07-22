@@ -1,0 +1,473 @@
+Title: DAIS: Dependency-Aware Intermediate QA Supervision for Complex Reasoning
+
+URL Source: https://arxiv.org/pdf/2607.19088v1
+
+Published Time: Wed, 22 Jul 2026 01:01:26 GMT
+
+Number of Pages: 21
+
+Markdown Content:
+# DAIS: Dependency-Aware Intermediate QA Supervision for Complex Reasoning 
+
+Yu Wang †1 , Ming Fan *1 , Xicheng Zhang 1, Zhiyong Li 1,Zhihu Wang 2, Caiyue Xu 2, Dahai Hu 2, Ting Liu 11Xi’an Jiaotong University 2Huawei Technologies Ltd. 
+
+Abstract 
+
+Chain-of-thought (CoT) supervision exposes in-termediate rationales, but flat rationale targets usually optimize a single reasoning sequence and provide limited supervision on how lo-cal conclusions should support later decisions. We introduce Dependency-Aware Intermediate QA Supervision (DAIS), a training-time frame-work that converts filtered teacher rationales into stage-level QA records. Each intermedi-ate record predicts a local answer conditioned on the previous states needed for that decision, while the final-answer record keeps the origi-nal task format; evaluation therefore uses only the original input and optional context. Across GDPR, AIACT, MedQA, and FOLIO with mul-tiple Qwen backbones, DAIS improves average final-answer accuracy over answer-only, flat chain-of-thought, and independent-QA base-lines. On policy-compliance benchmarks, it achieves a largest gain of 5.6% and an aver-age gain of 4.2% over the strongest non-DAIS baseline. Controlled ablations show that valid previous-state conditioning contributes beyond longer targets or additional intermediate text, supporting dependency-conditioned intermedi-ate QA as a lightweight auxiliary supervision signal for standard final-answer inference. 
+
+1 Introduction 
+
+Large language models (LLMs) have demonstrated strong performance on a wide range of reasoning tasks. A key factor behind these advances is the use of intermediate reasoning before producing the fi-nal answer. Chain-of-thought (CoT) prompting and supervision encourage models to generate explicit rationales and have become standard techniques for eliciting such reasoning behavior (Wei et al., 2022; Kojima et al., 2022). Subsequent work further improves this paradigm through self-consistency,  
+
+> †Work done during an internship at Huawei Technologies Ltd. *Corresponding Author
+
+task decomposition, and tool-augmented reason-ing (Wang et al., 2022; Zhou et al., 2022; Press et al., 2023; Yao et al., 2022). Despite these gains, flat rationale supervision offers limited control over what is learned. As il-lustrated by Figure 1, answer-only SFT supervises only the final label, while CoT-SFT adds intermedi-ate text but optimizes it as one sequence. This for-mat does not represent local objectives or previous-state support relations as conditioning variables, so CoT gains can be entangled with target length, style, step markers, or answer-template imitation. Intermediate-supervision methods make reason-ing steps more explicit through rationale supervi-sion (Wei et al., 2022; Kojima et al., 2022), de-composition (Zhou et al., 2022; Press et al., 2023), and process supervision (Uesato et al., 2022; Light-man et al., 2024), sometimes with inference-time search or verification. Here, we focus on standard SFT, where intermediate targets often remain flat rationales, ordered steps, or local records without previous-state conditioning. This motivates reorga-nizing teacher rationales into local QA records with previous-state support context while preserving di-rect final-answer inference. The key challenge is to use such dependencies as a training signal without turning them into an inference-time requirement. To this end, we propose Dependency-Aware In-termediate QA Supervision (DAIS). DAIS con-verts filtered teacher-generated CoT rationales into stage-level question-answer records. Each interme-diate record targets a local subtask extracted from the rationale, and later records are conditioned on selected earlier subtask answers that serve as sup-port context for the current decision. The original final-answer record is kept separately and remains in the standard task format. Therefore, DAIS can be trained with ordinary supervised fine-tuning and evaluated with direct final-answer prompting. This design is complementary to inference-time decomposition methods. DAIS does not require a arXiv:2607.19088v1 [cs.CL] 21 Jul 2026 Answer: No Output (CoT): Answer: No Ques �on   
+
+> A company stores users’ email addresses for marke �ng purposes without obtaining explicit consent. Does this prac �ce comply with GDPR?
+> Extract Legal Elements Match Legal Ar �cles Legal Reasoning
+> Q: What personal data is involved? A: Email addresses Q: Which GDPR ar �cles apply to this situa �on? A: Art. 6(1)(a), Art. 7(1) Q: Was the consent requirement sa �sfi ed? A: No explicit consent was obtained Q: Does the prac �ce comply with GDPR? A: No (Non-compliant)
+> SFT (Answer-only) CoT-SFT Exis �ng Training Data (Learn the Format)
+
+DAIS (Ours): Dependency-Condi �oned QA Supervision   
+
+> Ques �on
+> A company stores users’ email addresses for marke �ng purposes without obtaining explicit consent. Does this prac �ce comply with GDPR?
+> Step 1 Step 2 Step 3
+> Supervise local states and support rela �ons Limited supervision of state dependencies Ques �on
+> A company stores users’ email addresses for marke �ng purposes without obtaining explicit consent. Does this prac �ce comply with GDPR?
+> Compliance Judgement
+
+Figure 1: Comparison between conventional supervised targets and DAIS. Answer-only SFT provides only the final label, flat CoT-SFT imitates a monolithic rationale, and DAIS restructures the rationale into dependency-conditioned intermediate QA records used as auxiliary training supervision. The final-answer record remains in the original task format, so evaluation can use standard direct final-answer inference. 
+
+controller, search procedure, external verifier, gold intermediate state, or architecture change at eval-uation time. Instead, it asks whether dependency-conditioned intermediate targets provide a better supervised fine-tuning signal for standard final-answer prediction. We evaluate DAIS across four reasoning bench-marks spanning policy compliance, medical ques-tion answering, and logical reasoning, using four representative backbone models. Experi-ments show that DAIS consistently improves final-answer accuracy. Notably, DAIS achieves a largest gain of 5.6% over the strongest non-DAIS base-line on AIACT, with an average gain of 4.2% on policy-oriented benchmarks. These results demon-strate that bridging intermediate supervision and dependency-aware reasoning can yield substantial gains, especially in domains where final decisions depend on correctly using earlier reasoning states to evaluate applicable rules and constraints. Our contributions are: • We propose DAIS, a training-time dependency-conditioned intermediate supervision framework that converts teacher CoT rationales into stage-level QA records. • We provide a lightweight SFT data-construction pipeline that preserves the standard direct final-answer inference setting. • We show across four benchmarks and multiple Qwen backbones that valid previous-state con-ditioning improves final-answer accuracy be-yond answer-only, flat CoT, independent-QA, order-only, length-matched, and corrupted-state controls. 
+
+2 Related Work 
+
+Chain-of-thought, rationale supervision, and distillation. Scratchpad and chain-of-thought (CoT) methods prompt or train models to expose intermediate computation before producing an an-swer (Nye et al., 2021; Wei et al., 2022). Sub-sequent work improves this paradigm through zero-shot prompting, self-consistency, rationale bootstrapping, synthetic supervision, and distilla-tion (Kojima et al., 2022; Wang et al., 2022; Zelik-man et al., 2022; Hsieh et al., 2023; Magister et al., 2023). These studies show that intermediate text and teacher-generated rationales can improve rea-soning, but most supervised targets remain linear rationales followed by final answers. 
+
+Decomposition and structured inference. 
+
+Decomposition-based methods break complex problems into subproblems, search structures, tool calls, or executable programs (Zhou et al., 2022; Press et al., 2023; Khot et al., 2022; Yao et al., 2023; Besta et al., 2024; Yao et al., 2022; Gao et al., 2023). They provide structured reasoning procedures at inference time, often relying on prompting strategies, external tools, or explicit exploration over intermediate states. 
+
+Process supervision and rationale faithfulness. 
+
+Verifier and process-supervision methods train eval-uators or reward models for complete solutions or intermediate reasoning steps (Cobbe et al., 2021; Input (x) Ques �on Context Op �ons …Teacher CoT Collec �on 1 2 CoT Decomposi �on into Subtasks                               
+
+> Teacher LLM Teacher CoT ( ) Step 1: … Step 2: … …Step k: … Final Answer: 𝒚
+> Teacher CoT ( ) …Subtasks Subtask 1 Subtask 2 Subtask k …All Subtask Candidates …3Dataset-level Subtask Induc �on / Clustering Subtask Schema (Taxonomy)
+> Informa �on Extrac �on Evidence Localiza �on
+> Constraint Checking
+> Intermediate Inference
+> Veri fi ca �on / Aggrega �on
+> Final Decision Cluster 4Dependency-aware Intermediate QA Construc �on
+> …Subtask 1: 𝒒 𝟏 (Input: 𝒙 )Subtask 2: 𝒒 𝟐 (Input: 𝒙 ,𝒂 𝟏 )Subtask 3: 𝒒 𝟑 (Input: 𝒙 ,𝒂 𝟏 ,𝒂 𝟐 )Final: 𝒒 𝒌 (Input: 𝒙 ,𝒂 𝟏 ,…, 𝒂 𝒌−𝟏 )For each instance ( 𝒙 ,𝒚 )
+> 𝒂 𝟏 𝒂 𝟐 𝒂 𝟑 𝒂 𝟏
+> …Dependency Structure
+> 𝒂 𝟏 𝒂 𝟐 𝒂 𝟑 𝒂 𝒌
+> …5Training Dataset Construc �on
+> Subtask 1: 𝒒 𝟏 → 𝒂 𝟏
+> Subtask 2: 𝒒 𝟐 (𝒙 ,𝒂 𝟏 )→ 𝒂 𝟐
+> Subtask 3: 𝒒 𝟑 (𝒙 ,𝒂 𝟏 ,𝒂 𝟐 )→ 𝒂 𝟑
+> Final: 𝒒 𝒌 (𝒙 )→ 𝒚
+> …
+
+Figure 2: Overview of DAIS data construction. Teacher CoT rationales are decomposed into subtasks, normalized into dataset-level schemas, and converted into stage-level QA records. Later intermediate records receive serialized previous subtask outputs as context, whereas the final-answer record remains the original final-task record and does not receive constructed intermediate states. 
+
+Uesato et al., 2022; Lightman et al., 2024). Related work on rationales and explainable NLP studies ev-idence selection, rationale quality, and explanation faithfulness (Lei et al., 2016; DeYoung et al., 2020; Jain and Wallace, 2019; Turpin et al., 2023; Lan-ham et al., 2023). Prior work motivates supervision while cautioning against interpreting intermediate text as faithful reasoning; accordingly, DAIS eval-uates whether dependency-conditioned supervision improves final-answer accuracy without claiming faithful intermediate explanations. 
+
+3 Method 
+
+We introduce DAIS, a dependency-aware interme-diate supervision framework for constructing train-ing data from teacher-generated CoT rationales. As illustrated in Figure 2, DAIS collects teacher rationales, decomposes them into local subtasks, in-duces a dataset-level subtask schema, and converts each instance into a set of stage-level QA records. 
+
+3.1 Problem Setup 
+
+We consider supervised reasoning tasks with train-ing instances (xi, c i, y i), where xi is the task input, 
+
+ci is optional context or evidence, and yi is the gold final answer. For each training instance, a strong teacher model generates a CoT rationale ri.The teacher rationale is used only for constructing supervision targets and is not available at test time. A standard CoT SFT baseline trains on a flat rationale-answer target: 
+
+τ CoT 
+
+i = ri ⊕ yi, (1) where ⊕ denotes sequence concatenation. This tar-get exposes intermediate reasoning text, but treats the rationale as a single sequence and does not explicitly represent local subproblems or depen-dencies among intermediate states. DAIS instead constructs an ordered set of inter-mediate QA states 
+
+T DAIS 
+
+i = [( qi1, a i1), . . . , (qik i , a ik i )] .
+
+These states are materialized as stage-level SFT records: the first record predicts ai1 from 
+
+(xi, c i, q i1), each later record predicts ait from 
+
+(xi, c i, q it , a i,<t ), and an additional final record pre-dicts yi from (xi, c i) alone. At test time, the model receives only xi and op-tional ci; no teacher rationale, gold intermediate state, or external decomposition module is pro-vided. Thus, DAIS uses dependencies to organize SFT records, not as an inference-time requirement. 
+
+3.2 Teacher CoT Collection 
+
+The first stage of DAIS collects teacher ratio-nales for the training instances. For each example 
+
+(xi, c i, y i), we prompt a strong teacher model with the task input, optional context, and answer options. The teacher generates a step-by-step rationale ri
+
+together with a predicted final answer ˆyi.To reduce noise in teacher-generated rationales, we apply filtering before downstream construction. For each instance, the teacher may generate up to 
+
+K candidate rationales. We keep the first candidate whose final answer matches the gold answer yi and Legal Element Extrac �on Legal / Policy Compliance Subtasks 
+
+> Clinical Concept Mapping
+> Evidence Grounding Causal Inference Constraint Reasoning
+> Applicable Ar �cle Matching
+> Compliance Reasoning
+> Medical QA Subtasks
+> Final QA State
+> Final QA State
+
+Figure 3: Examples of task-conditioned subtask schemas. 
+
+whose rationale is internally consistent: its sub-stantive reasoning steps should be grounded in the input, context, answer options, or preceding steps, and should not support a different conclusion. If no candidate passes the filter, the instance is dis-carded. The retained rationales are treated as silver supervision for subsequent subtask decomposition and dependency-aware QA construction. 
+
+3.3 Subtask Decomposition 
+
+After collecting filtered teacher rationales, DAIS decomposes each rationale into a compact ordered sequence of local subtasks. Rather than splitting the CoT at the sentence level, we extract key rea-soning operations that are necessary for reaching the final answer or supporting later intermediate decisions. For each teacher rationale ri, we extract 
+
+ri → Si =  (si1, e i1), . . . , (sik i , e ik i ), (2) where sit denotes an instance-specific subtask and 
+
+eit is its aligned teacher-rationale span. In practice, we retain two to five main subtasks for most ratio-nales, which keeps the supervision compact while preserving the main reasoning operations. A valid subtask should be decision-relevant, lo-cally answerable from the input, optional context, and aligned rationale span, and focused on one distinct reasoning operation rather than a stylistic transition or question restatement. Adjacent spans are merged when they perform the same operation, while spans that mix separable operations are split. The resulting instance-specific subtask candidates are normalized into a compact dataset-level schema and later converted into stage-level QA records. 
+
+3.4 Dataset-level Subtask Schema Induction 
+
+The subtasks extracted from teacher rationales are initially instance-specific and free-form. Even when two subtasks serve a similar reasoning func-tion, the teacher model may describe them with different names, granularities, or surface forms. To reduce this inconsistency, DAIS performs dataset-level subtask schema induction using only the train-ing rationales. We collect all extracted subtasks in a dataset as a candidate pool and use their frequencies to guide the selection of high-coverage types. We then in-duce a compact schema Z = {z1, . . . , z M } by grouping candidates that share similar underlying reasoning functions rather than merely similar sur-face forms. Each instance-level subtask is mapped to one schema type: 
+
+zit = g(sit ), zit ∈ Z . (3) When a task has a stable domain-specific reason-ing schema, such as legal or policy-compliance reasoning, we instantiate Z directly. Otherwise, the schema is obtained through an LLM-assisted clustering and refinement process, with consistency checks used to merge overlapping types and revise inconsistent assignments. The induced schema is task-conditioned rather than universal; its labels organize local-question templates and support analysis rather than gen-eral reasoning primitives. Figure 3 shows example schemas, while each instance retains its own con-tent and subtask order. 
+
+3.5 DAIS QA Construction 
+
+After schema induction, DAIS rewrites each se-lected subtask sit into a local QA state (qit , a it )
+
+and materializes it as an instruction–input–output record. The first subtask record uses the original task input, optional context, and the current subtask question. Each later subtask record additionally in-cludes a serialized previous-state block containing selected earlier subtask questions and answers that are used as support context for the current local decision. The output of each intermediate record is the local answer ait . The final-answer record is kept separate from these dependent subtask records. Its input contains only the original task input and optional context, and its output is the gold final answer yi. Thus, DAIS preserves the original final-task format while adding dependency-conditioned subtask supervision. In our implementation, de-pendency conditioning is operationalized through previous-state serialization. We do not train the model to predict explicit dependency-edge tokens, and the schema labels are used only to organize local QA templates. The intermediate answer ait is derived from the aligned teacher-rationale span eit , either by direct extraction or by meaning-preserving normalization. During construction, we enforce three constraints: previous-state conditioning must be causal; each local answer must be grounded in the original in-put, optional context, answer options, or aligned rationale span; and the current subtask input must not reveal its own answer ait or the final answer yi.
+
+3.6 Dataset Construction and Usage 
+
+The final stage converts each retained trace into instruction–input–output records. For a retained instance with ki intermediate subtasks, DAIS cre-ates ki dependent subtask records and one plain final-answer record: 
+
+RDAIS  
+
+> i
+
+= {(Iit , a it )}ki 
+
+> t=1
+
+∪ { (IiF , y i)}. (4) Here Iit is the input for the t-th subtask record, which contains the original input, the current sub-task question, and the serialized previous-state con-text Hit when t > 1. The final-answer record is defined by IiF = Format( xi, c i) and OiF = yi, so it uses only the original input and optional context. DAIS does not introduce a new training algo-rithm or model architecture. All records are trained with the standard autoregressive instruction-tuning objective. Following the usual instruction-tuning setup, the loss is applied only to the output side of each instruction–input–output record, while the input side is treated as conditioning context. For intermediate subtask records, the output is the local answer ait ; for the final-task record, the output is the gold final answer yi.
+
+4 Experimental Setup 
+
+4.1 Tasks and Datasets 
+
+We use four complex reasoning benchmarks. GDPR and AIACT evaluate privacy and policy-compliance reasoning (Li et al., 2025; Hu et al., 2025). MedQA evaluates medical question answer-ing (Jin et al., 2020), and FOLIO evaluates natural-language logical reasoning (Han et al., 2022). All tasks are evaluated by final-answer accuracy. 
+
+4.2 Compared Methods 
+
+We compare DAIS with target-format baselines un-der the same backbone and training data. Base de-notes the untuned backbone. Final-SFT uses only final-answer supervision, while CoT-SFT trains on a flat teacher rationale followed by the final answer. IndepQA uses the same intermediate QA states as DAIS but removes previous-state conditioning, isolating the effect of previous-state support con-text. DAIS uses the full dependency-conditioned intermediate QA target. For GDPR and AIACT, we additionally report CR-Data SFT, our Qwen-based model fine-tuned on the public Context-Reasoner SFT data released by Li et al. (2025). Because it uses an external data source, we treat it as a reference comparison rather than a controlled target-format ablation. 
+
+4.3 Implementation and Evaluation 
+
+Intermediate QA records are constructed only from training-set rationales generated by DeepSeek mod-els (DeepSeek-AI, 2026). For GDPR and AIACT, we use a predefined compliance-oriented schema; for MedQA and FOLIO, we induce dataset-level schemas with LLM-assisted clustering and man-ual audit. In DAIS, later subtask records receive serialized previous states as context, while the final-answer record remains the original task. All super-vised variants for the same dataset and backbone use the same retained training instances. If a ratio-nale fails consistency or answer-matching checks, the corresponding instance is removed for all vari-ants. More details are provided in Appendix A.2. Controlled experiments fine-tune four Qwen backbones: Qwen2.5-3B, Qwen2.5-7B (Qwen et al., 2025), Qwen3-4B, and Qwen3-8B (Yang et al., 2025). Reference comparisons additionally include Qwen2.5-72B, GPT-OSS-120B (Agarwal et al., 2025), MiniMax-M27 (MiniMax-AI, 2026), GLM-4.7 (Team et al., 2025), and released Context-Reasoner SFT/RL models (Li et al., 2025). At evaluation time, models receive only the orig-inal task input and optional context. The main evaluation uses the final-answer task format. Final predictions are normalized with a fixed LLM-based answer matcher under the same task-specific rubric across methods. The matcher maps each model output to a canonical option or label and compares it with the gold benchmark answer; ambiguous outputs, missing answers, or multiple incompatible final answers are counted as incorrect. The matcher is used for answer extraction and normalization, not for creating test labels. Table 1: Accuracy on four benchmarks across four Qwen backbones. I NDEP QA removes previous-state conditioning, and CR-D ATA SFT is an external-data reference for policy tasks. Bold marks the best score in each column; averages are over backbones.                                                                                                                       
+
+> Benchmark Method Qwen2.5-3B Qwen2.5-7B Qwen3-4B Qwen3-8B Average
+> GDPR BASE 0.756 0.890 0.608 0.768 0.756 FINAL -SFT 0.788 0.904 0.626 0.770 0.772 COT-SFT 0.752 0.896 0.630 0.770 0.762 INDEP QA 0.686 0.852 0.568 0.750 0.714 CR-D ATA SFT 0.724 0.912 0.652 0.712 0.750 DAIS (O URS )0.798 0.954 0.656 0.786 0.799
+> AIACT BASE 0.356 0.408 0.628 0.700 0.523 FINAL -SFT 0.364 0.404 0.632 0.724 0.531 COT-SFT 0.360 0.408 0.636 0.726 0.533 INDEP QA 0.352 0.418 0.574 0.612 0.489 CR-D ATA SFT 0.396 0.382 0.654 0.692 0.531 DAIS (O URS )0.472 0.486 0.658 0.738 0.589
+> MedQA BASE 0.752 0.850 0.602 0.855 0.765 FINAL -SFT 0.738 0.845 0.732 0.848 0.791 COT-SFT 0.752 0.849 0.758 0.858 0.804 INDEP QA 0.722 0.818 0.750 0.850 0.785 DAIS (O URS )0.764 0.872 0.769 0.856 0.815
+> FOLIO BASE 0.470 0.560 0.710 0.835 0.644 FINAL -SFT 0.475 0.565 0.795 0.795 0.658 COT-SFT 0.485 0.570 0.795 0.805 0.664 INDEP QA 0.473 0.565 0.785 0.795 0.655 DAIS (O URS )0.500 0.580 0.815 0.840 0.684
+
+Table 2: Accuracy comparison on GDPR and AI Act benchmarks for 7B variants, larger reference models, and context-reasoner systems.                      
+
+> Group Model GDPR AI Act
+> Qwen-7B variants
+> Qwen2.5-7B (Base) 0.890 0.408 Qwen2.5-7B + CoT 0.896 0.408
+> Qwen2.5-7B + DAIS 0.954 0.486
+> Reference models
+> Qwen2.5-72B 0.756 0.610 GLM-4.7 0.842 0.610 MiniMax-M27 0.906 0.616 GPT-OSS-120B 0.848 0.678
+> CtxR systems
+> CtxR-SFT-7B 0.820 0.764 CtxR-RL-7B 0.822 0.780
+
+5 Experimental Results 
+
+In this section, we evaluate overall accuracy, dependency-validity ablations, subtask coverage, component variants, and efficiency with respect to original training instances. 
+
+5.1 Main Results 
+
+Table 1 reports the controlled comparison across four benchmarks and four backbone models. By point estimate, DAIS achieves the best average over backbones on all four tasks and obtains the best result in 15 of 16 benchmark–model settings. The advantage is most evident on policy-oriented benchmarks, especially AIACT: averaged over backbones, DAIS improves over the strongest non-DAIS baseline by 2.7 points on GDPR and 5.6 points on AIACT. This suggests that dependency-conditioned subtask supervision is particularly helpful when final decisions require linking sce-nario facts to applicable constraints and intermedi-ate conditions. DAIS also improves the average accuracy on MedQA and FOLIO, although the margins are smaller and one MedQA setting is a near-tie: on Qwen3-8B MedQA, C OT-SFT reaches 0.858, while DAIS obtains 0.856. On the policy bench-marks, DAIS remains stronger than CR-D ATA 
+
+SFT; on AIACT, for example, the average accu-racy increases from 0.531 to 0.589. Together with its consistent advantage over I NDEP QA, this sug-gests that dependency preservation is an important contributor beyond QA formatting alone. Table 2 further shows that DAIS achieves com-petitive GDPR performance relative to several larger reference models and CtxR systems, al-though specialized CtxR models remain substan-Table 3: Accuracy on dependency validity ablations. Corr. preserves the dependency format but uses mis-matched previous states.                              
+
+> AIACT MedQA Method Qwen-7B Qwen-4B Qwen-7B Qwen-4B
+> Final 0.404 0.632 0.845 0.732 Match 0.440 0.622 0.814 0.766 Ordered 0.382 0.504 0.820 0.758 Corr. 0.400 0.568 0.812 0.754 IndepQA 0.418 0.534 0.818 0.574
+> DAIS 0.486 0.638 0.872 0.769
+
+tially stronger on AIACT. These comparisons are intended as broad reference points rather than con-trolled head-to-head evaluations, since differences in prompting, decoding, evaluation protocols, and training setups may also affect performance. 
+
+5.2 Dependency Validity 
+
+Table 3 provides a representative dependency-validity diagnostic on AIACT and MedQA. It ex-amines whether valid previous-state conditioning is a useful training signal beyond surface properties of the SFT records. We compare against final-only SFT (F INAL ), a length-matched control (M ATCH ), order-marked subtask records (O RDERED ), cor-rupted previous states (C ORR .), and dependency-free intermediate QA (I NDEP QA). M ATCH con-trols for target length at the original-instance level. ORDERED preserves subtask and order markers but removes previous-state conditioning. C ORR . pre-serves the dependency-style template but replaces previous-state fields with mismatched states. I N-
+
+> DEP
+
+QA exposes the same intermediate QA states as independent records without previous states. DAIS achieves the best accuracy across all four combinations of dataset and backbone. On AIACT, it exceeds M ATCH by 4.6 points and C ORR . by 8.6 points on Qwen2.5-7B, and also gives the strongest result on Qwen3-4B. On MedQA, DAIS remains best for both backbones, although the margin over MATCH is small on Qwen3-4B. Because C ORR .preserves the dependency-style format while cor-rupting the referenced previous states, its gap from DAIS indicates that valid support relations among intermediate states are an important part of the observed gains. These ablations address the cen-tral training-time question in DAIS: whether valid previous-state conditioning improves the auxiliary supervision signal. They should not be read as evidence that the model executes the same depen-                             
+
+> Table 4: Accuracy of subtask coverage variants. DAIS preserves the full dependency organization, while the other variants expose only partial or dependency free intermediate states.
+> GDPR MedQA Variant Qwen-7B Qwen-4B Qwen-7B Qwen-4B
+> Base 0.890 0.608 0.850 0.602 Subtask1 0.896 0.622 0.810 0.754 Subtask2 0.899 0.618 0.812 0.746 Subtask3 0.897 0.604 0.814 0.754 IndepQA 0.852 0.568 0.818 0.750
+> DAIS 0.954 0.656 0.872 0.769
+
+dency graph at inference time, because the main evaluation supplies only the original task input and context. Rather, they show that preserving valid support relations during SFT matters beyond target length, ordering cues, dependency-like templates, or intermediate QA exposure alone. 
+
+5.3 Subtask Coverage 
+
+Table 4 examines whether exposing only partial subtask information is sufficient to reproduce the gains of DAIS. All variants use the same original-task final-answer records. The subtask-only vari-ants add records from only one subtask subset, whereas DAIS adds all dependency-conditioned subtask records. We also compare with I NDE -
+
+> P
+
+QA, which exposes intermediate QA states with-out previous-state conditioning. DAIS achieves the best accuracy in all four re-ported settings. On GDPR with Qwen2.5-7B, the individual subtask variants range from 0.896 to 0.899, while DAIS reaches 0.954. On MedQA, adding only one subtask subset helps Qwen3-4B but remains below DAIS; for Qwen2.5-7B, these variants are below the base model. These results suggest that partial subtask exposure can provide signals in some cases, but the gain appears to come not only from revealing intermediate subtask content; connecting and aggregating those states through valid dependencies also matters. 
+
+5.4 Related-Style Component Variants 
+
+Table 5 evaluates controlled component-isolation variants inspired by prior decomposition and rationale-supervision methods. These variants are not full reproductions of prior systems; instead, they isolate supervision components often empha-sized in such work, including high-level decompo-sition plans, subproblem questions, and interme-Table 5: Accuracy of single-component variants on Qwen2.5-7B.                                           
+
+> Method GDPR AIACT MedQA FOLIO
+> Base 0.890 0.408 0.850 0.560 FINAL 0.904 0.404 0.845 0.565 CoT-SFT 0.896 0.408 0.849 0.570 P-only 0.906 0.412 0.794 0.550 A-only 0.902 0.406 0.794 0.545 Q-only 0.896 0.410 0.798 0.555
+> DAIS 0.954 0.486 0.872 0.580 10% 25% 50% 100%
+> Training Data Fraction
+> 86
+> 88
+> 90
+> 92
+> 94
+> 96
+> Accuracy (%)
+> GDPR
+> 10% 25% 50% 100%
+> Training Data Fraction
+> 80
+> 82
+> 84
+> 86
+> 88
+> 90 MedQA
+> Base SFT CoT DAIS
+
+Figure 4: Sample efficiency on GDPR and MedQA with Qwen2.5-7B. The dashed line denotes the untuned base model. 
+
+diate answers. Using the same original instances and Qwen2.5-7B backbone, all variants keep the original-task final-answer records fixed and mod-ify only the additional DAIS-derived records. P- 
+
+> ONLY
+
+retains only the overall plan, represented as the ordered list of subtask names for the instance. 
+
+> A
+
+-ONLY retains only the intermediate answer com-ponents. Q-ONLY retains only the local subtask questions. We compare these variants with stan-dard baselines and the full DAIS construction. The component variants remain below full DAIS, supporting the value of coupling local QA signals with valid previous-state conditioning. 
+
+5.5 Data Efficiency 
+
+Figure 4 studies data efficiency with 10%, 25%, 50%, and 100% of the original supervised instances. We compare DAIS with SFT and CoT baselines on Qwen2.5-7B. For DAIS, each sampled instance contributes its dependency-conditioned subtask records and the original-task final-answer record. On GDPR, DAIS is strongest at every fraction, reaching 0.896 with 10% of the original instances and 0.942 with 25%. On MedQA, the gains are more gradual: DAIS surpasses the base model from 25% onward and achieves the best full-data result. These results suggest improved efficiency with respect to original supervised instances, espe-cially on GDPR. However, because DAIS expands each instance into multiple records and additional supervision tokens, the comparison does not con-trol for token budget, optimization steps, or training compute. 
+
+6 Discussion 
+
+Ablations against I NDEP QA, O RDERED , M ATCH ,and C ORR . indicate that DAIS is not explained only by target length, ordering cues, dependency-like templates, or intermediate QA exposure. The results support valid previous-state conditioning as a useful training-time supervision signal. Be-cause the main evaluation uses direct final-answer inference without teacher rationales, gold interme-diate states, or external decomposition modules, these findings demonstrate improved SFT target organization and final-answer accuracy, but do not establish that the model faithfully executes an ex-plicit dependency graph internally. DAIS also introduces additional target construc-tion and expands each retained instance into mul-tiple SFT records. At the 1,000-example scale, the preprocessing overhead on MedQA remained moderate: CoT generation took about 1.7 hours and subtask decomposition about 4.6 hours. The low-resource curves further suggest that fewer orig-inal supervised instances may suffice in domains such as GDPR. However, these comparisons eval-uate efficiency with respect to original instances rather than matched token budget, record count, wall-clock training time, or total training cost. 
+
+7 Conclusion 
+
+In this work, we introduced Dependency-Aware Intermediate QA Supervision (DAIS), a framework that integrates dependency-conditioned intermedi-ate QA into supervised fine-tuning. Through ex-periments across policy compliance, medical QA, and logical reasoning benchmarks, we show that DAIS consistently improves final-answer accuracy over answer-only, flat CoT, and independent-QA baselines. Our results indicate that intermediate text alone is insufficient: effective supervision should also specify how earlier local conclusions support later decisions. Ablations confirm that valid previous-state conditioning contributes be-yond target length, ordering cues, and QA format-ting. Future work may further examine inference-time faithfulness and more scalable construction of dependency-aware supervision. 
+
+Limitations 
+
+Generated supervision artifacts. DAIS de-pends on generated or automatically constructed supervision artifacts, including teacher-generated rationales or CoT traces, intermediate QA states, subtask decompositions, role labels, and depen-dency links. These artifacts may contain hallu-cinated evidence, unsupported subtasks, incom-plete intermediate states, mislabeled roles, or in-correct dependency relations. They are also not guaranteed to be optimal or faithful descriptions of the model’s internal computation. Stronger teach-ers, better prompts, human annotation, filtering, or iterative refinement may produce higher-quality dependency-conditioned targets. 
+
+Filtering and retained-set bias. The filtering step changes the effective training distribution. Al-though all controlled variants use the same retained instances, so target-format comparisons remain controlled, the retained set may be biased toward examples for which the teacher can produce gold-consistent rationales. Future work should report retention rates, label-wise retention, and the prop-erties of discarded examples. 
+
+SFT-only setting. Our study focuses on super-vised fine-tuning in order to isolate the effect of dependency-conditioned target organization. This controlled setting allows us to compare final-only supervision, flat CoT supervision, independent in-termediate QA, corrupted dependency supervision, and dependency-conditioned supervision under the same likelihood objective. However, it also lim-its the scope of our conclusions. We do not com-bine DAIS with reinforcement learning, prefer-ence optimization, rejection sampling, self-training, inference-time search, or verifier-guided refine-ment. These methods may further improve per-formance, but they introduce additional factors be-yond the controlled SFT comparison studied here. 
+
+Main-inference setting and structured-inference extension. In the main experiments, DAIS does not add inference-time inputs or decoding steps: the model receives only the original task input and optional context. The additional cost is primarily in target construction and SFT data expansion. A different deployment mode could ask the model to generate DAIS-style intermediate states at test time and then condition later predictions on generated states. Such structured inference would introduce additional latency and error-propagation risks, be-cause early-state mistakes could affect later local decisions. We do not evaluate this deployment set-ting in the main results. 
+
+Evaluation scope. Our evaluation is limited to se-lected policy-compliance, medical QA, multi-hop, and logical-reasoning benchmarks. These exper-iments primarily measure final-answer accuracy and selected properties of generated intermediate traces. They do not prove that intermediate QA states faithfully reflect the model’s internal compu-tation, nor do they guarantee that the same gains will hold in domains where teacher rationales, sub-task decompositions, or dependency structures are less reliable. The role labels used in our data are task-conditioned supervision markers rather than universal reasoning primitives. 
+
+Answer matching. We use a fixed LLM-based answer matcher to normalize model generations into canonical task labels or answer options when deterministic parsing is insufficient. This matcher does not create benchmark labels, but it may in-troduce evaluator-model bias or prompt sensitiv-ity. We therefore use the same matcher and rubric across methods and count ambiguous outputs as incorrect. 
+
+Ethical Considerations 
+
+DAIS is evaluated on tasks involving policy com-pliance, legal or regulatory reasoning, medical QA, multi-hop QA, and logical reasoning. Models trained with this framework should be used for research analysis or decision support rather than as substitutes for qualified legal, regulatory, or medi-cal experts. Structured intermediate states may ap-pear coherent even when they contain unsupported, incomplete, or incorrect reasoning. The supervision artifacts used by DAIS are con-structed with the help of large language models, including rationales, intermediate QA states, role labels, and dependency links. These artifacts may inherit hallucinations, biases, or unsupported as-sumptions from the teacher model or generation pipeline. Before public release or downstream use, generated supervision data should be audited and documented, including provenance, prompting pro-cedures, filtering criteria, known noise sources, and intended-use restrictions. We use a fixed LLM-based answer matcher for final-answer extraction and normalization, and may also use LLMs for auxiliary analyses such as check-ing intermediate-state quality or categorizing error types. The matcher does not create benchmark la-bels; it maps model outputs to canonical task labels or answer options and compares them with the gold answers. Nevertheless, LLM-based matching can reflect evaluator-model biases, rubric sensitivity, or prompt sensitivity. We therefore use the same matcher, decoding setting, and rubric across meth-ods, count ambiguous or incompatible outputs as incorrect, and treat such evaluation as a limitation of the current study. Finally, dependency-aware intermediate traces should not be interpreted as certified explanations of model internals. They are supervision and anal-ysis artifacts designed to improve and diagnose model behavior, not guarantees of faithful reason-ing. Users should avoid over-trusting a model’s output solely because it provides a structured inter-mediate trace. 
+
+References 
+
+Sandhini Agarwal, Lama Ahmad, Jason Ai, Sam Alt-man, Andy Applebaum, Edwin Arbus, Rahul K Arora, Yu Bai, Bowen Baker, Haiming Bao, and 1 others. 2025. gpt-oss-120b & gpt-oss-20b model card. arXiv preprint arXiv:2508.10925 .Maciej Besta, Nils Blach, Ales Kubicek, Robert Gersten-berger, Michal Podstawski, Lukas Gianinazzi, Joanna Gajda, Tomasz Lehmann, Hubert Niewiadomski, Pi-otr Nyczyk, and 1 others. 2024. Graph of thoughts: Solving elaborate problems with large language mod-els. In Proceedings of the AAAI conference on artifi-cial intelligence , volume 38, pages 17682–17690. Karl Cobbe, Vineet Kosaraju, Mohammad Bavarian, Mark Chen, Heewoo Jun, Lukasz Kaiser, Matthias Plappert, Jerry Tworek, Jacob Hilton, Reiichiro Nakano, and 1 others. 2021. Training verifiers to solve math word problems, 2021. URL https://arxiv. org/abs/2110.14168 , 9. DeepSeek-AI. 2026. Deepseek-v4: Towards highly efficient million-token context intelligence. Jay DeYoung, Sarthak Jain, Nazneen Fatema Rajani, Eric Lehman, Caiming Xiong, Richard Socher, and Byron C Wallace. 2020. Eraser: A benchmark to evaluate rationalized nlp models. In Proceedings of the 58th annual meeting of the association for computational linguistics , pages 4443–4458. Luyu Gao, Aman Madaan, Shuyan Zhou, Uri Alon, Pengfei Liu, Yiming Yang, Jamie Callan, and Gra-ham Neubig. 2023. Pal: Program-aided language models. In International conference on machine learning , pages 10764–10799. PMLR. Simeng Han, Hailey Schoelkopf, Yilun Zhao, Zhenting Qi, Martin Riddell, Luke Benson, Lucy Sun, Eka-terina Zubova, Yujie Qiao, Matthew Burtell, David Peng, Jonathan Fan, Yixin Liu, Brian Wong, Mal-colm Sailor, Ansong Ni, Linyong Nan, Jungo Ka-sai, Tao Yu, and 7 others. 2022. Folio: Natural lan-guage reasoning with first-order logic. arXiv preprint arXiv:2209.00840 .Cheng-Yu Hsieh, Chun-Liang Li, Chih-Kuan Yeh, Hootan Nakhost, Yasuhisa Fujii, Alex Ratner, Ranjay Krishna, Chen-Yu Lee, and Tomas Pfister. 2023. Dis-tilling step-by-step! outperforming larger language models with less training data and smaller model sizes. In Findings of the Association for Computa-tional Linguistics: ACL 2023 , pages 8003–8017. Wenbin Hu, Haoran Li, Huihao Jing, Qi Hu, Ziqian Zeng, Sirui Han, Xu Heli, Tianshu Chu, Peizhao Hu, and Yangqiu Song. 2025. Context reasoner: Incen-tivizing reasoning capability for contextualized pri-vacy and safety compliance via reinforcement learn-ing. In Proceedings of the 2025 Conference on Em-pirical Methods in Natural Language Processing ,pages 865–883. Sarthak Jain and Byron C Wallace. 2019. Attention is not explanation. In Proceedings of the 2019 Confer-ence of the North American Chapter of the Associ-ation for Computational Linguistics: Human Lan-guage Technologies, Volume 1 (Long and Short Pa-pers) , pages 3543–3556. Di Jin, Eileen Pan, Nassim Oufattole, Wei-Hung Weng, Hanyi Fang, and Peter Szolovits. 2020. What dis-ease does this patient have? a large-scale open do-main question answering dataset from medical exams. 
+
+arXiv preprint arXiv:2009.13081 .Tushar Khot, Harsh Trivedi, Matthew Finlayson, Yao Fu, Kyle Richardson, Peter Clark, and Ashish Sab-harwal. 2022. Decomposed prompting: A modular approach for solving complex tasks. arXiv preprint arXiv:2210.02406 .Takeshi Kojima, Shixiang Shane Gu, Machel Reid, Yu-taka Matsuo, and Yusuke Iwasawa. 2022. Large lan-guage models are zero-shot reasoners. Advances in neural information processing systems , 35:22199– 22213. Woosuk Kwon, Zhuohan Li, Siyuan Zhuang, Ying Sheng, Lianmin Zheng, Cody Hao Yu, Joseph E. Gonzalez, Hao Zhang, and Ion Stoica. 2023. Effi-cient memory management for large language model serving with pagedattention. In Proceedings of the ACM SIGOPS 29th Symposium on Operating Systems Principles .Tamera Lanham, Anna Chen, Ansh Radhakrishnan, Benoit Steiner, Carson Denison, Danny Hernandez, Dustin Li, Esin Durmus, Evan Hubinger, Jackson Kernion, and 1 others. 2023. Measuring faithful-ness in chain-of-thought reasoning. arXiv preprint arXiv:2307.13702 .Tao Lei, Regina Barzilay, and Tommi Jaakkola. 2016. Rationalizing neural predictions. In Proceedings of the 2016 conference on empirical methods in natural language processing , pages 107–117. Haoran Li, Wenbin Hu, Huihao Jing, Yulin Chen, Qi Hu, Sirui Han, Tianshu Chu, Peizhao Hu, and Yangqiu Song. 2025. Privaci-bench: Evaluating privacy with contextual integrity and legal compliance. In Pro-ceedings of the 63rd Annual Meeting of the Associa-tion for Computational Linguistics (Volume 1: Long Papers) , pages 10544–10559. Hunter Lightman, Vineet Kosaraju, Yuri Burda, Harri-son Edwards, Bowen Baker, Teddy Lee, Jan Leike, John Schulman, Ilya Sutskever, and Karl Cobbe. 2024. Let’s verify step by step. In International Conference on Learning Representations , volume 2024, pages 39578–39601. Lucie Charlotte Magister, Jonathan Mallinson, Jakub Adamek, Eric Malmi, and Aliaksei Severyn. 2023. Teaching small language models to reason. In Pro-ceedings of the 61st Annual Meeting of the Associa-tion for Computational Linguistics (Volume 2: Short Papers) , pages 1773–1781. MiniMax-AI. 2026. MiniMax-M2.7. https:// github.com/MiniMax-AI/MiniMax-M2.7 . GitHub repository. Maxwell Nye, Anders Johan Andreassen, Guy Gur-Ari, Henryk Michalewski, Jacob Austin, David Bieber, David Dohan, Aitor Lewkowycz, Maarten Bosma, David Luan, and 1 others. 2021. Show your work: Scratchpads for intermediate computation with lan-guage models. Ofir Press, Muru Zhang, Sewon Min, Ludwig Schmidt, Noah A Smith, and Mike Lewis. 2023. Measuring and narrowing the compositionality gap in language models. In Findings of the Association for Computa-tional Linguistics: EMNLP 2023 , pages 5687–5711. Qwen, :, An Yang, Baosong Yang, Beichen Zhang, Binyuan Hui, Bo Zheng, Bowen Yu, Chengyuan Li, Dayiheng Liu, Fei Huang, Haoran Wei, Huan Lin, Jian Yang, Jianhong Tu, Jianwei Zhang, Jianxin Yang, Jiaxi Yang, Jingren Zhou, and 25 oth-ers. 2025. Qwen2.5 technical report. Preprint ,arXiv:2412.15115. GLM Team, Aohan Zeng, Xin Lv, Qinkai Zheng, Zhenyu Hou, Bin Chen, Chengxing Xie, Cunxiang Wang, Da Yin, Hao Zeng, Jiajie Zhang, Kedong Wang, Lucen Zhong, Mingdao Liu, Rui Lu, Shulin Cao, Xiaohan Zhang, Xuancheng Huang, Yao Wei, and 152 others. 2025. Glm-4.5: Agentic, reason-ing, and coding (arc) foundation models. Preprint ,arXiv:2508.06471. Miles Turpin, Julian Michael, Ethan Perez, and Samuel Bowman. 2023. Language models don’t always say what they think: Unfaithful explanations in chain-of-thought prompting. Advances in Neural Information Processing Systems , 36:74952–74965. Jonathan Uesato, Nate Kushman, Ramana Kumar, Fran-cis Song, Noah Siegel, Lisa Wang, Antonia Creswell, Geoffrey Irving, and Irina Higgins. 2022. Solv-ing math word problems with process-and outcome-based feedback. arXiv preprint arXiv:2211.14275 .Xuezhi Wang, Jason Wei, Dale Schuurmans, Quoc Le, Ed Chi, Sharan Narang, Aakanksha Chowdhery, and Denny Zhou. 2022. Self-consistency improves chain of thought reasoning in language models. arXiv preprint arXiv:2203.11171 .Jason Wei, Xuezhi Wang, Dale Schuurmans, Maarten Bosma, Fei Xia, Ed Chi, Quoc V Le, Denny Zhou, and 1 others. 2022. Chain-of-thought prompting elic-its reasoning in large language models. Advances in neural information processing systems , 35:24824– 24837. An Yang, Anfeng Li, Baosong Yang, Beichen Zhang, Binyuan Hui, Bo Zheng, Bowen Yu, Chang Gao, Chengen Huang, Chenxu Lv, Chujie Zheng, Day-iheng Liu, Fan Zhou, Fei Huang, Feng Hu, Hao Ge, Haoran Wei, Huan Lin, Jialong Tang, and 41 others. 2025. Qwen3 technical report. Preprint ,arXiv:2505.09388. Shunyu Yao, Dian Yu, Jeffrey Zhao, Izhak Shafran, Tom Griffiths, Yuan Cao, and Karthik Narasimhan. 2023. Tree of thoughts: Deliberate problem solving with large language models. Advances in neural information processing systems , 36:11809–11822. Shunyu Yao, Jeffrey Zhao, Dian Yu, Nan Du, Izhak Shafran, Karthik Narasimhan, and Yuan Cao. 2022. React: Synergizing reasoning and acting in language models. arXiv preprint arXiv:2210.03629 .Eric Zelikman, Yuhuai Wu, Jesse Mu, and Noah Good-man. 2022. Star: Bootstrapping reasoning with rea-soning. Advances in Neural Information Processing Systems , 35:15476–15488. Denny Zhou, Nathanael Schärli, Le Hou, Jason Wei, Nathan Scales, Xuezhi Wang, Dale Schuurmans, Claire Cui, Olivier Bousquet, Quoc Le, and 1 oth-ers. 2022. Least-to-most prompting enables com-plex reasoning in large language models, 2023. URL https://arxiv. org/abs/2205.10625 .A Experimental Details 
+
+This section provides additional implementation details for data construction, fine-tuning, model deployment, and evaluation. Dataset sources and licenses are summarized in Table 6, and model sources and licenses are summarized in Table 7. All construction models are used only to build su-pervised training targets. At evaluation time, no teacher rationale, gold intermediate state, or exter-nal decomposition module is provided. 
+
+A.1 Datasets 
+
+We evaluate on four reasoning datasets covering le-gal or policy-compliance reasoning, medical ques-tion answering, and natural-language logical rea-soning. Dataset sources are summarized in Table 6. For the privacy and policy-compliance domain, we use the GDPR and AIACT subsets from Privaci-Bench. Privaci-Bench also contains a HIPAA sub-set, but we do not include it in our main experi-ments because it contained only slightly more than 200 examples at the time of our study. This size was too small for constructing a label-balanced test set and a controlled fine-tuning split comparable to the GDPR and AIACT settings. We therefore focus on GDPR and AIACT, which provide suffi-ciently large compliance-reasoning pools and cover two related but distinct regulatory domains. For GDPR, the original pool contains 3,137 examples; for AIACT, the original pool contains 3,000 exam-ples. The GDPR dataset evaluates whether a described event is permitted, prohibited, or unrelated under GDPR-style privacy compliance. The task requires identifying relevant actors, data types, processing purposes, and applicable regulatory obligations before producing the final norm judgment. The AIACT dataset follows the same norm-judgment format, but focuses on AI-system compliance sce-narios, such as AI-system roles, deployment con-texts, biometric or high-risk use cases, and applica-ble policy constraints. For both GDPR and AIACT, we randomly sample a label-balanced test set of 500 examples and then sample 1,000 training ex-amples from the remaining pool. MedQA is a medical multiple-choice question answering benchmark. Each example contains a clinical question, answer options, and a gold an-swer. Solving these questions often requires ex-tracting clinical evidence, mapping symptoms or findings to medical concepts, eliminating incom-patible options, and selecting the final diagnosis, treatment, or management decision. We use 1,000 training examples and 500 test examples. FOLIO is a natural-language logical reasoning benchmark with first-order-logic-style dependen-cies. Each example contains natural-language premises, a conclusion, and a label indicating whether the conclusion is True , False , or Unknown .The task requires retrieving relevant premises, com-posing local deductions, and determining the final veracity label. We use 1,000 training examples and 200 test examples. All sampled splits are fixed before trace con-struction and are shared across all target-format variants. Teacher-rationale filtering and trace con-struction are applied only to the training split. After filtering, all controlled supervised variants for the same dataset and backbone use the same retained training instances, original inputs, and gold final labels; they differ only in how the supervision is constructed. 
+
+A.2 Trace Construction 
+
+The intermediate QA records used for supervised fine-tuning are constructed through API calls. For each training instance, we first generate a candidate teacher rationale with DeepSeek-V4-Flash . The candidate is then validated by DeepSeek-V4-Pro 
+
+for final-answer correctness and rationale consis-tency. A rationale is considered invalid if its pre-dicted answer does not match the gold answer, if it contains unsupported non-trivial reasoning steps, or if it includes explicit contradictions or support for an alternative answer. If the initial candidate fails validation, we regenerate the rationale with 
+
+DeepSeek-V4-Pro for up to two additional rounds and retain the first valid candidate. All API calls used for trace construction are decoded with tem-perature 0.7.After obtaining a valid teacher rationale, we use DeepSeek-V4-Pro for subtask-level QA con-struction. For GDPR and AIACT, we use a pre-defined compliance-oriented schema and gener-ate local QA states for each schema stage, in-cluding legal element extraction, legal regulation mapping, and compliance reasoning. For MedQA and FOLIO, we apply the full decomposition pipeline: DeepSeek-V4-Pro extracts two to five decision-relevant subtasks, aligns them with ra-tionale spans where applicable, derives interme-diate answers, and reconstructs local QA states. We then induce dataset-level schemas for MedQA Table 6: Datasets, sources and licenses used in this work.       
+
+> Dataset URL
+> PrivaCI-Bench-gdpr https://github.com/HKUST-KnowComp/PrivaCI-Bench PrivaCI-Bench-AIACT https://github.com/HKUST-KnowComp/PrivaCI-Bench PrivaCI-Bench-sft dataset https://github.com/HKUST-KnowComp/PrivaCI-Bench folio https://github.com/Yale-LILY/FOLIO medqa https://github.com/jind11/MedQA
+
+and FOLIO through LLM-assisted clustering with 
+
+DeepSeek-V4-Pro , followed by manual auditing, merging, and relabeling. For DAIS, dependency conditioning is imple-mented by serializing previous subtask states into the input of later subtask records. The first sub-task record receives only the original task input, optional context, and the current subtask ques-tion. Later subtask records additionally receive a Previous states: block containing earlier sub-task questions, inputs, reasoning when available, and answers. The final-answer record remains the original final-answer task and does not receive con-structed intermediate states. The I NDEP QA control uses the same local subtask records as DAIS but removes the Previous states: context from later subtask inputs. 
+
+A.3 Fine-tuning Setup 
+
+All supervised fine-tuning experiments are con-ducted with LLaMA-Factory. For controlled com-parisons, all variants for the same task and back-bone use the same retained training instances, orig-inal task inputs, gold final labels, optimization bud-get, and sequence-length limits. They differ only in the supervised target construction. FINAL -SFT uses one final-answer record per re-tained instance. C OT-SFT uses one record whose output is the flat teacher rationale followed by the final answer. I NDEP QA and DAIS are both materi-alized as stage-level subtask records plus one final-answer record. I NDEP QA uses the same local sub-task records as DAIS but removes the Previous states: context from later subtask inputs. DAIS keeps this previous-state context for later interme-diate subtasks. For both methods, the final-answer record uses only the original task input and gold final label. All fine-tuned variants are optimized with the standard autoregressive SFT objective. In instruc-tion tuning, the loss is applied to the output side of each instruction–input–output record. Train-ing hyperparameters are held fixed across target-format variants for each backbone and task, so that the comparisons isolate the effect of the supervi-sion format rather than changes in optimization. Fine-tuning is performed with LLaMA-Factory on the mixed Ascend environment described in Ap-pendix A.4, with device allocation determined by model size and memory requirements. 
+
+A.4 Inference and Model Deployment 
+
+We use vLLM (Kwon et al., 2023) for local model inference and deployment. The experiments are run on a mixed hardware environment consisting of 32GB Ascend 910B4 devices, 64GB Ascend 910B3 devices, and 32GB NVIDIA Tesla V100 PCIe devices. We allocate devices according to model size and memory requirements. For models with more than 70 billion parame-ters, we use eight 32GB Ascend 910B4 devices with tensor parallelism. This configuration pro-vides 256GB aggregate device memory before run-time overhead. For 32B-scale models, including Qwen2.5-32B, Qwen3-32B, QwQ-32B, and DS-Qwen-32B, we use two 32GB Ascend 910B4 de-vices with tensor parallelism and keep the batch size and maximum generation length within the available memory budget. For 14B-scale models, such as Qwen2.5-14B, we use one 64GB Ascend 910B3 device. For 3B–9B-scale models, includ-ing LLaMA3.1-8B, Qwen2.5-7B, DS-Qwen-7B, and ChatGLM4-9B, we use one 32GB Ascend 910B4 device. For retrieval-related components, such as bge-m3 and bge-reranker-v2-m3 , we use one 32GB NVIDIA Tesla V100 PCIe device. The allocation follows the approximate bf16/fp16 parameter footprint of each model size before KV cache and framework overhead. Accordingly, large models are deployed with tensor parallelism, and batch size and maximum generation length are kept within the available Table 7: Models, sources and licenses used in this work.                               
+
+> Model URL Licenses
+> Qwen2.5-3B https://huggingface.co/Qwen/Qwen2.5-3B-Instruct Apache License 2.0 Qwen2.5-7B https://huggingface.co/Qwen/Qwen2.5-7B-Instruct Apache License 2.0 Qwen2.5-14B https://huggingface.co/Qwen/Qwen2.5-14B-Instruct Apache License 2.0 Qwen2.5-72B https://huggingface.co/Qwen/Qwen2.5-72B-Instruct Qwen license Qwen3-4B https://huggingface.co/Qwen/Qwen3-4B Apache License 2.0 Qwen3-8B https://huggingface.co/Qwen/Qwen3-8B Apache License 2.0 Qwen3-14B https://huggingface.co/Qwen/Qwen3-14B Apache License 2.0 GPT-OSS-120B https://huggingface.co/openai/gpt-oss-120b Apache License 2.0 MiniMax-M27 https://huggingface.co/MiniMaxAI/MiniMax-M2.7 NON-COMMERCIAL LICENSE GLM-4.7 https://huggingface.co/zai-org/GLM-4.7 MIT License DeepSeek-V4-pro https://www.deepseek.com/ DEEPSEEK LICENSE DeepSeek-V4-Flash https://www.deepseek.com/ DEEPSEEK LICENSE context-reasoner-sft https://huggingface.co/hubin/context-reasoner-sft_open_thinker Qwen license context-reasoner-rl https://huggingface.co/hubin/context-reasoner-ppo_open _thinker_acc_reward Qwen license
+
+memory budget. 
+
+A.5 Decoding and Evaluation 
+
+At evaluation time, each model receives only the original task input and optional context. No teacher rationale, gold intermediate state, or external de-composition module is provided to the evaluated model. The main evaluation uses the final-answer task format: the model is prompted to produce the final answer directly. For methods or reference sys-tems that produce rationales or structured text, the final prediction is extracted from the generated out-put using the same normalization procedure across methods. We use a fixed LLM-based answer matcher to normalize candidate outputs. For each test exam-ple, the matcher receives the original task input, optional context or answer options, the gold final answer, and the candidate model output. It iden-tifies the candidate’s final prediction, maps it to the canonical task label or option when possible, and compares it with the gold answer. Ambiguous outputs, missing answers, or outputs containing multiple incompatible final answers are counted as incorrect. The same matcher model, evaluation prompt, deterministic decoding setting, and deci-sion rubric are used across methods within each task. The matcher is used for answer extraction and normalization rather than for creating benchmark labels. We report final-answer accuracy for all tasks. For multiple-choice tasks, a prediction is correct if the normalized final option or answer text matches the gold option. For label-style tasks, a prediction is correct if the normalized final label matches the gold label, after accounting for task-specific ver-balizations such as permit /prohibit /unrelated 
+
+or True /False /Unknown .For API-based trace construction, we use tem-perature 0.7. For local model generation, decoding settings are held fixed across methods within each task and backbone. When evaluating generations that explicitly request long-form reasoning, we use stochastic decoding with temperature 1.0 and top-
+
+p = 1 .0 to allow complete reasoning traces. For other local model outputs, we use deterministic de-coding with temperature 0 and top-p = 1 .0. The LLM-based answer matcher is run with determin-istic decoding. Each experiment is repeated three times, and all reported scores are averaged over the three runs. 
+
+A.6 Reproducibility Notes 
+
+All controlled comparisons use the same sampled split and the same retained training instances for a given dataset and backbone. Teacher-rationale filtering and trace construction are applied only to the training split. After this step, all controlled su-pervised variants are trained on the same retained instances, original task inputs, and gold final labels; Table 8: Accuracy comparison on MedQA and Folio benchmarks for 7B variants, larger reference models, and context-reasoner systems.                  
+
+> Group Model MedQA Folio
+> Qwen-7B variants
+> Qwen2.5-7B (Base) 0.850 0.560 Qwen2.5-7B + CoT 0.845 0.565
+> Qwen2.5-7B + DAIS 0.872 0.580
+> Reference models
+> Qwen2.5-72B 0.898 0.68 GLM-4.7 0.565 0.565 MiniMax-M27 0.790 0.625 GPT-OSS-120B 0.790 0.785
+
+they differ only in the supervised target construc-tion. Training configuration, decoding settings, evaluation prompts, answer extraction, and evalua-tion scripts are kept fixed across target-format vari-ants. Dataset and model sources, together with li-cense or terms-of-use information, are documented in Tables 6 and 7. 
+
+B Additional Experimental Results 
+
+B.1 Reference Comparisons 
+
+Table 8 reports additional reference comparisons on MedQA and FOLIO. These results compare Qwen2.5-7B variants with larger reference models. They are not controlled target-format comparisons, because the reference models differ in scale and training source. 
+
+B.2 Full Controlled Results 
+
+Table 9 reports the full controlled results across four benchmarks and four Qwen backbones. Scores are averaged over three runs, and the subscripted values denote standard deviations. 
+
+B.3 Full Data-Efficiency Results 
+
+Tables 10 and 11 report the full numerical results for the low-resource data-efficiency analysis. We evaluate Qwen2.5-7B on GDPR and MedQA us-ing different fractions of the original supervised training instances. The untuned B ASE model is repeated across fractions as a reference, while the other methods are fine-tuned with the correspond-ing amount of original data. On GDPR, DAIS achieves the best score at ev-ery training fraction. With only 25% of the train-ing data, DAIS reaches 0.942, which is already substantially higher than the full-data F INAL -SFT and C OT-SFT baselines. On MedQA, the pat-tern is more conservative: DAIS ties C OT-SFT among fine-tuned methods at 10%, remains be-low the untuned base at that point, and becomes the best method from 25% onward. These results suggest that dependency-conditioned intermediate supervision can improve efficiency with respect to original supervised instances, with a stronger effect on the policy-compliance task than on the medical QA task. They should not be interpreted as equal-budget results in total records, tokens, wall-clock time, or optimization steps. 
+
+C Construction Prompts and Data Examples 
+
+This section provides the construction prompts and representative data examples used in our super-vised target construction. We include the essen-tial prompt templates rather than implementation-specific file paths. All examples are shortened for readability; the complete serialized records are pro-vided in the supplementary material. For readabil-ity, the MedQA examples are translated into En-glish, while the constructed training records pre-serve the original dataset language. The construction process contains both LLM-based and deterministic components. Teacher ratio-nales, subtask decompositions, and schema propos-als are generated with LLM prompts. Target serial-ization, previous-state insertion, and ablation vari-ants are implemented deterministically. For GDPR and AIACT, we use a predefined compliance-oriented schema because the two datasets share a stable legal-compliance reasoning structure. For MedQA and FOLIO, we induce dataset-level schemas from generated subtasks and manually audit the resulting categories. All supervised variants are represented as instruction–input–output records. The main dif-ference between I NDEP QA and DAIS is the treat-ment of previous intermediate states. Both for-mats expose local QA states, but only DAIS inserts earlier subtask outputs into the input of later intermediate subtasks. The final-answer record remains the original final-answer task. The main markers include [Stage i | label] ,
+
+Current subtask question: , Current subtask input: , Previous states: , Answer: , and Final option: . Table 17 summarizes the resulting target-format difference. DAIS makes support re-lations visible through input serialization rather than through explicit dependency-edge prediction. Therefore, the dependency structure should be in-Table 9: Accuracy on four benchmarks across four Qwen backbones. I NDEP QA removes previous-state conditioning, and CR-D ATA SFT is an external-data reference for policy tasks. Bold marks the best score in each column; averages are over backbones. 
+
+Benchmark Method Qwen2.5-3B Qwen2.5-7B Qwen3-4B Qwen3-8B Average 
+
+GDPR BASE 0.756 ±0.005 0.890 ±0.005 0.608 ±0.005 0.768 ±0.005 0.756 ±0.005 
+
+FINAL -SFT 0.788 ±0.003 0.904 ±0.003 0.626 ±0.003 0.770 ±0.003 0.772 ±0.003 
+
+COT-SFT 0.752 ±0.006 0.896 ±0.006 0.630 ±0.006 0.770 ±0.006 0.762 ±0.006 
+
+INDEP QA 0.686 ±0.009 0.852 ±0.009 0.568 ±0.009 0.750 ±0.009 0.714 ±0.009 
+
+CR-D ATA SFT 0.724 ±0.005 0.912 ±0.005 0.652 ±0.005 0.712 ±0.005 0.750 ±0.005 
+
+DAIS (O URS ) 0.798 ±0.005 0.954 ±0.005 0.656 ±0.005 0.786 ±0.005 0.799 ±0.005 
+
+AIACT BASE 0.356 ±0.005 0.408 ±0.005 0.628 ±0.005 0.700 ±0.005 0.523 ±0.005 
+
+FINAL -SFT 0.364 ±0.003 0.404 ±0.003 0.632 ±0.003 0.724 ±0.003 0.531 ±0.003 
+
+COT-SFT 0.360 ±0.006 0.408 ±0.006 0.636 ±0.006 0.726 ±0.006 0.533 ±0.006 
+
+INDEP QA 0.352 ±0.009 0.418 ±0.009 0.574 ±0.009 0.612 ±0.009 0.489 ±0.009 
+
+CR-D ATA SFT 0.396 ±0.005 0.382 ±0.005 0.654 ±0.005 0.692 ±0.005 0.531 ±0.005 
+
+DAIS (O URS ) 0.472 ±0.005 0.486 ±0.005 0.658 ±0.005 0.738 ±0.005 0.589 ±0.005 
+
+MedQA BASE 0.752 ±0.005 0.850 ±0.005 0.602 ±0.005 0.855 ±0.005 0.765 ±0.005 
+
+FINAL -SFT 0.738 ±0.003 0.845 ±0.003 0.732 ±0.003 0.848 ±0.003 0.791 ±0.003 
+
+COT-SFT 0.752 ±0.006 0.849 ±0.006 0.758 ±0.006 0.858 ±0.006 0.804 ±0.006 
+
+INDEP QA 0.722 ±0.009 0.818 ±0.009 0.750 ±0.009 0.850 ±0.009 0.785 ±0.009 
+
+DAIS (O URS ) 0.764 ±0.005 0.872 ±0.005 0.769 ±0.005 0.856 ±0.005 0.815 ±0.005 
+
+FOLIO BASE 0.470 ±0.018 0.560 ±0.018 0.710 ±0.018 0.835 ±0.018 0.644 ±0.018 
+
+FINAL -SFT 0.475 ±0.005 0.565 ±0.005 0.795 ±0.005 0.795 ±0.005 0.658 ±0.005 
+
+COT-SFT 0.485 ±0.013 0.570 ±0.013 0.795 ±0.013 0.805 ±0.013 0.664 ±0.013 
+
+INDEP QA 0.473 ±0.003 0.565 ±0.003 0.785 ±0.003 0.795 ±0.003 0.655 ±0.003 
+
+DAIS (O URS ) 0.500 ±0.005 0.580 ±0.005 0.815 ±0.005 0.840 ±0.005 0.684 ±0.005 
+
+Table 10: Data efficiency on GDPR with Qwen2.5-7B. DAIS achieves the best result at every training fraction and reaches strong performance with substantially less training data. 
+
+Method 10% 25% 50% 100% 
+
+Base 0.890 0.890 0.890 0.890 FINAL-SFT 0.888 0.866 0.862 0.904 CoT-SFT 0.892 0.896 0.894 0.896 DAIS 0.896 0.942 0.950 0.954 
+
+Table 11: Low-resource evaluation on MedQA with Qwen2.5-7B. Dependency-aware supervision (DAIS) consistently outperforms final-only and unordered inter-mediate supervision across all training fractions. 
+
+Method 10% 25% 50% 100% 
+
+Base 0.850 0.850 0.850 0.850 SFT 0.816 0.812 0.828 0.845 CoT 0.832 0.832 0.838 0.849 DAIS 0.832 0.852 0.854 0.872 
+
+terpreted as a target-construction device for SFT, not as a separately supervised graph parser. The following examples instantiate this format for GDPR, MedQA, and FOLIO. They cover the three main reasoning domains in our experiments. AIACT follows the same compliance-oriented tar-get structure as GDPR and is summarized in Ta-ble 21. Table 21 reports representative subtask schemas for all four datasets. Unlike a pure schema table, it also shows the typical previous-state outputs that are inserted into the input of later DAIS subtask records. Finally, several construction components are implemented procedurally rather than as separate prompts. Rationale-span alignment is represented through the subtask input and reasoning fields rather than character-offset annotations. Interme-diate answers are emitted as subtask-answer fields during decomposition or are derived from struc-tured compliance fields for GDPR and AIACT. De-pendency conditioning is implemented by serializ-ing previous states into later subtask inputs, not by training the model to predict explicit dependency-edge tokens. The final-answer record remains the Table 12: Teacher-rationale generation prompt. The same general instruction is adapted to the answer format of each dataset. 
+
+Field Prompt specification Model DeepSeek-V4-Flash for the first candidate rationale. Decoding Temperature 0.7 for construction-time API calls. General prompt Generate a concise step-by-step rationale and a final answer from the original task input, optional context or evidence, and answer options when available. Use only the supplied information. The rationale should be grounded in the input, decomposable into local reasoning steps, and free of unsupported facts or stylistic filler. Policy-compliance format Return a rationale explaining the relevant facts, applicable legal or policy conditions, and the final norm judgment. The final answer must be one of permit , prohibit , or unrelated .MedQA format Return a concise medical rationale, the final answer text, and the final option letter. The rationale should focus on diagnostic, clinical, anatomical, physiological, or treatment-selection clues. FOLIO format Return a concise logic rationale grounded only in the supplied natural-language premises. The final answer must be one of True , False , or Unknown .
+
+Table 13: Rationale validation and retry protocol. This step filters noisy teacher rationales before subtask construc-tion. 
+
+Field Prompt specification Validation model DeepSeek-V4-Pro .Retry model DeepSeek-V4-Pro .Validation instruction Check whether the candidate rationale should be retained for training-data construction. A retained candidate must satisfy two conditions: its predicted final answer matches the gold answer, and its non-trivial reasoning steps are grounded in the input, context, answer options, or preceding reasoning steps. Rejection criteria Reject the candidate if it contains unsupported reasoning, explicit contradictions, reasoning that supports an alternative answer, or a final conclusion inconsistent with the stated answer. Retry rule If the first candidate fails validation, regenerate the rationale with DeepSeek-V4-Pro for up to two additional rounds. We retain the first valid candidate. If no candidate passes, the instance is removed from the trace-construction set. 
+
+original task input paired with the gold final an-swer. This design keeps the supervised target tex-tual while making the support relation from earlier outputs to later local decisions visible during train-ing. Table 14: Subtask generation and DAIS QA construction instruction. For GDPR and AIACT, the schema is predefined; for MedQA and FOLIO, subtasks are generated from filtered teacher rationales. 
+
+Field Prompt specification Model DeepSeek-V4-Pro .Decoding Temperature 0.7 for construction-time API calls. General prompt Decompose the retained rationale into a compact ordered sequence of two to five local QA subtasks. Each subtask must contain a local question, the information needed to answer it, concise reasoning, an intermediate answer, and a reasoning-function label. Subtasks must be decision-relevant, non-redundant, and grounded in the original input and teacher rationale. MedQA-specific instruction Create local QA subtasks in the same language as the original question. Each subtask must be derived from the original question, options, gold answer, and rationale. Do not introduce external medical facts beyond the original question and rationale. FOLIO-specific instruction Create English QA subtasks for logic entailment. Each subtask must be supported by the premises and rationale. The sequence should typically include evidence retrieval, local deduction, and final veracity classification. GDPR / AIACT instruction Use the predefined compliance schema. Generate subtask-level QA states for legal element extraction, regulation or article mapping, and compliance reasoning. DAIS construction rule For the first subtask, construct the local question from the original input and context. For later subtasks, include a Previous states: block that serializes earlier subtask states as context for the current decision. The final-answer record uses only the original task input and optional context, without constructed intermediate states. 
+
+Table 15: Schema induction instruction for MedQA and FOLIO. GDPR and AIACT use a predefined compliance schema and do not require clustering. 
+
+Field Prompt specification Models DeepSeek-V4-Pro , followed by manual audit. Decoding Temperature 0.7 for construction-time API calls. Prompt Given noisy free-form subtask labels, label counts, and representative examples, cluster the labels into a compact set of reusable reasoning categories. The categories should describe reasoning functions rather than surface wording, entities, answer strings, or dataset-specific content. Output requirement Return a compact schema in which each raw label is assigned to exactly one canonical category. Each category should have a concise name and a short description. Manual audit After LLM-assisted clustering, we merge overlapping types, revise overly broad or ambiguous categories, correct inconsistent assignments, and relabel the generated subtasks according to the finalized schema. 
+
+Table 16: Evaluation protocol and answer extraction. No teacher rationale, gold intermediate state, or external decomposition module is provided at evaluation time. 
+
+Field Prompt specification General evaluation prompt Answer the original task input using the same task format across methods. The main evaluation asks the model to produce the final answer directly. Policy-compliance evalua-tion Judge whether the case is permit , prohibit , or unrelated . The predicted norm type is extracted from the model output, normalized by the fixed answer matcher when needed, and compared with the gold label. MedQA evaluation Answer the medical multiple-choice question and provide the final answer. When an option letter is present, the normalized predicted option is matched against the gold option. FOLIO evaluation Determine whether the conclusion is True , False , or Unknown . The normalized final label is matched against the gold label. Decoding Most local evaluation uses deterministic decoding with temperature 0. Long-form reasoning models use stochastic decoding as described in Appendix A.5. Table 17: Target-format comparison. DAIS differs from I NDEP QA by inserting previous subtask outputs into the input of later intermediate subtasks. The final-answer record remains the original task. 
+
+Target format Input context Target output FINAL -SFT Original task input only. Final answer only. COT-SFT Original task input only. Flat teacher rationale followed by the final an-swer. INDEP QA Original task input and the current local subtask question. No Previous states: block is in-cluded. Current subtask answer for intermediate records; final answer for the final record. DAIS intermediate record Original task input, current local subtask ques-tion, and a Previous states: block for later subtasks. The block serializes earlier subtask questions, inputs, reasoning, and answers. Current subtask answer. DAIS final-answer record Original task input only. Final answer. 
+
+Table 18: Representative GDPR target example. In DAIS, later compliance subtasks receive previous subtask outputs as part of their input; the final-answer record uses only the original case. 
+
+Format / record Input contains Target output Original QA Case: Meta Platforms Ireland Limited stored user pass-words internally without encryption and did not report or document a related data breach. Question: judge whether the case is permit , prohibit , or unrelated .Gold answer: prohibit .FINAL -SFT Original case only. prohibit .COT-SFT Original case only. A flat rationale explaining that unencrypted password storage violates security obliga-tions and that failure to report or document the breach implicates breach-notification du-ties. Final answer: prohibit .DAIS Stage 1: Le-gal Element Extrac-tion Original case and current subtask question: extract legal actors, roles, information type, consent form, and processing purpose. Controller = Meta Platforms Ireland Limited; data subjects = users; information type = pass-words; context = internal systems; purpose = data storage. DAIS Stage 2: Legal Regulation Mapping Original case and current subtask question. Previous states: Stage 1 output with extracted legal elements. Violated articles: Article 32, Article 33, and Article 34. DAIS Stage 3: Compliance Rea-soning Original case and current subtask question. Previous states: Stage 1 extracted elements and Stage 2 vio-lated articles. Norm type: prohibit ; violated articles: Ar-ticle 32, Article 33, and Article 34. DAIS Final-answer record Original case only. prohibit .Table 19: Representative MedQA target example. The second DAIS subtask conditions on the diagnosis output by the first subtask; the final-answer record uses only the original question and options. 
+
+Format / record Input contains Target output Original QA Question: A 50-year-old man develops sudden severe pain, redness, and swelling in the first metatarsopha-langeal joint at night after eating seafood. Options: A. Benzbromarone; B. Allopurinol; C. Antibiotics; D. NSAIDs; E. Methotrexate. Gold answer: NSAIDs; final option: D. FINAL -SFT Original question and options. Answer: NSAIDs; final option: D. COT-SFT Original question and options. Flat rationale: acute first metatarsophalangeal joint pain after a high-purine meal suggests acute gouty arthritis; acute attacks are treated with NSAIDs, while allopurinol and benzbro-marone are for chronic urate lowering. Final answer: NSAIDs; option D. DAIS Stage 1: Clinical Decision Making Original question, options, and current subtask ques-tion: based on the clinical presentation, what is the most likely diagnosis? Acute gouty arthritis. DAIS Stage 2: Clinical Decision Making Original question, options, and current subtask ques-tion: which drug class should be selected for an acute gout attack? Previous states: Stage 1 output = acute gouty arthritis. NSAIDs. DAIS Final-answer record Original question and options only. Answer: NSAIDs; final option: D. 
+
+Table 20: Representative FOLIO target example. Later logical subtasks receive earlier derived cases and local conclusions as input; the final-answer record uses only the original premises and conclusion. 
+
+Format / record Input contains Target output Original QA Premises about Rina, coffee drinking, caffeine depen-dence, joking about caffeine addiction, and being un-aware that caffeine is a drug. Conclusion: Rina jokes about being addicted to caffeine or is unaware that caffeine is a drug. Gold answer: True .FINAL -SFT Original premises and conclusion. True .COT-SFT Original premises and conclusion. Flat rationale: the premises yield two cases for Rina; in the first she is unaware, and in the second she must joke about being addicted to caffeine. Since the conclusion holds in both cases, the answer is true. DAIS Stage 1: Ev-idence Retrieval Original premises and current subtask question: what are the two possible cases for Rina? Case 1: Rina is a student, unaware, and de-pendent on caffeine. Case 2: Rina is not a student, not unaware, and not dependent on caffeine. DAIS Stage 2: Lo-cal Deduction Original premises and current subtask question: does the conclusion hold in each case? Previous states: 
+
+Stage 1 output with the two cases. Yes. The conclusion holds in both cases. DAIS Stage 3: Veracity Classifica-tion Original premises and current subtask question: does the conclusion necessarily follow? Previous states: 
+
+Stage 1 case split and Stage 2 local deduction output. 
+
+True .DAIS Final-answer record Original premises and conclusion only. True .Table 21: Representative subtask labels, local questions, and dependency contexts. The final column shows which previous outputs are typically inserted into the input of the current DAIS subtask record. 
+
+Dataset Subtask label Example local question Typical previous-state input in DAIS GDPR Legal Element Extraction Extract the legal actors, roles, information type, consent form, and processing purpose. None; first-stage extraction from the case. Legal Regulation Mapping Map the case or extracted legal elements to the relevant GDPR articles. Output of Legal Element Ex-traction. Compliance Reasoning Determine whether the case is permitted, prohibited, or unrelated. Outputs of Legal Element Ex-traction and Legal Regulation Mapping. AIACT Legal Element Extraction Extract the provider, user, affected subjects, AI-system function, information type, and deployment purpose. None; first-stage extraction from the case. Legal Regulation Mapping Map the extracted AI-system elements to applicable AI Act or policy-compliance pro-visions. Output of Legal Element Ex-traction. Compliance Reasoning Determine whether the AI-system deploy-ment is permitted, prohibited, or unrelated. Outputs of Legal Element Ex-traction and Legal Regulation Mapping. MedQA Clinical Evidence Extrac-tion What clinical findings, symptoms, labora-tory results, or temporal clues are relevant? None or earlier clinical con-text only. Clinical Concept Mapping Which disease, mechanism, drug class, or medical concept is indicated by the evi-dence? Often uses extracted clinical evidence. Differential & Constraint Reasoning Which option is compatible with the clinical constraints, and which alternatives should be eliminated? Often uses evidence and mapped clinical concepts. Mechanistic / Causal Infer-ence What pathophysiological or causal mecha-nism explains the phenomenon? Often uses extracted evidence and concept-mapping outputs. Clinical Decision Making What diagnosis, treatment, examination, or management step should be selected? Often uses previous diagno-sis, mechanism, or option-elimination outputs. FOLIO Evidence Retrieval Which premises or cases are relevant to the conclusion? None; first-stage retrieval from premises. Local Deduction What local consequence follows from the selected premises or case split? Output of Evidence Retrieval. Multi-hop Deduction How do multiple local conclusions combine to support or refute the target conclusion? Outputs of earlier retrieval and local deduction states. Veracity Classification Does the conclusion follow as True , False ,or Unknown ?All relevant previous interme-diate outputs.

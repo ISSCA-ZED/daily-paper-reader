@@ -6,34 +6,42 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-07-21
-- 运行时间：2026-07-21 20:11:59 UTC
+- 最新运行日期：2026-07-22
+- 运行时间：2026-07-22 21:01:34 UTC
 - 运行状态：成功
-- 本次总论文数：4
-- 精读区：3
-- 速读区：1
+- 本次总论文数：6
+- 精读区：2
+- 速读区：4
 
 ### 今日简报（AI）
-1) 今日精读两篇高分论文，分别从视觉访问边界与令牌级离线策略学习两个方向提升视觉语言模型推理与生成忠实性，并速读一篇动态导航中从慢推理到快规划的潜在流方法。  
-2) 最值得关注视觉语言模型推理中“视觉访问边界”如何限制推理能力，以及离线策略学习在分布偏移下保持生成忠实性的机制。  
-3) 建议普通读者优先精读这两篇8.0分论文，理解其核心假设与实验设计，后续可关注如何将离线策略学习应用于实际生成任务。
-- 详情：[/202607/21/README](/202607/21/README)
+今日日报聚焦大模型推理与效率优化，重点精读了两篇高分研究。
+
+最值得关注的方向：推理微调诱导的持久隐策略状态机制，以及约束锚定推理轨迹方法，两者都揭示了提升模型推理可靠性的新路径。
+
+建议普通读者优先阅读精读文章，理解模型如何编码因果关系与对照逻辑，这对设计更稳健的推理系统很有启发。
+- 详情：[/202607/22/README](/202607/22/README)
 
 ### 精读区论文标签
-1. [Visual Access Boundaries in Vision-Language Model Reasoning](/202607/21/2607.12815v2-visual-access-boundaries-in-vision-language-model-reasoning)  
+1. [Reasoning Fine-Tuning Induces Persistent Latent Policy States](/202607/22/2607.18532v1-reasoning-fine-tuning-induces-persistent-latent-policy-states)  
    标签：评分：8.0/10、query:key-tokens
-   evidence：因果干预测量推理轨迹中图像token的重要性
-2. [Token-Level Off-Policy Learning for Faithful Generation Under Distribution Shift](/202607/21/2607.17524v1-token-level-off-policy-learning-for-faithful-generation-under-distribution-shift)  
+   evidence：分析链式推理的隐藏状态以恢复潜在策略状态
+2. [For What Reason? Interpreting Models' Encoding of Causation and Antithesis](/202607/22/2607.18570v1-for-what-reason-interpreting-models-encoding-of-causation-and-antithesis)  
    标签：评分：8.0/10、query:key-tokens
-   evidence：token级正确性预测识别生成中的重要token
-3. [Can We Break LLMs Out of Self-Loops? Fine-Grained Reasoning Control with Activation Steering](/202607/21/2607.18100v1-can-we-break-llms-out-of-self-loops-fine-grained-reasoning-control-with-activation-steering)  
-   标签：评分：8.0/10、query:key-tokens
-   evidence：对推理标记的隐藏状态进行激活引导
+   evidence：对Transformer中因果和对比关系的隐藏状态分析
 
 ### 速读区论文标签
-1. [Token-Wise Latent Streaming from Slow Reasoners to Fast Planners for Dynamic Vision Language Navigation](/202607/21/2607.16806v1-token-wise-latent-streaming-from-slow-reasoners-to-fast-planners-for-dynamic-vision-language-navigation)  
+1. [Constraint-Anchored Reasoning Traces](/202607/22/2607.16727v1-constraint-anchored-reasoning-traces)  
    标签：评分：7.0/10、query:key-tokens
-   evidence：推理中关键token的隐藏状态分析
+   evidence：用于链式推理错误雪崩的约束锚定推理轨迹
+2. [VarRate: Training-Free Variable-Rate KV Cache Compression for Long-Context LLMs](/202607/22/2607.15498v1-varrate-training-free-variable-rate-kv-cache-compression-for-long-context-llms)  
+   标签：评分：6.0/10、query:key-tokens
+   evidence：基于查询显著性的token重要性
+3. [ST-Veto: Spatio-Temporal Token Veto for Diffusion MLLMs via Taylor Prediction and Visual Grounding](/202607/22/2607.17884v1-st-veto-spatio-temporal-token-veto-for-diffusion-mllms-via-taylor-prediction-and-visual-grounding)  
+   标签：评分：6.0/10、query:key-tokens
+   evidence：通过泰勒预测的token重要性度量
+4. [DAIS: Dependency-Aware Intermediate QA Supervision for Complex Reasoning](/202607/22/2607.19088v1-dais-dependency-aware-intermediate-qa-supervision-for-complex-reasoning)  
+   标签：评分：6.0/10、query:key-tokens
+   evidence：复杂推理链的中间QA监督
 
 
 <div class="dpr-home-promo-card">
