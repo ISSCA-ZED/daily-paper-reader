@@ -6,42 +6,37 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-07-22
-- 运行时间：2026-07-22 21:01:34 UTC
+- 最新运行日期：2026-07-23
+- 运行时间：2026-07-23 19:59:28 UTC
 - 运行状态：成功
-- 本次总论文数：6
+- 本次总论文数：5
 - 精读区：2
-- 速读区：4
+- 速读区：3
 
 ### 今日简报（AI）
-今日日报聚焦大模型推理与效率优化，重点精读了两篇高分研究。
-
-最值得关注的方向：推理微调诱导的持久隐策略状态机制，以及约束锚定推理轨迹方法，两者都揭示了提升模型推理可靠性的新路径。
-
-建议普通读者优先阅读精读文章，理解模型如何编码因果关系与对照逻辑，这对设计更稳健的推理系统很有启发。
-- 详情：[/202607/22/README](/202607/22/README)
+今日收录5篇论文，2篇精读聚焦长上下文推理与思维进化，3篇速读涉及量化模型与推理一致性。  
+最值得关注《Copy Less, Ground More》用证据感知强化学习攻克长上下文重复复制问题，以及《EvoThink》通过自剪枝与偏好优化进化大模型推理思维。  
+建议优先精读这两篇，其方法对减少模型冗余、提升推理可解释性有直接参考价值。
+- 详情：[/202607/23/README](/202607/23/README)
 
 ### 精读区论文标签
-1. [Reasoning Fine-Tuning Induces Persistent Latent Policy States](/202607/22/2607.18532v1-reasoning-fine-tuning-induces-persistent-latent-policy-states)  
+1. [Copy Less, Ground More: Overcoming Repetitive Copying in Long-Context Reasoning via Evidence-Aware Reinforcement Learning](/202607/23/2607.19345v1-copy-less-ground-more-overcoming-repetitive-copying-in-long-context-reasoning-via-evidence-aware-reinforcement-learning)  
    标签：评分：8.0/10、query:key-tokens
-   evidence：分析链式推理的隐藏状态以恢复潜在策略状态
-2. [For What Reason? Interpreting Models' Encoding of Causation and Antithesis](/202607/22/2607.18570v1-for-what-reason-interpreting-models-encoding-of-causation-and-antithesis)  
+   evidence：区分推理轨迹中的关键证据与无关干扰以减少重复复制
+2. [EvoThink: Evolving Thinking in Large Reasoning Models via Self-Pruning and Aha-Moment Preference Optimization](/202607/23/2607.19962v1-evothink-evolving-thinking-in-large-reasoning-models-via-self-pruning-and-aha-moment-preference-optimization)  
    标签：评分：8.0/10、query:key-tokens
-   evidence：对Transformer中因果和对比关系的隐藏状态分析
+   evidence：剪枝冗余推理步骤，识别关键令牌
 
 ### 速读区论文标签
-1. [Constraint-Anchored Reasoning Traces](/202607/22/2607.16727v1-constraint-anchored-reasoning-traces)  
+1. [CUSUM-Shaped Inference-Time Monitoring and Targeted Re-Decoding for Quantized Small Language Model Reasoning](/202607/23/2607.20129v1-cusum-shaped-inference-time-monitoring-and-targeted-re-decoding-for-quantized-small-language-model-reasoning)  
    标签：评分：7.0/10、query:key-tokens
-   evidence：用于链式推理错误雪崩的约束锚定推理轨迹
-2. [VarRate: Training-Free Variable-Rate KV Cache Compression for Long-Context LLMs](/202607/22/2607.15498v1-varrate-training-free-variable-rate-kv-cache-compression-for-long-context-llms)  
+   evidence：监控推理轨迹中令牌级不确定性和退化特征
+2. [CASE: Causal Alignment and Structural Enforcement for Improving Chain-of-Thought Faithfulness](/202607/23/2607.18820v1-case-causal-alignment-and-structural-enforcement-for-improving-chain-of-thought-faithfulness)  
    标签：评分：6.0/10、query:key-tokens
-   evidence：基于查询显著性的token重要性
-3. [ST-Veto: Spatio-Temporal Token Veto for Diffusion MLLMs via Taylor Prediction and Visual Grounding](/202607/22/2607.17884v1-st-veto-spatio-temporal-token-veto-for-diffusion-mllms-via-taylor-prediction-and-visual-grounding)  
+   evidence：应用因果干预确保推理链条忠实性，追踪token因果效应
+3. [Reasoning Error from Known Fact: Step-Level Self-Consistency Group Relative Policy Optimization for LLM](/202607/23/2607.18915v1-reasoning-error-from-known-fact-step-level-self-consistency-group-relative-policy-optimization-for-llm)  
    标签：评分：6.0/10、query:key-tokens
-   evidence：通过泰勒预测的token重要性度量
-4. [DAIS: Dependency-Aware Intermediate QA Supervision for Complex Reasoning](/202607/22/2607.19088v1-dais-dependency-aware-intermediate-qa-supervision-for-complex-reasoning)  
-   标签：评分：6.0/10、query:key-tokens
-   evidence：复杂推理链的中间QA监督
+   evidence：细粒度分析推理轨迹中的步骤级错误和关键token
 
 
 <div class="dpr-home-promo-card">

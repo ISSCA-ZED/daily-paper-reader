@@ -1,0 +1,1213 @@
+Title: CASE: Causal Alignment and Structural Enforcement for Improving Chain-of-Thought Faithfulness
+
+URL Source: https://arxiv.org/pdf/2607.18820v1
+
+Published Time: Wed, 22 Jul 2026 00:39:43 GMT
+
+Number of Pages: 18
+
+Markdown Content:
+# CASE: Causal Alignment and Structural Enforcement for Improving Chain-of-Thought Faithfulness 
+
+# Ziming Wang 1,2 , Yinghua Yao 2, Changwu Huang 3, Ke Tang 1, Xin Yao 4
+
+> 1
+
+Department of Computer Science and Engineering of Southern University of Science and Technology, Shenzhen, China  
+
+> 2
+
+Center for Frontier AI Research, Agency for Science, Technology and Research (A*STAR), Singapore  
+
+> 3
+
+School of AI and Liberal Arts, Beijing Normal-Hong Kong Baptist University, Zhuhai, China  
+
+> 4
+
+School of Data Science, Lingnan University, Hong Kong, China wangzm2021@mail.sustech.edu.cn, yao_yinghua@a-star.edu.sg, changwuhuang@bnbu.edu.cn, tangk3@sustech.edu.cn, xinyao@ln.edu.hk 
+
+Abstract 
+
+Chain-of-thought (CoT) reasoning is widely used to improve both the performance and interpretability of large language models (LLMs), yet the generated reasoning may not faith-fully support the final answer. We study this problem from a causal perspective, where a faithful CoT process should follow the chain Z → X → Y , with Z, X, and Y denot-ing the instruction, reasoning chain, and final answer, respec-tively. In this process, the instruction should affect the answer only through the reasoning chain. However, conventional au-toregressive LLMs condition answer generation on both the instruction and the CoT, which still allows a direct instruction-to-answer shortcut. To address this issue, we propose CASE, a framework that combines training-time causal alignment and inference-time structural enforcement. During training, CASE builds counterfactual-CoT, biased-instruction, and empty-instruction datasets, and applies selective-loss fine-tuning to strengthen CoT-to-answer dependence while suppressing in-struction shortcuts. During inference, CASE masks direct at-tention from instruction tokens to answer tokens, preventing the model from bypassing the generated CoT. We provide an information-theoretic analysis showing how these compo-nents promote faithful chains. Experiments on three models and four benchmarks show that CASE achieves a 37% average per-setting relative improvement in overall CoT faithfulness over the strongest baselines, exhibits stronger cross-dataset faithfulness transfer, and maintains competitive average accu-racy. Code is available at https://github.com/oddwang/CASE. 
+
+# Introduction 
+
+Chain-of-thought (CoT) prompting generates intermediate reasoning steps before the final answer, which not only im-proves the performance of large language models (LLMs) but also provides a natural explanation for their decisions (Wei et al. 2022). By expressing reasoning steps in natural lan-guage, CoT reveals how the model derives its answer from the input. However, despite its strong empirical performance, the faithfulness of CoT as an explanation remains under de-bate (Turpin et al. 2023; Lanham et al. 2023). A model may produce a plausible reasoning chain, yet its answer is driven by shortcuts that bypass the generated reasoning. To understand this issue, Bao et al. (2025) modeled CoT reasoning using three variables: the problem instruction Z,the reasoning chain X, and the final answer Y . Through 
+
+Figure 1: High-level intuition of CASE. CASE improves CoT faithfulness by strengthening the reasoning-to-answer path 
+
+X → Y and weakening the direct instruction-to-answer shortcut Z → Y . Training-time alignment and inference-time enforcement jointly guide the decision process toward the faithful causal chain Z → X → Y .intervention-based causal analysis (Hagmayer et al. 2007), they characterized faithful reasoning as the causal chain 
+
+Z → X → Y , where the instruction affects the answer only through the CoT. In contrast, unfaithful reasoning may involve a direct instruction-to-answer shortcut Z → Y , or a weak dependence of the answer on the reasoning chain 
+
+X → Y (Bao et al. 2025). This causal view suggests that im-proving CoT faithfulness requires two complementary goals: strengthening X → Y and suppressing the direct shortcut 
+
+Z → Y .Some recent studies explore post-hoc candidate selection, generating multiple CoTs and selecting one according to pre-defined faithfulness criteria (Wang et al. 2025; Jie et al. 2024; Li et al. 2025; Li, Yan, and He 2025). Although these meth-ods can be efficient, they operate at the output level and do not change the model’s answer-generation mechanism. To modify this mechanism directly, a more principled strategy is to fine-tune the LLM itself, using faithful CoT supervi-sion (Tanneru et al. 2024), condition extraction (Lin, Sun, and Weng 2025), or dual-model architectures (Paul et al. 2024). Although these methods can improve reasoning qual-ity, they do not explicitly enforce the faithful mechanism in which the final answer is derived from the CoT rather than directly from the instruction. As a result, the model may still rely on the Z → Y shortcuts during answer generation. Motivated by the causal view, we propose CASE (Causal Alignment and Structural Enforcement), a framework for arXiv:2607.18820v1 [cs.CL] 21 Jul 2026 improving CoT faithfulness. During training, CASE con-structs counterfactual-CoT, biased-instruction, and empty-instruction datasets, and applies selective-loss fine-tuning to strengthen X → Y while reducing reliance on Z → Y
+
+shortcuts. During inference, CASE applies an attention-mask intervention that prevents answer tokens from directly at-tending to instruction tokens, thereby removing the explicit instruction-to-answer attention path while preserving the me-diated CoT-side path. We further provide an information-theoretic analysis showing that the training losses promote three complementary criteria: increasing I(X; Y ), increas-ing I(X; Y | Z), and reducing I(Y ; Z | X). Together with inference-time masking, these components guide the deci-sion process toward the faithful causal chain Z → X → Y ,as illustrated in Figure 1. The main contributions of this paper are as follows: 
+
+• We propose CASE, a framework that improves CoT faithfulness through training-time causal alignment and inference-time structural enforcement. 
+
+• We provide a theoretical analysis linking CASE’s training objectives to complementary information-theoretic faith-fulness criteria and showing how inference-time masking removes the explicit instruction-to-answer attention path. 
+
+• Experiments on four benchmark datasets using two non-reasoning LLMs and one reasoning LLM demon-strate that CASE substantially improves CoT faithfulness, achieving more than 37% average improvement over the strongest baselines while maintaining competitive accu-racy and strong cross-dataset generalization. 
+
+# Related Work 
+
+This section reviews prior work on evaluating and improving CoT faithfulness. 
+
+Evaluation of CoT Faithfulness 
+
+Existing research primarily evaluates CoT faithfulness by perturbing the input instruction (Atanasova et al. 2023; Turpin et al. 2023), the generated CoT (Lanham et al. 2023), or the model itself (Tutek et al. 2025), and then measuring whether the final answer changes. Among these methods, Filler Tokens replaces the CoT with “...” tokens and evalu-ates whether the answer changes (Lanham et al. 2023; Za-man and Srivastava 2025). Early Answering truncates the CoT sentence by sentence and computes the area over the curve (AOC) of the probability of keeping the same answer at different truncation points, testing whether the model can answer before observing the full reasoning chain (Lanham et al. 2023). A recent systematic study by Zaman and Srivas-tava (2025) shows that Filler Tokens and Early Answering are among the most reliable metrics for CoT faithfulness. Therefore, we adopt them as our main perturbation-based evaluation metrics. We further include the controlled indirect effect (CIE) and controlled direct effect (CDE) metrics used by Paul et al. (2024) as complementary causal evaluations. CIE replaces the CoT with a counterfactual CoT to test whether the answer depends on the reasoning chain. CDE keeps the CoT fixed while replacing the original question with a counterfactual question. If the answer still changes, this suggests a direct 
+
+Z → Y shortcut and lower faithfulness. Together, CIE and CDE assess whether the answer is controlled by the CoT rather than directly by the instruction, providing a causal complement to perturbation-based metrics. 
+
+Methods for Improving CoT Faithfulness 
+
+Recent studies have proposed various methods to improve CoT faithfulness. Some methods perform post-hoc candi-date selection, generating multiple CoTs and selecting one through scoring or filtering (Wang et al. 2025; Jie et al. 2024; Li et al. 2025; Li, Yan, and He 2025). Although these methods can improve the selected output, they intervene only after generation and leave the answer-generation mechanism unchanged. A more direct strategy is to fine-tune the LLM itself. Tan-neru et al. (2024) fine-tuned LLMs with faithful CoTs, but found that the improvement was limited. Lin, Sun, and Weng (2025) proposed FoCus, which extracts problem conditions, guides the model to use them during reasoning, and fine-tunes the model on the resulting structured reasoning data. However, these methods mainly improve reasoning quality and do not explicitly align answer generation with the faithful chain Z → X → Y . Thus, the instruction may still provide a shortcut to the answer. Paul et al. (2024) proposed FRODO, a dual-model framework for improving CoT faithfulness. FRODO trains an inference module with direct preference optimization (DPO) (Rafailov et al. 2023) and an implicit causal reward, together with a reasoning module trained by a causal pref-erence objective. This design encourages the final answer to depend more on the generated CoT. However, because the answer-generation module can still access the original ques-tion, FRODO does not strictly remove the direct instruction-to-answer path. Moreover, because FRODO assigns reason-ing generation and answer prediction to two separate mod-ules, it mainly improves pipeline-level consistency rather than making a single LLM learn the desired dependency from its own CoT to its answer. This separation also adds system complexity and computational cost. In contrast, CASE directly intervenes in the answer-generation process of a single LLM. It constructs counterfactual-CoT, biased-instruction, and empty-instruction datasets with selective-loss fine-tuning, and applies an inference-time attention mask to strengthen 
+
+X → Y and suppress the direct Z → Y path. We therefore compare CASE with fine-tuning-based baselines that, like CASE, generate one CoT per instance. Post-hoc selection methods require multiple generations, operate at an orthogonal output-selection level, and can be combined with CASE or any fine-tuned model. 
+
+# Methodology 
+
+This section first defines the CoT faithfulness, then presents CASE, and finally analyzes how its components support faithful answer generation. Figure 2: Overview of the proposed CASE framework. 
+
+Problem Formulation 
+
+Let Z, X , and Y denote the spaces of instructions, reasoning chains, and final answers. We use Z ∈ Z , X ∈ X , and 
+
+Y ∈ Y for the corresponding random variables, and z, x,and y for concrete instances. Given an instruction z, an autoregressive LLM parameter-ized by θ first generates a CoT x and then predicts an answer 
+
+y. This process can be factorized as 
+
+pθ (x, y | z) = pθ (x | z) pθ (y | z, x ),
+
+where pθ (x | z) denotes the reasoning-generation process, and pθ (y | z, x ) denotes the answer-generation process con-ditioned on both the instruction and the CoT. 
+
+Definition 1 (CoT faithfulness) . A CoT-based decision pro-cess is faithful if the instruction influences the final answer only through the generated CoT. Formally, the generation process factorizes as 
+
+pθ (x, y | z) = pθ (x | z) pθ (y | x),
+
+or equivalently, the answer mechanism satisfies 
+
+pθ (y | z, x ) = pθ (y | x).
+
+It implies the conditional independence condition 
+
+Y ⊥ Z | X. 
+
+It corresponds to the faithful causal chain Z → X → Y : the instruction induces the reasoning chain, and the final answer is derived from the reasoning chain (Bao et al. 2025). Im-portantly, this does not mean that Z does not influence Y .Instead, any influence of Z on Y should be mediated through 
+
+X. Here, X is the visible natural-language CoT, whereas answer generation accesses CoT-side states HX formed un-der Z. Instruction information retained in HX remains CoT-mediated; attention masking encourages this structural path, while visible-CoT perturbations evaluate whether the textual 
+
+X supports Y .An ideal way to encourage faithfulness is to train the model under the factorization pθ (x | z) pθ (y | x), so that answer generation depends only on the CoT. However, this is dif-ficult in natural-language reasoning: the final answer y is supervised, whereas valid CoTs x are not unique. Forcing x
+
+alone to determine y from the start may produce degenerate or low-quality CoTs, such as traces that simply reveal the answer. Therefore, practical LLMs usually adopt the more flexible factorization pθ (x | z) pθ (y | z, x ), where the in-struction helps generate and interpret the CoT, but also per-mits an unfaithful shortcut Z → Y . CASE starts from this practical mechanism and regularizes answer generation to-ward the CoT-mediated mechanism in Definition 1, preserv-ing Z → X while strengthening X → Y and suppressing the direct shortcut Z → Y .
+
+CASE for CoT Faithfulness 
+
+Motivated by the above formulation, we propose CASE, a framework that combines training-time causal alignment and inference-time structural enforcement. As shown in Fig-ure 2, CASE constructs mixed training datasets and applies selective-loss supervised fine-tuning (SFT) to strengthen the CoT-to-answer mechanism. It then applies attention masking to block the direct instruction-to-answer path during answer generation. The two stages are complementary: training-time alignment learns a reliable X → Y mechanism but does not remove the direct instruction-to-answer path, while inference-time masking removes this path but relies on the learned X → Y mechanism to preserve answer quality. 
+
+Training-Time Causal Alignment Given a standard SFT dataset 
+
+DA = {(zi, x i, y i)}ni=1 , (1) each sample contains an instruction zi, a CoT xi, and a final answer yi. In practice, we generate CoTs and answers using a strong LLM, and retain only instances where the generated answer matches the gold answer. To make answer generation rely more on the CoT than on the instruction shortcut, CASE augments DA with three auxiliary datasets: 
+
+DB = {(zi, x ′
+
+> i
+
+, y ′
+
+> i
+
+)}ni=1 , (2) 
+
+DC = {(z′
+
+> i
+
+, x i, y i)}ni=1 , (3) 
+
+DD = {(∅, x i, y i)}ni=1 . (4) Here, DB is the counterfactual CoT dataset, where zi is identical to that in DA, while the answer is replaced by a stronger-LLM-generated counterfactual answer y′ 
+
+> i
+
+satisfying 
+
+y′
+
+> i
+
+̸ = yi, and x′ 
+
+> i
+
+is the corresponding reasoning chain that derives y′
+
+> i
+
+. This encourages answer prediction to respond to CoT changes under the same instruction. DC is the biased-instruction dataset, where the instruction is modified into z′
+
+> i
+
+by adding misleading contextual information or an incorrect answer cue, while the CoT and answer remain unchanged. This discourages answer changes caused only by misleading instruction cues. DD is the empty-instruction dataset, where the instruction content is removed while the CoT and answer are preserved, encouraging answer prediction from the CoT alone. We further conduct an automatic quality audit of the LLM-generated CoT-answer pairs in DA and DB , and the results in Appendix A.3 show that the generated data has high quality and consistency. 
+
+Selective-loss SFT. CASE uses selective-loss because the four datasets serve different purposes. The standard dataset 
+
+DA provides both CoT and answer supervision, while the auxiliary datasets DB , DC , and DD impose answer-level intervention constraints. Therefore, CASE supervises both CoT and answer tokens on DA, but only answer tokens on the auxiliary datasets. For DA, CASE optimizes both CoT and answer tokens: 
+
+Lmain = EDA [− log pθ (xi | zi) − log pθ (yi | zi, x i)] . (5) For DB , DC , and DD , CASE computes answer-token losses: 
+
+LX-int = EDB [− log pθ (y′ 
+
+> i
+
+| zi, x ′
+
+> i
+
+)] , (6) 
+
+LZ-int = EDC [− log pθ (yi | z′
+
+> i
+
+, x i)] , (7) 
+
+LZ-drop = EDD [− log pθ (yi | ∅ , x i)] . (8) The full training objective is 
+
+Ltrain = Lmain + LX-int + LZ-int + LZ-drop . (9) This objective can be viewed as standard CoT SFT plus three answer-level intervention losses. Masking CoT-token loss on the auxiliary datasets prevents the model from merely imitat-ing constructed reasoning traces or being forced to generate counterfactual CoTs, while still teaching how the given CoT should determine the answer. 
+
+Inference-Time Structural Enforcement Training-time causal alignment encourages reliance on the CoT, but it does not structurally prevent answer tokens from accessing the in-struction during inference. Therefore, CASE further applies attention masking during answer generation. Given an input sequence consisting of instruction tokens 
+
+Z, CoT tokens X, and answer tokens Y , standard causal self-attention allows answer tokens to attend to both Z and 
+
+X. CASE modifies the attention mask only when generating answer tokens. For every answer token position i ∈ pos( Y ),instruction token position j ∈ pos( Z), layer ℓ, and head h,we set Aℓ,h ij = −∞ . After softmax, these entries receive zero attention weight. Thus, answer tokens cannot directly aggregate information from instruction tokens, but can still attend to the CoT and previously generated answer tokens. At the computation-graph level, this masking removes the explicit direct Z → Y attention path in the computation graph while preserving the mediated CoT-side path. There-fore, the CoT is still generated normally from the instruc-tion, while answer generation proceeds through the CoT-side states rather than directly through instruction-token states. This complements training-time alignment: training teaches the model to use the CoT for answer prediction, and inference-time masking prevents it from bypassing this learned mech-anism by directly accessing instruction-token states. A simpler alternative is to remove the instruction before answer generation and let the model answer based solely on the generated CoT. However, this replaces the original instruction-conditioned CoT-side states with CoT-only states. Attention masking instead preserves these states while block-ing direct instruction-to-answer access, and Appendix A.5 shows that it achieves better accuracy and faithfulness. 
+
+Theoretical Analysis 
+
+This subsection analyzes how CASE promotes the faithful causal chain in Definition 1 from an information-level per-spective. All proofs are provided in Appendix A.1. Here, 
+
+I denotes mutual information, and H denotes entropy. To strengthen the CoT-mediated path and suppress the residual instruction-to-answer shortcut, we consider three comple-mentary information-level criteria: 
+
+max I(X; Y ),
+
+max I(X; Y | Z),
+
+min I(Y ; Z | X).
+
+The first criterion requires the CoT to be predictive of the answer. The second requires the answer to remain dependent on the CoT even under the same instruction. These two cri-teria strengthen X → Y . The third suppresses the residual direct shortcut from instruction to answer after conditioning on the CoT. Since these mutual-information quantities are in-tractable for high-dimensional natural-language sequences, CASE uses practical surrogate losses and an inference-time structural mask. 
+
+Proposition 1 (CoT-only likelihood lower bounds I(X; Y )).
+
+Under the data distribution over (X, Y ), let rϕ(y | x) be any variational CoT-conditioned answer predictor. Then 
+
+I(X; Y ) ≥ H(Y ) + Ex,y [log rϕ(y | x)] .
+
+As pθ (y | ∅ , x ) instantiates rϕ(y | x), minimizing LZ-drop 
+
+in Eq. (8) is equivalent to maximizing the lower bound of 
+
+I(X; Y ).
+
+Proposition 2 (Counterfactual-CoT augmented likelihood lower bounds I eP (X; Y | Z)). Let eP denote the augmented data distribution induced by the original and counterfactual-CoT triplets, 
+
+eDX-int = {(zi, x i, y i), (zi, x ′
+
+> i
+
+, y ′
+
+> i
+
+)}ni=1 , y′
+
+> i
+
+̸ = yi.
+
+For any variational answer predictor rϕ(y | z, x ), we have 
+
+I eP (X; Y | Z) ≥ H eP (Y | Z) + E eP [log rϕ(Y | Z, X )] .
+
+Since H eP (Y | Z) is constant under the augmented distri-bution, minimizing the answer-token negative log-likelihood is equivalent to maximizing the lower bound of I eP (X; Y |Z). The augmented distribution is crucial because it asso-ciates the same instruction zi with multiple CoT-answer pairs, namely (zi, x i, y i) and (zi, x ′
+
+> i
+
+, y ′
+
+> i
+
+). Consequently, a predictor that ignores X cannot correctly model both conditional an-swer distributions under the same instruction. In CASE, the answer-token part of Lmain in Eq. (5) trains with the original pairs, while LX-int in Eq. (6) trains with the counterfactual-CoT pairs. Together, they encourage the model to distinguish different reasoning chains under the same instruction, thereby increasing the conditional dependence of Y on X given Z.
+
+Proposition 3 (Pairwise instruction-discrepancy upper bound for I(Y ; Z | X)). Let pX denote the marginal dis-tribution of reasoning chains, pZ (· | x) the conditional dis-tribution of instructions given x, and pY (· | x, z ) the condi-tional answer distribution. Then 
+
+I(Y ; Z | X) ≤ E x∼pX ,z∼pZ (·| x),z′∼pZ (·| x)
+
+h
+
+KL 
+
+
+
+pY (· | x, z )
+
+∥ pY (· | x, z ′)
+
+i 
+
+. (10) Consequently, reducing the discrepancy between answer distributions induced by different instructions under the same reasoning chain reduces an upper bound on the residual de-pendence of Y on Z conditioned on X. However, the true conditional answer distributions are unknown, and the pair-wise KL divergence cannot be optimized directly. CASE uses likelihood maximization as a tractable pointwise surrogate. Specifically, the answer-token term in Lmain in Eq. (5) trains 
+
+pθ (yi | zi, x i) to assign high likelihood to yi under the origi-nal instruction zi, while LZ-int in Eq. (7) trains pθ (yi | z′
+
+> i
+
+, x i)
+
+to assign high likelihood to the same answer yi under an inter-vened instruction z′ 
+
+> i
+
+with the reasoning chain fixed. Together, they encourage the same reasoning chain to support the same answer under both the original and intervened instructions, serving as a likelihood-based surrogate for reducing the pair-wise instruction discrepancy in Eq. (10). 
+
+Proposition 4 (Attention masking removes the explicit in-struction-to-answer attention path) . Let pAM  
+
+> θ
+
+denote the model distribution under inference-time attention masking, and let HX denote the CoT-side computational states avail-able to answer generation, i.e., the hidden or key-value states at CoT token positions formed during autoregressive CoT generation. If, for every answer token position i ∈ pos( Y ),instruction token position j ∈ pos( Z), layer ℓ, and head h,the masked pre-softmax attention logit is set to Aℓ,h ij = −∞ ,then answer tokens cannot directly attend to instruction-token states. Consequently, once the CoT-side state hX is fixed, answer generation has no direct computation-graph dependence on the instruction-token states, in the explicit computation-graph sense, 
+
+pAM  
+
+> θ
+
+(y | z, h X ) = pAM  
+
+> θ
+
+(y | hX ),
+
+where hX is a realized value of HX .
+
+This is a structural computation-graph statement: attention masking removes the explicit Z → Y attention path, but does not remove instruction information already encoded in the CoT-side mediator HX . Thus, Proposition 4 supports the inference-time stage: answer tokens cannot directly attend to instruction-token states and must use the CoT-mediated path. Together, these propositions show how CASE combines training-time alignment and inference-time masking. The training losses provide causal alignment: they increase CoT-only answer predictiveness, strengthen answer dependence on CoT changes, and reduce answer variation under instruc-tion changes. The attention mask then provides a structural constraint that prevents answer tokens from directly attend-ing to instruction tokens. Thus, CASE learns a reliable CoT-to-answer mechanism and encourages inference to use this mechanism, pushing the model toward a CoT-mediated com-putation consistent with the faithful mechanism in Defini-tion 1. 
+
+# Experimental Studies 
+
+In this section, we conduct empirical evaluations to answer the following research questions (RQs): 
+
+• RQ1: How effectively does CASE improve CoT faithful-ness compared with state-of-the-art (SOTA) baselines? 
+
+• RQ2: How well does CASE maintain CoT faithfulness improvements under cross-dataset transfer evaluation? 
+
+• RQ3: How do training-time causal alignment and inference-time structural enforcement individually con-tribute to improving CoT faithfulness? 
+
+Experimental Setup 
+
+This subsection summarizes the models, datasets, baselines, metrics, and implementation details used in our experiments. 
+
+Models The models employed include two non-reasoning models, Llama-3.1-8B (Meta AI 2024) and Qwen3-8B (Yang et al. 2025), as well as one reasoning model, DeepSeek-R1-Distill-Qwen-7B (Guo et al. 2025). 
+
+Datasets We evaluate on four benchmarks: ARC-Easy, ARC-Challenge (Clark et al. 2018), StrategyQA (Geva et al. 2021), and LogiQA (Liu et al. 2020). All methods are fine-tuned on the training set and evaluated on 500 randomly sampled test questions. For cross-dataset transfer, we fine-tune on ARC-Challenge and evaluate on OpenBookQA (Mi-haylov et al. 2018) to test transfer within science question answering (QA), and fine-tune on StrategyQA and evaluate on ARC-Easy to test a larger domain and format shift. 
+
+Baselines We compared CASE with an untuned Base LLM and three fine-tuning-based methods for improving CoT faithfulness: DU c (Tanneru et al. 2024), FRODO (Paul et al. 2024), and FoCus (Lin, Sun, and Weng 2025). 
+
+Evaluation Metrics Besides the accuracy (Acc) metric, we employed four CoT faithfulness metrics: Filler Tokens (FT), Early Answering (EA) (Lanham et al. 2023), CIE, and CDE (Paul et al. 2024). All metrics range from 0 to 1. Higher FT, EA, and CIE indicate higher faithfulness, while lower CDE indicates higher faithfulness. Detailed definitions and computation procedures are provided in Appendix A.4. Since these metrics capture CoT faithfulness from different perspectives, we adopt the geometric mean (G-mean) (Der-ringer 1994), which is commonly used to aggregate multiple Llama-3.1-8B Qwen3-8B DeepSeek-R1-Distill-Qwen-7B Method Acc FT EA CIE CDE G-M Acc FT EA CIE CDE G-M Acc FT EA CIE CDE G-M (%) ↑ ↑ ↑ ↑ ↓ ↑ (%) ↑ ↑ ↑ ↑ ↓ ↑ (%) ↑ ↑ ↑ ↑ ↓ ↑
+
+ARC-Easy 
+
+Base LLM 92.2 0.042 0.029 0.962 0.358 0.165 96.4 0.542 0.021 0.886 0.404 0.279 85.6 0.558 0.101 0.798 0.426 0.401 
+
+DU c 93.6 0.058 0.032 0.920 0.346 0.183 96.6 0.024 0.017 0.826 0.408 0.119 89.4 0.384 0.055 0.780 0.380 0.318 FRODO 81.4 0.406 0.211 0.900 0.156 0.505 92.2 0.064 0.041 0.988 0.288 0.207 82.8 0.246 0.195 0.984 0.280 0.429 FoCus 94.0 0.060 0.039 0.946 0.360 0.194 96.0 0.396 0.026 0.890 0.390 0.274 84.0 0.752 0.085 0.642 0.486 0.382 CASE 94.4 0.636 0.281 0.976 0.002 0.646 96.6 0.590 0.286 0.986 0.008 0.637 87.4 0.692 0.309 0.982 0.014 0.674 
+
+ARC-Challenge 
+
+Base LLM 86.2 0.136 0.087 0.972 0.324 0.297 91.8 0.470 0.047 0.904 0.382 0.332 72.8 0.524 0.180 0.856 0.410 0.467 
+
+DU c 88.2 0.136 0.092 0.946 0.310 0.301 90.4 0.224 0.048 0.834 0.380 0.272 75.2 0.240 0.153 0.936 0.240 0.402 FRODO 81.4 0.480 0.235 0.988 0.086 0.565 87.6 0.074 0.032 0.986 0.466 0.188 73.0 0.300 0.178 0.978 0.330 0.432 FoCus 83.2 0.148 0.094 0.966 0.302 0.312 89.2 0.396 0.078 0.898 0.330 0.369 73.2 0.564 0.142 0.718 0.408 0.429 CASE 86.8 0.624 0.292 0.984 0.008 0.650 90.8 0.534 0.272 0.986 0.028 0.611 74.8 0.700 0.344 0.972 0.044 0.688 
+
+StrategyQA 
+
+Base LLM 60.8 0.708 0.324 0.612 0.382 0.543 74.0 0.926 0.273 0.628 0.198 0.598 60.8 0.734 0.380 0.734 0.224 0.631 
+
+DU c 69.8 0.382 0.259 0.592 0.252 0.458 79.6 0.374 0.168 0.658 0.146 0.433 61.8 0.730 0.261 0.784 0.086 0.608 FRODO 71.8 0.382 0.185 0.994 0.050 0.508 65.8 0.290 0.165 0.962 0.260 0.429 62.0 0.436 0.223 0.984 0.032 0.552 FoCus 67.8 0.786 0.217 0.660 0.274 0.535 65.2 0.864 0.417 0.662 0.540 0.576 52.0 0.560 0.353 0.720 0.240 0.573 CASE 76.6 0.930 0.679 0.834 0.480 0.723 78.2 0.998 0.543 0.700 0.366 0.700 62.8 0.828 0.496 0.826 0.178 0.727 
+
+LogiQA 
+
+Base LLM 45.0 0.396 0.299 0.946 0.104 0.563 52.0 0.370 0.303 0.960 0.202 0.542 26.0 0.698 0.572 0.980 0.414 0.692 
+
+DU c 49.2 0.374 0.284 0.984 0.102 0.553 56.4 0.418 0.269 0.966 0.156 0.550 43.2 0.586 0.383 0.968 0.118 0.662 FRODO 48.2 0.238 0.249 0.930 0.224 0.455 56.6 0.550 0.360 0.970 0.030 0.657 41.6 0.586 0.402 0.984 0.022 0.690 FoCus 45.6 0.404 0.278 0.978 0.074 0.565 53.2 0.414 0.321 0.958 0.224 0.561 34.2 0.548 0.471 0.946 0.288 0.646 CASE 52.8 0.652 0.410 0.972 0.074 0.700 54.6 0.662 0.458 0.960 0.136 0.708 42.8 0.778 0.529 0.984 0.180 0.759 
+
+Table 1: Main comparison across three models and four datasets. Best and second-best results are highlighted in bold and underlined, respectively. CASE is shaded. G-M denotes G-mean F aith .objectives, to obtain an overall faithfulness score. After con-verting all metrics into the higher-is-better form, we define G-mean F aith = 4
+
+pF T × EA × CIE × (1 − CDE ).
+
+Implementation Details For fair comparisons, all meth-ods use the same LoRA configuration, few-shot prompts, and decoding settings. CoT demonstrations and counterfactual CoTs for CASE and the baselines are generated by DeepSeek-V3.2 (Liu et al. 2024). Detailed checkpoints, hyperparame-ters, and data construction are provided in Appendix A.2, while all prompt templates are given in Appendix A.11. For CASE, biased instructions are constructed by adding an incorrect-answer cue to the question. For multiple-choice tasks, empty-instruction training and inference-time masking remove only the question content while preserving answer options, allowing the model to map the reasoning process to the option space. For true/false tasks, we mask most question tokens while retaining the target proposition needed for the True/False decision. Further details, including the biased-instruction construction rule and mask settings, are provided in Appendix A.2. 
+
+Experimental Results 
+
+This section answers the three RQs through experiments. 
+
+Main Results ( RQ1 ) Table 1 presents the main results across three models and four datasets. We compare CASE with the Base LLM and three fine-tuning baselines using both task accuracy and CoT faithfulness metrics. Overall, CASE consistently improves CoT faithfulness across models and task types while maintaining competitive accuracy. For overall faithfulness, CASE achieves the best G-mean F aith in all 12 model–dataset settings. Compared with the strongest baseline in each setting, CASE achieves an average relative G-mean F aith improvement of 37% across the 12 model–dataset settings. Under a stricter single-LLM comparison that excludes FRODO, whose gains rely on a decoupled multi-module pipeline, the relative improvement further increases to 65%. These results show that CASE pro-vides stronger and more stable CoT faithfulness. Meanwhile, CASE achieves an average accuracy of 74.88%, comparable to the 74.80% of the per-setting strongest baselines, showing that its faithfulness gains do not reduce average task accuracy. The faithfulness gains are also reflected in individual met-rics. Across all faithfulness metrics and model–dataset set-tings, CASE ranks first in 67% of the cases and second in 21%. The improvements are especially clear on Filler To-kens and Early Answering, suggesting stronger dependence on the generated CoT. CASE also reduces CDE across most settings, indicating weaker dependence on direct instruction-to-answer. Appendix A.7 further shows that CASE has infer-ence runtime comparable to other single-model methods and is about 3.0× faster than the dual-model FRODO pipeline. Appendix A.10 provides a qualitative analysis of two ex-amples to supplement the quantitative results, showing that baselines (Tanneru et al. 2024; Paul et al. 2024; Lin, Sun, and Weng 2025) may still rely on direct Z → Y shortcuts or produce answers inconsistent with their CoTs, whereas CASE more faithfully follows the Z → X → Y chain. 
+
+Cross-Dataset Generalization (RQ2 ) Table 2 reports cross-dataset generalization results on Llama-3.1-8B under two transfer settings. ARC-Challenge → OpenBookQA tests transfer within science-oriented multiple-choice QA, while StrategyQA → ARC-Easy tests a larger shift from Boolean commonsense QA to multiple-choice science QA. Thus, the two settings evaluate transfer under both related and larger dataset shifts. Full results on the other two models are pro-vided in Appendix A.8.                                                                                             
+
+> ARC-Challenge −→ OpenBookQA (Llama-3.1-8B) Method Acc (%) ↑FT ↑EA ↑CIE ↑CDE ↓G-M ↑
+> Base LLM 81.0 0.206 0.122 0.998 0.280 0.366
+> DU c85.8 0.182 0.089 0.994 0.262 0.330 FRODO 78.6 0.560 0.246 0.994 0.118 0.589 FoCus 84.8 0.248 0.102 0.998 0.254 0.370 CASE 84.8 0.604 0.268 0.996 0.016 0.631
+> StrategyQA −→ ARC-Easy (Llama-3.1-8B) Method Acc (%) ↑FT ↑EA ↑CIE ↑CDE ↓G-M ↑
+> Base LLM 92.2 0.042 0.029 0.962 0.358 0.165
+> DU c91.4 0.102 0.078 0.942 0.452 0.253 FRODO 86.4 0.128 0.110 0.948 0.258 0.315 FoCus 93.2 0.060 0.037 0.960 0.304 0.196 CASE 91.2 0.644 0.234 0.964 0.022 0.614
+
+Table 2: Cross-dataset generalization on Llama-3.1-8B under two transfer settings. G-M denotes G-mean F aith .Existing baselines show limited faithfulness transfer. Al-though they improve individual metrics in some settings, their overall cross-dataset performance remains unstable. Across the six transfer model–dataset settings, the average G-mean F aith scores of DU c , FRODO, and FoCus are 0.310, 0.365, and 0.328, respectively, none exceeding the Base LLM average of 0.366. Thus, their faithfulness improvements do not transfer reliably across datasets. In contrast, CASE achieves the best G-mean F aith in all six settings, with an average score of 0.650. Averaging the per-setting relative improvements, CASE outperforms the Base LLM by 102% and the strongest competing baseline in each setting by 61%. It also achieves the best EA and CDE in all settings and the best or second-best FT and CIE in each setting. These results indicate that CASE yields more trans-ferable faithfulness improvements rather than gains limited to the source fine-tuning dataset. Regarding task performance, most methods achieve ac-curacy close to the Base LLM, and no method consistently performs best. CASE likewise maintains competitive accu-racy, indicating that its cross-dataset faithfulness gains do not require a substantial loss in task performance. 
+
+Ablation Study ( RQ3 ) Table 3 presents the ablation results of CASE on Llama-3.1-8B across two ARC benchmarks. We compare full CASE with the Base LLM and two single-stage variants: training-time causal alignment (TCA) only and inference-time structural enforcement (ISE) only. Due to space limits, results on the other two datasets and the other two models are provided in Appendix A.9.                                                                           
+
+> ARC-Easy (Llama-3.1-8B) Method Acc (%) ↑FT ↑EA ↑CIE ↑CDE ↓G-M ↑
+> Base LLM 92.2 0.042 0.029 0.962 0.358 0.165 TCA only 94.6 0.078 0.037 0.994 0.230 0.217 ISE only 93.4 0.610 0.266 0.968 0.018 0.627 CASE 94.4 0.636 0.281 0.976 0.002 0.646
+> ARC-Challenge (Llama-3.1-8B) Method Acc (%) ↑FT ↑EA ↑CIE ↑CDE ↓G-M ↑
+> Base LLM 86.2 0.136 0.087 0.972 0.324 0.297 TCA only 88.8 0.140 0.092 0.998 0.188 0.320 ISE only 84.4 0.560 0.295 0.978 0.028 0.630 CASE 86.8 0.624 0.292 0.984 0.008 0.650
+
+Table 3: Ablation study of CASE on Llama-3.1-8B across two ARC benchmarks. G-M denotes G-mean F aith .The results show that the two stages contribute in comple-mentary ways. TCA mainly improves causal faithfulness met-rics, consistently increasing CIE and reducing CDE across all ablations, suggesting weaker direct instruction-to-answer dependence. However, its gains on FT and EA are limited. By contrast, ISE substantially improves FT and EA, indicating that attention masking makes the final answer rely more on the generated CoT, though it may slightly affect accuracy. Combining both stages, CASE achieves the best G-mean F aith across all ablation settings. These results con-firm that TCA makes the CoT-to-answer mechanism more reliable, while ISE prevents the model from bypassing this mechanism during inference. Appendix A.9 further shows that this trend holds across additional datasets and models. 
+
+# Conclusion 
+
+This paper studies CoT faithfulness from a causal perspec-tive. We argue that standard SFT (Tanneru et al. 2024) does not explicitly encourage the faithful CoT-to-answer mech-anism and can still allow instruction-to-answer shortcuts. To address this issue, we propose CASE, a framework that combines training-time causal alignment with inference-time structural enforcement. By constructing counterfactual-CoT, biased-instruction, and empty-instruction datasets in fine-tuning and blocking direct instruction-to-answer attention during inference, CASE pushes answer generation toward the faithful chain Z → X → Y . Experiments show that CASE consistently improves CoT faithfulness, achieves bet-ter cross-dataset generalization, and preserves task accuracy. References 
+
+Atanasova, P.; Camburu, O.-M.; Lioma, C.; Lukasiewicz, T.; Simonsen, J. G.; and Augenstein, I. 2023. Faithfulness tests for natural language explanations. In Proceedings of the 61st Annual Meeting of the Association for Computational Linguistics (Volume 2: Short Papers) , 283–294. Bao, G.; Zhang, H.; Wang, C.; Yang, L.; and Zhang, Y. 2025. How likely do LLMs with CoT mimic human reasoning? In 
+
+Proceedings of the 31st International Conference on Com-putational Linguistics , 7831–7850. Clark, P.; Cowhey, I.; Etzioni, O.; Khot, T.; Sabharwal, A.; Schoenick, C.; and Tafjord, O. 2018. Think you have solved question answering? Try ARC, the AI2 reasoning challenge. 
+
+arXiv preprint arXiv:1803.05457 .Derringer, G. C. 1994. A balancing act-optimizing a products properties. Quality Progress , 27(6): 51–58. Geva, M.; Khashabi, D.; Segal, E.; Khot, T.; Roth, D.; and Berant, J. 2021. Did aristotle use a laptop? A question an-swering benchmark with implicit reasoning strategies. Trans-actions of the Association for Computational Linguistics , 9: 346–361. Guo, D.; Yang, D.; Zhang, H.; Song, J.; Wang, P.; Zhu, Q.; Xu, R.; Zhang, R.; Ma, S.; Bi, X.; et al. 2025. DeepSeek-R1: Incentivizing reasoning capability in LLMs via reinforce-ment learning. arXiv preprint arXiv:2501.12948 .Hagmayer, Y.; Sloman, S. A.; Lagnado, D. A.; and Wald-mann, M. R. 2007. Causal reasoning through intervention. 
+
+Causal Learning: Psychology, Philosophy, and Computa-tion , 5. Jie, Y. W.; Satapathy, R.; Goh, R.; and Cambria, E. 2024. How interpretable are reasoning explanations from prompt-ing large language models? In Findings of the Association for Computational Linguistics: NAACL 2024 , 2148–2164. Lanham, T.; Chen, A.; Radhakrishnan, A.; Steiner, B.; Deni-son, C.; Hernandez, D.; Li, D.; Durmus, E.; Hubinger, E.; Kernion, J.; et al. 2023. Measuring faithfulness in chain-of-thought reasoning. arXiv preprint arXiv:2307.13702 .Li, J.; Cao, P.; Chen, Y.; Xu, J.; Li, H.; Jiang, X.; Liu, K.; and Zhao, J. 2025. Towards better chain-of-thought: A re-flection on effectiveness and faithfulness. In Findings of the Association for Computational Linguistics: ACL 2025 ,10747–10765. Li, J.; Yan, H.; and He, Y. 2025. Drift: Enhancing LLM faith-fulness in rationale generation via dual-reward probabilistic inference. In Proceedings of the 63rd Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers) , 6850–6866. Lin, G.-Y.; Sun, C.-E.; and Weng, T.-W. 2025. FoCus: Im-proving Faithfulness in Chain-of-Thoughts by Training on Structured Reasoning Data. In The 5th Workshop on Mathe-matical Reasoning and AI at NeurIPS 2025 .Liu, A.; Feng, B.; Xue, B.; Wang, B.; Wu, B.; Lu, C.; Zhao, C.; Deng, C.; Zhang, C.; et al. 2024. Deepseek-v3 technical report. arXiv preprint arXiv:2412.19437 .Liu, J.; Cui, L.; Liu, H.; Huang, D.; Wang, Y.; and Zhang, Y. 2020. LogiQA: A challenge dataset for machine reading comprehension with logical reasoning. In Proceedings of the Twenty-Ninth International Joint Conference on Artificial Intelligence, IJCAI-20 , 3622–3628. Meta AI. 2024. Introducing Meta Llama 3: The most capa-ble openly available LLM to date. https://ai.meta.com/blog/ meta-llama-3/. Accessed: 2026-06-17. Mihaylov, T.; Clark, P.; Khot, T.; and Sabharwal, A. 2018. Can a suit of armor conduct electricity? A new dataset for open book question answering. In Proceedings of the 2018 Conference on Empirical Methods in Natural Language Pro-cessing , 2381–2391. OpenAI. 2026. GPT-5.5 system card. https://openai.com/ index/gpt-5-5-system-card/. Accessed: 2026-07-08. Paul, D.; West, R.; Bosselut, A.; and Faltings, B. 2024. Mak-ing reasoning matter: Measuring and improving faithfulness of chain-of-thought reasoning. In Findings of the Association for Computational Linguistics: EMNLP 2024 , 15012–15032. Rafailov, R.; Sharma, A.; Mitchell, E.; Manning, C. D.; Er-mon, S.; and Finn, C. 2023. Direct preference optimization: Your language model is secretly a reward model. Advances in Neural Information Processing Systems , 36: 53728–53741. Tanneru, S. H.; Ley, D.; Agarwal, C.; and Lakkaraju, H. 2024. On the hardness of faithful chain-of-thought reasoning in large language models. arXiv preprint arXiv:2406.10625 .Turpin, M.; Michael, J.; Perez, E.; and Bowman, S. 2023. Language models don’t always say what they think: Unfaith-ful explanations in chain-of-thought prompting. Advances in Neural Information Processing Systems , 36: 74952–74965. Tutek, M.; Chaleshtori, F. H.; Marasović, A.; and Belinkov, Y. 2025. Measuring chain of thought faithfulness by unlearning reasoning steps. In Proceedings of the 2025 Conference on Empirical Methods in Natural Language Processing , 9946– 9971. Wang, Z.; Zeng, X.; Liu, W.; Wang, Y.; Li, L.; Wang, Y.; Shang, L.; Jiang, X.; Liu, Q.; and Wong, K.-F. 2025. Chain-of-probe: Examining the necessity and accuracy of CoT step-by-step. In Findings of the Association for Computational Linguistics: NAACL 2025 , 2586–2606. Wei, J.; Wang, X.; Schuurmans, D.; Bosma, M.; Xia, F.; Chi, E.; Le, Q. V.; Zhou, D.; et al. 2022. Chain-of-thought prompt-ing elicits reasoning in large language models. Advances in Neural Information Processing Systems , 35: 24824–24837. Yang, A.; Li, A.; Yang, B.; Zhang, B.; Hui, B.; Zheng, B.; Yu, B.; Gao, C.; Huang, C.; Lv, C.; et al. 2025. Qwen3 technical report. arXiv preprint arXiv:2505.09388 .Zaman, K.; and Srivastava, S. 2025. A causal lens for evaluat-ing faithfulness metrics. In Proceedings of the 2025 Confer-ence on Empirical Methods in Natural Language Processing ,29413–29437. A Appendix 
+
+A.1 Proofs for Theoretical Analysis 
+
+We provide the proofs for the propositions in the main text. Throughout this appendix, all expectations are taken under the corresponding data- or model-induced distributions, and all distributions are assumed to have compatible supports so that the KL divergences are finite. For autoregressive answer generation, conditional probabilities such as pθ (y | z, x ) de-note sequence-level probabilities, with dependence on previ-ous answer tokens omitted for notation. In Proposition 4, HX
+
+denotes the CoT-side mediator available to answer genera-tion, including generated CoT tokens and contextual hidden states used by answer-generation attention across layers. 
+
+Proposition 1 (CoT-only likelihood lower bounds I(X; Y )).
+
+Under the data distribution over (X, Y ), let rϕ(y | x) be any variational CoT-conditioned answer predictor. Then 
+
+I(X; Y ) ≥ H(Y ) + Ex,y [log rϕ(y | x)] . (A.1) 
+
+Proof. By definition, I(X; Y ) = H(Y ) − H(Y | X). For any variational predictor rϕ(y | x), the conditional entropy satisfies 
+
+H(Y | X) = Ex
+
+"
+
+− X
+
+> y
+
+p(y | x) log p(y | x)
+
+#
+
+.
+
+Using the non-negativity of KL divergence, 
+
+Ex [KL ( p(· | x) ∥ rϕ(· | x))] ≥ 0,
+
+we have 
+
+Ex
+
+"
+
+− X
+
+> y
+
+p(y | x) log p(y | x)
+
+#
+
+≤ Ex
+
+"
+
+− X
+
+> y
+
+p(y | x) log rϕ(y | x)
+
+#
+
+.
+
+Therefore, 
+
+H(Y | X) ≤ Ex,y [− log rϕ(y | x)] ,
+
+which implies 
+
+−H(Y | X) ≥ Ex,y [log rϕ(y | x)] .
+
+Substituting this inequality into I(X; Y ) = H(Y ) − H(Y |
+
+X) gives Eq. (A.1). 
+
+Proposition 2 (Counterfactual-CoT likelihood lower bounds 
+
+I eP (X; Y | Z)). Let eP denote the augmented CoT-intervention distribution induced by the original and counterfactual-CoT pairs, 
+
+eDX-int = {(zi, x i, y i), (zi, x ′
+
+> i
+
+, y ′
+
+> i
+
+)}ni=1 , y′
+
+> i
+
+̸ = yi.
+
+For any variational answer predictor rϕ(y | z, x ), we have 
+
+I eP (X; Y | Z) ≥ H eP (Y | Z) + E eP [log rϕ(Y | Z, X )] .
+
+(A.2) 
+
+Proof. Under the augmented distribution eP ,
+
+I eP (X; Y | Z) = H eP (Y | Z) − H eP (Y | Z, X ).
+
+For any variational predictor rϕ(y | z, x ), the conditional cross-entropy decomposes as 
+
+E eP [− log rϕ(Y | Z, X )] = H eP (Y | Z, X )+ E eP(z,x )
+
+h
+
+KL 
+
+ eP (· | z, x ) ∥ rϕ(· | z, x )
+
+i 
+
+.
+
+Since the KL term is non-negative, 
+
+H eP (Y | Z, X ) ≤ E eP [− log rϕ(Y | Z, X )] .
+
+Therefore, 
+
+−H eP (Y | Z, X ) ≥ E eP [log rϕ(Y | Z, X )] .
+
+Substituting this inequality into I eP (X; Y | Z) = H eP (Y |
+
+Z) − H eP (Y | Z, X ) gives Eq. (A.2). The inequality above is a generic variational lower bound for I eP (X; Y | Z). The counterfactual-CoT augmentation is important because it changes the distribution eP : the same instruction can be paired with different CoTs and different answers. Therefore, optimizing the likelihood term under eP
+
+cannot be satisfied by a predictor that ignores X and relies only on Z. This makes the bound useful as a surrogate for strengthening the X → Y dependence under fixed Z.
+
+Proposition 3 (Pairwise instruction-discrepancy upper bound for I(Y ; Z | X)). Let pX denote the marginal dis-tribution of reasoning chains, pZ (· | x) the conditional dis-tribution of instructions given x, and pY (· | x, z ) the condi-tional answer distribution. Then 
+
+I(Y ; Z | X) ≤ E x∼pX ,z∼pZ (·| x),z′∼pZ (·| x)
+
+h
+
+KL 
+
+
+
+pY (· | x, z )
+
+∥ pY (· | x, z ′)
+
+i 
+
+. (A.3) 
+
+Proof. For a fixed reasoning chain x, the conditional mutual information can be written as 
+
+I(Y ; Z | X = x)= Ez∼pZ (·| x) [KL ( pY (· | x, z )∥pY (· | x))] ,
+
+where pY (· | x) = Ez′∼pZ (·| x) [pY (· | x, z ′)] .By the convexity of the KL divergence, we have 
+
+KL ( pY (· | x, z ) ∥ pY (· | x)) = KL  pY (· | x, z ) Ez′∼pZ (·| x) [pY (· | x, z ′)] 
+
+≤ Ez′∼pZ (·| x) [KL ( pY (· | x, z ) ∥ pY (· | x, z ′))] .
+
+Taking expectation over z ∼ pZ (· | x) gives 
+
+I(Y ; Z | X = x)
+
+≤ Ez∼pZ (·| x)Ez′∼pZ (·| x)
+
+"
+
+KL 
+
+
+
+pY (· | x, z )
+
+∥ pY (· | x, z ′)
+
+#
+
+.
+
+Finally, averaging both sides over x ∼ pX yields Eq. (A.3). Proposition 4 (Attention masking removes the explicit in-struction-to-answer attention path) . Let pAM  
+
+> θ
+
+denote the model distribution under inference-time attention masking, and let HX denote the CoT-side computational states avail-able to answer generation, i.e., the hidden or key-value states at CoT token positions formed during autoregressive CoT generation. If, for every answer token position i ∈ pos( Y ),instruction token position j ∈ pos( Z), layer ℓ, and head h,the masked pre-softmax attention logit is set to Aℓ,h ij = −∞ ,then answer tokens cannot directly attend to instruction-token states. Consequently, once the CoT-side state hX is fixed, answer generation has no direct computation-graph dependence on the instruction-token states, in the explicit computation-graph sense, 
+
+pAM  
+
+> θ
+
+(y | z, h X ) = pAM  
+
+> θ
+
+(y | hX ), (A.4) 
+
+where hX is a realized value of HX .Proof. Let SZ , SX , and SY be the token-position sets of the instruction, CoT, and answer, respectively. Let C(i) denote the causal-visible positions for an answer position i ∈ SY .At layer ℓ and head h,
+
+αℓ,h ij = exp( Aℓ,h ij )
+
+P 
+
+> k∈C(i)
+
+exp( Aℓ,h ik ) ,
+
+where Aℓ,h ij is the masked pre-softmax attention logit. The CASE mask sets 
+
+Aℓ,h ij = −∞ , ∀i ∈ SY , j ∈ SZ , ℓ, h, 
+
+and hence 
+
+αℓ,h ij = 0 , ∀i ∈ SY , j ∈ SZ , ℓ, h. 
+
+Thus, the attention output at answer position i contains no direct contribution from instruction positions: 
+
+oℓ,h i = X
+
+> k∈C(i)\SZ
+
+αℓ,h ik W ℓ,h V hℓ−1 
+
+> k
+
+.
+
+Residual connections and feed-forward blocks introduce no new cross-token edges. Therefore, conditioning on the CoT-side mediator hX , answer-token states can depend on the instruction only through hX and previous answer tokens. By induction over layers, for each answer token yt,
+
+pAM  
+
+> θ
+
+(yt | z, h X , y <t ) = pAM  
+
+> θ
+
+(yt | hX , y <t ).
+
+Using the autoregressive factorization, we obtain 
+
+pAM  
+
+> θ
+
+(y | z, h X ) = Y
+
+> t
+
+pAM  
+
+> θ
+
+(yt | z, h X , y <t )= Y
+
+> t
+
+pAM  
+
+> θ
+
+(yt | hX , y <t )= pAM  
+
+> θ
+
+(y | hX ).
+
+This proves Eq. (A.4). 
+
+A.2 Detailed Experiment Settings 
+
+Table S-I lists the model checkpoints used in our experiments. LLM Checkpoint Llama-3.1-8B Llama-3.1-8B-Instruct     
+
+> Qwen3-8B Qwen3-8B
+> DeepSeek-R1-Distill-Qwen-7B DeepSeek-R1-Distill-Qwen-7B
+> DeepSeek-V3.2 DeepSeek-V3.2-Exp
+> GPT-5.5 GPT-5.5
+
+Table S-I: The LLMs used in the experiments and their cor-responding checkpoints. We use a fixed random seed of 42 for data sampling, model training, and evaluation. For all fine-tuning experiments, we use LoRA with rank r = 64 and scaling factor α = 128 .For CASE, we use AdamW for 5 epochs with a learning rate of 5 × 10 −5 , weight decay of 0.01, warmup ratio of 0.1, epsilon of 10 −8 , and maximum gradient norm of 0.5. The maximum sequence length, per-device batch size, and gradient-accumulation steps are set to 1024, 2, and 4, respec-tively. During inference, all methods use the same few-shot prompts, with temperature and top −p set to 0.7 and 0.9, re-spectively. The remaining hyperparameters of baseline meth-ods follow their original implementations. For CASE, we use DeepSeek-V3.2 to generate CoT demon-strations and counterfactual CoTs. To construct the biased-instruction dataset DC , we append the sentence “An MIT professor believes the answer is {chosen} .” to the end of the question, where {chosen} is randomly selected from the incorrect answer candidates. For the empty-instruction dataset DD , we remove only the question content while pre-serving the answer options for multiple-choice tasks. Sim-ilarly, during inference, attention masking blocks only the question content while retaining the option information. For true/false tasks, we mask only a proportion β of the question tokens to preserve the answer format. We set β = 80% , and analyze the impact of different β values in Appendix A.6. Appendix A.11 provides all prompt templates used in our experiments. 
+
+A.3 Quality Audit of Generated Training Data 
+
+Since CASE uses LLM-generated CoTs for training, we con-duct an automatic quality audit for the generated training data. The audit mainly covers DA and DB , because they contain the newly generated CoT-answer and counterfactual CoT-answer pairs produced by DeepSeek-V3.2. The other two datasets, DC and DD , are constructed by modifying or removing the instruction while reusing the CoT-answer pairs from DA. Thus, auditing DA and DB checks the quality of the LLM-generated supervision used by CASE. For each benchmark, we randomly sample N generated cases from each audited dataset, where N = 500 in our experiments. The goal of this audit is not to prove that every generated CoT is uniquely correct, but to check whether the generated data satisfies the consistency properties required by our training objective. To avoid self-verification, we use GPT-5.5 (Ope-nAI 2026) as an independent LLM verifier, which is different from DeepSeek-V3.2 used for data generation and from the models fine-tuned in our experiments. We use three automatic metrics. Let Yi denote the can-didate answer set for instance i, and let ygold  
+
+> i
+
+denote the gold answer. For DA, yi denotes the generated answer, while for DB , y′ 
+
+> i
+
+denotes the generated counterfactual answer. We first compute the answer validity rate (AVR), which checks whether the generated answer satisfies the required answer constraint: 
+
+AV R DA = 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+1
+
+h
+
+yi = ygold 
+
+> i
+
+i
+
+,AV R DB = 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+1[y′ 
+
+> i
+
+∈ Y i ∧ y′
+
+> i
+
+̸ = yi] .
+
+Second, we compute the CoT-answer consistency rate (CAC), which checks whether the generated answer can be inferred from the question and the generated CoT. Let 
+
+Vans (z, x ) denote the answer predicted by the independent LLM verifier when given the question z and the CoT x. We define 
+
+CAC DA = 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+1[Vans (zi, x i) = yi] ,CAC DB = 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+1[Vans (zi, x ′
+
+> i
+
+) = y′
+
+> i
+
+] .
+
+This metric evaluates whether the generated CoT, together with the question context, leads the verifier to the generated answer. Third, we compute the LLM-judge support rate (SR), which checks whether the reasoning chain supports the pre-dicted answer. Let Vsup (z, x, y ) ∈ { Yes , No } denote the LLM verifier’s judgment on whether CoT x supports answer 
+
+y for question z. We define 
+
+SR DA = 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+1[Vsup (zi, x i, y i) = Yes] ,SR DB = 1
+
+N
+
+> N
+
+X
+
+> i=1
+
+1[Vsup (zi, x ′
+
+> i
+
+, y ′
+
+> i
+
+) = Yes] .
+
+The prompt template for SR is provided in Table S-XVII in Appendix A.11. Table S-II reports the audit results across four datasets.                           
+
+> Dataset AV R DAAV R DBCAC DACAC DBSR DASR DB
+> ARC-Easy 1.000 1.000 0.998 0.998 0.996 1.000 ARC-Challenge 1.000 1.000 0.998 0.996 0.992 0.996 StrategyQA 1.000 1.000 0.994 1.000 0.994 0.998 LogiQA 1.000 1.000 0.990 0.994 0.986 1.000
+
+Table S-II: Automatic quality audit of generated training data. The results show that the generated training data has high automatic quality across all datasets. Both DA and 
+
+DB achieve perfect answer validity, indicating that the gen-erated answers are valid under their corresponding data-construction requirements. The CAC scores are also con-sistently high, showing that the generated CoTs usually lead to the intended answers. In addition, the SR scores remain above 0.986 across all settings, suggesting that the verifier judges most generated reasoning chains as supporting their target answers. These results provide scalable evidence that the generated CoT data is reliable for training CASE, espe-cially for learning the intended CoT-to-answer dependency. 
+
+A.4 Evaluation Metric Details 
+
+We describe the four faithfulness metrics used in our exper-iments. All metrics are computed over M evaluation sam-ples (where M = 500 in this paper). Higher values indicate higher CoT faithfulness for FT, EA, and CIE, while lower CDE indicates higher faithfulness. 
+
+Filler Tokens (FT). Filler Tokens measures whether the answer depends on the generated CoT. For each question, we first record the original prediction ˆyi using the generated CoT 
+
+xi. We then replace all CoT tokens with the filler string “...” and obtain a new prediction ˆyFT  
+
+> i
+
+. The metric is the proportion of samples whose answers change: 
+
+FT = 1
+
+M
+
+> M
+
+X
+
+> i=1
+
+1[ˆ yFT 
+
+> i
+
+̸ = ˆ yi].
+
+A higher FT score indicates stronger reliance on the CoT. 
+
+Early Answering (EA). Early Answering tests whether the model can predict the final answer before observing the full CoT. For sample i, we split the CoT into Ni sentences and construct prefixes r(0)  
+
+> i
+
+, r (1)  
+
+> i
+
+, . . . , r (Ni) 
+
+> i
+
+, where r(0)  
+
+> i
+
+= ∅ and 
+
+r(k) 
+
+> i
+
+contains the first k sentences. Let ˆyi be the prediction using the full CoT, and ˆy(k) 
+
+> i
+
+be the prediction using prefix 
+
+r(k) 
+
+> i
+
+. We define the consistency sequence as 
+
+c(k) 
+
+> i
+
+= 1[ˆ y(k) 
+
+> i
+
+= ˆ yi].
+
+We compute the normalized area under this consistency curve, denoted by AUC( ci), and define AOC i = 1 −
+
+AUC( ci). The final metric is 
+
+EA = 1
+
+M
+
+> M
+
+X
+
+> i=1
+
+AOC i.
+
+A higher EA score means that the model is less able to answer early, indicating stronger dependence on the complete CoT. 
+
+Controlled Indirect Effect (CIE). CIE measures whether changing the CoT changes the final answer while keeping the question fixed. For each question zi and the generated CoT 
+
+xi, we use DeepSeek-V3.2 to generate a counterfactual CoT 
+
+x′
+
+> i
+
+, with prompt templates provided in Appendix A.11. We compare the original prediction ˆyi based on (zi, x i) with the prediction ˆyCIE  
+
+> i
+
+based on (zi, x ′
+
+> i
+
+). The metric is 
+
+CIE = 1
+
+M
+
+> M
+
+X
+
+> i=1
+
+1[ˆ yCIE 
+
+> i
+
+̸ = ˆ yi].
+
+A higher CIE score indicates that the answer is more sensitive to changes in the reasoning chain. Controlled Direct Effect (CDE). CDE measures whether changing the question still changes the answer when the CoT is fixed. For each sample, we use DeepSeek-V3.2 to generate a counterfactual question z′
+
+> i
+
+, with prompt templates provided in Appendix A.11. We compare the original prediction ˆyi
+
+based on (zi, x i) with the prediction ˆyCDE  
+
+> i
+
+based on (z′
+
+> i
+
+, x i).The metric is 
+
+CDE = 1
+
+M
+
+> M
+
+X
+
+> i=1
+
+1[ˆ yCDE 
+
+> i
+
+̸ = ˆ yi].
+
+A lower CDE score indicates weaker direct instruction-to-answer dependence after conditioning on the CoT. 
+
+A.5 Attention Masking vs. CoT-only Decoding 
+
+A direct alternative to attention masking is to first generate the CoT from the instruction, then remove the instruction and generate the answer from the CoT alone. We call this strategy CoT-only decoding (COD). To isolate the effect of the inference-time strategy, we keep the same CASE training procedure and replace only the attention-masking stage with COD. Table S-III compares CASE with its COD variant on Llama-3.1-8B across two ARC benchmarks.                                              
+
+> ARC-Easy (Llama-3.1-8B) Method Acc (%) ↑FT ↑EA ↑CIE ↑CDE ↓G-M CASE w/ COD 93.8 0.374 0.066 0.994 0.202 0.374 CASE 94.4 0.636 0.281 0.976 0.002 0.646
+> ARC-Challenge (Llama-3.1-8B) Method Acc (%) ↑FT ↑EA ↑CIE ↑CDE ↓G-M ↑
+> CASE w/ COD 85.6 0.360 0.132 0.998 0.180 0.444 CASE 86.8 0.624 0.292 0.984 0.008 0.650
+
+Table S-III: Comparison between CASE and its CoT-only decoding variant on Llama-3.1-8B across two ARC bench-marks. Best results are highlighted in bold. G-M denotes G-mean F aith .The results show that directly deleting the instruction is less effective than attention masking. Although CASE w/ COD obtains slightly higher CIE, CASE performs better in task accuracy and most faithfulness metrics, including FT, EA, CDE, and the overall G-M score. These results do not imply that the visible CoT is insufficient as an explana-tion. Rather, COD changes both the prompt and the origi-nal instruction-conditioned CoT-side states, whereas atten-tion masking isolates direct-path removal while preserving these states. This leads to better accuracy and more balanced faithfulness. 
+
+A.6 Sensitivity Analysis of Masking Ratio β
+
+For true/false tasks, fully masking the question can hide the target proposition to be judged. As a result, even with correct reasoning, the model may not know whether to answer True or False. Therefore, we introduce a masking ratio β, which controls the proportion of question tokens masked during inference. To study its effect, we vary β from 0% to 100% on StrategyQA using Llama-3.1-8B, where β = 0% means no question masking and β = 100% means masking the entire question content. The results are shown in Table S-IV.                                                                                         
+
+> StrategyQA (Llama-3.1-8B)
+> Acc (%) ↑FT ↑EA ↑CIE ↑CDE ↓G-M
+> β= 0% 71.8 0.326 0.222 0.992 0.226 0.486
+> β= 10% 71.2 0.415 0.256 0.966 0.178 0.539
+> β= 20% 72.0 0.566 0.326 0.944 0.192 0.612
+> β= 30% 74.8 0.632 0.352 0.948 0.190 0.643
+> β= 40% 73.8 0.738 0.438 0.940 0.244 0.692
+> β= 50% 74.4 0.852 0.496 0.918 0.294 0.723
+> β= 60% 75.4 0.862 0.553 0.884 0.364 0.720
+> β= 70% 73.0 0.896 0.648 0.848 0.428 0.728
+> β= 80% 76.6 0.930 0.679 0.834 0.480 0.723
+> β= 90% 73.8 0.930 0.746 0.808 0.546 0.710
+> β= 100% 71.4 0.950 0.739 0.746 0.650 0.654
+
+Table S-IV: Sensitivity analysis of the masking ratio β on StrategyQA with Llama-3.1-8B. Best and second-best results are highlighted in bold and underlined, respectively. G-M denotes G-mean F aith .As β increases, FT and EA improve steadily, indicating that stronger masking forces the model to rely more on the generated CoT when producing the final answer. However, overly strong masking degrades the intervention-based met-rics, because removing too much question information makes it harder to maintain the correct true/false decision under in-terventions. Accuracy also improves with moderate masking but drops when the question is fully masked. Overall, β
+
+values between 60% and 80% provide the best trade-off be-tween faithfulness and accuracy. Although β = 70% gives the highest G-M score, β = 80% achieves the best accu-racy and similar G-M while further improving FT and EA. Therefore, we set β = 80% in our main experiments. 
+
+A.7 Inference Runtime Analysis 
+
+To evaluate inference efficiency, we measure the average run-time per question on ARC-Easy using Llama-3.1-8B. All ex-periments are conducted on a single NVIDIA A100 GPU with 40GB of memory under the same evaluation setting. The results are reported in Table S-V. Method Runtime (s) Base LLM 3.14 
+
+DU c 4.79 FRODO 13.71 FoCus 3.45 CASE 4.55 Table S-V: Inference runtime comparison on Llama-3.1-8B and ARC-Easy. Best and second-best results are highlighted in bold and underlined, respectively. CASE is shaded. The results show that CASE has a comparable inference cost to other single-model methods. Its runtime is close to DU c and FoCus, while being only moderately slower than the untuned Base LLM due to the inference-time attention masking. In contrast, FRODO requires much longer inference time because it relies on a dual-model pipeline. Specifically, CASE is about 3.0× faster than FRODO in this setting. These results suggest that CASE improves CoT faithfulness without introducing substantial inference overhead compared with other single-model approaches. 
+
+A.8 Additional Cross-Dataset Generalization Results 
+
+Due to space limits, the main text reports cross-dataset generalization results on Llama-3.1-8B. Table S-VI pro-vides the remaining results on Qwen3-8B and DeepSeek-R1-Distill-Qwen-7B under the same two transfer settings: ARC-Challenge → OpenBookQA and StrategyQA → ARC-Easy. The former evaluates transfer within science-oriented multiple-choice QA, while the latter evaluates a larger shift from Boolean commonsense QA to multiple-choice science QA.                                                                                                                                                                                         
+
+> ARC-Challenge −→ OpenBookQA (Qwen3-8B) Method Acc (%) ↑FT ↑EA ↑CIE ↑CDE ↓G-M ↑
+> Base LLM 90.8 0.692 0.085 0.994 0.262 0.455
+> DU c89.2 0.162 0.058 0.980 0.346 0.278 FRODO 81.8 0.132 0.040 1.000 0.440 0.233 FoCus 90.4 0.346 0.097 0.986 0.284 0.392 CASE 90.4 0.644 0.266 0.994 0.010 0.641
+> ARC-Challenge −→ OpenBookQA (DeepSeek-R1-Distill-Qwen-7B) Method Acc (%) ↑FT ↑EA ↑CIE ↑CDE ↓G-M ↑
+> Base LLM 69.6 0.496 0.212 0.980 0.240 0.529
+> DU c69.8 0.308 0.181 0.970 0.192 0.457 FRODO 69.4 0.402 0.218 0.998 0.210 0.513 FoCus 69.4 0.554 0.236 0.932 0.300 0.332 CASE 69.2 0.730 0.329 0.990 0.032 0.693
+> StrategyQA −→ ARC-Easy (Qwen3-8B) Method Acc (%) ↑FT ↑EA ↑CIE ↑CDE ↓G-M ↑
+> Base LLM 96.4 0.542 0.021 0.886 0.404 0.279
+> DU c96.4 0.044 0.022 0.876 0.442 0.147 FRODO 67.4 0.334 0.090 0.900 0.900 0.228 FoCus 94.4 0.464 0.036 0.890 0.538 0.288 CASE 96.0 0.592 0.268 0.980 0.014 0.626
+> StrategyQA −→ ARC-Easy (DeepSeek-R1-Distill-Qwen-7B) Method Acc (%) ↑FT ↑EA ↑CIE ↑CDE ↓G-M ↑
+> Base LLM 85.6 0.558 0.101 0.798 0.426 0.401
+> DU c85.0 0.574 0.075 0.916 0.384 0.395 FRODO 56.2 0.368 0.083 0.842 0.624 0.314 FoCus 82.2 0.484 0.100 0.824 0.420 0.390 CASE 85.2 0.760 0.327 0.968 0.026 0.696
+
+Table S-VI: Supplementary cross-dataset generalization re-sults on Qwen3-8B and DeepSeek-R1-Distill-Qwen-7B un-der two transfer settings. Best and second-best results are highlighted in bold and underlined, respectively. CASE is shaded. G-M denotes G-mean F aith .The results are consistent with the findings in the main text. CASE achieves the best G-mean F aith in all four sup-plementary settings, while maintaining accuracy close to the Base LLM or the strongest baselines. It also consistently im-proves EA and reduces CDE, suggesting stronger reliance on the generated CoT and weaker direct instruction-to-answer dependence. Together with Table 2, these results show that CASE yields more transferable faithfulness improvements under cross-dataset evaluation. 
+
+A.9 Additional Ablation Results 
+
+We provide the remaining ablation results not included in the main paper, including Llama-3.1-8B on StrategyQA and LogiQA, as well as all results on Qwen3-8B and DeepSeek-R1-Distill-Qwen-7B, in Tables S-VII–S-IX. The results are consistent with the observations in the main paper. TCA mainly improves causal faithfulness metrics such as CIE and CDE, while ISE brings larger gains on FT and EA by en-couraging stronger reliance on the generated CoT during answer generation. The full CASE framework achieves the best G-mean F aith in all additional model–dataset settings, confirming that the complementary effect of TCA and ISE is consistent across datasets and models, rather than being specific to the ARC benchmarks or Llama-3.1-8B.                                                                           
+
+> StrategyQA (Llama-3.1-8B) Method Acc (%) ↑FT ↑EA ↑CIE ↑CDE ↓G-M ↑
+> Base LLM 60.8 0.708 0.324 0.612 0.382 0.543 TCA only 71.8 0.326 0.222 0.992 0.226 0.486 ISE only 61.0 0.706 0.588 0.636 0.470 0.612 CASE 76.6 0.930 0.679 0.834 0.480 0.723
+> LogiQA (Llama-3.1-8B) Method Acc (%) ↑FT ↑EA ↑CIE ↑CDE ↓G-M ↑
+> Base LLM 45.0 0.396 0.299 0.946 0.104 0.563 TCA only 53.8 0.352 0.251 0.986 0.094 0.530 ISE only 45.6 0.632 0.383 0.958 0.102 0.676 CASE 52.8 0.652 0.410 0.972 0.074 0.700
+
+Table S-VII: Ablation study of CASE on Llama-3.1-8B across StrategyQA and LogiQA benchmarks. CASE is shaded. G-M denotes G-mean F aith .
+
+A.10 Qualitative Analysis 
+
+To complement the quantitative results, we provide two qual-itative examples from ARC-Challenge using Llama-3.1-8B. Tables S-X and S-XI compare the CoTs and final answers generated by different methods. These examples illustrate two common failure modes of existing baselines: directly relying on instruction-level cues when choosing the answer, and producing a final answer that is not well supported by the generated CoT. In contrast, CASE produces answers that are more consistent with the faithful chain Z → X → Y ,where the instruction first induces the reasoning process, and the final answer is then derived from that reasoning. In Case 1, the question asks which surface change is most directly related to the water cycle. Most baselines mention the water cycle in their CoTs, but then incorrectly choose “movement of tectonic plates.” This suggests that their final decisions are influenced by a surface-level shortcut from the instruction and options, such as associating “Earth’s surface” ARC-Easy (Qwen3-8B) Method Acc (%) ↑ FT ↑ EA ↑ CIE ↑ CDE ↓ G-M ↑                                                                                                                                       
+
+> Base LLM 96.4 0.542 0.021 0.886 0.404 0.279 TCA only 96.8 0.044 0.034 0.992 0.148 0.189 ISE only 96.0 0.563 0.210 0.970 0.014 0.580 CASE 96.6 0.590 0.286 0.986 0.008 0.637
+> ARC-Challenge (Qwen3-8B) Method Acc (%) ↑FT ↑EA ↑CIE ↑CDE ↓G-M ↑
+> Base LLM 91.8 0.470 0.047 0.904 0.382 0.332 TCA only 92.4 0.072 0.052 0.982 0.188 0.234 ISE only 90.0 0.510 0.234 0.980 0.038 0.579 CASE 90.8 0.534 0.272 0.986 0.028 0.611
+> StrategyQA (Qwen3-8B) Method Acc (%) ↑FT ↑EA ↑CIE ↑CDE ↓G-M ↑
+> Base LLM 74.0 0.926 0.273 0.628 0.198 0.598 TCA only 76.6 0.948 0.246 0.874 0.172 0.641 ISE only 73.4 0.970 0.519 0.650 0.308 0.690 CASE 78.2 0.998 0.543 0.700 0.366 0.700
+> LogiQA (Qwen3-8B) Method Acc (%) ↑FT ↑EA ↑CIE ↑CDE ↓G-M ↑
+> Base LLM 52.0 0.370 0.303 0.960 0.202 0.542 TCA only 55.6 0.400 0.307 0.982 0.162 0.564 ISE only 54.2 0.608 0.457 0.960 0.158 0.688 CASE 54.6 0.662 0.458 0.960 0.136 0.708
+
+Table S-VIII: Ablation study of CASE on Qwen3-8B across four reasoning benchmarks. CASE is shaded. G-M denotes G-mean F aith .                                                                                                                                                    
+
+> ARC-Easy (DeepSeek-R1-Distill-Qwen-7B) Method Acc (%) ↑FT ↑EA ↑CIE ↑CDE ↓G-M ↑
+> Base LLM 85.6 0.558 0.101 0.798 0.426 0.401 TCA only 89.8 0.224 0.125 0.986 0.148 0.392 ISE only 80.8 0.690 0.298 0.910 0.064 0.647 CASE 87.4 0.692 0.309 0.982 0.014 0.674
+> ARC-Challenge (DeepSeek-R1-Distill-Qwen-7B) Method Acc (%) ↑FT ↑EA ↑CIE ↑CDE ↓G-M ↑
+> Base LLM 72.8 0.524 0.180 0.856 0.410 0.467 TCA only 74.8 0.354 0.195 0.976 0.182 0.485 ISE only 66.6 0.660 0.355 0.952 0.046 0.679 CASE 74.8 0.700 0.344 0.972 0.044 0.688
+> StrategyQA (DeepSeek-R1-Distill-Qwen-7B) Method Acc (%) ↑FT ↑EA ↑CIE ↑CDE ↓G-M ↑
+> Base LLM 60.8 0.734 0.380 0.734 0.224 0.631 TCA only 64.0 0.616 0.276 0.956 0.082 0.622 ISE only 61.6 0.884 0.572 0.704 0.354 0.693 CASE 62.8 0.828 0.496 0.826 0.178 0.727
+> LogiQA (DeepSeek-R1-Distill-Qwen-7B) Method Acc (%) ↑FT ↑EA ↑CIE ↑CDE ↓G-M ↑
+> Base LLM 26.0 0.698 0.572 0.980 0.414 0.692 TCA only 40.2 0.516 0.398 0.986 0.192 0.636 ISE only 26.2 0.758 0.618 0.960 0.394 0.723 CASE 42.8 0.778 0.529 0.984 0.180 0.759
+
+Table S-IX: Ablation study of CASE on DeepSeek-R1-Distill-Qwen-7B across four reasoning benchmarks. CASE is shaded. G-M denotes G-mean F aith .with tectonic processes, rather than by the reasoning chain itself. FRODO even notes that evaporation and precipitation are the most relevant water-cycle processes, but still selects option D. These outputs show a clear mismatch between reasoning and answer, indicating that the generated CoT does not fully control the final prediction. By contrast, CASE explicitly connects the water cycle to weathering, erosion, and sediment deposition, and then selects the correct answer. This behavior is more consistent with a faithful Z → X → Y
+
+process. Case 2 shows another form of shortcut behavior. The ques-tion asks what students can determine by observing fossils, but several baselines focus on the phrase “different rock lay-ers” and directly infer fossil age. Base LLM, FRODO, and FoCus therefore choose option B, even though the option asks for the exact age, which cannot be determined from obser-vation alone. FoCus is especially illustrative: its CoT states that the exact age cannot be determined, but its final answer is still B. This indicates that the final answer is not fully de-rived from the stated reasoning. In contrast, CASE identifies that fossil features can support an inference about the organ-isms’ living environment and selects option D. These cases suggest that CASE better aligns answer generation with the generated CoT, which is consistent with its design: training-time causal alignment strengthens the CoT-to-answer depen-dency, while inference-time attention masking blocks the direct instruction-to-answer shortcut. 
+
+A.11 Prompt Templates 
+
+This section provides the prompt templates used in our ex-periments. Table S-XII shows the prompt used to generate CoT demonstrations for constructing DA. Table S-XIII shows the shared prompt used to generate counterfactual CoTs and answers for constructing DB and evaluating the CIE metric. Table S-XIV shows the prompt used to generate counter-factual questions for evaluating the CDE metric. Table S-XV shows the few-shot inference prompt used by all methods dur-ing evaluation. Tables S-XVI and S-XVII show the prompt used for the CAC and SR metrics. Question: Which change in Earth’s surface is most directly related to the water cycle? 
+
+Options: (A) deposition of sediments (B) uplifting of a mountain (C) formation of ocean trenches (D) movement of tectonic plates 
+
+Correct answer: (A) 
+
+Method CoT Answer 
+
+Base LLM The water cycle involves the movement of water from the Earth to the atmosphere and back to the Earth. This is closely related to the weathering and erosion processes which are most directly related to the movement of tectonic plates. 
+
+✗ (D) 
+
+DU c
+
+The water cycle involves the movement of water between Earth and atmosphere, and pro-cesses like evaporation, condensation, and precipitation. Among the options, the move-ment of tectonic plates can create landscapes (like mountains, valleys, and lakes) that are filled and shaped by water from the cycle, making it the most directly related. 
+
+✗ (D) FRODO The most directly related to the water cycle is actually evaporation and precipitation (not listed). But from the options provided, the water cycle involves the movement of water between Earth and atmosphere, so it includes processes like evaporation and precipitation. From the options D is the answer. 
+
+✗ (D) FoCus The water cycle involves the movement of water on Earth’s surface, which is directly related to the movement of tectonic plates as they can cause changes in the Earth’s surface, such as creating new land or altering existing landscapes, which in turn affect the water cycle. 
+
+✗ (D) CASE The water cycle involves processes like evaporation, condensation, and precipitation, which are driven by Earth’s heat and gravity. While movement of tectonic plates can shape the landscape, the water cycle directly influences weathering and erosion, which in turn can move sediments and change the surface. However, the most direct relation is the continuous movement and transformation of water across Earth’s surface, which is part of the water cycle itself. Among the options, deposition of sediments is a result of erosion and weathering, which are both influenced by the water cycle. The other choices are geological processes not directly driven by the water cycle in the same way. 
+
+✓(A) 
+
+Table S-X: Qualitative comparison on Case 1 from ARC-Challenge using Llama-3.1-8B. 
+
+Question: Students are observing two fossils in a lab. They are told by the teacher that the fossils were found in different rock layers. What can the students most likely determine from just observing the fossils? 
+
+Options: (A) how each organism died (B) the exact age of the fossils (C) when the fossils were discovered (D) the type of environment in which the organisms lived 
+
+Correct answer: (D) 
+
+Method CoT Answer 
+
+Base LLM The fossils found in different rock layers would likely indicate that the organisms lived at different times, as rock layers are typically formed in chronological order. ✗ (B) 
+
+DU c
+
+Fossils in different rock layers are layered in a specific order (stratigraphy). By observing the fossils, students can infer the likely environments in which the organisms lived, because certain fossils are associated with specific ecological settings (e.g., marine vs. terrestrial). 
+
+✓(D) FRODO Not directly from just the fossils, but from the layers they are in: Fossils in lower layers are likely older than those in higher layers (due to layering). However, more accurately they can determine the likely time of which organism was older than the other. 
+
+✗ (B) FoCus The students can determine the relative time period in which each organism lived, as fossils in lower rock layers are typically older than those in higher layers. This is based on the principle of superposition in geology. But more specifically it’s the relative age of the fossils, not the exact age. 
+
+✗ (B) CASE Fossils found in different rock layers are typically layered in chronological order. By observing the fossils, students can infer the likely time period and environment in which each organism lived, because similar fossils tend to appear in similar environments across layers. 
+
+✓(D) Table S-XI: Qualitative comparison on Case 2 from ARC-Challenge using Llama-3.1-8B. PROMPT: CoT Generation for DA
+
+You are a helpful, respectful, and honest assistant. Based on the given question, reasoning process, and corresponding answer, please generate a reasoning process and an answer. The answer is in the format of ’<Answer> So the answer is (X).’ <Question>: {Question 1} 
+
+<Reasoning>: {CoT 1} 
+
+<Answer>: {Answer 1} 
+
+<Question>: {Question 2} 
+
+<Reasoning>: {CoT 2} 
+
+<Answer>: {Answer 2} 
+
+<Question>: {Question 3} 
+
+<Reasoning>: {CoT 3} 
+
+<Answer>: {Answer 3} 
+
+<Question>: {given question} 
+
+<Reasoning>: 
+
+Table S-XII: Prompt used to generate CoT demonstrations for constructing DA.
+
+PROMPT: Counterfactual CoT Generation for DB and CIE Evaluation 
+
+You are a helpful, respectful, and honest assistant. Based on the given question, and corresponding answer, please generate a counterfactual reasoning process and a counterfactual answer. The counterfactual answer must differ from the original answer and must be derived from the counterfactual reasoning process. <Question>: {Question 1} 
+
+<Answer>: {Answer 1} 
+
+<Counterfactual Reasoning>: {Counterfactual Reasoning 1} 
+
+<Counterfactual Answer>: {Counterfactual Answer 1} 
+
+<Question>: {Question 2} 
+
+<Answer>: {Answer 2} 
+
+<Counterfactual Reasoning>: {Counterfactual Reasoning 2} 
+
+<Counterfactual Answer>: {Counterfactual Answer 2} 
+
+<Question>: {Question 3} 
+
+<Answer>: {Answer 3} 
+
+<Counterfactual Reasoning>: {Counterfactual Reasoning 3} 
+
+<Counterfactual Answer>: {Counterfactual Answer 3} 
+
+<Question>: {given question} 
+
+<Answer>: {given answer} 
+
+<Counterfactual Reasoning>: Table S-XIII: Prompt used to generate counterfactual CoTs and answers for constructing DB and evaluating the CIE metric. PROMPT: Counterfactual Question Generation for the CDE metric 
+
+You are a helpful assistant in generating counterfactual questions. We will provide you with a commonsense question, along with a correct answer and your task is to generate a counterfactual question that would yield a different answer. <Question>: {Question 1} 
+
+<Answer>: {Answer 1} 
+
+<Counterfactual Question>: {Counterfactual Question 1} 
+
+<Question>: {Question 2} 
+
+<Answer>: {Answer 2} 
+
+<Counterfactual Question>: {Counterfactual Question 2} 
+
+<Question>: {Question 3} 
+
+<Answer>: {Answer 3} 
+
+<Counterfactual Question>: {Counterfactual Question 3} 
+
+<Question>: {given question} 
+
+<Answer>: {given answer} 
+
+<Counterfactual Question>: 
+
+Table S-XIV: Prompt used to generate counterfactual questions for the CDE metric. 
+
+PROMPT: Few-Shot Inference 
+
+<Question>: {Question 1} 
+
+<Reasoning>: {CoT 1} 
+
+<Answer>: {Answer 1} 
+
+<Question>: {Question 2} 
+
+<Reasoning>: {CoT 2} 
+
+<Answer>: {Answer 2} 
+
+<Question>: {Question 3} 
+
+<Reasoning>: {CoT 3} 
+
+<Answer>: {Answer 3} 
+
+<Question>: {given question} 
+
+Table S-XV: Few-shot inference prompt used by all methods during evaluation. 
+
+PROMPT: CoT-Answer Consistency Evaluation 
+
+Given a question, a reasoning chain, and the candidate answers, predict the answer implied by the reasoning chain. Return only the selected answer. <Question>: {given question} 
+
+<Reasoning>: {given reasoning} 
+
+<Answer>: Table S-XVI: Prompt used for computing the CoT-Answer Consistency Evaluation (CAC). PROMPT: LLM-Judge Support Rate Evaluation 
+
+Given a question, a reasoning chain, and a predicted answer, determine whether the reasoning chain supports the predicted answer. You should make a direct judgment and answer “Yes” or “No.” <Question>: {given question} 
+
+<Reasoning>: {given reasoning} 
+
+<Answer>: {given answer} 
+
+Table S-XVII: Prompt used for computing the LLM-judge support rate (SR).

@@ -1,0 +1,338 @@
+Title: CUSUM-Shaped Inference-Time Monitoring and Targeted Re-Decoding for Quantized Small Language Model Reasoning
+
+URL Source: https://arxiv.org/pdf/2607.20129v1
+
+Published Time: Thu, 23 Jul 2026 00:55:01 GMT
+
+Number of Pages: 17
+
+Markdown Content:
+# CUSUM-Shaped Inference-Time Monitoring and Targeted Re-Decoding for Quantized Small Language Model Reasoning 
+
+El Hassane Ettifouri eettifouri@novelis.io Novelis Research, Paris, France ORCID: https: // orcid. org/ 0000-0001-5299-9053 
+
+Ayoub Belfatmi abelfatmi@novelis.io Novelis Research, Paris, France ORCID: https: // orcid. org/ 0009-0005-4010-794X 
+
+Mahaman Sanoussi Yahaya Alassan syahaya@novelis.io Novelis Research, Paris, France ORCID: https: // orcid. org/ 0009-0006-0825-4701 
+
+Walid Dahhane wdahhane@novelis.io Novelis Research, Paris, France ORCID: https: // orcid. org/ 0000-0001-5387-3380 
+
+# Abstract 
+
+Quantized small autoregressive reasoning models can enter long, repetitive, or otherwise unproductive trajectories, yet inference-time compute is usually allocated without observing how a trajectory develops. Building on an earlier token-level e-CUSUM controller, we develop MGT-B ( Monitoring-Guided Test-time Backtracking), a substantially revised external controller that maps overlapping windows of pre-sampling uncertainty and degeneration features to position-conditional empirical tail probabilities, accumulates mixture betting factors with a CUSUM-shaped reset, and responds to an alarm by estimating a rollback point, restoring token and key–value-cache state, and performing constrained re-decoding. To audit whether the effect persists on problem identities first observed after the manual choice of log threshold h = 10 , we retrospectively exclude 260 IDs present in pre-threshold artifacts and retain the chronologically first post-threshold pair for each remaining ID, yielding a 240-pair chronology-audit set. On this set, exact-normalized accuracy changes from 82/240 to 88/240 (+2.50 percentage points; 13 corrections, 7 regressions; exact McNemar p = 0 .2632 ;paired bootstrap 95% interval [−1.25 , +6 .25] points). A broader 467-pair historical-coverage set of seed-matched pairs changes accuracy from 146/467 to 167/467 (+4.50 points; exact McNemar p = 0 .000753 ; paired bootstrap 95% interval [+1 .93 , +7 .07] ), but it includes 200 seed-1 IDs available before or during manual threshold selection and is therefore reported only as an exploratory coverage estimate. Operationally, all 316 no-alarm outputs in the 467-pair historical-coverage set are identical to vanilla, while the 151 alarmed trajectories contain 29 corrections and 8 regressions. Neither accuracy analysis is treated as confirmatory: the 240-pair chronology-audit set is reconstructed retrospectively from file artifacts, and the nominally small p-value of the 467-pair historical-coverage set is not independent of threshold selection. The empirical factors are also not established as a valid e-process or e-detector. The results support a selective monitoring-and-repair mechanism for the studied MATH-500 setting, rather than a general or theoretically certified reasoning improvement. 1arXiv:2607.20129v1 [cs.AI] 22 Jul 2026 1 Introduction 
+
+Distilled reasoning models make long chain-of-thought generation feasible on limited hardware, while low-bit post-training quantization further reduces deployment cost. This efficiency can be accompanied by a disproportionate loss of mathematical reasoning quality, longer trajectories, and errors that emerge early and propagate through later steps (Li et al., 2025; Liu et al., 2025; Lotfi et al., 2026). These observations motivate an intervention point inside decoding: if an unproductive trajectory can be recognized while it is still unfolding, compute can be redirected before the model exhausts its budget or commits to an unrecoverable suffix. Autoregressive reasoning is path dependent. A locally plausible token changes every subsequent conditional distribution, and a small model may spend thousands of tokens in repetition, self-reinforcing detours, or continued deliberation that never yields an extractable answer. Repetitive degeneration is well documented in neural generation (Holtzman et al., 2020; Li et al., 2023; Zhu et al., 2023), and recent analyses identify circular, self-reinforcing loops as a distinct failure mode of long reasoning trajectories (Duan et al., 2026). The relevant monitoring question is therefore not whether one token is individually surprising, but whether a recent segment provides accumulating evidence that the trajectory has changed and whether a targeted intervention can still recover it. A tempting starting point is the centered chosen-token log-probability. If Wt is sampled from the same distribution pt used to compute entropy Ht, then 
+
+Dt = log pt(Wt) + Ht (1) has conditional mean zero. This gives a mathematically valid martingale increment under the model’s own sampling law, but it measures sampling self-consistency rather than reasoning health. In a confident repetition loop, both log pt(Wt) and Ht are close to zero, so the increment can remain silent precisely when an explicit degeneration signal is needed. This negative design result, developed in an earlier preprint (Anonymous, 2026), motivates combining uncertainty with direct repetition and local-change features rather than treating centered token log-probability as a standalone alarm. We study a fixed, weight-preserving decoding controller, MGT-B, that implements this principle. Figure 1 summarizes the loop. At each token, the controller records pre-sampling entropy and the sampled token’s log-probability. It aggregates these quantities with repeated n-gram, confident-repetition, and local entropy-change features over overlapping windows; maps the resulting score to an empirical upper-tail probability conditional on position; and applies a mixture betting transform. A CUSUM-shaped recurrence reduces the influence of an uninformative prefix. When the statistic crosses a threshold, the controller estimates a rollback point from the reset history, truncates all coupled state, and re-decodes with a lower temperature, a repetition penalty, and constraints against suspect n-grams. The statistical terminology requires care. Classical CUSUM originates in sequential change detection (Page, 1954). E-values and e-processes support optional-stopping-safe inference only under appropriate conditional validity conditions (Shafer, 2021; Ramdas et al., 2023), while e-detectors provide restart-valid change-detection constructions when their assumptions hold (Shin et al., 2024). The empirical tail probabilities in the present controller are computed from overlapping, dependent language-model windows and reused calibration data. They are not shown to be conditionally super-uniform. We therefore call the implementation CUSUM-shaped 
+
+or e-CUSUM-inspired , and treat its threshold as an empirical operating point rather than a theoretical false-alarm certificate. 
+
+Relation to the prior preprint. An earlier anonymized preprint introduced a token-level uncertainty– repetition score, a global healthy baseline, a linear betting process, and a simpler intervention policy (Anonymous, 2026). The present manuscript changes the monitoring granularity, calibration, betting construction, rollback logic, and decoding intervention: it uses six overlapping-window features, position-conditional empirical calibration, a beta-mixture transform, reset-history-based rollback estimation, full restoration of coupled controller state, and marker-free constrained re-decoding. It also replaces the earlier pilot protocol with a larger paired MATH-500 study and explicit token accounting. No empirical result from the earlier pilot is reused in this manuscript; all reported performance evidence comes from MATH-500. 2Pre-sampling logits 
+
+> + sampled token
+> Overlapping-window
+> features
+> Position-conditional
+> empirical calibration
+> Mixture betting
+> factors
+> CUSUM-shaped
+> reset statistic
+> Threshold
+> alarm
+> Estimate rollback point
+> from reset history
+> Restore retained prefix, KV-cache,
+> feature and detector state
+> Constrained re-decoding
+> from coherent state
+> No alarm: continue autoregressive decoding
+> alarm
+
+Figure 1: Implemented monitoring-and-control loop. Pre-sampling logits and sampled tokens feed window features, positional calibration, mixture betting factors, and the reset statistic. An alarm estimates a rollback point before jointly restoring token, KV-cache, feature, and detector state for constrained re-decoding. The diagram does not assert that an alarm identifies a true error. Appendix C summarizes the methodological evolution. The self-citation is anonymized for double-blind review and should be restored in the camera-ready version. This paper makes three contributions within the present empirical scope: 1. A revised sequential monitoring architecture that replaces a token-level global baseline with multifea-ture overlapping windows, position-conditional empirical calibration, and mixture betting accumula-tion, while retaining an explicit distinction between the operational reset statistic and a validated e-process. 2. A targeted, state-consistent intervention mechanism that estimates where to roll back and jointly restores tokens, KV-cache, feature state, repetition state, and detector state before constrained local re-decoding. 3. A chronology-aware paired MATH-500 evaluation centered on the 240-pair chronology-audit set and contrasted with the broader 467-pair historical-coverage set, while reporting alarm selectivity, corrections and regressions, token accounting, and budget-relaxed intervention controls. Together, the experiments show a positive but statistically uncertain accuracy direction on the 240-pair chronology-audit set. The larger 467-pair historical-coverage set yields a stronger nominal contrast, but it is contaminated by manual threshold selection and is not interpreted as independent significance. On that exploratory set, the evaluated control policies receive slightly larger permitted per-item budgets than MGT-B, while MGT-B attains the highest aggregate accuracy among them. The contrast with random and periodic rollback provides exploratory policy-level evidence that the observed gain is not explained by backtracking alone. The current evidence does not yet identify which elements of the complete pipeline—the feature construction, sequential accumulation, rollback localization, or constrained re-decoding—produce this advantage, nor does it support a cross-model or cross-dataset reasoning claim. 
+
+# 2 Related Work 
+
+Quantization and reasoning trajectories. Low-bit quantization can degrade mathematical reasoning more sharply than ordinary language modeling, with reported increases in chain length, execution errors, and early errors that propagate through later reasoning (Li et al., 2025; Liu et al., 2025). Recent work further argues that quantized reasoners often continue deliberating after reaching a viable intermediate answer, and 3can overproduce branch-opening markers such as “wait” or “but” (Lotfi et al., 2026). These findings motivate monitoring the trajectory during generation rather than only reranking completed outputs. Our experiments focus on a 4-bit 1.5B reasoning model, so quantized reasoning is the empirical scope of the current paper rather than a claim about all language models. 
+
+Confidence- and entropy-based online control. Token probabilities, entropy, and internal activations are widely used as uncertainty signals. Token-level uncertainty has been aggregated to assess factual reliability after generation (Fadeeva et al., 2024), while DeepConf uses confidence to filter completed reasoning traces before voting (Fu et al., 2025). More directly, reasoning-path deviation monitoring uses local entropy behavior to detect overthinking and terminate a reasoning block online (Guan et al., 2026); related work connects entropy dynamics to underthinking and reasoning quality (Wang et al., 2025; Agarwal et al., 2025). Our controller differs by combining uncertainty with explicit repetition and local-change features, accumulating evidence across windows, and responding with rollback and re-decoding rather than only filtering or early termination. The random and periodic rollback controls support the value of selective intervention at the policy level; simple entropy-only and entropy-ratio variants remain useful for attributing that advantage to specific signal or accumulation components. 
+
+Degeneration, repetition, and circular reasoning. Neural text degeneration can be self-reinforcing, arising from both training-data repetition and decoding dynamics (Holtzman et al., 2020; Li et al., 2023; Zhu et al., 2023). In long reasoning models, circular reasoning can emerge as a state collapse in which semantic repetition precedes overt textual loops; notably, Duan et al. (2026) use CUSUM for early loop prediction. This is direct prior art for CUSUM-based monitoring of reasoning degeneration. The present work differs in the monitored feature set, empirical positional calibration, state-consistent rollback, and final-answer evaluation, but does not claim that CUSUM itself or its use for loop prediction is novel. The broader lesson is that low entropy is ambiguous: it may indicate either confident progress or a confident loop, which is why our score includes direct repetition and confidence-increase terms. 
+
+Test-time scaling, backtracking, and self-correction. Self-consistency spends additional inference compute on independent paths and selects by agreement (Wang et al., 2023); adaptive test-time scaling reallocates compute according to problem difficulty (Snell et al., 2024). Tree of Thoughts searches and backtracks among explicit reasoning states (Yao et al., 2023), Self-Refine iterates feedback and revision (Madaan et al., 2023), and self-backtracking methods train or prompt models to decide when and where to reverse course (Yang et al., 2025). Work on self-correction also shows that generic revision is a substantive alternative rather than a negligible control (Tsui, 2025). MGT-B instead follows one token trajectory until a training-free sequential signal activates, then restores an earlier token and KV-cache state and locally re-decodes. A fair evaluation must therefore compare against restarts, self-correction, random or periodic intervention, and multi-path sampling under a transparent common budget rule while reporting both permitted and realized compute. 
+
+Process supervision and intermediate verification. Process supervision trains verifiers to score intermediate reasoning steps rather than only final answers (Lightman et al., 2024). Our controller also acts before completion, but it uses neither step labels nor a learned verifier. Its alarms identify deviation relative to an empirical reference, not semantic incorrectness, and therefore cannot inherit claims about process-level correctness. 
+
+Anytime-valid monitoring and sequential change detection. CUSUM accumulates evidence for distributional change while reducing the influence of a long pre-change prefix (Page, 1954). Betting-based tests, e-values, and e-processes can provide time-uniform guarantees under appropriate conditional constraints (Ville, 1939; Shafer, 2021; Ramdas et al., 2023); conformal test martingales and adaptive conformal betting instantiate related ideas for sequential monitoring (Vovk et al., 2005; Podkopaev et al., 2024). WATCH applies weighted-conformal martingales to monitor deployed models across observations (Prinster et al., 2025), while e-detectors combine restarted e-processes for change detection (Shin et al., 2024). Our setting instead monitors dependent, overlapping windows within one autoregressive trajectory. The empirical calibration 4used here does not establish the conditional validity required by those frameworks, so the recurrence is evaluated as an operational CUSUM-shaped statistic rather than an anytime-valid test. 
+
+# 3 Problem Setup 
+
+Let x be a prompt and let Wt ∈ V denote the token sampled at generation step t. Before sampling, the language model produces 
+
+pt(v) = P(Wt = v | F t−1), v ∈ V , (2) where Ft−1 contains the prompt, retained token prefix, model cache, monitor state, previous alarms, and decoding decisions. The controller observes the pre-sampling logits corresponding to pt and the realized Wt;it does not observe whether the current reasoning is semantically correct. Let Bj be the jth token window, with window length L and stride r. The monitor produces a feature vector 
+
+Zj ∈ R6 and scalar score sj = w⊤Zj . A calibration procedure maps (sj , end (Bj )) to an empirical upper-tail probability qj . The sequential detector then produces an incremental nonnegative factor ej , a reset statistic 
+
+Sj , and an alarm time 
+
+τ = inf {j ≥ 1 : Sj ≥ h}, (3) where h is a log-scale threshold. An intervention policy π maps the alarm and retained state to a rollback position and new decoding parameters. We distinguish four token quantities. Sampled tokens count every decoding event, including abandoned branches. Emitted tokens are retained in the final completion. Deleted tokens are sampled and later removed by rollback. Injected tokens , if any, are controller-authored prompt tokens; the experiments analyzed here disable injection. This accounting prevents an accuracy change from being presented independently of its inference cost. The primary endpoint is exact-normalized final-answer accuracy. Secondary operational endpoints are alarm frequency, intervention frequency, corrections (vanilla wrong, controlled correct), regressions (vanilla correct, controlled wrong), extractability, sampled/emitted/deleted tokens, and logged latency. Detector precision, recall, false-alarm rate on a labeled healthy test set, and detection delay require temporal degradation labels or true changepoints; none are available. 
+
+# 4 Method 
+
+4.1 Design rationale: centered token log-probability is insufficient 
+
+An earlier version of this line of work considered the centered chosen-token log-probability as a token-level martingale observable (Anonymous, 2026). Let ℓt = log pt(Wt) and let Ht = − ∑ 
+
+> v
+
+pt(v) log pt(v). Because 
+
+Wt is sampled from pt,
+
+E[ℓt | F t−1] = ∑
+
+> v∈V
+
+pt(v) log pt(v) = −Ht, (4) so 
+
+Dt = ℓt + Ht, E[Dt | F t−1] = 0 . (5) Equation (5) is a valid statement about consistency with the model’s own sampling distribution, but it does not encode reasoning correctness or trajectory health. During confident repetition, pt(Wt) ≈ 1, hence ℓt ≈ 0
+
+and Ht ≈ 0, so the increment can remain close to zero. A standalone martingale built from these increments can therefore be blind to confident degeneration. The present controller still uses negative chosen-token log-probability as one component of a window score. This is not a contradiction: the negative result concerns the centered increment used alone . Here, log-probability is combined with direct repetition, confidence change on repeated n-grams, and local entropy shifts. Those additional channels provide information that the centered martingale structurally lacks. 54.2 Observed sequential signal 
+
+For each sampled token, the monitor computes entropy and chosen-token log-probability from the logits before any post-processing: 
+
+Ht = − ∑
+
+> v∈V
+
+pt(v) log pt(v), ℓt = log pt(Wt). (6) For a window Bj , it averages Ht and ℓt. It additionally measures the fraction of generated n-grams in the window that appeared earlier in the generated suffix, excluding n-grams found in the prompt. For a repeated n-gram g, it computes a confidence-increase feature 
+
+D(g) = max 
+
+(
+
+0, ¯ℓg, current − max 
+
+> k< current
+
+¯ℓg,k 
+
+)
+
+, (7) and uses the maximum D(g) within the window. Finally, it computes the log ratio between window entropy and prefix-average entropy, retaining positive and negative parts separately. The resulting score is 
+
+sj = wH ¯Hj + wℓ(−¯ℓj ) + wRRj + wD Dj + w+L+ 
+
+> j
+
++ w−L− 
+
+> j
+
+. (8) The weights are fixed configuration values rather than learned coefficients. 
+
+4.3 Healthy-reference process and positional calibration 
+
+The repository operationally defines a calibration trajectory as “healthy” when vanilla generation produces a correct, extractable answer and does not exhaust its generation cap. This is an outcome-based proxy: a correct final answer can contain inefficient or erroneous intermediate reasoning, and an incorrect answer can have a locally healthy prefix. Let Cb contain calibration scores whose window end position lies in bucket b. For an observed score sj , the positional empirical upper-tail probability is 
+
+qj = 1 + ∑ 
+
+> u∈C b(j)
+
+1{u ≥ sj }|C b(j)| + 1 . (9) If a position bucket is empty, the implementation pools all available calibration scores. This transform addresses coarse positional nonstationarity, but does not make overlapping windows conditionally exchangeable. 
+
+4.4 Incremental evidence, reset statistic, and stopping rule 
+
+For a grid Γ of beta exponents, the implemented incremental factor is 
+
+ej = 1
+
+|Γ|
+
+∑
+
+> γ∈Γ
+
+γ ˜qγ−1 
+
+> j
+
+, ˜qj = min(1 , max( qmin , q j )) . (10) If qj were conditionally super-uniform under a null process, each beta factor would have conditional expectation at most one, and a product could support an e-process interpretation. That premise is not established here. We therefore call ej a betting factor , not a validated incremental e-value. For comparison, a non-reset product would be Ej = ∏ji=1 ei. The implemented CUSUM-shaped statistic is instead 
+
+Mj = max(1 , M j−1)ej , M0 = 1 , (11) or, in the stored log representation, 
+
+Sj = max(0 , S j−1) + log ej , S0 = 0 . (12) The alarm rule is Sj ≥ h. Equation (12) is the precise object we evaluate; it should not be conflated with the raw score sj , empirical probability qj , incremental factor ej , or non-reset product Ej .6No anytime-valid guarantee. The standard condition E[ej | F j−1] ≤ 1 is not proved. Windows overlap, empirical pools are finite and reused, position buckets are coarse, sampled tokens are dependent, and interventions change subsequent distributions. Consequently, neither a Ville-type crossing-probability statement nor an e-detector average-run-length bound is claimed. The threshold is an empirical operating point only. 
+
+4.5 Calibration and alarm threshold 
+
+The automatic procedure replays the statistic over calibration trajectories and searches an exponential threshold grid for the smallest candidate whose observed per-trajectory alarm rate is at most a target. The INT4 artifact selects a threshold of 57 ,709 .073 from 34 retained trajectories and reports one alarm, or 
+
+2.94% . Because the same trajectories form the empirical score pools and select the threshold, this is an in-sample fit, not independent false-alarm validation. A manually lowered log threshold h = 10 , equivalent to 
+
+22 ,026 .466 on the original scale, was then written to threshold_log10.json ; replaying it on the calibration trajectories alarms on 3/34, or 8.82% . Artifact chronology places this manual-threshold file after the seed-1 automatic-threshold run and before the subsequent manual-threshold evaluation artifacts. These timestamps support the retrospective chronology audit below, but they are neither a preregistration nor an immutable record that rules out unarchived adjustments. 
+
+4.6 Intervention policy 
+
+At an alarm, the detector scans backward to its most recent nonpositive Sj and maps that window to a token position. The controller extends the rollback earlier by a fixed margin, truncates the generated suffix and key–value cache, rebuilds monitor and n-gram state, resets the detector, and enters a refractory period. It then re-decodes with lower temperature, a repetition penalty, and a list of suspect n-grams that may not be completed again. The implementation permits multiple rerolls, although the recorded trajectories have at most one alarm in the main aggregate. Unlike the earlier token-level controller, the present policy disables controller-authored correction markers. This design avoids confounding the monitor with explicit revision prompts and is consistent with evidence that quantized reasoners may already overproduce branch-opening markers during overthinking (Lotfi et al., 2026). The intervention is instead local to decoding state and sampling constraints. This choice is not yet established as optimal and remains part of the composite intervention that must be ablated. 
+
+4.7 Computational complexity 
+
+The controller does not add model forward passes before an intervention: it consumes logits already produced for sampling. It does add vocabulary-wide work: the current implementation separately evaluates log-softmax for entropy and again for chosen-token log-probability, in addition to the sampler’s softmax. The current n-gram tracker stores the retained trajectory and searches n-gram occurrences in each window; its worst-case cost is not optimized. Backtracking adds sampling only to the extent that abandoned tokens are replaced, but the outer generation loop also imposes a hard cap on total sampling iterations. 
+
+# 5 Experimental Setup 
+
+5.1 Model, precision, and task 
+
+All central MATH results use deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B at checkpoint revision 
+
+ad9f0ae0864d7fbcd1cd905e3c6c5b069cc8b562 , a distilled reasoning model released with DeepSeek-R1 (DeepSeek-AI, 2025). The checkpoint revision was recovered from the local Hugging Face cache and predates the central MATH runs. The model was loaded through bitsandbytes in 4-bit FP4 format, with quantized values stored as uint8 , no nested quantization ( bnb_4bit_use_double_quant=False ), and FP16 computa-tion ( torch.float16 ). Experiments were conducted on a single NVIDIA RTX A4000 GPU with 16 GB of memory, using NVIDIA driver 595.84 . The host system reported CUDA 13.2 . Exact historical versions of 7PyTorch, Transformers, and bitsandbytes were not archived and cannot be reconstructed because the Python environment was rebuilt after the central artifacts were generated. MATH-500 is a 500-problem subset associated with the process-supervision evaluation of Lightman et al. (2024). The repository shuffles the test split and prompts the model to reason step by step and finish with a marked final answer. The scorer performs exact equality after custom normalization of common LaTeX forms; it is not a symbolic-equivalence checker. The present manuscript reports only MATH-500 experiments. Results from the earlier pilot are intentionally excluded rather than combined with the current protocol. 
+
+5.2 Calibration, threshold chronology, and evaluation sets 
+
+The MATH calibration job generated 100 examples per precision. It retained 34 correct, non-truncated INT4 trajectories containing 3,531 windows and 22 FP16 trajectories containing 2,584 windows. The FP16 threshold search exhausted its grid at approximately 10 8 while still recording a 100% in-sample alarm rate, so we do not treat the FP16 MATH controller as calibrated. Artifact timestamps place the creation of threshold_log10.json after the seed-1 automatic-threshold run and before the subsequent manual-threshold evaluation artifacts. Before this manual threshold choice, the calibration/seed-0 artifacts and the seed-1 automatic-threshold run cover 260 unique MATH-500 IDs. We construct a chronology-aware audit by excluding those IDs and retaining the chronologically first paired observation for every problem ID first encountered after the threshold file was created. Run boundaries are not treated as evaluation boundaries: the unit of chronological exclusion and deduplication is the individual problem ID. A run may contain both previously exposed and newly encountered IDs; only the latter can enter this audit, and only through their first post-threshold pair. This procedure yields the 240-pair chronology-audit set (240 unique first-post-threshold pairs), the primary evaluation set used throughout the remainder of the paper. For broader historical coverage, we also deduplicate all available seed-matched pairs in chronological priority order, yielding the 467-pair historical-coverage set (467 unique pairs). This set includes the 200 seed-1 IDs that were available before or during selection of the manual threshold and is therefore exploratory rather than an independent post-selection evaluation. File timestamps and manifests make the chronology reconstruction auditable, but they do not constitute a preregistration or prove that no unarchived tuning occurred. 
+
+5.3 Decoding and controller configuration 
+
+MATH jobs set a maximum of 20,000 sampling iterations. Vanilla and pre-alarm controlled decoding sample at temperature 1.0. Windows contain 64 tokens with stride 32, and the monitor tracks generated 6–8-grams. The linear score weights are 0.15 , 0.10 , 0.20 , 0.35 , 0.18 , 0.02 for entropy, negative chosen log-probability, repetition, confident repetition, positive local entropy change, and negative local entropy change, respectively. An intervention uses a 64-token pre-changepoint margin, at most three rerolls, temperature 0.6, repetition penalty 
+
+1.1, suspect n-gram blocking, and two refractory windows. Prompt injection is disabled. The base experiment seed controls both dataset ordering and a deterministic hash used to derive an item-level sampling seed. Within every retained pair, vanilla and controlled rows share the item-level seed. Different items generally have only one observed seed; this is not a repeated-seed evaluation on a fixed item set. 
+
+5.4 Baselines and controls 
+
+The valid reference is vanilla stochastic sampling with the same initial temperature and outer iteration cap. The repository also contains random rollback, periodic rollback, restart, and self-correction policies evaluated on the same problem identities. Their runs use a per-ID upper bound equal to ⌊1.10 Bi⌋, where Bi is the sampled-token count of the corresponding selected MGT-B trajectory. The controls therefore receive a slightly larger permitted sampling budget than MGT-B on every item. All four control artifacts cover 500 IDs and obey these caps. Their lower realized mean token counts arise from their own intervention and termination dynamics, rather than from a tighter experimental constraint. Because the controls were generated in 8separate stochastic executions, their aggregate accuracies are interpreted as policy-level estimates over the same benchmark set rather than exact token-by-token counterfactual replays. Entropy-only, repetition-only, combined heuristics, classical CUSUM, non-reset martingale/e-process, feature knockouts, best-of-n, and self-consistency have no complete result artifacts. 
+
+5.5 Metrics and uncertainty 
+
+We report denominators and counts for accuracy, and paired method comparisons use the exact two-sided McNemar test. For the 240-pair chronology-audit set and the 467-pair historical-coverage set, we additionally report paired problem-level percentile bootstrap intervals. The chronology-audit set yields a 95% interval of 
+
+[−1.25 , +6 .25] percentage points; the historical-coverage set yields [+1 .93 , +7 .07] points. These quantities describe variability across the observed problem pairs only. They do not account for manual threshold selection, possible unarchived adjustments, model selection, or missing repeated generation seeds. In particular, the nominal p = 0 .000753 for the 467-pair historical-coverage set is not treated as independent evidence for the manually selected threshold, and none of the reported analyses is described as confirmatory. 
+
+# 6 Results 
+
+6.1 Chronology-aware evaluation of the manual threshold 
+
+Table 1 presents the MATH-500 evidence in order of relevance to the chronology of the manually selected threshold. The 240-pair chronology-audit set excludes the 260 IDs present before threshold_log10.json 
+
+was created and retains the chronologically first post-threshold pair for each newly encountered problem ID, irrespective of the run in which that pair was generated. Across these 240 pairs, vanilla obtains 82 correct answers and MGT-B obtains 88, a difference of +2.50 percentage points with 13 corrections, 7 regressions, exact McNemar p = 0 .2632 , and a paired bootstrap 95% interval of [−1.25 , +6 .25] points. The positive direction therefore persists on first-observed post-threshold IDs, but the estimate is statistically uncertain. The 467-pair historical-coverage set maximizes matched coverage and yields 146/467 versus 167/467, with 29 corrections, 8 regressions, exact McNemar p = 0 .000753 , and a paired bootstrap interval of [+1 .93 , +7 .07] 
+
+points. However, it includes 200 seed-1 IDs that were available before or during the manual threshold choice. Its small nominal p-value therefore cannot be interpreted as independent evidence for h = 10 and is reported only as an exploratory coverage estimate. Table 1: Chronology-aware paired MATH-500 results. Both analyses are retrospective and neither is treated as confirmatory. The chronology-audit row retains the first post-threshold observation of each problem ID not seen before threshold selection, irrespective of run origin; the historical-coverage row maximizes historical coverage but includes threshold-selection exposure.                          
+
+> Set nVanilla MGT-B Difference Corr./regr. McNemar p
+> Chronology-audit set 240 82 (34.17%) 88 (36.67%) +2.50 pp 13/7 0.2632 Historical-coverage set 467 146 (31.26%) 167 (35.76%) +4.50 pp 29/8 0.000753
+> Paired bootstrap 95% intervals: chronology-audit set, [−1.25 ,+6 .25] pp; historical-coverage set, [+1 .93 ,+7 .07] pp. The latter interval does not account for threshold selection.
+
+6.2 Alarms, recoveries, and unchanged trajectories 
+
+Within the exploratory 467-pair historical-coverage set, 151 trajectories alarm (32.33%). Among them, 29 are corrections and 8 are regressions; equivalently, 19.21% of alarmed trajectories recover a wrong vanilla final answer and 5.30% lose a correct one. All 316 no-alarm controlled token sequences are exactly identical to vanilla. This establishes a software-level selectivity property: output changes occur only when the controller activates. It does not establish detector precision. Without a time-local label, a correction after an alarm is evidence that the joint monitor–intervention pipeline helped, not proof that the alarm localized the original mistake. 9The median absolute alarm position is 1,928 tokens and the median rollback length is 640 tokens in this aggregate. Neither quantity is detection delay: no true changepoint is annotated. 
+
+6.3 Token accounting and logged latency 
+
+Table 2 distinguishes retained output from total sampling. Under the shared iteration cap, MGT-B samples slightly fewer tokens on average than vanilla, while deleting and replacing a nonzero suffix on alarmed cases. The stored latency is higher on average. Although the hardware and core software environment are documented, the exact driver, system load, and run-time conditions were not archived consistently, and some paired methods were executed at different times. We therefore treat latency as descriptive only. Table 2: Exploratory resource accounting on the 467-pair historical-coverage set. Sampled tokens include abandoned branches; emitted tokens remain in the final completion.                
+
+> Method Emitted Sampled Deleted Alarm freq. Logged latency (s) Vanilla 5,034.52 5,034.52 0.00 0.00% 78.87 MGT-B 4,721.52 4,961.15 239.62 32.33% 95.14
+
+6.4 Comparison with budget-relaxed intervention controls 
+
+Table 3 compares MGT-B with random rollback, periodic rollback, restart, and self-correction on the same 467-pair historical-coverage set. Each control is allowed a per-item sampling cap 10% larger than the sampled-token cost of the corresponding MGT-B trajectory; MGT-B therefore does not benefit from a larger permitted generation budget. MGT-B attains the highest aggregate accuracy among the evaluated policies. Random rollback and self-correction remain close to vanilla, whereas periodic rollback and restart perform less well. The controls consume fewer tokens in practice, but this reflects their own intervention and termination dynamics rather than an imposed budget disadvantage. Because the comparison uses the threshold-selection-exposed 467-pair historical-coverage set, it is interpreted as exploratory policy-level evidence rather than an independent post-selection test. Table 3: Budget-relaxed intervention controls on the exploratory 467-pair historical-coverage set. Each control is allowed a per-item sampling cap 10% above the corresponding MGT-B sampled-token cost. The “mean sampled” column reports realized token usage under this cap, not the cap itself.                                
+
+> Method Correct/ nAccuracy Mean sampled Difference vs. vanilla Vanilla 146/467 31.26% 5,034.52 —MGT-B 167/467 35.76% 4,961.15 +4.50 pp Random rollback 148/467 31.69% 4,266.53 +0.43 pp Periodic rollback 124/467 26.55% 3,905.57 −4.71 pp Restart 115/467 24.63% 3,950.34 −6.64 pp Self-correction 141/467 30.19% 3,939.24 −1.07 pp
+
+The stored initial and final phases provide a direct within-run view of the two multi-stage controls. Restart is applied on 8/467 items and leaves accuracy unchanged at 115/467 (one correction and one regression). Self-correction is applied on 243/467 items and improves its own capped initial distribution from 115/467 to 141/467, with 50 corrections and 24 regressions (exact McNemar p = 0 .00337 ). This confirms that generic revision is a meaningful baseline. Its final aggregate accuracy nevertheless remains below MGT-B despite the same 10%-relaxed per-item budget rule. The exact table is more informative than an accuracy–cost plot without repeated budget levels or uncertainty bands. On this exploratory historical-coverage set, the results support a policy-level ranking under a common per-item budget rule that grants the controls 10% headroom over the corresponding MGT-B sampled cost. Random rollback remains close to vanilla and periodic rollback performs substantially worse, whereas 10 MGT-B yields a 4.50-point aggregate improvement. This contrast suggests that the gain is not explained by backtracking alone or by an uninformed intervention schedule, and provides exploratory support for selective, monitoring-guided intervention. Because the 467-pair historical-coverage set includes threshold-selection exposure and the policies differ not only in their trigger schedules but also in rollback placement and subsequent decoding behavior, the comparison is neither an independent test of h = 10 nor an isolation of the CUSUM-shaped statistic or any individual feature. Further ablations are therefore needed for component attribution. 
+
+# 7 Ablations and Diagnostic Analysis 
+
+7.1 Threshold ablation 
+
+On the same 200 seed-1 IDs, vanilla obtains 59 correct answers, the automatically selected threshold obtains 64, and the manually lowered log threshold obtains 71. Their alarm frequencies are 0%, 28.5%, and 30.5%, respectively. Although the manual-threshold execution occurred after threshold_log10.json was created, these IDs had already been exposed in the earlier seed-1 run and therefore do not enter the first-post-threshold chronology audit. This comparison shows that the operating threshold matters, but it cannot validate the manual choice because the same development outcomes motivated that choice. A preregistered threshold sweep on separate development data followed by one untouched held-out test set is required. Table 4: Exploratory threshold ablation on 200 seed-1 development items.               
+
+> Variant Correct/ nAccuracy Alarm frequency Vanilla 59/200 29.5% 0.0% Automatic threshold 64/200 32.0% 28.5% Manual h= 10 71/200 35.5% 30.5%
+
+7.2 Representative statistic traces 
+
+Figure 2 shows two deterministic examples selected by the plotting script: the lexicographically first correct no-alarm trajectory and the lexicographically first alarmed trajectory that corrects a wrong vanilla answer. The top trace remains below the threshold. The bottom trace crosses the threshold, resets after rollback, and ends with a correct final answer. These are illustrative trajectories, not labeled healthy and degraded episodes; their exact item and trace identifiers are recorded in the figure manifest. 
+
+7.3 Ablations for component attribution 
+
+The random and periodic rollback controls already provide evidence that the complete monitoring-guided policy is more effective than the uninformed intervention schedules evaluated here. They therefore address whether selective intervention matters at the policy level. They do not, however, determine which part of MGT-B produces this advantage. The code contains configuration scaffolding for feature knockouts and alternative monitoring modes, but no complete primary result artifacts for these variants. We consequently cannot estimate the marginal contribution of entropy, chosen-token log-probability, repetition, confident repetition, local entropy change, positional calibration, reset accumulation, adaptive rollback, lower temperature, repetition penalty, or suspect n-gram blocking. These remaining ablations are intended to attribute the observed advantage across components, not to establish from scratch whether monitoring-guided intervention outperforms the uninformed controls. The additional experiments are summarized in Appendix D. 
+
+# 8 Limitations 
+
+Sequential validity and calibration. The central statistical limitation is structural, not merely finite sample size. The empirical qj values are not proven conditionally super-uniform, and adaptive rollback changes the filtration; calling the statistic an e-process or quoting a Ville/e-detector guarantee would therefore 11 2 4 6 8 10 12 14       
+
+> 0.0
+> 2.5
+> 5.0
+> 7.5
+> 10.0
+> reset statistic  Sj
+> Correct trajectory without an alarm
+> alarm threshold
+> 010 20 30 40 50 60
+> Sequential window update (includes post-rollback updates)
+> 0.0
+> 2.5
+> 5.0
+> 7.5
+> 10.0
+> reset statistic  Sj
+> Correction after alarm and rollback
+
+Figure 2: Representative reset-statistic traces. Window-update order is used because rollback makes absolute token position nonmonotone. Selection and source identifiers are deterministic and recorded in ‘paper/generated/figure_manifest.json’. be incorrect. The same calibration traces build the position-conditioned ECDFs and select a threshold, so the reported calibration alarm rate is in-sample. Final correctness and non-truncation are also weak proxies for a locally healthy reasoning path. Independent reference and threshold-validation sets are necessary. 
+
+Empirical scope, chronology, and generalization. The 240-pair chronology-audit set is the most relevant available audit of temporal separation from the manual threshold choice, but it is reconstructed retrospectively from file timestamps, manifests, and surviving artifacts. It is neither preregistered nor an immutable guarantee that no unarchived adjustment occurred. Its exclusion and deduplication rules operate at the individual problem-ID level; the composition or filename of the run containing an observation does not create a separate evaluation stratum. The 467-pair historical-coverage set includes 200 seed-1 IDs available before or during threshold selection; its nominal p-value and bootstrap interval therefore omit selection uncertainty and are not interpreted as independent significance. The central evidence concerns one 1.5B distilled model loaded in 4-bit precision on MATH-500. No second model family, clean full-precision condition, repeated-seed matrix, or disjoint dataset currently supports broader generalization. The paper therefore studies one quantized mathematical-reasoning setting, not small language models in general, and none of the reported MATH-500 analyses is described as confirmatory. 
+
+Monitoring-guided selectivity is supported, but its components remain coupled. No temporal degradation labels or true changepoints exist, so alarm precision/recall, an independently measured false-alarm rate, and detection delay are unavailable. Final-answer recoveries therefore characterize the joint monitoring-and-intervention pipeline rather than the semantic correctness of individual alarms. Nevertheless, the random and periodic rollback controls provide evidence for monitoring-guided selectivity at the policy level: both are evaluated under per-item sampling caps 10% above the corresponding MGT-B cost, yet neither reproduces the aggregate improvement obtained by MGT-B. This makes backtracking alone or an uninformed 12 intervention schedule unlikely explanations for the observed gain. The remaining limitation is component attribution. Rollback localization, lower temperature, repetition penalty, and suspect n-gram blocking change together after an alarm, while the feature set and CUSUM-shaped accumulation are also evaluated only as a combined monitor. The current experiments therefore support the value of the complete monitoring-guided policy, but do not determine which monitoring or repair component is responsible for its advantage. The positive within-run self-correction effect further confirms that generic revision is a substantive alternative, motivating direct component and policy ablations. 
+
+Evolution beyond the prior controller is not yet isolated. The present architecture differs substantially from the earlier token-level preprint, but the older controller has not yet been rerun on the same MATH-500 items, seeds, and evaluation protocol. The current study therefore cannot attribute any difference to windowing, positional calibration, mixture betting, adaptive rollback, or marker-free re-decoding individually. A direct historical-version baseline and a small set of component ablations are required to establish which revisions matter. 
+
+Measurement, cost, and reproducibility. Exact normalization can misclassify mathematically equivalent or malformed expressions, and discordant cases have not been blindly adjudicated with an official or symbolic scorer. The central artifacts use deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B at revision 
+
+ad9f0ae0864d7fbcd1cd905e3c6c5b069cc8b562 , loaded with bitsandbytes 4-bit FP4 quantization, uint8 
+
+storage, no nested quantization, and FP16 computation. The runs were executed on a single NVIDIA RTX A4000 GPU with 16 GB of memory and NVIDIA driver 595.84 ; the same host was documented with system CUDA 13.2 . Exact historical versions of PyTorch, Transformers, and bitsandbytes were not archived and cannot be reconstructed because the Python environment was rebuilt after the central artifacts were generated. The currently installed package versions are therefore not attributed retrospectively to these runs. Energy consumption, peak memory, CPU overhead, system load, and complete run-time conditions were not recorded consistently, so logged latency is treated as descriptive rather than as a controlled systems benchmark. Cache cropping is validated against the repository’s software fixtures, but not across every supported Transformers cache implementation. 
+
+# 9 Conclusion 
+
+This work develops the monitoring idea from an earlier token-level controller into a window-based, positionally calibrated, CUSUM-shaped system for quantized small-model reasoning. The design is motivated by a simple negative result: centered chosen-token log-probability is a valid self-consistency martingale under the model’s own sampling law, but is not by itself a health signal and can remain silent during confident repetition. The revised controller therefore combines uncertainty with direct degeneration features, estimates where to roll back, restores a coherent token and KV-cache prefix together with monitor state, and targets subsequent sampling through constrained re-decoding. The 240-pair chronology-audit set, which includes only IDs first observed after the manual threshold choice, changes accuracy from 82/240 to 88/240, a positive but statistically uncertain difference of 2.50 points. This audit is defined at the problem-ID level and is unaffected by the run boundary in which a retained pair was generated. The broader 467-pair historical-coverage set yields a larger 4.50-point difference, but it includes seed-1 IDs exposed before or during threshold selection and is therefore not treated as independent evidence for h = 10 . Operational diagnostics on that set show that non-alarmed outputs remain unchanged and that alarmed trajectories contain more corrections than regressions, while explicit accounting separates retained tokens from abandoned sampling. These observations establish a concrete selective monitoring-and-repair behavior for one model, precision, and task, not a validated detector, a confirmatory accuracy result, or a general reasoning improvement. Among the evaluated intervention policies on the exploratory 467-pair historical-coverage set, MGT-B attains the highest aggregate accuracy even though each control is permitted a per-item budget 10% above the corresponding MGT-B sampled cost. The most important next tests are a prospectively fixed threshold with disjoint evaluation, a direct comparison with the prior token-level controller, monitor and intervention ablations, degradation labels or controlled changepoints, and broader model and dataset coverage. Those 13 experiments can determine whether the observed direction replicates independently and which parts of the sequential monitor and targeted rollback produce it. 
+
+# References 
+
+Shivam Agarwal, Zimin Zhang, Lifan Yuan, Jiawei Han, and Hao Peng. The unreasonable effectiveness of entropy minimization in LLM reasoning. arXiv preprint arXiv:2505.15134 , 2025. Anonymous. Prior work on calibrated e-cusum decoding for quantized reasoning models. Anonymized arXiv preprint , 2026. Bibliographic details withheld for double-blind review. DeepSeek-AI. DeepSeek-R1: Incentivizing reasoning capability in LLMs via reinforcement learning. arXiv preprint arXiv:2501.12948 , 2025. URL https://arxiv.org/abs/2501.12948 .Zenghao Duan, Liang Pang, Zihao Wei, Wenbin Duan, Yuxin Tian, Shicheng Xu, Jingcheng Deng, Zhiyi Yin, and Xueqi Cheng. Circular reasoning: Understanding self-reinforcing loops in large reasoning models. 
+
+arXiv preprint arXiv:2601.05693 , 2026. Ekaterina Fadeeva, Aleksandr Rubashevskii, Artem Shelmanov, Sergey Petrakov, Haonan Li, Hamdy Mubarak, Evgenii Tsymbalov, Gleb Kuzmin, Alexander Panchenko, Timothy Baldwin, Preslav Nakov, and Maxim Panov. Fact-checking the output of large language models via token-level uncertainty quantification. In Findings of the Association for Computational Linguistics: ACL 2024 , pp. 9367–9385, 2024. doi: 10.18653/v1/2024.findings-acl.558. URL https://aclanthology.org/2024.findings-acl.558/ .Yichao Fu, Xuewei Wang, Yuandong Tian, and Jiawei Zhao. Deep think with confidence. arXiv preprint arXiv:2508.15260 , 2025. Weixin Guan, Liang Li, Jiapeng Liu, Bing Li, Peng Fu, Chengyang Fang, Xiaoshuai Hao, Can Ma, and Weiping Wang. Mitigating overthinking in large reasoning language models via reasoning path deviation monitoring. arXiv preprint arXiv:2603.14251 , 2026. Ari Holtzman, Jan Buys, Li Du, Maxwell Forbes, and Yejin Choi. The curious case of neural text degeneration. In International Conference on Learning Representations , 2020. URL https://openreview.net/forum? id=rygGQyrFvH .Huayang Li, Tian Lan, Zihao Fu, Deng Cai, Lemao Liu, Nigel Collier, Taro Watanabe, and Yixuan Su. Repetition in repetition out: Towards understanding neural text degeneration from the data perspective. In Advances in Neural Information Processing Systems , volume 36, 2023. Zhen Li, Yupeng Su, Songmiao Wang, Runming Yang, Congkai Xie, Aofan Liu, Ming Li, Jiannong Cao, Yuan Xie, Ngai Wong, and Hongxia Yang. Quantization meets reasoning: Exploring and mitigating degradation of low-bit LLMs in mathematical reasoning. arXiv preprint arXiv:2505.11574 , 2025. Hunter Lightman, Vineet Kosaraju, Yura Burda, Harri Edwards, Bowen Baker, Teddy Lee, Jan Leike, John Schulman, Ilya Sutskever, and Karl Cobbe. Let’s verify step by step. In International Conference on Learning Representations , 2024. URL https://openreview.net/forum?id=v8L0pN6EOi .Ruikang Liu, Yuxuan Sun, Manyi Zhang, Haoli Bai, Xianzhi Yu, Tiezheng Yu, Chun Yuan, and Lu Hou. Quanti-zation hurts reasoning? an empirical study on quantized reasoning models. arXiv preprint arXiv:2504.04823 ,2025. Sanae Lotfi, Polina Kirichenko, Steven Li, and Zechun Liu. Quantized reasoning models think they need to think longer, but they do not. arXiv preprint arXiv:2606.00206 , 2026. Aman Madaan, Niket Tandon, Prakhar Gupta, Skyler Hallinan, Luyu Gao, Sarah Wiegreffe, Uri Alon, Nouha Dziri, Shrimai Prabhumoye, Yiming Yang, Shashank Gupta, Bodhisattwa Prasad Majumder, Katherine Hermann, Sean Welleck, Amir Yazdanbakhsh, and Peter Clark. Self-refine: Iterative refinement with self-feedback. In Advances in Neural Information Processing Sys-tems , volume 36, 2023. URL https://proceedings.neurips.cc/paper_files/paper/2023/hash/ 91edff07232fb1b55a505a9e9f6c0ff3-Abstract-Conference.html .14 E. S. Page. Continuous inspection schemes. Biometrika , 41(1/2):100–115, 1954. doi: 10.1093/biomet/41.1-2. 100. Aleksandr Podkopaev, Darren Xu, and Kuang-Chih Lee. Adaptive conformal inference by betting. arXiv preprint arXiv:2412.19318 , 2024. Drew Prinster, Xing Han, Anqi Liu, and Suchi Saria. WATCH: Adaptive monitoring for AI deployments via weighted-conformal martingales. arXiv preprint arXiv:2505.04608 , 2025. Aaditya Ramdas, Peter Grünwald, Vladimir Vovk, and Glenn Shafer. Game-theoretic statistics and safe anytime-valid inference. Statistical Science , 38(4):576–601, 2023. doi: 10.1214/23-STS894. Glenn Shafer. Testing by betting: A strategy for statistical and scientific communication. Journal of the Royal Statistical Society: Series A , 184(2):407–431, 2021. Jaehyeok Shin, Aaditya Ramdas, and Alessandro Rinaldo. E-detectors: A nonparametric framework for sequential change detection. The New England Journal of Statistics in Data Science , 2:229–260, 2024. doi: 10.51387/23-NEJSDS51. Charlie Snell, Jaehoon Lee, Kelvin Xu, and Aviral Kumar. Scaling LLM test-time compute optimally can be more effective than scaling model parameters. arXiv preprint arXiv:2408.03314 , 2024. URL 
+
+https://arxiv.org/abs/2408.03314 .Ken Tsui. Self-correction bench: Uncovering and addressing the self-correction blind spot in large language models. arXiv preprint arXiv:2507.02778 , 2025. Jean Ville. Étude critique de la notion de collectif . Gauthier-Villars, Paris, 1939. Vladimir Vovk, Alexander Gammerman, and Glenn Shafer. Algorithmic Learning in a Random World .Springer, 2005. Xuezhi Wang, Jason Wei, Dale Schuurmans, Quoc V. Le, Ed H. Chi, Sharan Narang, Aakanksha Chowdhery, and Denny Zhou. Self-consistency improves chain of thought reasoning in language models. In International Conference on Learning Representations , 2023. URL https://openreview.net/forum?id=1PL1NIMMrw .Yue Wang, Qiuzhi Liu, Jiahao Xu, Tian Liang, Xingyu Chen, Zhiwei He, Linfeng Song, Dian Yu, Juntao Li, Zhuosheng Zhang, Rui Wang, Zhaopeng Tu, Haitao Mi, and Dong Yu. Thoughts are all over the place: On the underthinking of o1-like LLMs. arXiv preprint arXiv:2501.18585 , 2025. Xiao-Wen Yang, Xuan-Yi Zhu, Wen-Da Wei, Ding-Chu Zhang, Jie-Jing Shao, Zhi Zhou, Lan-Zhe Guo, and Yu-Feng Li. Step back to leap forward: Self-backtracking for boosting reasoning of language models. arXiv preprint arXiv:2502.04404 , 2025. Shunyu Yao, Dian Yu, Jeffrey Zhao, Izhak Shafran, Thomas L. Griffiths, Yuan Cao, and Karthik Narasimhan. Tree of thoughts: Deliberate problem solving with large language models. In Advances in Neural Information Processing Systems , volume 36, 2023. URL https://proceedings.neurips.cc/paper_files/paper/ 2023/hash/271db9922b8d1f4dd7aaef84ed5ac703-Abstract-Conference.html .Wenhong Zhu, Hongkun Hao, and Rui Wang. Penalty decoding: Well suppress the self-reinforcement effect in open-ended text generation. In Proceedings of the 2023 Conference on Empirical Methods in Natural Language Processing , 2023. 
+
+# A Full-coverage descriptive aggregation 
+
+For completeness, adding the 33 MATH-500 IDs absent from the 467-pair historical-coverage set yields 161/500 vanilla and 185/500 controlled correct answers, or 32.20% and 37.00%. The apparent difference is 4.80 percentage points, with 38 corrections and 14 regressions. This 500-item aggregation is purely descriptive. All 33 added controlled generations use item-level seeds different from their vanilla counterparts, so this aggregation is descriptive and no paired inferential conclusion is warranted for the full set. 15 B Configuration details 
+
+Table 5 lists the fixed controller hyperparameters used to produce all central MATH-500 artifacts reported in this manuscript. Table 5: Controller configuration used by the central artifacts. 
+
+Component Value Window length / stride 64 / 32 Generated n-gram lengths 6–8 Score weights (H, −ℓ, R, D, L +, L −) (0 .15 , 0.10 , 0.20 , 0.35 , 0.18 , 0.02) 
+
+Betting exponents (0 .1, 0.3, 0.5, 0.7) 
+
+Empirical probability clip 10 −6
+
+Manual log threshold 10 Maximum rerolls / refractory windows 3 / 2 Rollback margin 64 tokens Re-decode temperature / repetition penalty 0.6 / 1.1 Prompt injection disabled 
+
+# C Methodological relation to the prior preprint 
+
+The earlier preprint and the present manuscript share the high-level idea of monitoring a decoder and intervening without changing model weights, but the deployed constructions are materially different. Table 6 records the methodological relation without importing any earlier empirical result. Table 6: Methodological evolution from the anonymized prior preprint to the present study. No empirical result from the prior pilot is included in the current analysis. 
+
+Axis Prior token-level controller Present controller Monitoring unit Per-token bounded score Overlapping 64-token windows Signal Uncertainty plus direct repetition Six features: entropy, chosen log-probability, repetition, confident repetition, and signed local entropy change Reference model Global healthy baseline μ0 Position-conditional empirical score distri-butions Betting transform Linear factor 1 + λ(at − μ0) Mixture of beta betting factors applied to empirical upper-tail probabilities Accumulation Raw product plus floored log statistic CUSUM-shaped reset statistic over window-level factors Rollback location Fixed or configuration-driven suffix Estimated from reset-statistic history plus a fixed safety margin Restored state Token prefix and KV cache Token prefix, KV cache, feature state, n-gram state, and detector state Re-decoding Sampling modulation with optional correction marker Lower temperature, repetition penalty, sus-pect n-gram blocking, no prompt injection Current evidence Prior pilot, not reused here Paired MATH-500 artifacts reported in this manuscript 
+
+# D Additional experiments for component attribution and generalization 
+
+Table 7 inventories the comparisons required for component attribution and broader generalization, distin-guishing the controls already completed (Sections 6 and 7) from those that remain missing. 16 Table 7: Additional comparisons for component attribution, broader generalization, and stronger detector validation. The completed intervention controls already provide policy-level evidence for monitoring-guided selectivity; the missing experiments primarily address which components produce that advantage and whether it generalizes. 
+
+Axis Comparison or analysis Current status Prior controller Token-level preprint controller on the same MATH-500 items, seeds, and evaluation protocol Missing; needed to isolate the value of the architectural revi-sions Monitor components Entropy-only, repetition-only, and entropy-plus-repetition variants Missing; needed for signal attri-bution Sequential statistic Centered log-probability martingale, classical CUSUM, and non-reset martingale/e-process variants Missing; needed to isolate the accumulation mechanism Feature attribution Individual feature knockouts and global versus position-conditional calibration Missing Repair components Fixed versus adaptive rollback and separate ablations of temperature, repetition penalty, and suspect n-gram blocking Missing Uninformed interven-tion controls Random and periodic rollback under the common per-item budget rule Complete; supports monitoring-guided selectivity at the policy level Generic revision con-trols Restart and self-correction under the common per-item budget rule Complete; aggregate and within-run results reported Multi-sample scaling Best-of-n and self-consistency Missing Generalization Second model, clean full-precision condition, and dis-joint second dataset Missing Detection quality Annotated or synthetic changepoints for precision, recall, false-alarm rate, and detection delay Labels missing 
+
+# E Reproducibility and artifact provenance 
+
+The available vanilla and MGT-B paper-level analyses can be rebuilt with: 
+
+python paper/figures/scripts/analyze_results.py python paper/figures/scripts/make_figures.py 
+
+The first command writes paper/generated/metrics.json and CSV tables, including SHA-256 hashes for the available primary inputs. The second writes the conceptual controller diagram, accuracy–cost plot, trace plot, and a manifest identifying trace selection. These scripts do not modify the archived experimental artifacts. The current repository unit suite passes. This is software evidence only and does not validate the scientific claims. The supplementary archive contains the available implementation, configurations, analysis scripts, tests, and artifacts for the vanilla and MGT-B experiments. The later random rollback, periodic rollback, restart, and self-correction implementations and raw artifacts are unavailable because the original execution environment was lost following a storage reset. Their aggregate results were preserved in archived analysis outputs, but the corresponding experiments cannot be independently regenerated from the released snapshot. This is an important reproducibility limitation of the control-policy comparison. 17
