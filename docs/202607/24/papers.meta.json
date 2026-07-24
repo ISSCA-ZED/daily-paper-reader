@@ -1,0 +1,54 @@
+{
+  "label": "2026-07-24",
+  "date": "2026-07-24",
+  "generated_at": "2026-07-24T21:31:48",
+  "count": 3,
+  "papers": [
+    {
+      "paper_id": "202607/24/2607.21433v1-token-budget-saturation-and-mechanistic-early-detection-of-reasoning-non-convergence-in-chain-of-thought-models",
+      "section": "deep",
+      "title_en": "Token Budget Saturation and Mechanistic Early Detection of Reasoning Non-Convergence in Chain-of-Thought Models",
+      "authors": "Renuka Oladri, Niveda Jawahar, Abdirisak Mohamed",
+      "date": "2026-07-23",
+      "pdf": "https://arxiv.org/pdf/2607.21433v1",
+      "score": "9.0",
+      "evidence": "在token级别使用隐藏状态探测检测推理非收敛",
+      "tldr": "思维链模型如DeepSeek-R1-Distill-Qwen-7B呈现双峰收敛模式：收敛生成准确率90.3%，非收敛仅6.6%，总体收敛率62.0%。本研究利用内部隐状态训练线性探针，在token 150的layer-20激活可早期检测收敛命运，AUC达0.608，优于行为基线。该发现为早期退出推理和自适应计算分配提供了可行路径。",
+      "tags": "query:key-tokens",
+      "abstract_en": "Chain-of-thought reasoning models such as DeepSeek-R1-Distill-Qwen-7B exhibit a bimodal convergence pattern: generations either terminate within a token budget (converged) or exhaust it without reaching a conclusion (non-converged). We characterize this phenomenon empirically, showing that converged generations achieve 90.3% accuracy on AIME 1983-2024 while non-converged ones achieve only 6.6%, with an overall convergence rate of 62.0%. We then ask whether this outcome is detectable early in the thinking chain using internal model representations. Training linear probes on hidden-state activations at token positions 50-300, we find that layer-20 activations at token 150 achieve AUC 0.608 (+-0.080, 5-fold CV), reliably above chance even at token 50. Activation probes consistently outperform behavioral baselines derived from token entropy and repetition statistics. A sweep-level permutation test yields p=0.063 (100,000 permutations), consistent with a modest signal that our sample size cannot confirm at conventional thresholds. These findings suggest that convergence fate is partially encoded in intermediate representations well before the generation ends, opening a path toward early-exit inference and adaptive compute allocation.",
+      "source": "arxiv",
+      "selection_source": "fresh_fetch"
+    },
+    {
+      "paper_id": "202607/24/2607.21453v1-test-time-scaling-via-error-localization",
+      "section": "deep",
+      "title_en": "Test-Time Scaling via Error Localization",
+      "authors": "Rajiv Shailesh Chitale, Rahul Madhavan, Taneesh Gupta, Deepanway Ghosal, Aravindan Raghuveer",
+      "date": "2026-07-23",
+      "pdf": "https://arxiv.org/pdf/2607.21453v1",
+      "score": "8.0",
+      "evidence": "通过条件概率比较进行token级错误定位, 类似因果追踪错误token",
+      "tldr": "现有测试时扩展方法缺乏token级信用分配，导致计算效率低下，有效推理前缀常被丢弃。本文提出TTEL，利用环境反馈进行token级错误定位，通过比较条件概率差异确定错误步骤，截断轨迹并分支生成。在LiveCodeBench上，TTEL结合Qwen3-8B达到pass@64 71.0%，生成token数仅为独立采样的49%。该方法在多个推理基准上建立严格占优的Pareto前沿，显著提升推理计算效率。",
+      "tags": "query:key-tokens",
+      "abstract_en": "Scaling inference-time computation has emerged as a reliable method to improve the performance of large language models on complex reasoning and programming tasks. However, standard approaches such as independent sampling and sequential multi-turn refinement operate without token-level credit assignment, resulting in computational inefficiency, since valid reasoning prefixes are frequently discarded. In this work, we introduce Test-Time Scaling via Error Localization (TTEL), an inference-time algorithm that utilizes fixed or environment feedback to perform token-level error localization. By comparing conditional probabilities under informed feedback against a null-context baseline, TTEL isolates the step at which an error occurred. The algorithm then truncates the trajectory and branches a new generation, maximally reusing the valid prefix. Extensive evaluations demonstrate that TTEL establishes strictly dominating Pareto frontiers across sequential reasoning domains, measured by pass-at-k vs. generated-token cost. With Qwen3-8B on LiveCodeBench, TTEL attains a pass@64 of 71.0% while generating approximately half as many tokens as independent sampling (360.4k vs. 735.0k). Generalizing to math benchmarks AIME-2025 and HMMT-2025, TTEL cleanly outperforms competing test-time baselines across both Qwen3-8B and Qwen3-4B-Thinking-2507.",
+      "source": "arxiv",
+      "selection_source": "fresh_fetch"
+    },
+    {
+      "paper_id": "202607/24/2607.20995v1-where-animacy-lives-in-large-language-models-tracing-the-circuits-of-the-animacy-concept",
+      "section": "quick",
+      "title_en": "Where Animacy Lives in Large Language Models: Tracing the Circuits of the Animacy Concept",
+      "authors": "Samuele Punzo, Giovanni Cinà, Sandro Pezzelle",
+      "date": "2026-07-23",
+      "pdf": "https://arxiv.org/pdf/2607.20995v1",
+      "score": "7.0",
+      "evidence": "对生命性概念进行电路发现和因果追踪，方法可迁移至推理令牌",
+      "tldr": "大型语言模型能区分文本中的有生命与无生命概念。本研究通过最小对数据集和电路发现方法，在四个开源模型中定位到处理有生命性的因果回路。实验表明该回路存在但较为分散，在不同模型和任务上仅部分泛化，揭示有生命性概念的分布式、上下文依赖和梯度性质。",
+      "tags": "query:key-tokens",
+      "abstract_en": "Distinguishing animate from inanimate concepts in written language requires more than shallow text processing, as it involves recognizing complex selectional constraints and contextual cues, such as verb-argument interactions. Yet, current large language models (LLMs) appear to be capable of doing it. We investigate whether this animacy-sensitive behavior of LLMs can be traced to a localized set of causally relevant components and connections. To do so, we construct a controlled dataset of minimal pairs and perform circuit discovery on four open-weight models. Through in-depth experiments and ablations, we show that a causal mechanism responsible for handling animacy in these models does exist, thus discovering an animacy circuit. At the same time, this circuit appears to be less localized compared to other known ones and generalizes only partially across models and animacy tasks, confirming the distributed, context-dependent, and somewhat graded nature of the animacy concept.",
+      "source": "arxiv",
+      "selection_source": "fresh_fetch"
+    }
+  ],
+  "errors": []
+}

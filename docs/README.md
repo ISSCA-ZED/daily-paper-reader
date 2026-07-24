@@ -6,37 +6,29 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-07-23
-- 运行时间：2026-07-23 19:59:28 UTC
+- 最新运行日期：2026-07-24
+- 运行时间：2026-07-24 21:31:42 UTC
 - 运行状态：成功
-- 本次总论文数：5
+- 本次总论文数：3
 - 精读区：2
-- 速读区：3
+- 速读区：1
 
 ### 今日简报（AI）
-今日收录5篇论文，2篇精读聚焦长上下文推理与思维进化，3篇速读涉及量化模型与推理一致性。  
-最值得关注《Copy Less, Ground More》用证据感知强化学习攻克长上下文重复复制问题，以及《EvoThink》通过自剪枝与偏好优化进化大模型推理思维。  
-建议优先精读这两篇，其方法对减少模型冗余、提升推理可解释性有直接参考价值。
-- 详情：[/202607/23/README](/202607/23/README)
+今日推荐3篇论文，精读2篇高分研究：9.0分的《Token Budget Saturation...》聚焦链式思维模型的推理非收敛早期检测，8.0分的《Test-Time Scaling via Error Localization》探讨测试时缩放与错误定位机制。建议优先精读高分论文，速读可关注大模型中的生命性概念神经回路。
+- 详情：[/202607/24/README](/202607/24/README)
 
 ### 精读区论文标签
-1. [Copy Less, Ground More: Overcoming Repetitive Copying in Long-Context Reasoning via Evidence-Aware Reinforcement Learning](/202607/23/2607.19345v1-copy-less-ground-more-overcoming-repetitive-copying-in-long-context-reasoning-via-evidence-aware-reinforcement-learning)  
+1. [Token Budget Saturation and Mechanistic Early Detection of Reasoning Non-Convergence in Chain-of-Thought Models](/202607/24/2607.21433v1-token-budget-saturation-and-mechanistic-early-detection-of-reasoning-non-convergence-in-chain-of-thought-models)  
+   标签：评分：9.0/10、query:key-tokens
+   evidence：在token级别使用隐藏状态探测检测推理非收敛
+2. [Test-Time Scaling via Error Localization](/202607/24/2607.21453v1-test-time-scaling-via-error-localization)  
    标签：评分：8.0/10、query:key-tokens
-   evidence：区分推理轨迹中的关键证据与无关干扰以减少重复复制
-2. [EvoThink: Evolving Thinking in Large Reasoning Models via Self-Pruning and Aha-Moment Preference Optimization](/202607/23/2607.19962v1-evothink-evolving-thinking-in-large-reasoning-models-via-self-pruning-and-aha-moment-preference-optimization)  
-   标签：评分：8.0/10、query:key-tokens
-   evidence：剪枝冗余推理步骤，识别关键令牌
+   evidence：通过条件概率比较进行token级错误定位, 类似因果追踪错误token
 
 ### 速读区论文标签
-1. [CUSUM-Shaped Inference-Time Monitoring and Targeted Re-Decoding for Quantized Small Language Model Reasoning](/202607/23/2607.20129v1-cusum-shaped-inference-time-monitoring-and-targeted-re-decoding-for-quantized-small-language-model-reasoning)  
+1. [Where Animacy Lives in Large Language Models: Tracing the Circuits of the Animacy Concept](/202607/24/2607.20995v1-where-animacy-lives-in-large-language-models-tracing-the-circuits-of-the-animacy-concept)  
    标签：评分：7.0/10、query:key-tokens
-   evidence：监控推理轨迹中令牌级不确定性和退化特征
-2. [CASE: Causal Alignment and Structural Enforcement for Improving Chain-of-Thought Faithfulness](/202607/23/2607.18820v1-case-causal-alignment-and-structural-enforcement-for-improving-chain-of-thought-faithfulness)  
-   标签：评分：6.0/10、query:key-tokens
-   evidence：应用因果干预确保推理链条忠实性，追踪token因果效应
-3. [Reasoning Error from Known Fact: Step-Level Self-Consistency Group Relative Policy Optimization for LLM](/202607/23/2607.18915v1-reasoning-error-from-known-fact-step-level-self-consistency-group-relative-policy-optimization-for-llm)  
-   标签：评分：6.0/10、query:key-tokens
-   evidence：细粒度分析推理轨迹中的步骤级错误和关键token
+   evidence：对生命性概念进行电路发现和因果追踪，方法可迁移至推理令牌
 
 
 <div class="dpr-home-promo-card">
