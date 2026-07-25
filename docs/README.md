@@ -6,29 +6,24 @@
 </div>
 
 ## 每次日报
-- 最新运行日期：2026-07-24
-- 运行时间：2026-07-24 21:31:42 UTC
+- 最新运行日期：2026-07-25
+- 运行时间：2026-07-25 20:59:26 UTC
 - 运行状态：成功
-- 本次总论文数：3
-- 精读区：2
+- 本次总论文数：1
+- 精读区：0
 - 速读区：1
 
 ### 今日简报（AI）
-今日推荐3篇论文，精读2篇高分研究：9.0分的《Token Budget Saturation...》聚焦链式思维模型的推理非收敛早期检测，8.0分的《Test-Time Scaling via Error Localization》探讨测试时缩放与错误定位机制。建议优先精读高分论文，速读可关注大模型中的生命性概念神经回路。
-- 详情：[/202607/24/README](/202607/24/README)
+今日仅速读1篇论文，聚焦语言模型的隐藏推理策略。值得关注的是，该文揭示了模型内部潜在的推理模式，对理解大模型思维链机制有参考价值。建议后续可探索这些策略在提升模型可解释性方面的实际应用。
+- 详情：[/202607/25/README](/202607/25/README)
 
 ### 精读区论文标签
-1. [Token Budget Saturation and Mechanistic Early Detection of Reasoning Non-Convergence in Chain-of-Thought Models](/202607/24/2607.21433v1-token-budget-saturation-and-mechanistic-early-detection-of-reasoning-non-convergence-in-chain-of-thought-models)  
-   标签：评分：9.0/10、query:key-tokens
-   evidence：在token级别使用隐藏状态探测检测推理非收敛
-2. [Test-Time Scaling via Error Localization](/202607/24/2607.21453v1-test-time-scaling-via-error-localization)  
-   标签：评分：8.0/10、query:key-tokens
-   evidence：通过条件概率比较进行token级错误定位, 类似因果追踪错误token
+- 本次无精读推荐。
 
 ### 速读区论文标签
-1. [Where Animacy Lives in Large Language Models: Tracing the Circuits of the Animacy Concept](/202607/24/2607.20995v1-where-animacy-lives-in-large-language-models-tracing-the-circuits-of-the-animacy-concept)  
-   标签：评分：7.0/10、query:key-tokens
-   evidence：对生命性概念进行电路发现和因果追踪，方法可迁移至推理令牌
+1. [Uncovering Latent Reasoning Strategies in Language Models](/202607/25/2607.17674v1-uncovering-latent-reasoning-strategies-in-language-models)  
+   标签：评分：6.0/10、query:key-tokens
+   evidence：潜在推理策略分解
 
 
 <div class="dpr-home-promo-card">
