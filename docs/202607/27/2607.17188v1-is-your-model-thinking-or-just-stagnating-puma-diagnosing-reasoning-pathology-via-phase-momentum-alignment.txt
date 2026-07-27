@@ -1,0 +1,711 @@
+Title: Is Your Model Thinking or Just Stagnating? PUMA: Diagnosing Reasoning Pathology via Phase-Momentum Alignment
+
+URL Source: https://arxiv.org/pdf/2607.17188v1
+
+Published Time: Tue, 21 Jul 2026 01:04:19 GMT
+
+Number of Pages: 13
+
+Markdown Content:
+# Is Your Model Thinking or Just Stagnating? PUMA: Diagnosing Reasoning Pathology via Phase-Momentum Alignment 
+
+# Cheng Yan ∗
+
+yc_sa22218099@mail.ustc.edu.cn University of Science and Technology of China Hefei, China 
+
+# Guangyang Ye ∗
+
+yeguangyang@mail.ustc.edu.cn University of Science and Technology of China Hefei, China 
+
+# Wuyang Zhang †
+
+wuyangz@ustc.edu.cn University of Science and Technology of China Hefei, China 
+
+# Fan Xu 
+
+University of Science and Technology of China Hefei, China 
+
+# Zhijun Fan 
+
+University of Science and Technology of China Hefei, China 
+
+# Xiang Xia 
+
+University of Science and Technology of China Hefei, China 
+
+# Yanyong Zhang †
+
+yanyongz@ustc.edu.cn University of Science and Technology of China Hefei, China 
+
+## Abstract 
+
+Test-time scaling empowers Large Reasoning Models (LRMs) to tackle complex tasks via extensive Chain-of-Thought (CoT). How-ever, this often induces the "overthinking" paradox, where redun-dant reasoning increases computational overhead without guaran-teeing accuracy. Existing test-time efficiency optimization methods primarily fall into two categories: information-theoretic approaches, which are prone to "deceptive convergence" where low uncertainty masks hallucinations, and latent representation analyses, which are often post-hoc, lacking the real-time sensitivity for dynamic reasoning. To bridge this gap, we first posit the Phase-Momentum Alignment Hypothesis , asserting that reasoning correctness hinges on the temporal synchronization between geometric momentum and uncertainty resolution. We then theoretically formulate the 
+
+Cognitive-Energy Model to characterize these dynamics through two orthogonal dimensions: Geometric Cognitive Effort (quantified by latent velocity and tortuosity) and Entropic Cognitive Uncertainty .To operationalize this, we introduce PUMA (Phase-Uncertainty 
+
+Momentum Alignment), a training-free framework employing a tiered diagnostic architecture. By coupling lightweight phase moni-toring with event-triggered geometric analysis, PUMA effectively distinguishes active exploration from passive stagnation, enabling precise interventions through adaptive truncation or corrective measures. Extensive experiments on LRMs spanning 1.5B to 32B demonstrate that PUMA consistently outperforms state-of-the-art baselines across diverse benchmarks, achieving a superior accuracy-efficiency trade-off and robust cross-domain generalization. 
+
+## CCS Concepts 
+
+• Computing methodologies → Natural language processing ;
+
+Learning latent representations .      
+
+> ∗These authors contributed equally to this work.
+> †Corresponding authors. (b) Passive Stagnation: Persistent high entropy coupled with vanishing cognitive momentum.
+> (a) Active Exploration: High entropy synchronized with intensifying cognitive momentum.
+
+Figure 1: Motivation: Active Thinking vs. Stagnation. Visu-alizing reasoning dynamics of QwQ-32B on MATH-500: (a) Solvable cases exhibit geometric effort synchronized with un-certainty resolution; (b) Unsolvable cases manifest persistent high entropy coupled with vanishing cognitive momentum. 
+
+## Keywords 
+
+Large Reasoning Models; Test-time Scaling; Efficient Reasoning; Latent Representation Analysis 
+
+## 1 Introduction 
+
+Large Reasoning Models (LRMs), such as OpenAI o1 [ 16 ] and DeepSeek-R1 [ 13 ], have achieved remarkable success in complex reasoning tasks. To further enhance these capabilities, recent ap-proaches leverage test-time scaling , allocating more inference-time computation to generate extensive Chain-of-Thought sequences [ 42 ]. arXiv:2607.17188v1 [cs.AI] 19 Jul 2026 Yan et al. 
+
+While this extended generation enables complex reasoning, it also introduces the risk of "overthinking", characterized by redundant and repetitive reasoning that escalate computational costs without guaranteeing accuracy [ 11 , 33 ]. Consequently, developing mech-anisms for efficient reasoning , particularly through dynamic self-evaluation, has become a key priority to optimize the trade-off between computational cost and reasoning reliability. Current efforts optimizing test-time computation generally fall into two primary streams: information-theoretic approaches and latent space representation analysis. From an information-theoretic perspective, methods like Think or Not [ 47 ] propose an Adaptive Think strategy that dynamically halts generation upon detecting low-entropy states, empirically validating that effective reasoning typically manifests as a progressive transition from high initial uncertainty to low-entropy certainty. However, observations in 
+
+Entropy-Lens [ 2] indicate that relying solely on entropy introduces significant ambiguity since high entropy may signify effective ex-ploration rather than ineffective exploration while low entropy can deceptively mask "confident hallucinations," rendering it an unreliable proxy for correctness. In parallel, approaches grounded in latent representation analysis, such as Tracing the Traces [38 ], evaluate reasoning quality by monitoring the temporal evolution of hidden states, demonstrating that the internal representational dynamics inherently encode signals predictive of output correct-ness. Nevertheless, these methods primarily operate in a post-hoc manner which renders them unsuitable for real-time monitoring. Although CoRE [ 21 ] attempts to address this by identifying lo-cal cyclical loops, it remains inefficient at detecting subtle error patterns emerging in the early stages of reasoning. In summary, neither paradigm alone suffices: entropy signals are prone to decep-tive convergence patterns stemming from the intrinsic ambiguity of entropy, while latent analysis often lacks real-time sensitivity. To bridge this gap, we draw inspiration from human cognitive processes, specifically the dynamic interplay between metacogni-tive monitoring and cognitive effort . Human reasoning typically evolves through structured phases from initial problem understand-ing and divergence to iteration and final convergence. Crucially, this mental effort is non-uniform across phases: intense exploration requires high cognitive load, while convergence is characterized by a reduction of effort. Hypothesizing that this phenomenon of phase-dependent thinking effort is also inherent in the generation dynamics of Large Reasoning Models (LRMs), we seek to decode these internal signals. To validate this intuition, we analyze the joint evolution of latent representation dynamics and entropy shifts. Our empirical observations, as visualized in Figure 1, reveal two distinct thinking patterns. In solvable cases (Figure 1(a)), the model exhibits synchronized dynamics : a sharp reduction in entropic un-certainty is strictly coupled with high latent momentum, signaling a distinct transition from exploratory divergence to structural con-vergence. Conversely, unsolvable or incorrect cases (Figure 1(b)) manifest a significant asynchrony : persistent high entropy coincides with vanishing latent momentum, reflecting a state of "cognitive stagnation" where the model continues to generate tokens despite having ceased constructive semantic processing. Based on these insights, we formally propose the Phase-Momentum Alignment Hy-pothesis : The correctness of a reasoning trajectory is closely correlated with the temporal synchronization between its epistemic uncertainty (phase) and its internal semantic Effort (momentum). 
+
+Motivated by these insights, we formally define the Cognitive-Energy Model , which decomposes the reasoning process into two orthogonal dimensions: (1) Geometric Cognitive Effort , quantifying the geometric dynamics of the latent trajectory via Global Thinking Intensity (tortuosity) and Local Semantic Gain (velocity); and (2) 
+
+Entropic Cognitive Uncertainty , leveraging lookahead entropy as a proxy for the solution-space phase. By synthesizing these met-rics, we derive the Net Reasoning Momentum to operationalize the 
+
+Phase-Momentum Alignment Hypothesis for diagnosis of reason-ing pathology. To implement this model, we introduce PUMA, a training-free framework for adaptive cognitive control. It employs a tiered architecture where a lightweight entropy-based Finite State Machine (FSM) serves as a continuous monitor to track phase tran-sitions with minimal computational overhead. The system triggers the Geometric Cognitive Effort calculation strictly upon detect-ing critical shifts to jointly diagnose the reasoning pattern. Based on the diagnostic outcomes, PUMA executes extensible interven-tion policies, such as effectively truncating generation or applying corrective measures to ensure robust reasoning integrity. Our contributions are summarized as follows: (1) We formulate the Cognitive-Energy Model and the Phase-Momentum Alignment Hypothesis . By introducing Net Reasoning Momentum derived from 
+
+Global Thinking Intensity and Local Semantic Gain , we provide a formal interpretation interpretation of "thinking effort" that effec-tively distinguishes valid reasoning from cognitive stagnation. (2) To operationalize this, we propose PUMA, a training-free inference framework that integrates a lightweight entropy-based FSM with event-triggered cognitive diagnosis, enabling adaptive supervision of the reasoning process without parameter updates. (3) Extensive experiments validate that PUMA achieves a superior accuracy-cost trade-off. Crucially, our framework demonstrates robust general-ization across diverse models and reasoning domains, consistently outperforming distinct optimization paradigms. 
+
+## 2 Related Work 2.1 Adaptive and Efficient Reasoning 
+
+To mitigate the “overthinking” phenomenon and computational overhead in LRMs, recent research focuses on optimizing reason-ing length and eliminating redundant computation [ 11 , 26 , 33 , 39 ]. We categorize these efforts into two primary streams. One major category is Training-based methods, which internalize efficiency via parameter updates, primarily enhancing performance through Supervised Fine-Tuning (SFT) on compressed CoT traces [ 18 , 23 ,25 , 30 , 44 ], Reinforcement Learning (RL) with length-aware penal-ties [ 1, 3, 34 , 46 , 49 ], or implicit reasoning within continuous latent spaces [ 29 , 31 , 32 , 45 ]. Alternatively, Training-free methods offer a model-agnostic approach, optimizing inference through prompt constraints for brevity [ 5, 14 , 20 , 24 ] or dynamic interventions such as early exiting and speculative decoding [4, 22, 43, 47]. 
+
+## 2.2 Information Theory in Efficient Reasoning. 
+
+Information theory [ 9 ] provides a valuable theoretical basis for analyzing the behavior of language models, offering rigorous frame-works to characterize generalization, uncertainty and hallucination Is Your Model Thinking or Just Stagnating? PUMA: Diagnosing Reasoning Pathology via Phase-Momentum Alignment 
+
+phenomena [ 7 , 10 , 17 , 19 , 28 ]. Building on these foundations, recent work extends information-theoretic perspectives to Large Reason-ing Models (LRMs) to optimize and validate complex reasoning trajectories [ 6, 12 ]. Yong et al . [47] propose an Adaptive Think 
+
+strategy that truncates reasoning when semantic entropy indicates sufficient confidence, though this heuristic remains vulnerable to high-confidence hallucinations where models are confidently incor-rect. Complementary to this, Ali et al . [2] introduce Entropy-Lens to analyze layer-wise token distributions, but find that distinguishing between healthy exploratory states and erroneous confusion re-mains challenging and often yields limited accuracy. Similarly, Ton et al . [36] quantify stepwise information gain to evaluate reasoning chains, but this verification process necessitates the training of an external supervisor model and relies heavily on well-defined final outcomes, limiting its flexibility in open-ended tasks. 
+
+## 2.3 Latent Representation Analysis. 
+
+Previous studies have shown that probing the hidden states of Large Language Models (LLMs) reveals informative signals regarding model reliability [ 48 ], safety [ 37 ], and generation performance [ 41 ]. Building on these insights, recent works have attempted to utilize latent space dynamics to enhance the efficiency of reasoning tasks. Chain-of-Embedding (CoE) [ 41 ] estimates response correctness by analyzing the geometric trajectory of hidden states. However, CoE depends on the relative displacement between the input and final output states for normalization, rendering it unsuitable for real-time step-level verification. [ 21 ] utilizes geometric analysis of latent trajectories to identify redundant patterns in Chain-of-Thought (CoT) generation. Latent-Trajectory signals [ 38 ] characterize the temporal evolution of representations, such as cumulative change, to guide sample selection. However, these metrics rely on coarse-grained segment averaging, which fails to pinpoint fine-grained logical inconsistencies within individual steps. 
+
+## 3 Preliminaries and Problem Formulation 3.1 Reasoning as a Structured Cognitive Process 
+
+Consider an LRM M parameterized by 𝜃 . We formally model the inference process as the generation of a semantic triplet T , compris-ing the input query 𝑥 , the final answer 𝑦 , and the intermediate latent reasoning chain R. Aligning with established Chain-of-Thought formalisms [ 42 ], we explicitly structure R within this triplet by de-composing the continuous token stream into an ordered sequence of discrete Reasoning Steps :
+
+T = {𝑥, R, 𝑦 }, where R = {𝑠 1, 𝑠 2, . . . , 𝑠 𝑇 }. (1) Here, 𝑇 denotes the total number of reasoning steps, which varies dynamically based on the complexity of the query 𝑥 , and each step 𝑠 𝑡 constitutes a coherent semantic unit, typically delimited by textual separators (e.g., \n\n ). Beyond this discrete segmentation, we hypothesize that the rea-soning generation process aligns with human cognitive dynamics. Specifically, an effective reasoning chain evolves through a specific ordered sequence of cognitive phases P:
+
+R ∼ P Und → P Div → P Iter → P Conv → P Ref , (2) where the cognitive progression consists of Problem Understanding 
+
+(PUnd ), Cognitive Divergence (PDiv ), optional Sub-problem Iteration 
+
+(PIter ), Convergence (PConv ), and optional Reflection (PRef ). 
+
+## 3.2 Problem Formulation 
+
+We frame the validation of the reasoning chain R as an Online Cognitive Diagnosis problem. Specifically, our goal is to monitor the validity of the inference process, distinguishing valid reasoning steps from pathological behaviors such as semantic stagnation or redundancy. To achieve this, we identify the current Cognitive State 
+
+𝑆 𝑡 by decoding the temporal synchronization between the model’s epistemic uncertainty and its semantic progression. Guided by the Phase-Momentum Alignment hypothesis, we opera-tionalize this diagnosis by deriving two complementary time-series signals from the discrete sequence R = {𝑠 𝑡 }𝑇 𝑡 =1:
+
+Latent Trajectory ( Z). To capture semantic evolution, we project each step 𝑠 𝑡 into the continuous latent space via a feature extraction function 𝜓 :
+
+z𝑡 = 𝜓 (𝑠 𝑡 , M) ∈ R𝐿 ×𝑑 , Z = {z1, . . . , z𝑡 }. (3) This yields a continuous trajectory representing the geometric "momentum" of thought within the semantic manifold. 
+
+Uncertainty Profile ( U). Simultaneously, we quantify the gen-eration uncertainty from an information-theoretic perspective to monitor the "phase" of exploration, forming the sequence U =
+
+{𝑢 1, . . . , 𝑢 𝑡 }.
+
+Diagnostic Objective. We define the task as mapping the joint history of these spatiotemporal signals to the discrete state 𝑆 𝑡 . For-mally, we seek a diagnostic function D such that: 
+
+𝑆 𝑡 = D (Z ≤𝑡 , U≤𝑡 ) ∈ S cognitive , (4) where Scognitive encompasses both healthy reasoning states (e.g., active exploration) and pathological modes (e.g., stagnation) that necessitate adaptive intervention. 
+
+## 4 The Cognitive-Energy Model 
+
+To formally characterize CoT efficiency, we propose the Cognitive-Energy Model , which conceptualizes reasoning as a dynamic trajec-tory within the transformer’s latent space, governed by processing intensity and epistemic uncertainty. We decompose this trajectory into two orthogonal dimensions: Geometric Cognitive Effort 
+
+(Section 4.1), quantifying the kinematic momentum of latent evolu-tion, and Entropic Cognitive Uncertainty (Section 4.2), reflecting the "phase" of solution exploration. Synthesizing these quantities, we formalize the Phase-Momentum Alignment Hypothesis 
+
+(Section 4.3) to diagnose the critical temporal synchronization be-tween cognitive expenditure and information resolution. 
+
+## 4.1 Geometric Cognitive Effort 
+
+To quantify the semantic dynamics during reasoning, we analyze the geometric evolution of hidden states within the final 𝑚 layers, as deeper layers encode the most abstract semantics. Let 𝐶 𝑡 =
+
+{𝑥, 𝑠 1, . . . , 𝑠 𝑡 } denote the full context sequence up to step 𝑡 . We introduce two complementary metrics to characterize the latent geometry, based on which we subsequently formulate a unified indicator of cognitive effort. Yan et al. 
+
+Global Thinking Intensity ( I𝑡 ). First, we define I𝑡 as the ratio of cumulative layer-wise transformation to the net semantic dis-placement, serving as a proxy for the geometric complexity of the reasoning process: 
+
+I𝑡 =
+
+Í𝐿 −1 
+
+> 𝑙 =𝐿 −𝑚 +1
+
+𝛿 (h𝑙 𝑡 , h𝑙 +1 
+
+> 𝑡
+
+)
+
+𝛿 (h𝐿 −𝑚 +1 
+
+> 𝑡
+
+, h𝐿 𝑡 ) , (5) where h𝑙 𝑡 ∈ R𝑑 is defined as the mean-pooled representation of the full context sequence 𝐶 𝑡 at the 𝑙 -th transformer layer. The function 𝛿 (· , ·) denotes a geometric distance metric. We instantiate this metric in two forms to capture distinct properties of the latent space—Magnitude (Euclidean) and Angle (Cosine): 
+
+𝛿 mag (a, b) = ∥a − b∥2, 𝛿 ang (a, b) = arccos 
+
+ a⊤b
+
+∥a∥2 ∥b∥2
+
+
+
+. (6) While 𝛿 mag captures the absolute scale of semantic updates, we explicitly utilize the Angular Distance ( 𝛿 ang ) in our primary analy-sis to ensure robustness against scale variations inherent in high-dimensional latent spaces. Physically, the ratio I𝑡 quantifies the tortuosity of the signal propagation path traversed on the semantic manifold. A high I𝑡 
+
+indicates that the model engages in extensive internal processing, characterized by a circuitous trajectory to refine latent representa-tions rather than a direct mapping. 
+
+Local Semantic Gain ( G𝑡 ). while I𝑡 captures intra-step process-ing depth, we introduce G𝑡 to measure the inter-step semantic transition, serving as the semantic velocity of the trajectory: 
+
+G𝑡 = 𝛿 (z𝑡 , z𝑡 −1), where z𝑡 = 1
+
+𝑚 
+
+> 𝐿
+
+∑︁ 
+
+> 𝑙 =𝐿 −𝑚 +1
+
+h𝑙 𝑡 . (7) Here, z𝑡 represents the Semantic Centroid of the processing unit. A diminishing G𝑡 → 0 indicates that the reasoning chain has ceased to generate new semantic content. 
+
+Unified Metric: Net Reasoning Momentum ( Φ𝑡 ). Valid reason-ing requires not just velocity ( G𝑡 ) but also sustained cognitive intensity. we formulate this comprehensive metric as: 
+
+Φ𝑡 = G𝑡 
+
+|{z} 
+
+> Semantic Velocity
+
++𝜆 · |I 𝑡 − 2I𝑡 −1 + I 𝑡 −2 |
+
+| {z }
+
+> Intensity Fluctuation
+
+, (8) where the second term approximates the Intensity Curvature (𝜅 𝑡 ≈|Δ2I𝑡 |), representing the acceleration of cognitive load. Crucially, as both terms rely on angular metrics, Φ𝑡 serves as a robust consistent energy function. 
+
+Convergence Mechanics: When the model reaches a solution fixed point 𝑦 ∗, the latent representations stabilize such that h𝑙 𝑡 ≈ h𝑙 𝑡 −1.Geometrically, this creates a stationary state on the manifold: both the semantic displacement vanishes ( G𝑡 → 0) and the internal processing path stabilizes ( Δ2I𝑡 → 0), driving Φ𝑡 → 0. This math-ematically characterizes the transition from active reasoning to 
+
+cognitive stagnation PConv .
+
+## 4.2 Entropic Cognitive Uncertainty 
+
+Complementary to geometric analysis, we quantify the epistemic uncertainty of the reasoning process. We define the Proxy-based Lookahead Entropy ( U𝑡 ) via a lightweight verifier M𝜙 :
+
+U𝑡 = −∑︁  
+
+> 𝑦 ∈ Y
+
+𝑃 𝜙 (𝑦 |𝐶 𝑡 ) log 2 𝑃 𝜙 (𝑦 |𝐶 𝑡 ), (9) where, the set of candidate final answers Y = {𝑦 1, . . . , 𝑦 𝑘 } is gener-ated by prompting a lightweight proxy model M𝜙 (with parameters 
+
+|𝜙 | ≪ | 𝜃 |) conditioned on the current context 𝐶 𝑡 . The term 𝑃 𝜙 (𝑦 |𝐶 𝑡 )
+
+denotes the normalized generation probability of candidate 𝑦 .This decoupled design significantly reduces overhead and mit-igates Self-Reinforcement Bias . Crucially, by functioning as a con-ditional verifier rather than an independent generator, the proxy leverages the pre-generated context to effectively discriminate be-tween valid and erroneous reasoning despite the capacity gap. This ensures diagnostic precision, establishing U𝑡 as a reliable indicator of the model’s evolutionary state. 
+
+Theoretical Phases and Probability Landscapes. To rigorously diagnose the reasoning phases, we first establish the boundary conditions of the uncertainty metric. The theoretical upper bound 
+
+U𝑚𝑎𝑥 is defined by the maximum entropy (uniform) distribution over the discrete output space Y:
+
+U𝑚𝑎𝑥 := max  
+
+> 𝑃
+
+U ( 𝑃 ) = −∑︁  
+
+> 𝑦 ∈ Y
+
+1
+
+|Y| log 2
+
+1
+
+|Y| = log 2 |Y| . (10) We then define the Initial Uncertainty of the Understanding Phase (PUnd ) as U𝑖𝑛𝑖𝑡 = 1
+
+> 𝑘
+
+Í𝑘 𝑡 =1 U𝑡 (where 𝑘 ≤ 5), capturing the model’s 
+
+intuitive prior before deep reasoning branches out. We map the step 𝑠 𝑡 to the theoretical phases defined in Eq. 2 by monitoring the persistence of uncertainty patterns over a temporal window 𝑤 . Formally, the phase assignment is determined as: 
+
+𝑠 𝑡 ∈
+
+(
+
+PConv if ∀𝜏 ∈ [ 𝑡 − 𝑤, 𝑡 ], U𝜏 < 𝛼 · U 𝑚𝑎𝑥 
+
+PDiv if ∀𝜏 ∈ [ 𝑡 − 𝑤, 𝑡 ], U𝜏 > U𝑖𝑛𝑖𝑡 
+
+, (11) where 𝑤 denotes the window size for stability verification, and 
+
+𝛼 ∈ ( 0, 1) is a sensitivity coefficient. From a time-series perspective, the evolution of U𝑡 reflects the dynamic reshaping of the probability landscape over Y. Persistence in the PDiv phase signifies a flattened distribution where probability mass is dispersed across multiple hypotheses. Conversely, the PConv 
+
+phase implies that the distribution asymptotically approaches a 
+
+Dirac delta function centered on a consensus candidate 𝑦 ∗. This confirms the effective collapse of the solution space, signaling the final elimination of semantic ambiguity. 
+
+## 4.3 Cognitive Pattern Recognition 
+
+With geometric momentum ( Φ𝑡 ) and entropic uncertainty ( U𝑡 )formally established, we synthesize these metrics to characterize the 
+
+Phase-Momentum Alignment Hypothesis , focusing specifically on the temporal synchronization between effort relaxation and uncertainty collapse. To operationalize the cognitive state 𝑆 𝑡 (defined in Eq. 4), we categorize the joint dynamics of momentum and reasoning phases into four distinct thinking patterns: 
+
+𝑆 𝑡 =
+
+
+
+SStagnant if 𝑠 𝑡 ∈ P Div ∧ Φ𝑡 < 𝜖 
+
+SHealthy if 𝑠 𝑡 ∈ P Conv ∧ Φ𝑡 < 𝜖 ∧ ( 𝜏 < 𝑡, 𝑠 𝜏 ∈ S Stagnant )SRedundant if 𝑠 𝑡 ∈ P Div ∧ (∃ 𝜏 < 𝑡, 𝑆 𝜏 = SHealthy )
+
+,
+
+(12) Is Your Model Thinking or Just Stagnating? PUMA: Diagnosing Reasoning Pathology via Phase-Momentum Alignment Decision    
+
+> Pattern IPattern II
+
+Step 1. Entropy -based FSM Monitoring Step 2. Geometric Cognitive Effort 
+
+Step 3. Cognitive Pattern Recognition Step 4. Adaptive Intervention Mechanism 
+
+> Query
+> Single CoT step
+> LLM
+
+…         
+
+> Thinking: <Think> Thinking: <Think>
+> Steps
+> Steps
+> Entropy Thinking  Intensity
+> Entropy Thinking  Intensity
+> Steps
+> Steps
+> …
+> Entropy Sequence
+> Entropy -based FSM
+> Initial Uncertain Low_confident High_confident
+
+## …   
+
+> Latent Signals
+> ×𝐿
+> Latent Representation Extraction Entropy Extraction
+
+## … 
+
+> Initial Window
+
+## ……     
+
+> Slide Window
+> Chain of Thought
+> Answer
+> 𝑠 !𝑠 "𝑠 #
+
+## …      
+
+> Trigge r
+> 𝑠 "~𝑠 #𝑠 "~𝑠 #$"Rep Rep
+> diff 𝑮 𝒕
+> 𝑠 "𝑠 &
+
+## … 𝑰 𝒕                 
+
+> Global Thinking Intensity
+> Net Reasoning Momentum
+> Semantic Manifold
+> 𝑠 "
+> 𝑠 #'"
+> 𝑠 #
+> 𝑠 (
+> 𝑠 #$"
+> 𝑠 #
+> 𝑠 #$)
+> 𝛷 #=𝐺 #+𝜆 ⋅𝐼 #−2𝐼 #$"+𝐼 #$)
+> Local Semantic Gain
+
+…                      
+
+> Hidden feature Ang/
+> Mag
+> 𝑳 𝟏
+> 𝑳 𝟐
+> 𝑳 𝑵
+> 𝒅𝒊𝒇𝒇 𝟏 ,𝟐
+> 𝒅𝒊𝒇𝒇 𝑵 %𝟏 ,𝑵
+> 𝑠 *
+> Augmented
+> Restart
+> High momentum
+> signifies Active
+> Exploration
+> Divergence phase
+> Convergence phase
+> Thought Completion
+> Divergence phase
+> Convergence phase
+> Low momentum signifies
+> Passive Stagnation
+> ... I notice that the
+> expression is a
+> difference of squares. I
+> can factor (x^2 -4) into
+> (x -2)(x+2) to simplify
+> the fraction .… </Think>
+> Answer :\boxed{x+2 }
+> … I need to double -
+> check the definition of
+> the variable x. Is xan
+> integer or a real number.
+> Let me re -read the
+> problem statement .…
+> </Think>
+> Answer :\boxed{0 }
+> UNCERTAIN
+> Continue COT
+> generation
+> CORRECT
+> WRONG
+> Truncate
+
+Figure 2: Overview of the PUMA Framework. (1) Real-time Monitoring via an entropy-based FSM to track phase transitions; (2) Event-triggered Diagnosis utilizing Geometric Cognitive Effort to verify Phase-Momentum Alignment; and (3) Adaptive Intervention executing dynamic truncation or remedial actions to rectify cognitive pathology. 
+
+where 𝜖 is the relaxation threshold. To facilitate this analysis, we introduce two critical timestamps: 𝑇 trans , denoting the transition point from Divergence ( PDiv ) to Convergence ( PConv ); and 𝑇 relax ,denoting the moment when Net Reasoning Momentum drops below a relaxation threshold 𝜖 (i.e., Φ𝑡 < 𝜖 ). 
+
+Pattern I: Synchronized Alignment ( SHealthy ). In this ideal state, the model maintains high cognitive momentum throughout the exploratory phase, and the relaxation of effort coincides with or slightly follows the resolution of uncertainty ( 𝑇 relax ≥ 𝑇 trans ). Physi-cally, this indicates that the model is actively traversing the semantic manifold to resolve ambiguity. The eventual drop in Φ𝑡 is a natural consequence of successfully locating the solution fixed point. 
+
+Pattern II: Energy-Entropy Misalignment ( SStagnant ). Here, the cognitive momentum dissipates before the uncertainty is resolved (𝑇 relax ≪ 𝑇 trans ). Despite remaining in a high-entropy state, the model ceases to update its semantic representation. This pattern characterizes a "giving up" behavior, where the model generates empty tokens without performing actual geometric work, inevitably drifting towards a hallucinated or incorrect conclusion. 
+
+Pattern III: Post-Convergence Repetition( SRedundant ). This pat-tern is defined as the superfluous continuation of generation after a successful Pattern I sequence has been established. This pattern signifies a failure of the internal stop mechanism, where the model manifests spurious uncertainty despite having solved the problem, resulting in repetitive verification loops. 
+
+## 5 PUMA: Adaptive Cognitive Control 
+
+To operationalize the Cognitive-Energy Model defined in Section 4, we propose a training-free framework, as shown in Figure 2), in-tegrating lightweight monitoring, event-triggered cognitive diag-nosis, and extensible dynamic intervention. The system orches-trates the inference process through three stages: (1) A lightweight entropy-based Finite State Machine (FSM) monitors phase transi-tions in real-time; (2) Upon detecting critical phase shifts, the sys-tem triggers the Geometric Cognitive Effort calculation to jointly diagnose the reasoning pattern; (3) Based on the diagnosis, the system adaptively executes corresponding intervention measures, effectively truncating generation or applying corrective measures. 
+
+## 5.1 Entropy-based FSM Monitoring 
+
+To capture valid reasoning signals, we initiate monitoring strictly after the Problem Understanding phase PUnd (as defined in Sec-tion 4.2). We formalize the FSM over a ternary state space S =
+
+{P Conv , PDiv , PUndet }. where any interval failing to satisfy the strict thresholds for either convergence or divergence is categorized as the indeterminate state PUndet . To ensure robust detection, the sys-tem tracks phase stability using a sliding window of size 𝑤 fixed 
+
+according to Eq. 11. To balance diagnostic precision with runtime efficiency, we em-ploy an event-driven protocol. The Diagnostic Trigger is activated strictly upon the detection of critical state transitions: ❶ Con-vergence Alert: The entropy consistently drops ( 𝑠 𝑡 → P Conv ), signaling a potential solution candidate. ❷ Divergence Persis-tence Alert: The entropy persists in high-uncertainty ( 𝑠 𝑡 ∈ P Div ), suggesting potential infinite looping or cognitive stagnation. Once triggered, the system computes the Net Reasoning Momentum Φ𝑡 
+
+(Eq. 8) and synthesizes it with the current phase state to identify the underlying cognitive pattern as defined in Eq. 12. 
+
+## 5.2 Dynamic Intervention Mechanism 
+
+Based on the cognitive state 𝑆 𝑡 identified by the diagnostic module, we define a mapping function 𝜋 : Scognitive → A that translates Yan et al. 
+
+reasoning patterns into actionable control policies: 
+
+𝜋 (𝑆 𝑡 ) =
+
+
+
+TRUNCATE success , if 𝑆 𝑡 = SHealthy 
+
+TRUNCATE fail , if 𝑆 𝑡 = SStagnant 
+
+CONTINUE , otherwise (13) This mechanism unifies efficiency optimization and error mitigation through the following targeted protocols: 
+
+Adaptive Success Truncation (Targeting SHealthy ). Standard stopping criteria often cut off reasoning prematurely or fail to de-tect redundancy. Our protocol ensures the completeness of the "Thought Chain" by acting strictly upon the detection of Synchro-nized Alignment . By executing TRUNCATE success at the exact mo-ment the model satisfies healthy convergence (low entropy coupled with relaxed momentum), we guarantee that the solution fixed point 𝑦 ∗ has been reached. Crucially, this preemptive intervention implicitly manages Post-Convergence Repetition ( SRedundant ) by eliminating the temporal window required for the model to drift into a redundant state, thereby maximizing efficiency without a separate suppression mechanism. 
+
+Cognitive Circuit Breaking & Restart (Targeting SStagnant ). 
+
+To prevent hallucinations induced by reasoning failure, we em-ploy a "Circuit Breaker" mechanism. When the diagnosis identifies 
+
+Energy-Entropy Misalignment (𝑆 𝑡 = SStagnant ), the system executes TRUNCATE fail . This action halts the generation of vacuous tokens where the model has "given up" (vanishing momentum) despite un-resolved ambiguity. This dynamic intervention specifically targets the pathology of "reasoning collapse," ensuring computational re-sources are not wasted on logically invalid content and preventing error propagation at an early stage. Furthermore, Circuit Breaker activation signals critical cogni-tive barriers, likely stemming from missing domain information or intrinsic reasoning insufficiency. We preliminarily explore a 
+
+Retrieval-Augmented Restart mechanism on mathematical datasets, where external context (e.g., theorems) is injected to reset the rea-soning trajectory and rectify potential hallucinations. Given the high extensibility of our intervention mechanism, we reserve com-prehensive evaluation of such advanced strategies for future work. 
+
+## 6 Experiments 6.1 Experimental Setup 
+
+Models and Datasets. We evaluate PUMA on four Large Reason-ing Models (LRMs) spanning parameter scales from 1.5B to 32B. Specifically, we employ the DeepSeek-R1-Distill [13 ] series (1.5B, 7B, 14B) and QwQ-32B [35 ]. To ensure a comprehensive evaluation, we select five benchmarks across three domains: Mathematical Reasoning (GSM8k [ 8 ], MATH-500 [ 15 ], and AIME 2025), Scien-tific Reasoning (GPQA-Diamond [ 27 ]), and General Complex Reasoning (MMLU-Pro [40]). 
+
+Baselines. We benchmark against representative efficiency opti-mization methods across three distinct paradigms: 
+
+• Information-Theoretic Methods: Think or Not [47] adopts an entropy-based halting mechanism, utilizing step-level entropy shifts and low-uncertainty thresholds to adaptively truncate generation when the model exhibits sufficient confidence. 
+
+• Latent Representation Analysis: Tracing the Traces (LT) [ 38 ]leverages Latent-Trajectory Signals (e.g., cumulative trajectory changes) to enable the early selection of high-quality traces, estimating the correctness of reasoning chains in a label-free manner. 
+
+• Training-based Control: AdaptThink [49 ] employs a multi-stage Reinforcement Learning (RL) framework to train a policy that dynamically switches between elaborate reasoning and di-rect answering. Due to the substantial computational overhead of RL training, we restrict the comparison of this baseline to the 1.5B and 7B parameter scales. 
+
+Variants for Hypothesis Verification. To explicitly verify the Phase-Momentum Alignment and disentangle the contributions of information-theoretic and geometric signals, we construct two ablated variants of our framework: 
+
+• PUMA entropy : This variant relies solely on the Information-Theo-retic dimension, executing truncation strictly based on the low-entropy convergence signal derived from our refined Lookahead Entropy (Section 4.2), ignoring geometric momentum. 
+
+• PUMA latent : This variant operates exclusively on the geometric analysis of hidden states, triggering truncation solely when the Net Reasoning Momentum drops below the relaxation threshold (i.e., Φ𝑡 < 𝜖 ), without considering phase alignment. 
+
+Implementation Details. We perform all experiments on NVIDIA A100 (80GB) GPUs. For Entropic Cognitive Dispersion , we employ DeepSeek-R1-Distill-Qwen-1.5B as the default proxy model 𝑀 𝜙 .To balance monitoring efficiency and accuracy, we define the rea-soning step granularity as every three newline separators (‘ \n\n ’). Regarding hyperparameters, we set the phase sensitivity 𝛼 = 0.05 
+
+and momentum threshold 𝜖 = 0.1 with a sliding window 𝑤 = 3; sen-sitivity analyses for these parameters and the proxy model size are provided in Section 6.4. For Geometric Cognitive Effort , we analyze the hidden states of the final 25% of layers using Angular Distance (𝛿 𝑎𝑛𝑔 ). All reported results are averaged over three independent runs to mitigate generation randomness. 
+
+## 6.2 Main Results: Efficiency-Accuracy Trade-off 
+
+Overall Efficiency Analysis. We present the comprehensive per-formance of PUMA across mathematical (GSM8k, MATH-500, AIME 2025), scientific (GPQA-Diamond), and general reasoning bench-marks (MMLU-Pro). As shown in Table 1 and the accuracy-efficiency Pareto frontier in Figure 3(b), PUMA achieves a superior balance between reasoning accuracy and computational cost. It consistently outperforms baselines across varying parameter scales from 7B to 32B (with 1.5B results detailed in the Appendix). To understand the sources of these improvements, we provide a detailed comparison against three representative baseline paradigms below. 
+
+Entropy Ambiguity and Calculation Bias (vs. Think or Not). 
+
+While Think or Not [ 47 ] reduces token consumption via its adaptive halting mechanism, it yields lower accuracy compared to our ab-lated variant PUMA entropy . For instance, on the GPQA-D benchmark with the DeepSeek-R1-Distill-14B model, Think or Not achieves an accuracy of 53.53% → 48.89%, whereas PUMA entropy reaches 
+
+53.03% . This performance difference stems from two structural lim-itations in the baseline: (1) Length Bias: It relies on beam search and sequence-based self-calculated entropy, inducing a bias toward Is Your Model Thinking or Just Stagnating? PUMA: Diagnosing Reasoning Pathology via Phase-Momentum Alignment 
+
+Table 1: Main Results on Math, Science, and General Reasoning Benchmarks. We report Accuracy ( ↑) and Average Token Cost ( ↓)across DeepSeek-R1-Distill (7B/14B) and QwQ-32B models. We compare PUMA against baselines from three distinct paradigms (Information-Theoretic, Latent-based, and Training-based) alongside our two ablated variants. 
+
+Methods MATH SCIENCE GENERAL GSM8K MATH-500 AIME2025 GPQA-D MMLU-Pro 
+
+Acc. ↑ Tokens ↓ Acc. ↑ Tokens ↓ Acc. ↑ Tokens ↓ Acc. ↑ Tokens ↓ Acc. ↑ Tokens ↓
+
+DeepSeek-R1-Distill-Qwen-7B 
+
+Vanilla 80.21 507.16 84.80 2345.30 36.67 7243.87 25.76 5336.08 55.71 2157.76 TracingtheTraces 80.60 1406.21 84.20 6126.10 33.33 11433.15 29.61 9136.77 57.30 5668.90 ThinkorNot 79.15 410.31 81.80 1516.59 30.00 6497.57 25.76 3882.31 48.00 1638.92 AdaptThink 87.18 392.94 86.00 1484.91 33.33 6445.47 37.88 4206.66 60.00 1773.70 
+
+PUMA entropy 79.83 239.88 82.40 1708.52 30.00 6681.00 25.76 3957.54 51.41 1758.77 
+
+PUMA latent 78.99 241.44 81.80 1712.98 36.67 6801.60 38.39 4463.95 58.57 1047.59 PUMA 84.08 235.48 87.40 1847.71 36.67 6620.17 39.40 2861.08 62.86 1552.76 
+
+Δ vs. Vanilla +4.82% -53.57% +3.07% -21.22% +0.0% -8.61% +52.95% -46.38% +12.83% -28.04% 
+
+DeepSeek-R1-Distill-Qwen-14B 
+
+Vanilla 88.63 710.49 86.60 2397.04 43.33 8101.67 53.53 3650.61 74.29 1728.84 TracingtheTraces 88.86 2097.41 84.80 6433.80 36.67 11966.90 54.02 7418.03 74.16 4722.90 ThinkorNot 87.18 525.30 83.40 1781.60 33.33 7076.65 48.89 2822.94 68.41 1313.26 
+
+PUMA entropy 88.02 395.76 84.00 1720.23 33.33 7073.80 53.03 3038.69 72.86 1360.91 
+
+PUMA latent 88.40 423.00 82.80 1760.22 40.00 7511.53 51.52 2805.70 72.86 995.56 PUMA 90.14 394.99 89.60 1822.31 40.00 7349.97 56.06 2885.09 75.71 1259.39 
+
+Δ vs. Vanilla +1.70% -44.41% +3.46% -23.98% -7.69% -9.28% +4.73% -20.97% +1.91% -27.15% 
+
+Qwen-QWQ-32B 
+
+Vanilla 95.98 1240.32 87.80 3590.62 43.33 8749.20 51.51 6609.05 80.00 3120.86 TracingtheTraces 95.82 3406.74 86.66 7331.60 36.67 12347.89 53.61 9873.06 76.44 7081.94 ThinkorNot 93.63 819.11 84.40 2649.45 36.67 7648.86 49.90 5127.31 73.83 2343.89 
+
+PUMA entropy 93.86 814.75 85.40 2755.13 36.67 7596.27 50.00 5032.51 74.16 2492.94 
+
+PUMA latent 95.15 931.80 84.20 2655.70 40.00 7986.43 59.09 5388.70 78.57 1977.53 PUMA 95.91 812.48 91.40 2616.89 46.67 8083.70 63.13 5414.01 81.41 2301.93 
+
+Δ vs. Vanilla -0.49% -34.49% +4.1% -27.12% +7.08% -7.6% +22.56 -18.08% +1.76% -26.24% 
+
+shorter answers to minimize uncertainty. (2) Coarse Granularity: 
+
+Its segmentation into fixed 𝑛 -token intervals disrupts semantic con-tinuity, causing the mechanism to miss the optimal halting timing. Furthermore, PUMA demonstrates higher overall efficiency com-pared to Think or Not . On the MATH-500 benchmark using the 32B model, PUMA attains 91.40% accuracy compared to 84.40% for the baseline (and 87.80% for Vanilla). This improvement arises because PUMA addresses the "deceptive convergence" of single-modal en-tropy. By cross-referencing with Net Reasoning Momentum , PUMA identifies high-momentum states as "Active Exploration," prevent-ing the premature truncation of reasoning paths. 
+
+Representation Granularity and Dynamic Diagnosis (vs. Trac-ing the Traces). Compared to our latent-only variant ( PUMA latent ), 
+
+Tracing the Traces (LT) [ 38 ] may achieve marginal accuracy gains in specific configurations (e.g., 88.86% vs. 88.40% on GSM8k with the 14B model). However, this comes at an exorbitant computa-tional cost. This inefficiency stems from LT’s reliance on a gener-ative selection paradigm , which necessitates generating multiple reasoning paths of fixed length (set to 𝑘 = 3, 2000 tokens each) before selection. Consequently, on MATH-500 with the 7B model, LT consumes 6126.10 tokens on average—over 3.5 × higher than PUMA latent (1712.98 tokens). PUMA latent avoids this redundancy by performing real-time diagnosis on a single path. Furthermore, regarding reasoning robustness, PUMA exhibits superior adaptability on challenging benchmarks. As shown in Ta-ble 1, on AIME 2025 with the 32B model, LT accuracy stagnates at 36.67%, significantly underperforming PUMA (46.67%). This perfor-mance gap stems from LT’s reliance on coarse-grained metrics that aggregate signals over broad segments and the inductive bias that correct reasoning exhibits faster semantic evolution. Such heuristics fail on complex tasks where valid reasoning often requires "Active Yan et al. (a) (b) (c) 
+
+Figure 3: Comprehensive Performance Analysis of PUMA. (a) Reasoning Quadrant Distribution of QwQ-32B on MATH-500, defined in §6.3. (b) Efficiency-Accuracy Pareto Frontier comparing PUMA with baselines across various on MATH-500 dataset. (c) Parameter Sensitivity of phase ( 𝛼 ) and momentum ( 𝜖 ) thresholds regarding average accuracy and token cost. 
+
+Exploration" (characterized by slower initial progress). In contrast, PUMA captures both fine-grained layer-wise variations and dynamic step-level evolution , enabling precise real-time intervention. 
+
+Distribution Shift(vs. AdaptThink). AdaptThink [49 ] demon-strates impressive efficacy on in-distribution mathematical tasks, notably achieving 87.18% on GSM8k with the 7B model via its RL-optimized policy. Nevertheless, its performance is less robust under distribution shifts compared to PUMA. When evaluated on di-verse out-of-distribution benchmarks using the same 7B backbone, PUMA consistently exhibits superior generalization. Specifically, on the scientific benchmark GPQA-D, PUMA attains 39.40% against AdaptThink’s 37.88%. This advantage extends to general reasoning tasks like MMLU-Pro, where it scores 62.86% compared to 60.00%, and challenging competitions like AIME 2025, leading with 36.67% over 33.33%. This confirms that while AdaptThink excels within its training distribution, PUMA captures intrinsic cognitive patterns, offering a more generalizable training-free solution. 
+
+## 6.3 Ablation and In-Depth Analysis 
+
+Ablation Study. Table 1 demonstrates that PUMA significantly outperforms its decoupled variants, confirming the necessity of the Phase-Momentum Alignment. For instance, on the MATH-500 benchmark with the 32B model, PUMA entropy and PUMA latent 
+
+achieve accuracies of 85.40% and 84.20%, respectively. In contrast, the full PUMA effectively synergizes these signals to reach 91.40%, achieving a substantial gain of over 6% compared to the single-modal baselines. To further analyze the source of this improvement, we define four reasoning quadrants formed by two orthogonal di-mensions: the correctness of the model’s original reasoning ( 𝑦 𝑜𝑟𝑖 )and the correctness after intervention ( 𝑦 𝑡𝑟𝑢𝑛𝑐 ), these quadrants are categorized as: (1) Efficiency Gain (𝑦 𝑜𝑟𝑖 ✓, 𝑦 𝑡𝑟𝑢𝑛𝑐 ✓), where trunca-tion preserves correctness; (2) Resource Saving (𝑦 𝑜𝑟𝑖 ×, 𝑦 𝑡𝑟𝑢𝑛𝑐 ×), where tokens are saved on inevitable errors; (3) Accuracy Gain 
+
+(𝑦 𝑜𝑟𝑖 ×, 𝑦 𝑡𝑟𝑢𝑛𝑐 ✓), representing rectified truncation from overthink-ing; and (4) Accuracy Loss (𝑦 𝑜𝑟𝑖 ✓, 𝑦 𝑡𝑟𝑢𝑛𝑐 ×), denoting premature failure. As illustrated in Figure 3(a). Empirically, while PUMA entropy 
+
+and PUMA latent achieve 85.4% and 84.2% Efficiency Gain respec-tively, they suffer from 2.0% and 4.0% Accuracy Loss. In contrast, PUMA achieves the highest Efficiency Gain (87.8%) with 0% Accu-racy Loss and a notable 3.6% Accuracy Gain. 
+
+Fine-grained Mechanism Analysis. The performance disparity stems from the intrinsic limitations of uncoupled diagnostic signals. First, PUMA latent exhibits significant Accuracy Loss (4.0%) due to the sensitivity dilemma of the momentum threshold 𝜖 : a loose 𝜖 
+
+triggers premature truncation before semantic convergence, sever-ing valid reasoning paths essential for correct deduction, whereas a strictly tight 𝜖 fails to arrest "overthinking" in time. Second, PUMA entropy suffers from non-negligible loss (2.0%) as low en-tropy can be deceptive, , thereby masking "confident hallucinations" where the model stabilizes superficially despite unsettled internal momentum. In contrast, the full PUMA resolves these trade-offs by subjecting 𝜖 to Phase constraints . By functionally inhibiting trun-cation during active exploration (even if momentum fluctuates), PUMA acts as a semantic gatekeeper that guarantees intervention only upon dual-signal synchronization between geometric momen-tum and entropic phase. Consequently, this alignment eliminates premature interventions (0% Accuracy Loss) while enabling the system to precisely rectify overthinking errors exactly when a valid intermediate thought is formed. 
+
+## 6.4 Sensitivity Analysis and Robustness 
+
+Hyperparameter Robustness ( 𝛼 and 𝜖 ). We investigate the sys-tem’s sensitivity to the phase threshold 𝛼 and momentum threshold 
+
+𝜖 within the interval [0, 0.1] using the 14B model averaged across all benchmarks. As illustrated in Figure 3(c), both accuracy and token consumption remain largely invariant to parameter variations. We attribute this stability to the mutual constraint mechanism inherent in PUMA. For 𝜖 , consistent with §6.3, the phase alignment require-ment relaxes the precision needed for the momentum threshold, allowing a flexible range. For 𝛼 , although larger values might theo-retically accelerate the detection of low-entropy states, the system avoids premature truncation because it is dually constrained by the momentum check ( 𝜖 ). Since PUMA targets distinct high/low en-tropy regimes rather than transitional uncertainty, this orthogonal verification ensures the framework remains robust to hyperparam-eter fluctuations, eliminating the need for meticulous tuning. 
+
+Impact of Proxy Model Scale ( 𝑀 𝜙 ). We analyze the performance consistency when varying the proxy model size (from 1.5B to 14B). As illustrated in Figure 3(a), we observe a counter-intuitive trend Is Your Model Thinking or Just Stagnating? PUMA: Diagnosing Reasoning Pathology via Phase-Momentum Alignment 
+
+where increasing proxy capacity exacerbates Accuracy Loss (rising to 2% with 7B and 3% with 14B). We attribute this to the contextual determinism of smaller models: they rely strictly on the gener-ated context for verification, yielding sharper entropy signals for correctness. In contrast, larger models, driven by vast parametric knowledge, may introduce unnecessary semantic ambiguity (as-sociating plausibility with incorrect steps), thereby diluting the diagnostic signal. This finding validates the architectural advantage of PUMA: a lightweight 1.5B proxy is not only cost-effective but also intrinsically more accurate for monitoring large-scale reasoners. 
+
+## 7 Conclusion 
+
+In this work, we first posit the Phase-Momentum Alignment Hypoth-esis , identifying that valid reasoning hinges on the temporal syn-chronization between entropic uncertainty and geometric cognitive effort. We rigorously formalize this insight via the Cognitive-Energy Model to precisely distinguish active exploration from passive stag-nation. To operationalize this, we propose PUMA, a training-free framework that optimizes test-time reasoning through dynamic diagnosis and intervention mechanism. Extensive experiments demonstrate that PUMA consistently outperforms representative baselines in information-theoretic, latent-based, and training-based paradigms, resulting in a superior accuracy-efficiency trade-off and robust cross-domain generalization. By establishing a transparent metric for reasoning integrity, our approach offers a robust and theoretically principled path for reliable inference scaling. Yan et al. 
+
+## References 
+
+[1] Pranjal Aggarwal and Sean Welleck. 2025. L1: Controlling how long a reason-ing model thinks with reinforcement learning. arXiv preprint arXiv:2503.04697 
+
+(2025). [2] Riccardo Ali, Francesco Caso, Christopher Irwin, and Pietro Liò. 2025. Entropy-lens: The information signature of transformer computations. arXiv preprint arXiv:2502.16570 (2025). [3] Daman Arora and Andrea Zanette. 2025. Training language models to reason efficiently. arXiv preprint arXiv:2502.04463 (2025). [4] Simon A Aytes, Jinheon Baek, and Sung Ju Hwang. 2025. Sketch-of-thought: Efficient llm reasoning with adaptive cognitive-inspired sketching. arXiv preprint arXiv:2503.05179 (2025). [5] Qiguang Chen, Libo Qin, Jiaqi Wang, Jingxuan Zhou, and Wanxiang Che. 2024. Unlocking the capabilities of thought: A reasoning boundary framework to quan-tify and optimize chain-of-thought. Advances in Neural Information Processing Systems 37 (2024), 54872–54904. [6] Xin Chen, Hanxian Huang, Yanjun Gao, Yi Wang, Jishen Zhao, and Ke Ding. 2024. Learning to maximize mutual information for chain-of-thought distillation. 
+
+arXiv preprint arXiv:2403.03348 (2024). [7] Zhuo Chen, Zhuotao Jin, Di Luo, Marin Soljačić, et al . 2025. L2M: Mutual Information Scaling Law for Long-Context Language Modeling. arXiv preprint arXiv:2503.04725 (2025). [8] Karl Cobbe, Vineet Kosaraju, Mohammad Bavarian, Mark Chen, Heewoo Jun, Lukasz Kaiser, Matthias Plappert, Jerry Tworek, Jacob Hilton, Reiichiro Nakano, et al . 2021. Training verifiers to solve math word problems. arXiv preprint arXiv:2110.14168 (2021). [9] Thomas M Cover. 1999. Elements of information theory . John Wiley & Sons. [10] Sebastian Farquhar, Jannik Kossen, Lorenz Kuhn, and Yarin Gal. 2024. Detecting hallucinations in large language models using semantic entropy. Nature 630, 8017 (2024), 625–630. [11] Sicheng Feng, Gongfan Fang, Xinyin Ma, and Xinchao Wang. 2025. Efficient reasoning models: A survey. arXiv preprint arXiv:2504.10903 (2025). [12] Zeyu Gan, Yun Liao, and Yong Liu. 2025. Rethinking external slow-thinking: From snowball errors to probability of correct reasoning. arXiv preprint arXiv:2501.15602 (2025). [13] Daya Guo, Dejian Yang, Haowei Zhang, Junxiao Song, Ruoyu Zhang, Runxin Xu, Qihao Zhu, Shirong Ma, Peiyi Wang, Xiao Bi, et al . 2025. Deepseek-r1: Incentivizing reasoning capability in llms via reinforcement learning. arXiv preprint arXiv:2501.12948 (2025). [14] Tingxu Han, Zhenting Wang, Chunrong Fang, Shiyu Zhao, Shiqing Ma, and Zhenyu Chen. 2025. Token-budget-aware llm reasoning. In Findings of the Association for Computational Linguistics: ACL 2025 . 24842–24855. [15] Dan Hendrycks, Collin Burns, Saurav Kadavath, Akul Arora, Steven Basart, Eric Tang, Dawn Song, and Jacob Steinhardt. 2021. Measuring mathematical problem solving with the math dataset. arXiv preprint arXiv:2103.03874 (2021). [16] Aaron Jaech, Adam Kalai, Adam Lerer, Adam Richardson, Ahmed El-Kishky, Aiden Low, Alec Helyar, Aleksander Madry, Alex Beutel, Alex Carney, et al . 2024. Openai o1 system card. arXiv preprint arXiv:2412.16720 (2024). [17] Hong Jun Jeon. 2025. Information-theoretic foundations for machine learning .Ph. D. Dissertation. Stanford University. [18] Yu Kang, Xianghui Sun, Liangyu Chen, and Wei Zou. 2025. C3ot: Generating shorter chain-of-thought without compromising effectiveness. In Proceedings of the AAAI Conference on Artificial Intelligence , Vol. 39. 24312–24320. [19] Jannik Kossen, Jiatong Han, Muhammed Razzak, Lisa Schut, Shreshth Malik, and Yarin Gal. 2024. Semantic entropy probes: Robust and cheap hallucination detection in llms. arXiv preprint arXiv:2406.15927 (2024). [20] Ayeong Lee, Ethan Che, and Tianyi Peng. 2025. How well do llms compress their own chain-of-thought? a token complexity approach. arXiv preprint arXiv:2503.01141 (2025). [21] Haoxi Li, Sikai Bai, Jie Zhang, and Song Guo. 2025. CoRE: Enhancing Metacog-nition with Label-free Self-evaluation in LRMs. arXiv preprint arXiv:2507.06087 
+
+(2025). [22] Baohao Liao, Yuhui Xu, Hanze Dong, Junnan Li, Christof Monz, Silvio Savarese, Doyen Sahoo, and Caiming Xiong. 2025. Reward-guided speculative decoding for efficient llm reasoning. arXiv preprint arXiv:2501.19324 (2025). [23] Haotian Luo, Li Shen, Haiying He, Yibo Wang, Shiwei Liu, Wei Li, Naiqiang Tan, Xiaochun Cao, and Dacheng Tao. 2025. O1-pruner: Length-harmonizing fine-tuning for o1-like reasoning pruning. arXiv preprint arXiv:2501.12570 (2025). [24] Wenjie Ma, Jingxuan He, Charlie Snell, Tyler Griggs, Sewon Min, and Matei Zaharia. 2025. Reasoning models can be effective without thinking. arXiv preprint arXiv:2504.09858 (2025). [25] Xinyin Ma, Guangnian Wan, Runpeng Yu, Gongfan Fang, and Xinchao Wang. 2025. Cot-valve: Length-compressible chain-of-thought tuning. arXiv preprint arXiv:2502.09601 (2025). [26] Xiaoye Qu, Yafu Li, Zhaochen Su, Weigao Sun, Jianhao Yan, Dongrui Liu, Ganqu Cui, Daizong Liu, Shuxian Liang, Junxian He, et al . 2025. A survey of efficient reasoning for large reasoning models: Language, multimodality, and beyond. 
+
+arXiv preprint arXiv:2503.21614 (2025). [27] David Rein, Betty Li Hou, Asa Cooper Stickland, Jackson Petty, Richard Yuanzhe Pang, Julien Dirani, Julian Michael, and Samuel R Bowman. 2024. Gpqa: A graduate-level google-proof q&a benchmark. In First Conference on Language Modeling .[28] Ruifeng Ren and Yong Liu. 2025. Revisiting transformers through the lens of low entropy and dynamic sparsity. arXiv preprint arXiv:2504.18929 (2025). [29] Xuan Shen, Yizhou Wang, Xiangxi Shi, Yanzhi Wang, Pu Zhao, and Jiuxiang Gu. 2025. Efficient reasoning with hidden thinking. arXiv preprint arXiv:2501.19201 
+
+(2025). [30] Yi Shen, Jian Zhang, Jieyun Huang, Shuming Shi, Wenjing Zhang, Jiangze Yan, Ning Wang, Kai Wang, Zhaoxiang Liu, and Shiguo Lian. 2025. Dast: Difficulty-adaptive slow-thinking for large reasoning models. arXiv preprint arXiv:2503.04472 (2025). [31] Zhenyi Shen, Hanqi Yan, Linhai Zhang, Zhanghao Hu, Yali Du, and Yulan He. 2025. Codi: Compressing chain-of-thought into continuous space via self-distillation. arXiv preprint arXiv:2502.21074 (2025). [32] DiJia Su, Hanlin Zhu, Yingchen Xu, Jiantao Jiao, Yuandong Tian, and Qinqing Zheng. 2025. Token assorted: Mixing latent and text tokens for improved lan-guage model reasoning. arXiv preprint arXiv:2502.03275 (2025). [33] Yang Sui, Yu-Neng Chuang, Guanchu Wang, Jiamu Zhang, Tianyi Zhang, Jiayi Yuan, Hongyi Liu, Andrew Wen, Shaochen Zhong, Na Zou, et al . 2025. Stop overthinking: A survey on efficient reasoning for large language models. arXiv preprint arXiv:2503.16419 (2025). [34] Kimi Team, Angang Du, Bofei Gao, Bowei Xing, Changjiu Jiang, Cheng Chen, Cheng Li, Chenjun Xiao, Chenzhuang Du, Chonghua Liao, et al . 2025. Kimi k1. 5: Scaling reinforcement learning with llms. arXiv preprint arXiv:2501.12599 (2025). [35] Qwen Team. 2025. Qwq-32b: Embracing the power of reinforcement learning. [36] Jean-Francois Ton, Muhammad Faaiz Taufiq, and Yang Liu. 2024. Under-standing chain-of-thought in llms through information theory. arXiv preprint arXiv:2411.11984 (2024). [37] Alexander Matt Turner, Lisa Thiergart, Gavin Leech, David Udell, Juan J Vazquez, Ulisse Mini, and Monte MacDiarmid. 2023. Steering language models with activation engineering. arXiv preprint arXiv:2308.10248 (2023). [38] Martina G Vilas, Safoora Yousefi, Besmira Nushi, Eric Horvitz, and Vidhisha Balachandran. 2025. Tracing the Traces: Latent Temporal Signals for Efficient and Accurate Reasoning. arXiv preprint arXiv:2510.10494 (2025). [39] Rui Wang, Hongru Wang, Boyang Xue, Jianhui Pang, Shudong Liu, Yi Chen, Jiahao Qiu, Derek Fai Wong, Heng Ji, and Kam-Fai Wong. 2025. Harnessing the reasoning economy: A survey of efficient reasoning for large language models. 
+
+arXiv preprint arXiv:2503.24377 (2025). [40] Yubo Wang, Xueguang Ma, Ge Zhang, Yuansheng Ni, Abhranil Chandra, Shiguang Guo, Weiming Ren, Aaran Arulraj, Xuan He, Ziyan Jiang, et al . 2024. Mmlu-pro: A more robust and challenging multi-task language understand-ing benchmark. Advances in Neural Information Processing Systems 37 (2024), 95266–95290. [41] Yiming Wang, Pei Zhang, Baosong Yang, Derek F Wong, and Rui Wang. 2024. Latent space chain-of-embedding enables output-free llm self-evaluation. arXiv preprint arXiv:2410.13640 (2024). [42] Jason Wei, Xuezhi Wang, Dale Schuurmans, Maarten Bosma, Fei Xia, Ed Chi, Quoc V Le, Denny Zhou, et al . 2022. Chain-of-thought prompting elicits reason-ing in large language models. Advances in neural information processing systems 
+
+35 (2022), 24824–24837. [43] Yuyang Wu, Yifei Wang, Ziyu Ye, Tianqi Du, Stefanie Jegelka, and Yisen Wang. 2025. When more is less: Understanding chain-of-thought length in llms. arXiv preprint arXiv:2502.07266 (2025). [44] Heming Xia, Chak Tou Leong, Wenjie Wang, Yongqi Li, and Wenjie Li. 2025. Tokenskip: Controllable chain-of-thought compression in llms. arXiv preprint arXiv:2502.12067 (2025). [45] Yige Xu, Xu Guo, Zhiwei Zeng, and Chunyan Miao. 2025. Softcot: Soft chain-of-thought for efficient reasoning with llms. arXiv preprint arXiv:2502.12134 
+
+(2025). [46] Shiming Yang, Yuxuan Tong, Xinyao Niu, Graham Neubig, and Xiang Yue. [n. d.]. Demystifying Long Chain-of-Thought Reasoning. In Forty-second International Conference on Machine Learning .[47] Xixian Yong, Xiao Zhou, Yingying Zhang, Jinlin Li, Yefeng Zheng, and Xian Wu. 2025. Think or Not? Exploring Thinking Efficiency in Large Reasoning Models via an Information-Theoretic Lens. arXiv preprint arXiv:2505.18237 (2025). [48] Mert Yuksekgonul, Varun Chandrasekaran, Erik Jones, Suriya Gunasekar, Ranjita Naik, Hamid Palangi, Ece Kamar, and Besmira Nushi. 2023. Attention satisfies: A constraint-satisfaction lens on factual errors of language models. arXiv preprint arXiv:2309.15098 (2023). [49] Jiajie Zhang, Nianyi Lin, Lei Hou, Ling Feng, and Juanzi Li. 2025. Adaptthink: Reasoning models can learn when to think. arXiv preprint arXiv:2505.13417 
+
+(2025). Is Your Model Thinking or Just Stagnating? PUMA: Diagnosing Reasoning Pathology via Phase-Momentum Alignment 
+
+## A Extended Experimental Main Results A.1 Scalability on Lightweight Models 
+
+Superior Pareto Frontier and Hallucination Mitigation. Ta-ble 2 presents the detailed performance of the DeepSeek-R1-Distill-Qwen-1.5B model across five benchmarks, demonstrating that PUMA establishes a superior accuracy-efficiency Pareto frontier even un-der limited model capacity. Compared to the Vanilla baseline, our framework significantly reduces computational overhead while maintaining or enhancing reasoning accuracy. Specifically, on math-ematical tasks such as GSM8K and MATH-500, PUMA reduces token consumption by 52.93% and 23.65% respectively, with simul-taneous accuracy gains of 4.56% and 2.47%. This efficiency advan-tage is even more pronounced on the challenging GPQA-Diamond benchmark, where the small model typically struggles with se-vere hallucinations (Vanilla Acc: 12.12%). Here, PUMA achieves a remarkable relative improvement of 116.66% (reaching 26.26%), suggesting that our mechanism effectively diagnoses "stagnation" in incorrect reasoning paths and applies corrective interventions to convert wasted computation into valid reasoning attempts. 
+
+Necessity of Phase-Momentum Alignment. Furthermore, a comparative analysis against the ablated variants, PUMA entropy 
+
+and PUMA latent , highlights the critical necessity of the dual-signal Phase-Momentum Alignment for lightweight models. The entropy-only variant ( PUMA entropy ) suffers from substantial performance degradation on hard tasks, such as AIME 2025, where its accuracy drops to 13.33%—significantly below the Vanilla baseline (20.00%). This failure stems from "confident hallucinations," where the 1.5B model exhibits low entropy despite flawed reasoning. Similarly, the latent-only variant ( PUMA latent ) incurs higher token costs due to the lack of phase-aware triggering. In contrast, the full PUMA framework integrates these signals: it uses geometric momentum to filter out deceptive low-entropy states and uses phase monitoring to trigger geometric checks only when necessary. This coupling recovers the accuracy loss on AIME2025, which reaches 23.33%, and achieves the lowest token consumption across most benchmarks, validating that the Cognitive-Energy Model provides a robust diag-nostic guardrail essential for trustworthy reasoning in small-scale models under resource constraints. 
+
+## A.2 Generalization vs. Training-based Methods 
+
+We benchmark PUMA against AdaptThink , a representative method employing Reinforcement Learning for reasoning optimization. The empirical results reveal a distinct trade-off between in-distribution specialization and out-of-distribution (OOD) robustness. While 
+
+AdaptThink achieves peak accuracy on GSM8K (70.56%), surpass-ing both Vanilla and our method, this performance gain appears highly dependent on the training distribution, essentially overfit-ting the policy to mathematical word problems. This hypothesis is substantiated by the sharp performance decline observed un-der distributional shifts: on the scientific reasoning benchmark GPQA-Diamond and the general reasoning benchmark MMLU-Pro, AdaptThink significantly underperforms PUMA (13.64% vs. 26.26% and 27.14% vs. 37.14%, respectively). This contrast under-scores the fundamental advantage of our training-free paradigm. Unlike policy-based methods that bias the model toward specific generation patterns learned during training, PUMA leverages the intrinsic Phase-Momentum Alignment —a universal cognitive signa-ture of the reasoning process. Consequently, our framework acts as a domain-agnostic supervisor, ensuring robust generalization across diverse reasoning tasks without the fragility associated with task-specific parameter updates. 
+
+## A.3 Reliability vs. Entropy-based Methods 
+
+To isolate the contribution of geometric signals, we contrast PUMA with Think or Not and the entropy-only ablation PUMA entropy . The experimental data highlights a critical pathology in relying exclu-sively on information-theoretic metrics: "Deceptive Convergence." On challenging tasks like AIME 2025, the 1.5B model frequently enters states of "confident hallucination," characterized by low se-mantic entropy but incorrect logic. Entropy-based methods misin-terpret this stability as valid convergence and prematurely truncate generation, causing accuracy to plummet to 13.33%, well below the Vanilla baseline of 20.00%. PUMA effectively resolves this issue by introducing Geometric Cognitive Effort as an orthogonal verifica-tion dimension. By demanding that low-entropy states also exhibit relaxed latent momentum (signifying a true semantic fixed point), our framework filters out spurious confidence. This dual-signal val-idation successfully recovers the accuracy to 23.33%, demonstrating that geometric dynamics serve as an indispensable verification mechanism for preserving reasoning integrity in lightweight mod-els. 
+
+## A.4 Efficiency vs. Latent-based Methods 
+
+Finally, we compare the computational efficiency of our online diag-nostic protocol against Tracing the Traces , a prominent latent-space selection method. The results expose the inherent inefficiency of the "generate-then-select" paradigm. Although Tracing the Traces 
+
+maintains competitive accuracy on benchmarks like MATH-500 (73.10%), it imposes a prohibitive computational burden, consuming an average of 5620.15 tokens per query due to the necessity of generating multiple complete candidate paths. In sharp contrast, PUMA operates as a step-level "Cognitive Circuit Breaker," mon-itoring phase transitions in real-time and intervening only when stagnation is detected. This preemptive mechanism allows PUMA to achieve superior accuracy (74.60%) while reducing token con-sumption to 2106.88 tokens—a reduction of over 60%. This empirical evidence validates that event-triggered online diagnosis offers a far more scalable solution for test-time scaling than post-hoc selection, delivering high-precision control with minimal redundancy. 
+
+## B Extended Sensitivity and Robustness Analysis 
+
+To rigorously validate the scalability and architectural universality of PUMA, we extend the sensitivity analysis to cover the spec-trum from edge to high-capacity models (1.5B, 7B, and 32B). This multi-scale investigation aims to determine if the Phase-Momentum alignment captures intrinsic reasoning dynamics independent of model size. Figure 4 presents performance metrics averaged across all five benchmarks. By mitigating task-specific variance through aggregation, we confirm that the observed robustness is intrinsic to the framework rather than dataset-specific. Yan et al. 
+
+Table 2: Detailed Performance Comparison on Mathematical and General Reasoning Benchmarks. This table provides the complete numerical results for DeepSeek-R1-Distill-Qwen-1.5B. We report Accuracy ( ↑) and Average Token Cost ( ↓). PUMA is compared against baselines from three distinct paradigms (Information-Theoretic, Latent-based, and Training-based) alongside our ablated variants. Note that Δ denotes the relative improvement of our full method over the Vanilla baseline. 
+
+Methods MATH SCIENCE GENERAL GSM8K MATH-500 AIME2025 GPQA-D MMLU-Pro 
+
+Acc. ↑ Tokens ↓ Acc. ↑ Tokens ↓ Acc. ↑ Tokens ↓ Acc. ↑ Tokens ↓ Acc. ↑ Tokens ↓
+
+DeepSeek-R1-Distill-Qwen-1.5B 
+
+Vanilla 64.22 532.99 72.80 2759.63 20.00 8166.60 12.12 5002.78 27.14 2706.99 TracingtheTraces 63.85 1495.34 73.10 5620.15 16.67 5598.40 12.63 5605.22 26.50 5580.11 ThinkorNot 54.22 425.59 57.36 1728.82 14.00 5170.39 12.12 3578.75 27.14 1917.98 AdaptThink 70.56 506.43 72.20 1285.72 23.33 5673.40 13.64 2842.57 27.14 1632.61 
+
+PUMA entropy 55.88 249.55 60.80 2030.53 13.33 7581.37 13.13 4257.55 28.57 2340.60 
+
+PUMA latent 64.29 257.59 72.20 2042.55 20.00 7362.90 25.25 3824.96 32.86 904.57 PUMA 67.15 250.87 74.60 2106.88 23.33 7581.37 26.26 2452.99 37.14 2233.13 
+
+Δ vs. Vanilla +4.56% -52.93% +2.47% -23.65% +16.65% -7.17% +116.66% -50.97% +36.85% -17.51% DeepSeek -R1 -Distill -Qwen -1.5B DeepSeek -R1 -Distill -Qwen -7B Qwen -QwQ -32B 
+
+Figure 4: Hyperparameter Robustness Analysis. Performance metrics (averaged across five benchmarks) for 1.5B, 7B, and 32B models under independent parameter sweeps. The x-axis denotes the value for 𝛼 (blue) and 𝜖 (red). 
+
+## B.1 Robustness to Phase Sensitivity 
+
+The Phase Sensitivity 𝛼 governs the strictness of the Entropy-based FSM. As evidenced by the blue metrics in Figure 4, PUMA demon-strates invariant stability across the sweep range [0.00 , 0.10 ].
+
+Dual-Signal Robustness: Both average accuracy (blue line) and token consumption (blue bars) remain virtually constant across all model scales. This counter-intuitive stability validates the architec-tural superiority of our Cognitive-Energy Model . Even if a looser 
+
+𝛼 (e.g., 0.10 ) prematurely flags a "Convergence Phase" based on entropy, the subsequent Geometric Cognitive Effort check acts as an orthogonal gatekeeper. It prevents truncation unless the latent momentum strictly dissipates. Consequently, PUMA is resilient to 
+
+𝛼 variations, eliminating the need for scale-specific tuning of the entropy threshold. 
+
+## B.2 Impact of Momentum Relaxation Threshold 
+
+The Momentum Relaxation threshold 𝜖 primarily regulates the "thinking budget." As 𝜖 increases (relaxing strictness), token con-sumption consistently decreases (red bars). However, accuracy re-veals distinct scale-dependent dynamics: 
+
+Small Models (1.5B & 7B): Efficiency without Penalty. Ac-curacy remains flat even as 𝜖 increases to 0.1. This implies that additional tokens under tighter thresholds ( 𝜖 < 0.04 ) consist largely of redundant generation rather than constructive reasoning. PUMA effectively prunes this stagnation, converting computational waste into savings without compromising correctness. 
+
+Large Models (32B): The Depth Trade-off. For QwQ-32B, sub-stantial cost reduction comes with a marginal accuracy decline. This reflects deeper reasoning depth, where valid reasoning may exhibit 
+
+transient low momentum (e.g., restructuring logic) before semantic resolution. A relaxed 𝜖 might aggressively prune these pauses. Cru-cially, however, this trade-off is favorable: a negligible accuracy dip Is Your Model Thinking or Just Stagnating? PUMA: Diagnosing Reasoning Pathology via Phase-Momentum Alignment 
+
+yields disproportionate savings, offering a adjustable parameter to significantly lower latency while maintaining reasoning fidelity. 
+
+## C Case Study Question(MATH500): 
+
+In the diagram, $PT$ is parallel to $QR.$ What is the measure of $ \angle PQR$ in degrees?[ asy ]
+
+Coordinates: $P( -7,10), T(7,10), Q(0,0), R(10,0)$Angle Labels: $ \angle QPT = x^{ \circ}$, 
+
+$\angle PTR = 2x^{ \circ}$, and an angle of $128^{ \circ}$ at point $R$. 
+
+# QwQ -32B :
+
+Identify angles using parallel lines and transversals: The angle at $T$ (between $PT$ and $TR$) 
+
+is given as $2x^{ \circ}$. The angle at $R$ (between $QR$ and $RT$) is given as $128^{ \circ}$. 
+
+Since $PT \parallel QR$, the angles at $T$ and $R$ are same -side interior angles with respect to 
+
+the transversal $RT$. Therefore, their sum is $180^{ \circ}$:$2x + 128 = 180$ Solving for 
+
+$x$:$2x = 180 - 128 \implies 2x = 52 \implies x = 26$ Determine $ \angle PQR$ using parallel 
+
+lines and transversals: The angle at $P$ (between $PQ$ and $PT$) is $x^{ \circ} = 26^{ \circ}$. 
+
+Since $PT \parallel QR$, the angles at $P$ and $Q$ ... are same -side interior angles... their sum 
+
+is$180^{ \circ}$: $ \angle PQR + 26^{ \circ} = 180^{ \circ}$ Solving for $ \angle PQR$: $ \angle 
+
+PQR = 180^{ \circ} - 26^{ \circ} = 154^{ \circ}$ 
+
+Vanilla Answer ： 154 Tokens: 14998 
+
+# PUMA :
+
+Given that $PT \parallel QR$, we analyze the two transversals: 
+
+1. Analyze transversal $RT$:$ \angle PTR$ (given as $2x^ \circ$) and $ \angle TRQ$ (the interior 
+
+angle at $R$) are corresponding angles. Since corresponding angles between parallel lines are 
+
+equal, $ \angle TRQ = 2x^ \circ$. 2. Solve for $x$:The diagram labels $128^ \circ$ at point $R$, 
+
+which is the measure of $ \angle TRQ$. 3. Therefore, $2x = 128^ \circ$, which solves to $x = 
+
+64^ \circ$. 4. Analyze transversal $PQ$:$ \angle QPT$ (given as $x^ \circ$) and $ \angle PQR$ are 
+
+same -side interior angles. Because the lines are parallel, these angles are supplementary (add up 
+
+to $180^ \circ$). Therefore, $ \angle PQR + x = 180^ \circ$. 5. Calculate $ \angle PQR$:Substitute 
+
+the value of $x$ into the equation from step 3 $\angle PQR + 64^ \circ = 180^ \circ$ $\angle PQR 
+
+= 180^ \circ - 64^ \circ = 116^ \circ$ Thus, the measure of $ \angle PQR$ is $ \boxed{116}$. 
+
+PUMA Answer ： 116 Tokens: 14596 
+
+# Retrieval -Augmented Restart Knowledge Prompt: 
+
+A Note on Geometric Principles of Parallel Lines and Transversals: In Euclidean geometry, the 
+
+relationships between angles formed by a transversal intersecting parallel lines are varied. A 
+
+common analytical pitfall is to focus solely on angle pairs that are equal (e.g., alternate interior, 
+
+corresponding angles). However, an equally critical relationship is that of supplementary angles. 
+
+It is essential to carefully verify: Do the key angle pairs in the diagram form a relationship of 
+
+equality, or do they form a supplementary relationship where their sum is 180 ° (such as 
+
+consecutive interior angles, which are the interior angles on the same side of the transversal)? 
+
+Correctly identifying this relationship is fundamental to all subsequent calculations. 
+
+# Ground Truth ：116 
+
+Figure 5: Comparison on a MATH500 geometry task. QwQ-32B generates a lengthy but flawed reasoning chain based on incorrect angle properties. In contrast, PUMA leverages retrieved geometric principles to restart the reasoning process, correctly identifying the angle relationships and achieving the correct answer.

@@ -1,0 +1,69 @@
+{
+  "label": "2026-07-27",
+  "date": "2026-07-27",
+  "generated_at": "2026-07-27T20:19:42",
+  "count": 4,
+  "papers": [
+    {
+      "paper_id": "202607/27/2607.21453v2-test-time-scaling-via-error-localization",
+      "section": "deep",
+      "title_en": "Test-Time Scaling via Error Localization",
+      "authors": "Rajiv Shailesh Chitale, Rahul Madhavan, Taneesh Gupta, Deepanway Ghosal, Aravindan Raghuveer",
+      "date": "2026-07-23",
+      "pdf": "https://arxiv.org/pdf/2607.21453v2",
+      "score": "9.0",
+      "evidence": "token级错误定位用于因果追踪",
+      "tldr": "现有推理时扩展方法缺少token级信用分配，常丢弃有效前缀导致计算低效。TTEL利用环境反馈进行token级错误定位，通过比较条件概率隔离错误步骤，截断轨迹并分支生成。在LiveCodeBench上，Qwen3-8B以一半token达到71.0% pass@64。该方法在编程和数学任务上建立严格支配的帕累托前沿。",
+      "tags": "query:key-tokens",
+      "abstract_en": "Scaling inference-time computation has emerged as a reliable method to improve the performance of large language models on complex reasoning and programming tasks. However, standard approaches such as independent sampling and sequential multi-turn refinement operate without token-level credit assignment, resulting in computational inefficiency, since valid reasoning prefixes are frequently discarded. In this work, we introduce Test-Time Scaling via Error Localization (TTEL), an inference-time algorithm that utilizes fixed or environment feedback to perform token-level error localization. By comparing conditional probabilities under informed feedback against a null-context baseline, TTEL isolates the step at which an error occurred. The algorithm then truncates the trajectory and branches a new generation, maximally reusing the valid prefix. Extensive evaluations demonstrate that TTEL establishes strictly dominating Pareto frontiers across sequential reasoning domains, measured by pass-at-k vs. generated-token cost. With Qwen3-8B on LiveCodeBench, TTEL attains a pass@64 of 71.0% while generating approximately half as many tokens as independent sampling (360.4k vs. 735.0k). Generalizing to math benchmarks AIME-2025 and HMMT-2025, TTEL cleanly outperforms competing test-time baselines across both Qwen3-8B and Qwen3-4B-Thinking-2507.",
+      "source": "arxiv",
+      "selection_source": "fresh_fetch"
+    },
+    {
+      "paper_id": "202607/27/2607.19326v1-selective-state-space-adaptation-and-retrieval-for-language-model-reasoning",
+      "section": "deep",
+      "title_en": "Selective State-Space Adaptation and Retrieval for Language Model Reasoning",
+      "authors": "Atahan Dokme, Larry Heck",
+      "date": "2026-07-21",
+      "pdf": "https://arxiv.org/pdf/2607.19326v1",
+      "score": "8.0",
+      "evidence": "通过状态空间循环引入动态token级调整，体现token重要性",
+      "tldr": "针对低秩适配对每个输入应用相同更新的局限性，提出MaLoRA和MaRA两种状态空间适配器。MaLoRA在token级引入依赖输入和循环状态的动态缩放因子，MaRA在上下文级跟踪跨段状态并检索相关段。在Qwen-2.5-7B、Llama-3.1-8B、Gemma-2-9B三个冻结骨干及MuSiQue、2WikiMultihopQA两个推理基准上，平均F1提升6.8（相对10.5%），最高达9.3（相对18.2%）。该方法以轻量适配实现动态推理改进，优于静态LoRA基线。",
+      "tags": "query:key-tokens",
+      "abstract_en": "Low-rank adaptation introduces a static learned update applied identically to every input. The update provides task-level adaptation but does not explicitly represent token-level or instance-level state variation. A family of adapters is proposed that introduces selective state-space recurrence at two complementary granularities. At the token level, \\textbf{MaLoRA} (Mamba-modulated low-rank adaptation) makes the adapter's scaling factor a dynamic input-dependent function with recurrent state across tokens, in contrast to the stateless modulators of prior work. At the context level, \\textbf{MaRA} (Mamba Retrieval Adapter) tracks cross-segment state and selects the segments most relevant to the query, before the modulated language model generates its answer. Across three frozen backbones (Qwen-2.5-7B, Llama-3.1-8B, Gemma-2-9B) and two reasoning benchmarks (MuSiQue, 2WikiMultihopQA), the family improves reasoning accuracy on every cell of the $3{\\times}2$ grid, by $+6.8$ F1 ($+10.5\\%$ relative) on average and up to $+9.3$ F1 ($+18.2\\%$ relative) on the hardest cell over the LoRA baseline, and the token-level gains carry to RULER QA-2 under length stress.",
+      "source": "arxiv",
+      "selection_source": "fresh_fetch"
+    },
+    {
+      "paper_id": "202607/27/2607.17188v1-is-your-model-thinking-or-just-stagnating-puma-diagnosing-reasoning-pathology-via-phase-momentum-alignment",
+      "section": "quick",
+      "title_en": "Is Your Model Thinking or Just Stagnating? PUMA: Diagnosing Reasoning Pathology via Phase-Momentum Alignment",
+      "authors": "Cheng Yan, Guangyang Ye, Wuyang Zhang, Fan Xu, Zhijun Fan, Xiang Xia, Yanyong Zhang",
+      "date": "2026-07-19",
+      "pdf": "https://arxiv.org/pdf/2607.17188v1",
+      "score": "7.0",
+      "evidence": "通过相位动量对齐诊断推理正确性，分析隐藏状态",
+      "tldr": "大推理模型在测试时扩展中易陷入“过度思考”导致效率下降，现有方法面临欺骗性收敛或缺乏实时敏感性。本文提出相位-动量对齐假设和认知能量模型，并推出训练无关框架PUMA，通过分层诊断架构实时监测推理状态并触发干预。实验表明PUMA在多种规模模型和基准上显著提升准确率-效率平衡，并展现强泛化能力。该工作为诊断和优化推理过程提供了新视角。",
+      "tags": "query:key-tokens",
+      "abstract_en": "Test-time scaling empowers Large Reasoning Models (LRMs) to tackle complex tasks via extensive Chain-of-Thought (CoT). However, this often induces the \"overthinking\" paradox, where redundant reasoning increases computational overhead without guaranteeing accuracy. Existing test-time efficiency optimization methods primarily fall into two categories: information-theoretic approaches, which are prone to \"deceptive convergence\" where low uncertainty masks hallucinations, and latent representation analyses, which are often post-hoc, lacking the real-time sensitivity for dynamic reasoning. To bridge this gap, we first posit the Phase-Momentum Alignment Hypothesis, asserting that reasoning correctness hinges on the temporal synchronization between geometric momentum and uncertainty resolution. We then theoretically formulate the Cognitive-Energy Model to characterize these dynamics through two orthogonal dimensions: Geometric Cognitive Effort, quantified by latent velocity and tortuosity, and Entropic Cognitive Uncertainty. To operationalize this, we introduce PUMA (Phase-Uncertainty Momentum Alignment), a training-free framework employing a tiered diagnostic architecture. By coupling lightweight phase monitoring with event-triggered geometric analysis, PUMA effectively distinguishes active exploration from passive stagnation, enabling precise interventions through adaptive truncation or corrective measures. Extensive experiments on LRMs spanning 1.5B to 32B demonstrate that PUMA consistently outperforms state-of-the-art baselines across diverse benchmarks, achieving a superior accuracy-efficiency trade-off and robust cross-domain generalization.",
+      "source": "arxiv",
+      "selection_source": "fresh_fetch"
+    },
+    {
+      "paper_id": "202607/27/2607.21981v1-j-cot-chain-of-thought-in-j-space",
+      "section": "quick",
+      "title_en": "J-CoT: Chain-of-Thought in J-Space",
+      "authors": "Junde Wu, Jiayuan Zhu, Fengling Liu, Minhao Hu, Jiazhen Pan",
+      "date": "2026-07-24",
+      "pdf": "https://arxiv.org/pdf/2607.21981v1",
+      "score": "7.0",
+      "evidence": "提出J-space用于选择和组织推理步骤中的信息",
+      "tldr": "针对语言模型推理中自然语言作为循环接口的限制以及现有潜在推理方法缺乏信息选择机制的问题，本文提出J-CoT循环推理框架，利用词汇索引坐标系J-space，在循环边界将中间状态编码为词汇索引系数（J-thought）再映射回隐藏表示，无需完整解码或循环整个隐藏状态。实验表明，在相同设置下J-CoT-Zero达到或超越最强潜在推理基线，J-CoT-Train在数学、科学、编码和结构化路径推理任务上取得最优结果，显著提升了推理能力。",
+      "tags": "query:key-tokens",
+      "abstract_en": "Chain-of-thought prompting improves language-model reasoning by carrying intermediate states across successive computation steps. However, relying on natural language as the only recurrent interface is overly restrictive, since many transient computations do not need to be fully verbalized. Existing latent-reasoning methods remove this constraint by recurrently propagating continuous hidden states. However, these methods pass a dense hidden vector as a whole, without an explicit mechanism for selecting and organizing the information needed by the next reasoning step. This motivates an intermediate interface that remains linguistically grounded without requiring a decoded sentence. We introduce \\textbf{J-CoT}, a recurrent reasoning framework built on \\emph{J-space}, a vocabulary-indexed coordinate system within the model's hidden representations. Within each cycle, the model computes in its full hidden space. At the cycle boundary, J-CoT expresses the intermediate state as vocabulary-indexed coefficients, carries these coefficients forward as a \\emph{J-thought}, and maps them back into the model's hidden representation for the next cycle. J-CoT therefore requires neither a fluent intermediate rationale nor recurrence over the complete hidden state. Under matched backbone and inference settings, J-CoT-Zero matches or exceeds the strongest evaluated latent-reasoning baseline on every benchmark, while J-CoT-Train obtains the highest score across the evaluated mathematical, scientific, coding, and structured path-reasoning tasks.",
+      "source": "arxiv",
+      "selection_source": "fresh_fetch"
+    }
+  ],
+  "errors": []
+}
